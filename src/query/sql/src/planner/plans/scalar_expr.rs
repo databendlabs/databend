@@ -589,6 +589,9 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
 pub struct UDFServerCall {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
+    // name in meta
+    pub name: String,
+    // name in handler
     pub func_name: String,
     pub display_name: String,
     pub server_addr: String,

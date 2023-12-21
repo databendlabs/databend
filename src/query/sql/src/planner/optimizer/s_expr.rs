@@ -504,7 +504,7 @@ pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
                 self.visit(expr)?;
             }
 
-            self.udfs.insert(&udf.func_name);
+            self.udfs.insert(&udf.name);
             Ok(())
         }
 

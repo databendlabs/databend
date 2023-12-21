@@ -15,6 +15,14 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
+    - uses: actions/checkout@v3
+    - name: Start UDF Server
+      shell: bash
+      run: |
+        pip install databend-udf
+        python3 tests/udf/udf_server.py &
+        sleep 2
+
     - name: Test setup
       shell: bash
       run: |

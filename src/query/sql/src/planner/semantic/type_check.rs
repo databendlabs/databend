@@ -2796,7 +2796,8 @@ impl<'a> TypeChecker<'a> {
                     .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, arguments, udf_def).await?,
+                self.resolve_udf_server(span, name, arguments, udf_def)
+                    .await?,
             )),
         }
     }
@@ -2806,6 +2807,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf_server(
         &mut self,
         span: Span,
+        name: String,
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2852,6 +2854,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             UDFServerCall {
                 span,
+                name,
                 func_name: udf_definition.handler,
                 display_name,
                 server_addr: udf_definition.address,

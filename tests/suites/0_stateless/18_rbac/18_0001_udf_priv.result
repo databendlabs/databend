@@ -54,3 +54,5 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] i
 200
 100
 200
+4
+Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF b for user 'test-user'@'%' with roles [public]
