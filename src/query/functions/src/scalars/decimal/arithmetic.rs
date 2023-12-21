@@ -86,7 +86,7 @@ macro_rules! binary_decimal {
             let scale_b = $right.scale();
 
 
-            // Note: the result scale is larger than the left's scale
+            // Note: the result scale is always larger than the left scale
             let scale_mul = scale_b + $size.scale - scale_a;
             let multiplier = T::e(scale_mul as u32);
             let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
