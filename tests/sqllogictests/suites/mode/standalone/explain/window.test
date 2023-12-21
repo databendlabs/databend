@@ -51,3 +51,55 @@ CompoundBlockOperator(Project) × 1 processor
                   Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
                     DeserializeDataTransform × 1 processor
                       SyncReadParquetDataSource × 1 processor
+
+statement ok
+DROP TABLE IF EXISTS Test
+
+statement ok
+CREATE TABLE Test (k int, v int);
+
+query
+explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
+----
+Filter
+├── output columns: [test.k (#0), test.v (#1)]
+├── filters: [rank() OVER (PARTITION BY k ORDER BY v DESC) (#4) = 1]
+├── estimated rows: 0.00
+└── Window
+  ├── output columns: [test.k (#0), test.v (#1), rank() OVER (PARTITION BY k ORDER BY v DESC) (#4)]
+  ├── aggregate function: [rank]
+  ├── partition by: [k]
+  ├── order by: [v]
+  ├── frame: [Range: Preceding(None) ~ CurrentRow]
+  └── UnionAll
+    ├── output columns: [test.k (#0), test.v (#1)]
+    ├── estimated rows: 0.00
+    ├── Filter
+    │   ├── output columns: [test.k (#0), test.v (#1)]
+    │   ├── filters: [is_true(test.k (#0) = 12)]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.test_explain_window.test
+    │       ├── output columns: [k (#0), v (#1)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── Filter
+      ├── output columns: [test.k (#2), test.v (#3)]
+      ├── filters: [is_true(test.k (#2) = 12)]
+      ├── estimated rows: 0.00
+      └── TableScan
+        ├── table: default.test_explain_window.test
+        ├── output columns: [k (#2), v (#3)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+        └── estimated rows: 0.00
+
+statement ok
+DROP DATABASE test_explain_window;

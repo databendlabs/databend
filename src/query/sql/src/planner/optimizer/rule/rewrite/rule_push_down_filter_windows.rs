@@ -14,30 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::AggregateFunction;
-use crate::plans::CastExpr;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
-use crate::plans::LagLeadFunction;
-use crate::plans::LambdaFunc;
-use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOp::Pattern;
-use crate::plans::ScalarItem;
-use crate::plans::UDFServerCall;
 use crate::plans::Window;
-use crate::plans::WindowFunc;
-use crate::plans::WindowFuncType;
-use crate::plans::WindowOrderBy;
-use crate::ScalarExpr;
 
 /// Input:   Filter
 ///           \
@@ -68,7 +54,7 @@ pub struct RulePushDownFilterWindows {
 impl RulePushDownFilterWindows {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownFilterSort,
+            id: RuleID::PushDownFilterWindows,
             patterns: vec![SExpr::create_unary(
                 Arc::new(
                     PatternPlan {
@@ -97,7 +83,11 @@ impl Rule for RulePushDownFilterWindows {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let window: Window = s_expr.child(0)?.plan().clone().try_into()?;
         let window_rel_expr = RelExpr::with_s_expr(s_expr);
