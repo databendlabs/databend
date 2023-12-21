@@ -23,8 +23,6 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -41,13 +39,8 @@ use ethnum::U256;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
-use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::BLOOM_RUNTIME_FILTER_THRESHOLD;
-use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::INLIST_RUNTIME_FILTER_THRESHOLD;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
-use crate::pipelines::processors::transforms::hash_join::util::bloom_filter;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
-use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
-use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -82,7 +75,6 @@ pub enum HashJoinHashTable {
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
-    pub(crate) ctx: Arc<QueryContext>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
     /// It will be increased by 1 when a new hash join build processor is created.
@@ -157,7 +149,6 @@ impl HashJoinState {
             enable_spill = true;
         }
         Ok(Arc::new(HashJoinState {
-            ctx: ctx.clone(),
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: AtomicUsize::new(0),
             build_done_watcher,
@@ -259,47 +250,5 @@ impl HashJoinState {
             build_state.mark_scan_map.clear();
         }
         build_state.generation_state.is_build_projected = true;
-    }
-
-    // Generate runtime filters
-    pub(crate) fn generate_runtime_filters(&self) -> Result<()> {
-        // If build side rows < 10k, using inlist filter else using bloom filter
-        let func_ctx = self.ctx.get_function_context()?;
-        let build_state = unsafe { &mut *self.build_state.get() };
-        let data_blocks = &mut build_state.build_chunks;
-
-        let num_rows = build_state.generation_state.build_num_rows;
-        if num_rows > BLOOM_RUNTIME_FILTER_THRESHOLD {
-            data_blocks.clear();
-            return Ok(());
-        }
-        let mut runtime_filter = RuntimeFilterInfo::default();
-        for (build_key, probe_key) in self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .zip(self.hash_join_desc.probe_keys_rt.iter())
-        {
-            if num_rows <= INLIST_RUNTIME_FILTER_THRESHOLD {
-                if let Some(distinct_build_column) =
-                    dedup_build_key_column(&func_ctx, data_blocks, build_key)?
-                {
-                    if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
-                        runtime_filter.add_inlist(filter);
-                    }
-                }
-            }
-            if num_rows <= BLOOM_RUNTIME_FILTER_THRESHOLD {
-                if let Some(filter) = bloom_filter(&func_ctx, build_key, probe_key, data_blocks)? {
-                    runtime_filter.add_bloom(filter);
-                }
-            }
-        }
-        if !runtime_filter.is_empty() {
-            self.ctx
-                .set_runtime_filter((self.table_index, runtime_filter));
-        }
-        data_blocks.clear();
-        Ok(())
     }
 }
