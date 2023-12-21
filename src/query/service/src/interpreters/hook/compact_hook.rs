@@ -120,7 +120,7 @@ async fn compact_table(
             database: compact_target.database,
             table: compact_target.table,
             action: OptimizeTableAction::CompactBlocks,
-            limit: Some(1000),
+            limit: Some(3),
             need_lock,
         })?;
 
