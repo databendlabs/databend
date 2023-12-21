@@ -227,6 +227,7 @@ impl IcebergTable {
             leaf_fields,
             &plan.push_downs,
             read_options,
+            vec![],
         )?;
 
         let sp = self.get_storage_params()?;

@@ -56,10 +56,11 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         ParquetReadOptions::default()
             .with_prune_row_groups(prune)
             .with_prune_pages(false),
+        vec![],
     )
     .unwrap();
 
-    let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None).unwrap();
+    let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None, None).unwrap();
 
     assert_eq!(
         expected_rgs, rgs,

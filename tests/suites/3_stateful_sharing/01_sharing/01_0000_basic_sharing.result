@@ -56,18 +56,6 @@ drop shared database and query data from share
 4
 5
 6
-ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error: 
-  --> SQL:1:15
-  |
-1 | SELECT * FROM shared_db.t2
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2` in catalog 'default'
-
-.
-ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error: 
-  --> SQL:1:15
-  |
-1 | SELECT * FROM shared_db.t2
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2` in catalog 'default'
-
-.
+ERROR 1105 (HY000) at line 1: ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
+ERROR 1105 (HY000) at line 1: ShareStorageError. Code: 2719, Text = share "test_share" storage error: HTTP status "Bad Request".
 all is good
