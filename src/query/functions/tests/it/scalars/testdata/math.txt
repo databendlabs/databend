@@ -435,6 +435,15 @@ output domain  : {100..=100}
 output         : 100
 
 
+ast            : truncate(1+3-6)(122::DECIMAL(3))
+raw expr       : truncate(-2)(CAST(122 AS Decimal(3, 0)))
+checked expr   : truncate<Decimal(3, 0)>(-2)(to_decimal<UInt8>(3, 0)(122_u8))
+optimized expr : 100_d128(3,0)
+output type    : Decimal(3, 0)
+output domain  : {100..=100}
+output         : 100
+
+
 ast            : truncate(122, -1)
 raw expr       : truncate(122, minus(1))
 checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(1_u8)))
