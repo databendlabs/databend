@@ -47,8 +47,12 @@ impl UDFValidator {
             return Err(ErrorCode::SyntaxException("Recursive UDF is not supported"));
         }
         let expr_params = &self.expr_params;
-        let mut parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
-        parameters.extend(self.lambda_parameters.iter().cloned().collect::<HashSet<_>>().into_iter());
+        let parameters = self
+            .parameters
+            .iter()
+            .chain(self.lambda_parameters.iter())
+            .cloned()
+            .collect::<HashSet<_>>();
 
         let params_not_declared: HashSet<_> = expr_params.difference(&parameters).collect();
         let params_not_used: HashSet<_> = parameters.difference(expr_params).collect();
@@ -125,9 +129,10 @@ impl<'ast> Visitor<'ast> for UDFValidator {
             }
         }
         if let Some(lambda) = lambda {
-            lambda.params.iter().for_each(|param| {
-                self.lambda_parameters.push(param.name.clone())
-            });
+            lambda
+                .params
+                .iter()
+                .for_each(|param| self.lambda_parameters.push(param.name.clone()));
             walk_expr(self, &lambda.expr)
         }
     }
