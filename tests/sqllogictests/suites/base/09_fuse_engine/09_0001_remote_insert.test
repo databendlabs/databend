@@ -83,7 +83,7 @@ SELECT segment_count, block_count, row_count from FUSE_SNAPSHOT('db1', 't3') lim
 4 4 3002
 
 statement ok
-SET auto_compaction_threshold = 3;
+SET auto_compaction_imperfect_blocks_threshold = 3;
 
 statement ok
 create table t4(number String);
@@ -109,7 +109,7 @@ SELECT segment_count, block_count, row_count from FUSE_SNAPSHOT('db1', 't4') lim
 3 3 300
 
 statement ok
-SET auto_compaction_threshold = 1000;
+SET auto_compaction_imperfect_blocks_threshold = 1000;
 
 statement ok
 DROP TABLE t1

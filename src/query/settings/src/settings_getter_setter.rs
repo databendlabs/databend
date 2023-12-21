@@ -436,12 +436,12 @@ impl Settings {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
-    pub fn get_auto_compaction_threshold(&self) -> Result<u64> {
-        self.try_get_u64("auto_compaction_threshold")
+    pub fn get_auto_compaction_imperfect_blocks_threshold(&self) -> Result<u64> {
+        self.try_get_u64("auto_compaction_imperfect_blocks_threshold")
     }
 
-    pub fn set_auto_compaction_threshold(&self, val: u64) -> Result<()> {
-        self.try_set_u64("auto_compaction_threshold", val)
+    pub fn set_auto_compaction_imperfect_blocks_threshold(&self, val: u64) -> Result<()> {
+        self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
