@@ -108,7 +108,7 @@ pub struct HashJoinBuildState {
     pub(crate) send_val: AtomicU8,
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
-
+    pub(crate) enable_inlist_runtime_filter: bool,
     /// Need to open runtime filter setting.
     pub(crate) enable_bloom_runtime_filter: bool,
 }
@@ -135,6 +135,7 @@ impl HashJoinBuildState {
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         let mut enable_bloom_runtime_filter = false;
+        let mut enable_inlist_runtime_filter = false;
         if hash_join_state.hash_join_desc.join_type == JoinType::Inner
             && ctx.get_settings().get_join_spilling_threshold()? == 0
         {
@@ -142,6 +143,7 @@ impl HashJoinBuildState {
             // For cluster, only support runtime filter for broadcast join.
             let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
             if !is_cluster || is_broadcast_join {
+                enable_inlist_runtime_filter = true;
                 if ctx.get_settings().get_runtime_filter()? {
                     enable_bloom_runtime_filter = true;
                 }
@@ -165,6 +167,7 @@ impl HashJoinBuildState {
             mutex: Default::default(),
             send_val: AtomicU8::new(1),
             enable_bloom_runtime_filter,
+            enable_inlist_runtime_filter,
         }))
     }
 
@@ -262,7 +265,8 @@ impl HashJoinBuildState {
             };
 
             let mut runtime_filter = RuntimeFilterInfo::default();
-            if build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
+            if self.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD
+            {
                 self.inlist_runtime_filter(&mut runtime_filter, &build_chunks)?;
             }
             // If enable bloom runtime filter, collect hashes for build keys
@@ -814,8 +818,11 @@ impl HashJoinBuildState {
                     num_rows,
                     &mut hashes,
                 )?;
-                let hashes: Vec<u64> = hashes.into_iter().collect();
-                let filter = BinaryFuse8::try_from(&hashes)?;
+                let mut hashes_vec = Vec::with_capacity(num_rows);
+                hashes.into_iter().for_each(|hash| {
+                    hashes_vec.push(hash);
+                });
+                let filter = BinaryFuse8::try_from(&hashes_vec)?;
                 runtime_filter.add_bloom((id.to_string(), filter));
             }
         }
@@ -835,7 +842,7 @@ impl HashJoinBuildState {
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
         {
             if let Some(distinct_build_column) =
-                dedup_build_key_column(&self.func_ctx, &data_blocks, build_key)?
+                dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
             {
                 if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                     runtime_filter.add_inlist(filter);

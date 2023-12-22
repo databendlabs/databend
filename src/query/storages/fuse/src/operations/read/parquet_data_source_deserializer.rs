@@ -227,6 +227,34 @@ impl DeserializeDataTransform {
                         _ => unreachable!(),
                     }
                 }
+                HashMethodKind::KeysU128(hash_method) => {
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::U128(c) => c.iter().for_each(|key| {
+                            let hash = key.fast_hash();
+                            if filter.contains(&hash) {
+                                bitmap.set(idx, true);
+                            }
+                            idx += 1;
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
+                HashMethodKind::KeysU256(hash_method) => {
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                    match key_state {
+                        KeysState::U256(c) => c.iter().for_each(|key| {
+                            let hash = key.fast_hash();
+                            if filter.contains(&hash) {
+                                bitmap.set(idx, true);
+                            }
+                            idx += 1;
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
                 _ => unreachable!(),
             }
         }
