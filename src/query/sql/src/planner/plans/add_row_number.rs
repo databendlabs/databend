@@ -46,10 +46,7 @@ impl Operator for AddRowNumber {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> databend_common_exception::Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 
@@ -61,5 +58,14 @@ impl Operator for AddRowNumber {
         required: &RequiredProperty,
     ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
+        rel_expr.compute_required_prop_children(ctx, required)
     }
 }
