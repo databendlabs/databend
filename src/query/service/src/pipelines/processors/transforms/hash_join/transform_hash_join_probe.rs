@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -206,13 +205,7 @@ impl TransformHashJoinProbe {
                     self.step_logs.push(HashJoinProbeStep::WaitBuild);
                     return Ok(Event::Async);
                 }
-                if self
-                    .join_probe_state
-                    .ctx
-                    .get_settings()
-                    .get_join_spilling_threshold()?
-                    != 0
-                {
+                if self.join_probe_state.hash_join_state.enable_spill {
                     self.join_probe_state.finish_final_probe()?;
                 }
                 self.output_port.finish();
@@ -345,13 +338,7 @@ impl Processor for TransformHashJoinProbe {
                             self.step_logs.push(HashJoinProbeStep::WaitBuild);
                             return Ok(Event::Async);
                         }
-                        if self
-                            .join_probe_state
-                            .ctx
-                            .get_settings()
-                            .get_join_spilling_threshold()?
-                            != 0
-                        {
+                        if self.join_probe_state.hash_join_state.enable_spill {
                             self.join_probe_state.finish_final_probe()?;
                         }
                         self.input_port.finish();
@@ -446,13 +433,7 @@ impl Processor for TransformHashJoinProbe {
                     }
                     return Ok(());
                 }
-                if self
-                    .join_probe_state
-                    .ctx
-                    .get_settings()
-                    .get_join_spilling_threshold()?
-                    != 0
-                {
+                if self.join_probe_state.hash_join_state.enable_spill {
                     if !self.spill_done {
                         self.step = HashJoinProbeStep::Spill;
                         self.step_logs.push(HashJoinProbeStep::Spill);
