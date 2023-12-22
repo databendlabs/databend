@@ -42,6 +42,7 @@ use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use log::error;
 use opendal::Operator;
 
 type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, BloomIndexFilterMeter>;
@@ -158,6 +159,10 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
         let mut array_iter =
             column_iter_to_arrays(vec![decompressor], vec![&column_type], field, None, 1)?;
         if let Some(array) = array_iter.next() {
+            if let Err(e) = &array {
+                error!("failed to deserialize bloom filter raw {:?}", e);
+            }
+
             let array = array?;
             let col = Column::from_arrow(
                 array.as_ref(),

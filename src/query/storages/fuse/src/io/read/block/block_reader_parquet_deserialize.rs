@@ -39,6 +39,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use log::error;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
@@ -107,7 +108,11 @@ impl BlockReader {
             parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
         for column_node in &self.project_column_nodes {
-            match self.deserialize_field(&field_deserialization_ctx, column_node)? {
+            let r = self.deserialize_field(&field_deserialization_ctx, column_node);
+            if let Err(e) = &r {
+                error!("deserialize_field error, location {}: {:?}", block_path, e);
+            }
+            match r? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);

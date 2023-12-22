@@ -25,6 +25,7 @@ use databend_storages_common_cache_manager::SizedColumnArray;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use log::error;
 
 use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
@@ -56,6 +57,7 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
+
         self.deserialize_chunks(
             &part.location,
             part.nums_rows,
@@ -76,13 +78,22 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
-                block_path,
-                num_rows,
-                compression,
-                column_metas,
-                column_chunks,
-            ),
+            FuseStorageFormat::Parquet => {
+                let r = self.deserialize_parquet_chunks(
+                    block_path,
+                    num_rows,
+                    compression,
+                    column_metas,
+                    column_chunks,
+                );
+                if let Err(e) = &r {
+                    error!(
+                        "deserialize_parquet_chunks error, location {}: {:?}",
+                        block_path, e
+                    );
+                };
+                r
+            }
             FuseStorageFormat::Native => self.deserialize_native_chunks(
                 block_path,
                 num_rows,
