@@ -334,6 +334,7 @@ impl SortPipelineBuilder {
                     output,
                     schema.clone(),
                     self.sort_desc.clone(),
+                    self.limit,
                     spiller,
                     output_order_col,
                 );
