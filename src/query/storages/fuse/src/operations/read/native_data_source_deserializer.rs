@@ -719,7 +719,7 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }
 
-            let count = match self.prewhere_filter.as_ref() {
+            let filtered_count = match self.prewhere_filter.as_ref() {
                 Some(_) => {
                     // Arrays are empty means all prewhere columns are default values,
                     // the filter have checked in the first process, don't need check again.
@@ -812,7 +812,7 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let block = if let Some(count) = &count {
+            let block = if let Some(count) = &filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
                 filter_executor.take(block, origin_num_rows, *count)?
             } else {
@@ -823,7 +823,7 @@ impl Processor for NativeDeserializeDataTransform {
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
-                let offsets = if let Some(count) = count {
+                let offsets = if let Some(count) = filtered_count {
                     let filter_executor = self.filter_executor.as_mut().unwrap();
                     filter_executor.mut_true_selection()[0..count]
                         .iter()
