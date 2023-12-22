@@ -165,7 +165,9 @@ impl PrivilegeAccess {
         if catalog.exists_table_function(table_name) {
             return Ok(());
         }
-
+    // to keep compatibility with the legacy privileges which granted by table name,
+    // we'd both check the privileges by name and id.
+    // we'll completely move to the id side in the future.
         match self
             .validate_access(
                 &GrantObject::Table(
