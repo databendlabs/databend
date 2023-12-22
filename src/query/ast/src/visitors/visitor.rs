@@ -241,12 +241,15 @@ pub trait Visitor<'ast>: Sized {
         _distinct: bool,
         _name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         over: &'ast Option<Window>,
         lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
             walk_expr(self, arg);
+        }
+        for param in params {
+            walk_expr(self, param);
         }
 
         if let Some(over) = over {

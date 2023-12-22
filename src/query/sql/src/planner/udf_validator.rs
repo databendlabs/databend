@@ -18,7 +18,6 @@ use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Window;
 use databend_common_ast::walk_expr;
 use databend_common_ast::Visitor;
@@ -94,7 +93,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         _distinct: bool,
         name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         over: &'ast Option<Window>,
         lambda: &'ast Option<Lambda>,
     ) {
@@ -106,6 +105,9 @@ impl<'ast> Visitor<'ast> for UDFValidator {
 
         for arg in args {
             walk_expr(self, arg);
+        }
+        for param in params {
+            walk_expr(self, param);
         }
 
         if let Some(over) = over {

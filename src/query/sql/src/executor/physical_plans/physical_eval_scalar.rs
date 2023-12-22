@@ -189,7 +189,7 @@ impl PhysicalPlanBuilder {
                             if func.func_name == "get" && !func.arguments.is_empty() {
                                 if let ScalarExpr::BoundColumnRef(column_ref) = &func.arguments[0] {
                                     if column_ref.column.index == srf_item.index {
-                                        params.push(func.params[0]);
+                                        params.push(func.params[0].clone());
                                     }
                                 }
                             }
