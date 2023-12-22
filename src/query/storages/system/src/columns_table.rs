@@ -203,9 +203,7 @@ pub(crate) async fn dump_tables(
         for db in all_databases {
             let db_id = db.get_db_info().ident.db_id;
             let db_name = db.name();
-            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id)
-                || db_name.to_lowercase() == "information_schema"
-            {
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
                 final_dbs.push((db_name.to_string(), db_id));
             }
         }
@@ -217,7 +215,9 @@ pub(crate) async fn dump_tables(
                 .get_db_info()
                 .ident
                 .db_id;
-            final_dbs.push((db, db_id));
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
+                final_dbs.push((db.to_string(), db_id));
+            }
         }
     }
 
@@ -246,8 +246,7 @@ pub(crate) async fn dump_tables(
                 table.name(),
                 db_id,
                 table.get_id(),
-            ) || database.to_lowercase() == "information_schema"
-            {
+            ) {
                 filtered_tables.push(table);
             }
         }

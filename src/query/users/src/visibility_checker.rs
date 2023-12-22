@@ -150,6 +150,11 @@ impl GrantObjectVisibilityChecker {
     }
 
     pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
+        // skip information_schema privilege check
+        if db.to_lowercase() == "information_schema" {
+            return true;
+        }
+
         if self.granted_global {
             return true;
         }
@@ -194,6 +199,11 @@ impl GrantObjectVisibilityChecker {
         db_id: u64,
         table_id: u64,
     ) -> bool {
+        // skip information_schema privilege check
+        if database.to_lowercase() == "information_schema" {
+            return true;
+        }
+
         if self.granted_global {
             return true;
         }

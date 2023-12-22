@@ -78,7 +78,7 @@ impl AsyncSystemTable for DatabasesTable {
                         &ctl_name,
                         db.name(),
                         db.get_db_info().ident.db_id,
-                    ) || db.name().to_lowercase() == "information_schema"
+                    )
                 })
                 .collect::<Vec<_>>();
 

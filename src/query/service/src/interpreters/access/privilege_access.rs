@@ -165,9 +165,9 @@ impl PrivilegeAccess {
         if catalog.exists_table_function(table_name) {
             return Ok(());
         }
-    // to keep compatibility with the legacy privileges which granted by table name,
-    // we'd both check the privileges by name and id.
-    // we'll completely move to the id side in the future.
+        // to keep compatibility with the legacy privileges which granted by table name,
+        // we'd both check the privileges by name and id.
+        // we'll completely move to the id side in the future.
         match self
             .validate_access(
                 &GrantObject::Table(
@@ -277,10 +277,13 @@ impl PrivilegeAccess {
                 }
             }
         }
-    // wrap an user-facing error message on privilege validations on cases like TableByID / DatabaseByID
+        // wrap an user-facing error message on privilege validations on cases like TableByID / DatabaseByID
         match session.validate_privilege(object, privileges.clone()).await {
             Ok(_) => Ok(()),
-            Err(_) => {
+            Err(err) => {
+                if err.code() != ErrorCode::PermissionDenied("").code() {
+                    return Err(err);
+                }
                 let current_user = self.ctx.get_current_user()?;
                 let effective_roles = session.get_all_effective_roles().await?;
 

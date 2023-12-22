@@ -124,21 +124,6 @@ impl UserApiProvider {
             UserPrivilegeSet::available_privileges_on_udf(),
         );
         let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-        // // Can not get table id and db id in here, so contain use name.
-        // public.grants.grant_privileges(
-        // &GrantObject::Table(
-        // "default".to_string(),
-        // "system".to_string(),
-        // "one".to_string(),
-        // ),
-        // UserPrivilegeType::Select.into(),
-        // );
-        //
-        // MySQL all user has this priv.
-        // public.grants.grant_privileges(
-        // &GrantObject::Database("default".to_string(), "information_schema".to_string()),
-        // UserPrivilegeType::Select.into(),
-        // );
 
         let mut result = HashMap::new();
         result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
