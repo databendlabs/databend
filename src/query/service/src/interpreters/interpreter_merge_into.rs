@@ -102,7 +102,7 @@ impl Interpreter for MergeIntoInterpreter {
         // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
         // build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),

@@ -14,6 +14,7 @@ test = false
 [dependencies]
 # Workspace dependencies
 async-backtrace = { workspace = true }
+databend-common-ast = { path = "../ast" }
 databend-common-base = { path = "../../common/base" }
 databend-common-catalog = { path = "../catalog" }
 databend-common-config = { path = "../config" }

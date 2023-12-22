@@ -95,7 +95,12 @@ impl SegmentCompactMutator {
 
         // need at lease 2 segments to make sense
         let num_segments = base_segment_locations.len();
-        let limit = std::cmp::max(2, self.compact_params.limit.unwrap_or(num_segments));
+        let limit = std::cmp::max(
+            2,
+            self.compact_params
+                .num_segment_limit
+                .unwrap_or(num_segments),
+        );
 
         // prepare compactor
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
