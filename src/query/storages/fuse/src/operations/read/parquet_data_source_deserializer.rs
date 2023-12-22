@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use log::info;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::DataSource;
@@ -60,6 +61,8 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
+
+    read_table_name: String,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -106,6 +109,7 @@ impl DeserializeDataTransform {
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
+            read_table_name: plan.source_info.desc(),
         })))
     }
 }
@@ -188,13 +192,23 @@ impl Processor for DeserializeDataTransform {
                     let columns_chunks = data.columns_chunks()?;
                     let part = FusePartInfo::from_part(&part)?;
 
-                    let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                        &part.location,
-                        part.nums_rows,
-                        &part.compression,
-                        &part.columns_meta,
-                        columns_chunks,
-                    )?;
+                    let mut data_block =
+                        match self.block_reader.deserialize_parquet_chunks_with_buffer(
+                            &part.location,
+                            part.nums_rows,
+                            &part.compression,
+                            &part.columns_meta,
+                            columns_chunks,
+                        ) {
+                            Err(err) => {
+                                info!(
+                                    "deserialize error:{} when reading table_info: {}",
+                                    err, self.read_table_name
+                                );
+                                return Err(err);
+                            }
+                            Ok(block) => block,
+                        };
 
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
