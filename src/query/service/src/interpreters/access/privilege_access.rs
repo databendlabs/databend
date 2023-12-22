@@ -275,7 +275,7 @@ impl PrivilegeAccess {
                 }
             }
         }
-
+    // wrap an user-facing error message on privilege validations on cases like TableByID / DatabaseByID
         match session.validate_privilege(object, privileges.clone()).await {
             Ok(_) => Ok(()),
             Err(_) => {
