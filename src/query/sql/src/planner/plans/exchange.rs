@@ -63,12 +63,12 @@ impl Operator for Exchange {
 
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        rel_expr.compute_required_prop_child(ctx, 0, required)
+        Ok(required.clone())
     }
 
     fn compute_required_prop_children(
