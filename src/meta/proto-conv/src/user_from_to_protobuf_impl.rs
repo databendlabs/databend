@@ -159,11 +159,19 @@ impl FromToProto for mt::principal::GrantObject {
                 catalog,
                 db,
             })) => Ok(mt::principal::GrantObject::Database(catalog, db)),
+            Some(pb::grant_object::Object::Databasebyid(
+                pb::grant_object::GrantDatabaseIdObject { catalog, db },
+            )) => Ok(mt::principal::GrantObject::DatabaseById(catalog, db)),
             Some(pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                 catalog,
                 db,
                 table,
             })) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
+            Some(pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+                catalog,
+                db,
+                table,
+            })) => Ok(mt::principal::GrantObject::TableById(catalog, db, table)),
             Some(pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf })) => {
                 Ok(mt::principal::GrantObject::UDF(udf))
             }
@@ -187,11 +195,24 @@ impl FromToProto for mt::principal::GrantObject {
                     db: db.clone(),
                 }),
             ),
+            mt::principal::GrantObject::DatabaseById(catalog, db) => Some(
+                pb::grant_object::Object::Databasebyid(pb::grant_object::GrantDatabaseIdObject {
+                    catalog: catalog.clone(),
+                    db: *db,
+                }),
+            ),
             mt::principal::GrantObject::Table(catalog, db, table) => Some(
                 pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                     catalog: catalog.clone(),
                     db: db.clone(),
                     table: table.clone(),
+                }),
+            ),
+            mt::principal::GrantObject::TableById(catalog, db, table) => Some(
+                pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+                    catalog: catalog.clone(),
+                    db: *db,
+                    table: *table,
                 }),
             ),
             mt::principal::GrantObject::UDF(udf) => Some(pb::grant_object::Object::Udf(
