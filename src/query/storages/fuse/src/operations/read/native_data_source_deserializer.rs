@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::BitAnd;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::array::Array;
@@ -51,6 +52,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
+use databend_common_expression::KeysState::U128;
+use databend_common_expression::KeysState::U256;
 use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
@@ -522,7 +525,11 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
-    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+    fn runtime_filter(
+        &mut self,
+        arrays: &mut Vec<(usize, Box<dyn Array>)>,
+    ) -> Result<Vec<MutableBitmap>> {
+        let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
             let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
@@ -539,24 +546,38 @@ impl NativeDeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok(data_block);
+                return Ok(vec![]);
             }
             self.cached_runtime_filter = Some(bloom_filters);
         }
-
-        let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
+        let mut bitmaps = Vec::with_capacity(self.cached_runtime_filter.as_ref().unwrap().len());
         for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
-            let probe_block_entry = data_block.get_by_offset(*idx);
-            let probe_column = probe_block_entry
-                .value
-                .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
+            if let Some(array_iter) = self.array_iters.get_mut(idx) {
+                let skip_pages = self.array_skip_pages.get(idx).unwrap();
+                match array_iter.nth(*skip_pages) {
+                    Some(array) => {
+                        let array = array.as_ref().unwrap();
+                        self.read_columns.push(*idx);
+                        arrays.push((*idx, array.clone()));
+                        local_arrays.push((*idx, array.clone()));
+                        self.array_skip_pages.insert(*idx, 0);
+                    }
+                    None => {
+                        return Ok(vec![]);
+                    }
+                }
+            }
+            let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
+            let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
+            local_arrays.clear();
+            let probe_column = probe_block.get_last_column().clone();
             let data_type = probe_column.data_type();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut idx = 0;
             match method {
                 HashMethodKind::KeysU8(hash_method) => {
                     let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
                             c.iter().for_each(|key| {
@@ -572,7 +593,7 @@ impl NativeDeserializeDataTransform {
                 }
                 HashMethodKind::KeysU16(hash_method) => {
                     let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
                             c.iter().for_each(|key| {
@@ -588,7 +609,7 @@ impl NativeDeserializeDataTransform {
                 }
                 HashMethodKind::KeysU32(hash_method) => {
                     let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
                             c.iter().for_each(|key| {
@@ -604,7 +625,7 @@ impl NativeDeserializeDataTransform {
                 }
                 HashMethodKind::KeysU64(hash_method) => {
                     let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], data_block.num_rows())?;
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
                     match key_state {
                         KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
                             c.iter().for_each(|key| {
@@ -618,10 +639,45 @@ impl NativeDeserializeDataTransform {
                         _ => unreachable!(),
                     }
                 }
+                HashMethodKind::KeysU128(hash_method) => {
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
+                    match key_state {
+                        U128(c) => c.iter().for_each(|key| {
+                            let hash = key.fast_hash();
+                            if filter.contains(&hash) {
+                                bitmap.set(idx, true);
+                            }
+                            idx += 1;
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
+                HashMethodKind::KeysU256(hash_method) => {
+                    let key_state = hash_method
+                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
+                    match key_state {
+                        U256(c) => c.iter().for_each(|key| {
+                            let hash = key.fast_hash();
+                            if filter.contains(&hash) {
+                                bitmap.set(idx, true);
+                            }
+                            idx += 1;
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
                 _ => unreachable!(),
             }
+            if bitmap.unset_bits() == bitmap.len() {
+                self.offset_in_part += probe_block.num_rows();
+                self.finish_process_skip_page()?;
+                return Ok(vec![]);
+            } else {
+                bitmaps.push(bitmap);
+            }
         }
-        data_block.filter_with_bitmap(&bitmap.into())
+        Ok(bitmaps)
     }
 }
 
@@ -802,6 +858,7 @@ impl Processor for NativeDeserializeDataTransform {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
+                        // 0
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
@@ -883,12 +940,15 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
+            let rf_filters = self.runtime_filter(&mut arrays)?;
+
             // Step 5: read remain columns and filter block if needed.
             for index in self.remain_columns.iter() {
                 if let Some(array_iter) = self.array_iters.get_mut(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
+                        // 1
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
@@ -917,16 +977,26 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let mut block = if let Some(filter) = &filter {
+
+            // Merge `rf_filters`
+            let filter = if !rf_filters.is_empty() {
+                let mut rf_bitmap = rf_filters[0].clone();
+                for rf_filter in rf_filters.into_iter().skip(1) {
+                    rf_bitmap = rf_bitmap.bitand(&rf_filter.into());
+                }
+                if let Some(filter) = &filter {
+                    rf_bitmap = rf_bitmap.bitand(filter.as_column().unwrap());
+                }
+                Some(Value::Column(rf_bitmap.into()))
+            } else {
+                filter
+            };
+
+            let block = if let Some(filter) = &filter {
                 block.filter_boolean_value(filter)?
             } else {
                 block
             };
-
-            // Step 9: runtime filter
-            if self.ctx.has_runtime_filters(self.table_index) {
-                block = self.runtime_filter(block)?;
-            }
 
             let progress_values = ProgressValues {
                 rows: block.num_rows(),
