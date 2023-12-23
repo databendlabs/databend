@@ -248,7 +248,7 @@ debug-assertions = true
 overflow-checks = true
 rpath = false
 
-[patch.crates-io]
+[patch.crates-io] 
 # If there are dependencies that need patching, they can be listed below.
 arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "588d371" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }

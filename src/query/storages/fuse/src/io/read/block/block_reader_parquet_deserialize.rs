@@ -40,6 +40,7 @@ use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use log::error;
+use log::info;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
@@ -129,12 +130,30 @@ impl BlockReader {
         for array in &deserialized_column_arrays {
             match array {
                 DeserializedArray::Deserialized((_, array, ..)) => {
+                    info!(
+                        "push chunk array Deserialized len is: {},block_path:{},state_info:{}",
+                        array.len(),
+                        block_path,
+                        self.ctx.get_status_info()
+                    );
                     chunk_arrays.push(array);
                 }
                 DeserializedArray::NoNeedToCache(array) => {
+                    info!(
+                        "push chunk array NoNeedToCache len is: {},block_path:{},state_info:{}",
+                        array.len(),
+                        block_path,
+                        self.ctx.get_status_info()
+                    );
                     chunk_arrays.push(array);
                 }
                 DeserializedArray::Cached(sized_column) => {
+                    info!(
+                        "push chunk array Cached len is: {},block_path:{},state_info:{}",
+                        sized_column.0.len(),
+                        block_path,
+                        self.ctx.get_status_info()
+                    );
                     chunk_arrays.push(&sized_column.0);
                 }
             }

@@ -308,13 +308,23 @@ impl AggregationContext {
             bytes: 0,
         };
         self.ctx.get_write_progress().incr(&progress_values);
-        let origin_data_block = read_block(
+        let origin_data_block = match read_block(
             self.write_settings.storage_format,
             &self.block_reader,
             block_meta,
             &self.read_settings,
         )
-        .await?;
+        .await
+        {
+            Err(err) => {
+                info!(
+                    "applying merge into occurs error: {},block_meta:{:?}",
+                    err, block_meta
+                );
+                return Err(err);
+            }
+            Ok(block) => block,
+        };
         let origin_num_rows = origin_data_block.num_rows();
         // apply delete
         let mut bitmap = MutableBitmap::new();
