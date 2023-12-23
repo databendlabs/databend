@@ -12,7 +12,7 @@ query
 select a.$1 from @data/csv/select.tsv (file_format => 'tsv') a order by $1
 ----
 
-When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided..
+query error When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided..
 select * from @data/tsv/select.tsv (file_format => 'tsv') a order by $1 
 
 query error 1065.*select \* from file only support parquet format
