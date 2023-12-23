@@ -250,7 +250,10 @@ impl Table for ParquetRSTable {
         true
     }
 
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         if !self.need_stats_provider {
             return Ok(Box::new(DummyColumnStatisticsProvider));
         }
@@ -302,7 +305,10 @@ impl Table for ParquetRSTable {
         Ok(Box::new(provider))
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         if parquet_metas.is_empty() {

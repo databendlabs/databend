@@ -59,6 +59,11 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
+    /// Whether the table engine supports the given internal column.
+    fn supported_internal_column(&self, _column_id: ColumnId) -> bool {
+        false
+    }
+
     fn schema(&self) -> Arc<TableSchema> {
         self.get_table_info().schema()
     }
@@ -137,11 +142,6 @@ pub trait Table: Sync + Send {
 
     /// Whether the table engine supports virtual columns optimization.
     fn support_virtual_columns(&self) -> bool {
-        false
-    }
-
-    /// Whether the table engine supports virtual column `_row_id`.
-    fn support_row_id_column(&self) -> bool {
         false
     }
 
@@ -269,12 +269,22 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
+        let _ = ctx;
+
         Ok(None)
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let _ = ctx;
+
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 

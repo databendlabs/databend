@@ -1206,7 +1206,7 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let table = table.table();
-        let statistics_provider = table.column_statistics_provider().await?;
+        let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
         let table_version = if table.engine() == "STREAM" {
             let options = table.options();
             let table_version = options
@@ -1343,7 +1343,7 @@ impl Binder {
             predicates.push(predicate);
         }
 
-        let stat = table.table_statistics().await?;
+        let stat = table.table_statistics(self.ctx.clone()).await?;
         let scan = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,

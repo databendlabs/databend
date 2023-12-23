@@ -301,7 +301,11 @@ impl ReplaceInterpreter {
             .get_replace_into_bloom_pruning_max_column_number()?;
         let bloom_filter_column_indexes = if !table.cluster_keys(self.ctx.clone()).is_empty() {
             fuse_table
-                .choose_bloom_filter_columns(&on_conflicts, max_num_pruning_columns)
+                .choose_bloom_filter_columns(
+                    self.ctx.clone(),
+                    &on_conflicts,
+                    max_num_pruning_columns,
+                )
                 .await?
         } else {
             vec![]
