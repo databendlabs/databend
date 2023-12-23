@@ -133,9 +133,8 @@ impl Binder {
                 for indirect in names {
                     if let Indirection::Star(span) = indirect {
                         return Err(ErrorCode::SemanticError(
-                            "SELECT * with no tables specified is not valid".to_string(),
-                        )
-                        .set_span(*span));
+                            "Invalid query: 'SELECT *' is used without specifying any tables in the FROM clause.".to_string(),
+                        ).set_span(*span));
                     }
                 }
             }
@@ -413,7 +412,9 @@ impl Binder {
                 }
                 return Ok((new_expr, bind_context.clone()));
             } else {
-                return Err(ErrorCode::Internal("Invalid table function subquery"));
+                return Err(ErrorCode::Internal(
+                    "Invalid subquery in table function: Table functions do not support this type of subquery.",
+                ));
             }
         }
         // Set name for srf result column

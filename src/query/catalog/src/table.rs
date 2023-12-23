@@ -154,7 +154,7 @@ pub trait Table: Sync + Send {
         let (_, _) = (ctx, cluster_key);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Unsupported clustering keys for engine: {}",
+            "Altering table cluster keys is not supported for the '{}' engine.",
             self.engine()
         )))
     }
@@ -164,7 +164,7 @@ pub trait Table: Sync + Send {
         let _ = ctx;
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Unsupported clustering keys for engine: {}",
+            "Dropping table cluster keys is not supported for the '{}' engine.",
             self.engine()
         )))
     }
@@ -178,8 +178,9 @@ pub trait Table: Sync + Send {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
+
         Err(ErrorCode::Unimplemented(format!(
-            "read_partitions operation for table {} is not implemented. table engine : {}",
+            "The 'read_partitions' operation is not implemented for table '{}' using the '{}' engine.",
             self.name(),
             self.get_table_info().meta.engine
         )))

@@ -201,8 +201,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };
@@ -787,7 +787,10 @@ impl TableContext for QueryContext {
                         return Ok(results);
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
-                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+                        return Err(ErrorCode::Internal(format!(
+                            "Exceeded the maximum number of {} files per commit.",
+                            COPY_MAX_FILES_PER_COMMIT
+                        )));
                     }
                 }
             }

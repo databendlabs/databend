@@ -219,7 +219,10 @@ impl StageFilesInfo {
                     if path == STDIN_FD {
                         return Ok(vec![stdin_stage_info()?]);
                     }
-                    return Err(ErrorCode::BadArguments("object mode is unknown"));
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unable to determine the mode of the object at path '{}'. The mode is unknown or unsupported.",
+                        path
+                    )));
                 }
             },
             Err(e) => {

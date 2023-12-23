@@ -121,10 +121,10 @@ impl Interpreter for DeleteInterpreter {
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
-                return Err(ErrorCode::from_string(
-                    "table doesn't support row_id, so it can't use delete with subquery"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::from_string(format!(
+                    "Delete with subquery is not supported for the table '{}', which lacks row_id support.",
+                    tbl.name(),
+                )));
             }
             let table_index = self.plan.metadata.read().get_table_index(
                 Some(self.plan.database_name.as_str()),
