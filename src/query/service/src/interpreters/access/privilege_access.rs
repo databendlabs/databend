@@ -205,7 +205,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied, user {} don't have privilege for database {}",
+                                "Permission denied: User '{}' does not have the required privileges for database '{}'.",
                                 identity, database
                             )))
                         };
@@ -216,7 +216,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied, user {} don't have privilege for database {}",
+                                "Permission denied: User '{}' does not have the required privileges for database '{}'.",
                                 identity, database
                             )))
                         };
@@ -227,7 +227,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied, user {} don't have privilege for table {}.{}",
+                                "Permission denied: User '{}' does not have the required privileges for table '{}.{}'.",
                                 identity, database, table
                             )))
                         };
@@ -734,7 +734,7 @@ impl AccessChecker for PrivilegeAccess {
                                 }
                             }
                             Err(err) => {
-                                return Err(err.add_message("get udf error on validating access"));
+                                return Err(err.add_message("Unable to access necessary user-defined functions for executing the DELETE operation"));
                             }
                         }
                     }
@@ -774,7 +774,7 @@ impl AccessChecker for PrivilegeAccess {
                                 }
                             }
                             Err(err) => {
-                                return Err(err.add_message("get udf error on validating access"));
+                                return Err(err.add_message("Failed to retrieve necessary user-defined functions for executing the UPDATE operation."));
                             }
                         }
                     }

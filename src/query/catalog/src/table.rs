@@ -201,7 +201,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
 
         Err(ErrorCode::Unimplemented(format!(
-            "read_data operation for table {} is not implemented. table engine : {}",
+            "The 'read_data' operation is not implemented for the table '{}'. Table engine type: '{}'.",
             self.name(),
             self.get_table_info().meta.engine
         )))
@@ -217,11 +217,12 @@ pub trait Table: Sync + Send {
         let (_, _, _) = (ctx, pipeline, append_mode);
 
         Err(ErrorCode::Unimplemented(format!(
-            "append_data operation for table {} is not implemented. table engine : {}",
+            "The 'append_data' operation is not available for the table '{}'. Current table engine: '{}'.",
             self.name(),
             self.get_table_info().meta.engine
         )))
     }
+
     fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -294,7 +295,7 @@ pub trait Table: Sync + Send {
         let _ = instant;
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support time travel",
+            "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -322,7 +323,7 @@ pub trait Table: Sync + Send {
         let (_, _, _) = (ctx, lock, limit);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support compact segments",
+            "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -337,7 +338,7 @@ pub trait Table: Sync + Send {
         let (_, _) = (ctx, limit);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support compact",
+            "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -355,7 +356,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support recluster",
+            "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -368,8 +369,9 @@ pub trait Table: Sync + Send {
         point: NavigationDescriptor,
     ) -> Result<()> {
         let (_, _) = (ctx, point);
+
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support revert",
+            "The 'revert_to' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -416,7 +418,7 @@ pub trait TableExt: Table {
         if self.is_read_only() {
             let table_info = self.get_table_info();
             Err(ErrorCode::InvalidOperation(format!(
-                "Mutation not allowed, table [{}] is READ ONLY.",
+                "Modification not permitted: Table '{}' is configured as READ ONLY, preventing any changes or updates.",
                 table_info.name
             )))
         } else {

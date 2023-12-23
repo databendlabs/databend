@@ -787,10 +787,7 @@ impl TableContext for QueryContext {
                         return Ok(results);
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
-                        return Err(ErrorCode::Internal(format!(
-                            "Exceeded the maximum number of {} files per commit.",
-                            COPY_MAX_FILES_PER_COMMIT
-                        )));
+                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
                 }
             }

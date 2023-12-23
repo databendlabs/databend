@@ -60,7 +60,9 @@ use crate::storage::StorageParams;
 pub const COPY_MAX_FILES_PER_COMMIT: usize = 15000;
 
 /// Instruction for exceeding 'copy into table' file limit.
-pub const COPY_MAX_FILES_COMMIT_MSG: &str = "Limit for 'copy into table': 15,000 files per commit. To handle more files, adjust 'CopyOption' with 'max_files=<num>' and perform several operations until all files are processed.";
+pub const COPY_MAX_FILES_COMMIT_MSG: &str = "Commit limit reached: 15,000 files for 'copy into table'. To process additional files, \
+    configure 'CopyOption' with 'max_files=<num>'. Repeat the process in batches as needed \
+    to manage all files effectively.";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
