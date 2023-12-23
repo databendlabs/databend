@@ -14,7 +14,7 @@ count() of test attach only table
 delete not allowed
 Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 update not allowed
-Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+Error: APIError: ResponseError with 1006: Unable to get field named "a". Valid fields: ["number"]
 truncate not allowed
 Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table column not allowed
@@ -36,7 +36,7 @@ optimize table purge not allowed
 Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 drop table ALL not allowed
 Error: APIError: ResponseError with 3905:  drop table ALL is not allowed for read only table, please consider remove the option ALL
-Mutation not allowed, table [attach_read_only] is READ ONLY.
+Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 drop table IS allowed
 undrop table should work
 0
