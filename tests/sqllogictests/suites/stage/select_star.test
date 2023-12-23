@@ -22,7 +22,7 @@ select $1 from @unload (file_format => 'csv')
 1
 2
 
-query error 1065.*select columns from csv file must in the form of
+query error 1065.*When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided..
 select * from @unload (file_format => 'csv')
 ----
 
