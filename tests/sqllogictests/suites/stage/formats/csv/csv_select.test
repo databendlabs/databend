@@ -12,8 +12,8 @@ select a.$1 from @data/csv (files=>('select.csv'), file_format=>'csv') a order b
 2
 3
 
-query error select columns from csv file must in the form of
+query error When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided..
 select * from @data/csv (files=>('select.csv'), file_format=>'csv')
 
-query error 1065.*select \* from file only support parquet format
+query error 1065.*When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided..
 select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')
