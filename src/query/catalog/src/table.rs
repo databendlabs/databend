@@ -418,7 +418,7 @@ pub trait TableExt: Table {
         if self.is_read_only() {
             let table_info = self.get_table_info();
             Err(ErrorCode::InvalidOperation(format!(
-                "Modification not permitted: Table '{}' is configured as READ ONLY, preventing any changes or updates.",
+                "Modification not permitted: Table '{}' is READ ONLY, preventing any changes or updates.",
                 table_info.name
             )))
         } else {

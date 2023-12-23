@@ -133,8 +133,10 @@ impl Binder {
                 for indirect in names {
                     if let Indirection::Star(span) = indirect {
                         return Err(ErrorCode::SemanticError(
-                            "Invalid query: 'SELECT *' is used without specifying any tables in the FROM clause.".to_string(),
-                        ).set_span(*span));
+                            "'SELECT *' is used without specifying any tables in the FROM clause."
+                                .to_string(),
+                        )
+                        .set_span(*span));
                     }
                 }
             }

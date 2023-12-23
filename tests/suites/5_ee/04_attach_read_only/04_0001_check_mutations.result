@@ -1,14 +1,14 @@
 create virtual column should fail
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is configured as READ ONLY, preventing any changes or updates.
 alter virtual column should fail
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is configured as READ ONLY, preventing any changes or updates.
 drop virtual column should fail
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is configured as READ ONLY, preventing any changes or updates.
 refresh virtual column should fail
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is configured as READ ONLY, preventing any changes or updates.
 vacuum table
 vacuum table should fail
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [test_json_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'test_json_read_only' is configured as READ ONLY, preventing any changes or updates.
 vacuum drop table from db should not include the read_only attach table
 expect table data still there
 1	{"a":33,"b":44}

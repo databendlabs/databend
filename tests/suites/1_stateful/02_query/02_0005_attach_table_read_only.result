@@ -12,28 +12,28 @@ count() of base table after deletion
 count() of test attach only table
 1
 delete not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 update not allowed
-Error: APIError: ResponseError with 1006: Unable to get field named "a". Valid fields: ["number"]
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 truncate not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table column not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table set options not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table flashback not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table recluster not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 analyze table not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 optimize table
 optimize table compact not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 optimize table compact segment not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 optimize table purge not allowed
-Error: APIError: ResponseError with 3905: Mutation not allowed, table [attach_read_only] is READ ONLY.
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 drop table ALL not allowed
 Error: APIError: ResponseError with 3905:  drop table ALL is not allowed for read only table, please consider remove the option ALL
 Mutation not allowed, table [attach_read_only] is READ ONLY.

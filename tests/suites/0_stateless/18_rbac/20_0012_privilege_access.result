@@ -47,8 +47,8 @@ t
 test -- show columns
 dummy	TINYINT UNSIGNED	NO		NULL	NULL
 c1	INT	NO		NULL	NULL
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for table system.tables
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for database nogrant
+Error: APIError: ResponseError with 1063: Permission denied: User ''a'@'%'' does not have the required privileges for table 'system.tables'.
+Error: APIError: ResponseError with 1063: Permission denied: User ''a'@'%'' does not have the required privileges for database 'nogrant'.
 1
 0
 93
