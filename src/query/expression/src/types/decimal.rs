@@ -21,12 +21,13 @@ use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::display_decimal_128;
+use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use ethnum::AsI256;
 use itertools::Itertools;
 use num_traits::NumCast;
-use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -305,9 +306,10 @@ pub trait Decimal:
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
-    fn from_u64(value: u64) -> Self;
-    fn from_i64(value: i64) -> Self;
+    fn from_i128<U: Into<i128>>(value: U) -> Self;
+
     fn de_binary(bytes: &mut &[u8]) -> Self;
+    fn display(self, scale: u8) -> String;
 
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
@@ -442,12 +444,8 @@ impl Decimal for i128 {
         }
     }
 
-    fn from_u64(value: u64) -> Self {
-        value.to_i128().unwrap()
-    }
-
-    fn from_i64(value: i64) -> Self {
-        value.to_i128().unwrap()
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        value.into()
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -456,6 +454,10 @@ impl Decimal for i128 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i128::from_le_bytes(bs)
+    }
+
+    fn display(self, scale: u8) -> String {
+        display_decimal_128(self, scale)
     }
 
     fn to_float32(self, scale: u8) -> f32 {
@@ -611,12 +613,8 @@ impl Decimal for i256 {
         value.as_i256()
     }
 
-    fn from_u64(value: u64) -> Self {
-        i256::from(value.to_i128().unwrap())
-    }
-
-    fn from_i64(value: i64) -> Self {
-        i256::from(value.to_i128().unwrap())
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        i256::from(value.into())
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -625,6 +623,10 @@ impl Decimal for i256 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i256::from_le_bytes(bs)
+    }
+
+    fn display(self, scale: u8) -> String {
+        display_decimal_256(self, scale)
     }
 
     fn to_float32(self, scale: u8) -> f32 {

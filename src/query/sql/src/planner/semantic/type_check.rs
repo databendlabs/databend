@@ -827,12 +827,29 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
+                    let mut new_params = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for aggregate function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(
-                            *span, func_name, expr, *distinct, params, &args,
+                            *span, func_name, expr, *distinct, new_params, &args,
                         )
                         .await?;
                     self.in_window_function = in_window;
@@ -858,25 +875,31 @@ impl<'a> TypeChecker<'a> {
                         .await?
                 } else {
                     // Scalar function
-                    let params = params
-                        .iter()
-                        .map(|literal| match literal {
-                            Literal::UInt64(n) => Ok(*n as usize),
-                            lit => Err(ErrorCode::SemanticError(format!(
-                                "invalid parameter {lit} for scalar function"
-                            ))
-                            .set_span(*span)),
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    self.resolve_function(*span, func_name, params, &args)
+                    let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for scalar function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
+                    self.resolve_function(*span, func_name, new_params, &args)
                         .await?
                 }
             }
 
             Expr::CountAll { span, window } => {
                 let (new_agg_func, data_type) = self
-                    .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
+                    .resolve_aggregate_function(*span, "count", expr, false, vec![], &[])
                     .await?;
 
                 if let Some(window) = window {
@@ -1054,7 +1077,7 @@ impl<'a> TypeChecker<'a> {
             if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: databend_common_expression::Scalar::Number(NumberScalar::Int64(1)),
+                    value: databend_common_expression::Scalar::Number(1i64.into()),
                 }
                 .into();
             }
@@ -1596,7 +1619,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         expr: &Expr,
         distinct: bool,
-        params: &[Literal],
+        params: Vec<Scalar>,
         args: &[&Expr],
     ) -> Result<(AggregateFunction, DataType)> {
         if matches!(
@@ -1626,14 +1649,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Check aggregate function
-        let params = params
-            .iter()
-            .map(|literal| {
-                self.resolve_literal_scalar(literal)
-                    .map(|box (value, _)| value)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         self.in_aggregate_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1819,7 +1834,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
@@ -1885,11 +1900,35 @@ impl<'a> TypeChecker<'a> {
         &self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        mut params: Vec<Scalar>,
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+
+        // inject the params
+        if ["round", "truncate"].contains(&func_name)
+            && !args.is_empty()
+            && params.is_empty()
+            && args[0].data_type()?.remove_nullable().is_decimal()
+        {
+            let scale = if args.len() == 2 {
+                let scalar_expr = &arguments[1];
+                let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
+
+                let scale = check_number::<_, i64>(
+                    expr.span(),
+                    &FunctionContext::default(),
+                    &expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                scale.clamp(-76, 76)
+            } else {
+                0
+            };
+            params.push(Scalar::Number(NumberScalar::Int64(scale)));
+        }
+
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
@@ -2772,7 +2811,8 @@ impl<'a> TypeChecker<'a> {
                     .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, arguments, udf_def).await?,
+                self.resolve_udf_server(span, name, arguments, udf_def)
+                    .await?,
             )),
         }
     }
@@ -2782,6 +2822,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf_server(
         &mut self,
         span: Span,
+        name: String,
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2828,6 +2869,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             UDFServerCall {
                 span,
+                name,
                 func_name: udf_definition.handler,
                 display_name,
                 server_addr: udf_definition.address,
@@ -2947,7 +2989,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value = FunctionCall {
                         span,
-                        params: vec![idx + 1],
+                        params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3073,7 +3115,7 @@ impl<'a> TypeChecker<'a> {
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![idx],
+                    params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3189,7 +3231,7 @@ impl<'a> TypeChecker<'a> {
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
                         span,
-                        params: vec![idx],
+                        params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }

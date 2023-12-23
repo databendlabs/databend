@@ -22,14 +22,18 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Dialect;
 use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check;
 use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
@@ -148,10 +152,15 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .collect(),
             params: params
                 .into_iter()
-                .map(|param| match param {
-                    ASTLiteral::UInt64(u) => u as usize,
-                    ASTLiteral::Decimal256 { .. } => 0_usize,
-                    _ => unimplemented!(),
+                .map(|param| {
+                    let raw_expr = transform_expr(param, &[]);
+                    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+                    let (expr, _) = ConstantFolder::fold(
+                        &expr,
+                        &FunctionContext::default(),
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    expr.into_constant().unwrap().1
                 })
                 .collect(),
         },
@@ -349,9 +358,13 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
-                    (vec![key as usize], vec![transform_expr(*expr, columns)])
+                    (vec![key as i64], vec![transform_expr(*expr, columns)])
                 }
             };
+            let params = params
+                .into_iter()
+                .map(|x| Scalar::Number(x.into()))
+                .collect();
             RawExpr::FunctionCall {
                 span,
                 name: "get".to_string(),

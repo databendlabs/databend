@@ -502,6 +502,14 @@ impl NumberScalar {
     }
 }
 
+impl<T> From<T> for NumberScalar
+where T: Number
+{
+    fn from(value: T) -> Self {
+        T::upcast_scalar(value)
+    }
+}
+
 impl NumberColumn {
     pub fn len(&self) -> usize {
         crate::with_number_type!(|NUM_TYPE| match self {

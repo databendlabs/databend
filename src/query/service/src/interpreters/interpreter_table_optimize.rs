@@ -171,17 +171,18 @@ impl OptimizeTableInterpreter {
             .compact_blocks(self.ctx.clone(), self.plan.limit)
             .await?;
 
-        let is_distributed = (!self.ctx.get_cluster().is_empty())
+        let catalog_info = catalog.info();
+        let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
 
-        let catalog_info = catalog.info();
+        // build the compact pipeline.
         let mut compact_pipeline = if let Some((parts, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
                 parts,
                 table_info,
                 snapshot,
                 catalog_info,
-                is_distributed,
+                compact_is_distributed,
                 self.plan.need_lock,
             )?;
 
@@ -193,8 +194,10 @@ impl OptimizeTableInterpreter {
             Pipeline::create()
         };
 
+        // build the recluster pipeline.
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
+        // check if the table need recluster, defined by cluster keys.
         let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         if need_recluster {
             if !compact_pipeline.is_empty() {

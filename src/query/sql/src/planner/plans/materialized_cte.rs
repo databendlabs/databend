@@ -61,7 +61,7 @@ impl Operator for MaterializedCte {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         Ok(Arc::new(StatInfo {
             cardinality: right_stat_info.cardinality,
@@ -80,5 +80,16 @@ impl Operator for MaterializedCte {
         Ok(RequiredProperty {
             distribution: Distribution::Serial,
         })
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
     }
 }

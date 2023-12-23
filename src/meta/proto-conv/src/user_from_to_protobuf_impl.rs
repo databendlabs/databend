@@ -99,7 +99,8 @@ impl FromToProto for mt::principal::UserOption {
         Ok(mt::principal::UserOption::default()
             .with_flags(flags)
             .with_default_role(p.default_role)
-            .with_network_policy(p.network_policy))
+            .with_network_policy(p.network_policy)
+            .with_password_policy(p.password_policy))
     }
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
@@ -109,6 +110,7 @@ impl FromToProto for mt::principal::UserOption {
             flags: self.flags().bits(),
             default_role: self.default_role().cloned(),
             network_policy: self.network_policy().cloned(),
+            password_policy: self.password_policy().cloned(),
         })
     }
 }
@@ -380,6 +382,62 @@ impl FromToProto for mt::principal::NetworkPolicy {
             name: self.name.clone(),
             allowed_ip_list: self.allowed_ip_list.clone(),
             blocked_ip_list: self.blocked_ip_list.clone(),
+            comment: self.comment.clone(),
+            create_on: self.create_on.to_pb()?,
+            update_on: match &self.update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
+        })
+    }
+}
+
+impl FromToProto for mt::principal::PasswordPolicy {
+    type PB = pb::PasswordPolicy;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::PasswordPolicy) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(mt::principal::PasswordPolicy {
+            name: p.name.clone(),
+            min_length: p.min_length,
+            max_length: p.max_length,
+            min_upper_case_chars: p.min_upper_case_chars,
+            min_lower_case_chars: p.min_lower_case_chars,
+            min_numeric_chars: p.min_numeric_chars,
+            min_special_chars: p.min_special_chars,
+            min_age_days: p.min_age_days,
+            max_age_days: p.max_age_days,
+            max_retries: p.max_retries,
+            lockout_time_mins: p.lockout_time_mins,
+            history: p.history,
+            comment: p.comment,
+            create_on: DateTime::<Utc>::from_pb(p.create_on)?,
+            update_on: match p.update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::PasswordPolicy, Incompatible> {
+        Ok(pb::PasswordPolicy {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            min_length: self.min_length,
+            max_length: self.max_length,
+            min_upper_case_chars: self.min_upper_case_chars,
+            min_lower_case_chars: self.min_lower_case_chars,
+            min_numeric_chars: self.min_numeric_chars,
+            min_special_chars: self.min_special_chars,
+            min_age_days: self.min_age_days,
+            max_age_days: self.max_age_days,
+            max_retries: self.max_retries,
+            lockout_time_mins: self.lockout_time_mins,
+            history: self.history,
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb()?,
             update_on: match &self.update_on {

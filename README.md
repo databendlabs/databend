@@ -3,8 +3,8 @@
 <div align="center">
 
 <h4 align="center">
-  <a href="https://docs.databend.com/doc/cloud">Databend Serverless Cloud (beta)</a>  |
-  <a href="https://docs.databend.com/doc">Documentation</a>  |
+  <a href="https://docs.databend.com/guides/cloud">Databend Serverless Cloud (beta)</a>  |
+  <a href="https://docs.databend.com/">Documentation</a>  |
   <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/11868">Roadmap (v1.3)</a>
 
@@ -50,7 +50,7 @@
 
 - **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/doc/sql-functions/ai-functions/).
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/sql/sql-functions/ai-functions/).
 
 - **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 
@@ -82,58 +82,57 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Deploying Databend</summary>
 
-- [Understanding Deployment Modes](https://docs.databend.com/doc/deploy/understanding-deployment-modes)
-- [Deploying a Standalone Databend](https://docs.databend.com/doc/deploy/deploying-databend)
-- [Expanding a Standalone Databend](https://docs.databend.com/doc/deploy/expanding-to-a-databend-cluster)
-- [Databend Cloud (Beta)](https://docs.databend.com/cloud)
+- [Understanding Deployment Modes](https://docs.databend.com/guides/deploy/understanding-deployment-modes)
+- [Deploying a Standalone Databend](https://docs.databend.com/guides/deploy/deploying-databend)
+- [Expanding a Standalone Databend](https://docs.databend.com/guides/deploy/expanding-to-a-databend-cluster)
+- [Databend Cloud (Beta)](https://docs.databend.com/guides/cloud)
 </details>
 
 <details>
 <summary>Connecting to Databend</summary>
 
-- [Connecting to Databend with BendSQL](https://docs.databend.com/doc/sql-clients/bendsql)
-- [Connecting to Databend with JDBC](https://docs.databend.com/doc/sql-clients/jdbc)
-- [Connecting to Databend with MySQL-Compatible Clients](https://docs.databend.com/doc/sql-clients/mysql)
+- [Connecting to Databend with BendSQL](https://docs.databend.com/guides/sql-clients/bendsql)
+- [Connecting to Databend with JDBC](https://docs.databend.com/guides/sql-clients/jdbc)
 
 </details>
 
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File](https://docs.databend.com/doc/load-data/load/local)
-- [How to Load Data from Bucket](https://docs.databend.com/doc/load-data/load/s3)
-- [How to Load Data from Stage](https://docs.databend.com/doc/load-data/load/stage)
-- [How to Load Data from Remote Files](https://docs.databend.com/doc/load-data/load/http)
-- [Querying Data in Staged Files](https://docs.databend.com/doc/load-data/transform/querying-stage)
-- [Transforming Data During a Load](https://docs.databend.com/doc/load-data/transform/data-load-transform)
-- [How to Unload Data from Databend](https://docs.databend.com/doc/load-data/unload)
+- [How to Load Data from Local File](https://docs.databend.com/guides/load-data/load/local)
+- [How to Load Data from Bucket](https://docs.databend.com/guides/load-data/load/s3)
+- [How to Load Data from Stage](https://docs.databend.com/guides/load-data/load/stage)
+- [How to Load Data from Remote Files](https://docs.databend.com/guides/load-data/load/http)
+- [Querying Data in Staged Files](https://docs.databend.com/guides/load-data/transform/querying-stage)
+- [Transforming Data During a Load](https://docs.databend.com/guides/load-data/transform/data-load-transform)
+- [How to Unload Data from Databend](https://docs.databend.com/guides/unload-data/)
 
 </details>
 
 <details>
 <summary>Loading Data Tools with Databend</summary>
 
-- [Apache Kafka](https://docs.databend.com/doc/load-data/load-db/kafka)
-- [Airbyte](https://docs.databend.com/doc/load-data/load-db/airbyte)
-- [dbt](https://docs.databend.com/doc/load-data/load-db/dbt)
-- [Debezium](https://docs.databend.com/doc/load-data/load-db/debezium)
-- [Apache Flink CDC](https://docs.databend.com/doc/load-data/load-db/flink-cdc)
-- [DataDog Vector](https://docs.databend.com/doc/load-data/load-db/vector)
-- [Addax](https://docs.databend.com/doc/load-data/load-db/addax)
-- [DataX](https://docs.databend.com/doc/load-data/load-db/datax)
+- [Apache Kafka](https://docs.databend.com/guides/load-data/load-db/kafka)
+- [Airbyte](https://docs.databend.com/guides/load-data/load-db/airbyte)
+- [dbt](https://docs.databend.com/guides/load-data/load-db/dbt)
+- [Debezium](https://docs.databend.com/guides/load-data/load-db/debezium)
+- [Apache Flink CDC](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+- [DataDog Vector](https://docs.databend.com/guides/load-data/load-db/vector)
+- [Addax](https://docs.databend.com/guides/load-data/load-db/addax)
+- [DataX](https://docs.databend.com/guides/load-data/load-db/datax)
 
 </details>
 
 <details>
 <summary>Visualize Tools with Databend</summary>
 
-- [Metabase](https://docs.databend.com/doc/visualize/metabase)
-- [Tableau](https://docs.databend.com/doc/visualize/tableau)
-- [Grafana](https://docs.databend.com/doc/visualize/grafana)
-- [Jupyter Notebook](https://docs.databend.com/doc/visualize/jupyter)
-- [Deepnote](https://docs.databend.com/doc/visualize/deepnote)
-- [MindsDB](https://docs.databend.com/doc/visualize/mindsdb)
-- [Redash](https://docs.databend.com/doc/visualize/redash)
+- [Metabase](https://docs.databend.com/guides/visualize/metabase)
+- [Tableau](https://docs.databend.com/guides/visualize/tableau)
+- [Grafana](https://docs.databend.com/guides/visualize/grafana)
+- [Jupyter Notebook](https://docs.databend.com/guides/visualize/jupyter)
+- [Deepnote](https://docs.databend.com/guides/visualize/deepnote)
+- [MindsDB](https://docs.databend.com/guides/visualize/mindsdb)
+- [Redash](https://docs.databend.com/guides/visualize/redash)
 
 </details>
 
@@ -226,8 +225,8 @@ Databend thrives on community contributions! Whether it's through ideas, code, o
 
 Here are some resources to help you get started:
 
-- [Building Databend From Source](https://docs.databend.com/doc/contributing/building-from-source)
-- [The First Good Pull Request](https://docs.databend.com/doc/contributing/good-pr)
+- [Building Databend From Source](https://docs.databend.com/guides/overview/community/contributor/building-from-source)
+- [The First Good Pull Request](https://docs.databend.com/guides/overview/community/contributor/good-pr)
 
 
 ## 👥 Community
@@ -236,7 +235,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs/) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 
@@ -258,7 +257,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/doc/enterprise/license).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/overview/editions/dee/license).
 
 
 ## 🙏 Acknowledgement

@@ -50,9 +50,9 @@ pub fn read_decimal_with_size<T: Decimal>(
                 // Checking whether numbers need to be added or subtracted to calculate rounding
                 if let Some(r) = n.checked_rem(T::e(scale_diff)) {
                     if let Some(m) = r.checked_div(T::e(scale_diff - 1)) {
-                        if m >= T::from_i64(5i64) {
+                        if m >= T::from_i128(5i64) {
                             round_val = Some(T::one());
-                        } else if m <= T::from_i64(-5i64) {
+                        } else if m <= T::from_i128(-5i64) {
                             round_val = Some(T::minus_one());
                         }
                     }
@@ -140,7 +140,7 @@ pub fn read_decimal<T: Decimal>(
                             .checked_mul(T::e(zeros + 1))
                             .ok_or_else(decimal_overflow_error)?;
                         n = n
-                            .checked_add(T::from_u64((v - b'0') as u64))
+                            .checked_add(T::from_i128((v - b'0') as u64))
                             .ok_or_else(decimal_overflow_error)?;
                         zeros = 0;
                     }
@@ -200,7 +200,7 @@ pub fn read_decimal<T: Decimal>(
                             .checked_mul(T::e(zeros + 1))
                             .ok_or_else(decimal_overflow_error)?;
                         n = n
-                            .checked_add(T::from_u64((v - b'0') as u64))
+                            .checked_add(T::from_i128((v - b'0') as u64))
                             .ok_or_else(decimal_overflow_error)?;
                         digits += zeros + 1;
                         zeros = 0;
@@ -288,11 +288,11 @@ pub fn read_decimal_from_json<T: Decimal>(
     match value {
         serde_json::Value::Number(n) => {
             if n.is_i64() {
-                Ok(T::from_i64(n.as_i64().unwrap())
+                Ok(T::from_i128(n.as_i64().unwrap())
                     .with_size(size)
                     .ok_or_else(decimal_overflow_error)?)
             } else if n.is_u64() {
-                Ok(T::from_u64(n.as_u64().unwrap())
+                Ok(T::from_i128(n.as_u64().unwrap())
                     .with_size(size)
                     .ok_or_else(decimal_overflow_error)?)
             } else {

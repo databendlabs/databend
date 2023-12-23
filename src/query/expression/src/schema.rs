@@ -87,11 +87,6 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 }
 
 #[inline]
-pub fn is_internal_stream_column_id(column_id: ColumnId) -> bool {
-    (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
-}
-
-#[inline]
 pub fn is_internal_column(column_name: &str) -> bool {
     matches!(
         column_name,
@@ -102,6 +97,13 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | BASE_BLOCK_IDS_COL_NAME
             | ROW_NUMBER_COL_NAME
             | PREDICATE_COLUMN_NAME
+            | CHANGE_ACTION_COL_NAME
+            | CHANGE_IS_UPDATE_COL_NAME
+            | CHANGE_ROW_ID_COL_NAME
+            // change$row_id might be expended 
+            // to the computation of the two following internal columns
+            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+            | BASE_ROW_ID_COL_NAME
     )
 }
 

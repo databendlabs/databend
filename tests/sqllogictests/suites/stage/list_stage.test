@@ -21,9 +21,9 @@ parquet/complex.parquet 92762 NULL
 query 
 select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') order by name limit 3
 ----
-delta/delta-table/part-00000-591f0193-1689-4fd1-9ca9-89b4a1ac3ee7-c000.snappy.parquet 452 NULL
-delta/delta-table/part-00001-ba27dc1f-0d4c-4d57-8869-b43b29beffce-c000.snappy.parquet 452 NULL
-delta/delta-table/part-00002-64a80177-8859-44fc-aee8-db5b4325483c-c000.snappy.parquet 452 NULL
+delta/partitioned/_delta_log/00000000000000000002.checkpoint.parquet 18468 NULL
+delta/partitioned/_delta_log/00000000000000000004.checkpoint.parquet 18428 NULL
+delta/partitioned/p0=10/p2=12/p4=14/part-00000-62d00564-86cc-4256-a203-dbb878f585a6.c000.snappy.parquet 890 NULL
 
 query 
 select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') where name = 'parquet/tuple.parquet'

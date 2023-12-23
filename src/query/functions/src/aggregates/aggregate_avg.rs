@@ -189,7 +189,7 @@ where
         match self
             .value
             .checked_mul(T::Scalar::e(decimal_avg_data.scale_add as u32))
-            .and_then(|v| v.checked_div(T::Scalar::from_u64(self.count)))
+            .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
         {
             Some(value) => {
                 T::push_item(builder, T::to_scalar_ref(&value));

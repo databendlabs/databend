@@ -241,7 +241,7 @@ impl Binder {
             .await
         {
             Ok(table) => table,
-            Err(_) => {
+            Err(e) => {
                 let mut parent = bind_context.parent.as_mut();
                 loop {
                     if parent.is_none() {
@@ -260,10 +260,13 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                ))
-                .set_span(*span));
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                    ))
+                    .set_span(*span));
+                }
+                return Err(e);
             }
         };
 
@@ -378,7 +381,7 @@ impl Binder {
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
                         func_name: "get".to_string(),
-                        params: vec![i + 1],
+                        params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
@@ -1203,7 +1206,7 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let table = table.table();
-        let statistics_provider = table.column_statistics_provider().await?;
+        let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
         let table_version = if table.engine() == "STREAM" {
             let options = table.options();
             let table_version = options
@@ -1340,7 +1343,7 @@ impl Binder {
             predicates.push(predicate);
         }
 
-        let stat = table.table_statistics().await?;
+        let stat = table.table_statistics(self.ctx.clone()).await?;
         let scan = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,

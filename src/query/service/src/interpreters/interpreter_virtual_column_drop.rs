@@ -68,6 +68,7 @@ impl Interpreter for DropVirtualColumnInterpreter {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let drop_virtual_column_req = DropVirtualColumnReq {
+            if_exists: self.plan.if_exists,
             name_ident: VirtualColumnNameIdent { tenant, table_id },
         };
 
