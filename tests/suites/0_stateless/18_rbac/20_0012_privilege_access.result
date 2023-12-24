@@ -33,12 +33,12 @@ information_schema
 test -- show tables
 test_t
 test -- show tables from system
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for database system
+Error: APIError: ResponseError with 1063: Permission denied: User ''a'@'%'' does not have the required privileges for database 'system'.
 test -- show tables from grant_db
 t
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for database system
+Error: APIError: ResponseError with 1063: Permission denied: User ''a'@'%'' does not have the required privileges for database 'system'.
 test -- show columns from one from system
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for table system.one
+Error: APIError: ResponseError with 1063: Permission denied: User ''a'@'%'' does not have the required privileges for table 'system.one'.
 c1	INT	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tables'.
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'.
