@@ -556,7 +556,7 @@ impl AccessChecker for PrivilegeAccess {
                     Ok(())
                 } else {
                     Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied, user {} does not have the required privileges for database '{}'",
+                        "Permission denied, user {} does not have the required privileges for database '{}'.",
                         identity, plan.database.clone()
                     )))
                 };
