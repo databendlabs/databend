@@ -439,7 +439,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User '{}' does not have the required privileges for database '{}'.",
+                                "Permission denied: User {} does not have the required privileges for database '{}'.",
                                 identity, database
                             )))
                         };
@@ -454,7 +454,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User '{}' does not have the required privileges for database '{}'.",
+                                "Permission denied: User {} does not have the required privileges for database '{}'.",
                                 identity, database
                             )))
                         };
@@ -469,7 +469,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User '{}' does not have the required privileges for table '{}.{}'.",
+                                "Permission denied: User {} does not have the required privileges for table '{}.{}'.",
                                 identity, database, table
                             )))
                         };
