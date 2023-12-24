@@ -43,6 +43,7 @@ impl SelectOp {
         }
     }
 
+    #[inline]
     pub fn reverse(&self) -> Self {
         match &self {
             SelectOp::Equal => SelectOp::Equal,
@@ -51,6 +52,18 @@ impl SelectOp {
             SelectOp::Lt => SelectOp::Gt,
             SelectOp::Gte => SelectOp::Lte,
             SelectOp::Lte => SelectOp::Gte,
+        }
+    }
+
+    #[inline]
+    pub fn expect_result(&self, res: Ordering) -> bool {
+        match self {
+            SelectOp::Equal => res.is_eq(),
+            SelectOp::NotEqual => res.is_ne(),
+            SelectOp::Gt => res.is_gt(),
+            SelectOp::Lt => res.is_lt(),
+            SelectOp::Gte => res.is_ge(),
+            SelectOp::Lte => res.is_le(),
         }
     }
 }

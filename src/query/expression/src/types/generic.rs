@@ -141,6 +141,10 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
+        lhs.cmp(&rhs)
+    }
 }
 
 impl<const INDEX: usize> ArgType for GenericType<INDEX> {

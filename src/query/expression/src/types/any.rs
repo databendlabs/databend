@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
@@ -129,6 +130,10 @@ impl ValueType for AnyType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {

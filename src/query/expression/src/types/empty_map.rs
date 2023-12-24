@@ -152,6 +152,10 @@ impl ValueType for EmptyMapType {
     fn column_memory_size(_: &Self::Column) -> usize {
         std::mem::size_of::<usize>()
     }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
+        lhs.cmp(&rhs)
+    }
 }
 
 impl ArgType for EmptyMapType {

@@ -14,14 +14,26 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use ethnum::i256;
 
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
+use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::*;
 use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::DateType;
+use crate::types::DecimalDataType;
 use crate::types::NullableType;
+use crate::types::NumberType;
+use crate::types::StringType;
+use crate::types::TimestampType;
+use crate::types::VariantType;
+use crate::with_decimal_mapped_type;
+use crate::with_number_mapped_type;
+use crate::Scalar;
 use crate::Selector;
 use crate::Value;
 
@@ -42,60 +54,177 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        if Value::Scalar(Scalar::Null) == left || Value::Scalar(Scalar::Null) == right {
+            if false_selection.1 {
+                return Ok(self.select_boolean_scalar_adapt(
+                    false,
+                    true_selection,
+                    false_selection,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                ));
+            } else {
+                return Ok(0);
+            }
+        }
+
         match (left, right) {
             // Select indices by comparing two scalars.
-            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars(
-                op,
-                left,
-                right,
-                left_data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            // Select indices by comparing two columns.
-            (Value::Column(left), Value::Column(right)) => self.select_columns(
-                op,
-                left,
-                right,
-                left_data_type,
-                right_data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            // Select indices by comparing scalar and column.
-            (Value::Scalar(scalar), Value::Column(column)) => self.select_scalar_and_column(
-                op,
-                scalar,
-                column,
-                right_data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            // Select indices by comparing column and scalar.
-            (Value::Column(column), Value::Scalar(scalar)) => self.select_scalar_and_column(
-                &op.reverse(),
-                scalar,
-                column,
-                left_data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
+            (Value::Scalar(left), Value::Scalar(right)) => {
+                let result = op.expect_result(left.cmp(&right));
+                Ok(self.select_boolean_scalar_adapt(
+                    result,
+                    true_selection,
+                    false_selection,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                ))
+            }
+
+            (left, right) => {
+                debug_assert!(left_data_type == right_data_type);
+                let mut op = op.clone();
+                let (left, right, validity) = match (left, right) {
+                    (Value::Column(a), Value::Column(b)) => {
+                        if left_data_type.is_nullable() {
+                            let a = a.into_nullable().unwrap();
+                            let b = b.into_nullable().unwrap();
+                            let validity = (&a.validity) & (&b.validity);
+                            (
+                                Value::<AnyType>::Column(a.column),
+                                Value::<AnyType>::Column(b.column),
+                                Some(validity),
+                            )
+                        } else {
+                            (Value::Column(a), Value::Column(b), None)
+                        }
+                    }
+                    (Value::Column(c), d) => {
+                        if left_data_type.is_nullable() {
+                            let c = c.into_nullable().unwrap();
+                            let validity = c.validity.clone();
+                            (Value::Column(c.column), d, Some(validity))
+                        } else {
+                            (Value::Column(c), d, None)
+                        }
+                    }
+                    (d, Value::Column(c)) => {
+                        op = op.reverse();
+                        if left_data_type.is_nullable() {
+                            let c = c.into_nullable().unwrap();
+                            let validity = c.validity.clone();
+                            (Value::Column(c.column), d, Some(validity))
+                        } else {
+                            (Value::Column(c), d, None)
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+                let data_type = left_data_type.remove_nullable();
+
+                match data_type {
+                    DataType::Number(ty) => {
+                        with_number_mapped_type!(|T| match ty {
+                            NumberDataType::T => self.select_type_values::<NumberType<T>>(
+                                &op,
+                                left,
+                                right,
+                                validity,
+                                true_selection,
+                                false_selection,
+                                mutable_true_idx,
+                                mutable_false_idx,
+                                select_strategy,
+                                count,
+                            ),
+                        })
+                    }
+
+                    DataType::Decimal(ty) => {
+                        with_decimal_mapped_type!(|T| match ty {
+                            DecimalDataType::T(_) => self.select_type_values::<DecimalType<T>>(
+                                &op,
+                                left,
+                                right,
+                                validity,
+                                true_selection,
+                                false_selection,
+                                mutable_true_idx,
+                                mutable_false_idx,
+                                select_strategy,
+                                count,
+                            ),
+                        })
+                    }
+                    DataType::Date => self.select_type_values::<DateType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
+                    DataType::Timestamp => self.select_type_values::<TimestampType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
+                    DataType::String => self.select_type_values::<StringType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
+                    DataType::Variant => self.select_type_values::<VariantType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
+                    DataType::Boolean => self.select_type_values::<BooleanType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
+                    _ => {
+                        todo!("anytype");
+                    }
+                }
+            }
         }
     }
 
