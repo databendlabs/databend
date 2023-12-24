@@ -911,9 +911,16 @@ impl Binder {
             FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
                 let max_column_position = self.metadata.read().get_max_column_position();
                 if max_column_position == 0 {
-                    return Err(ErrorCode::SemanticError(
-                        "When selecting columns from a CSV/TSV file, columns must be specified in the form of $<column_position>. No column positions have been provided.",
-                    ));
+                    let file_type = match stage_info.file_format_params {
+                        FileFormatParams::Csv(..) => "CSV",
+                        FileFormatParams::Tsv(..) => "TSV",
+                        _ => unreachable!(), // This branch should never be reached
+                    };
+
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        file_type
+                    )));
                 }
 
                 let mut fields = vec![];
