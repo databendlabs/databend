@@ -201,8 +201,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };

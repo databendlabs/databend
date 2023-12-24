@@ -112,7 +112,7 @@ impl Pipeline {
         match self.pipes.first() {
             Some(pipe) => Ok(pipe.input_length != 0),
             None => Err(ErrorCode::Internal(
-                "Logical error, call is_pushing on empty pipeline.",
+                "Logical error: Attempted to call 'is_pushing_pipeline' on an empty pipeline.",
             )),
         }
     }
@@ -122,7 +122,7 @@ impl Pipeline {
         match self.pipes.last() {
             Some(pipe) => Ok(pipe.output_length != 0),
             None => Err(ErrorCode::Internal(
-                "Logical error, call is_pulling on empty pipeline.",
+                "Logical error: 'is_pulling_pipeline' called on an empty pipeline.",
             )),
         }
     }

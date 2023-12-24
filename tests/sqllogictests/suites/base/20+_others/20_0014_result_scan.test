@@ -23,7 +23,7 @@ SELECT * FROM t1 ORDER BY a;
 statement ok
 SET enable_query_result_cache = 1;
 
-statement error `RESULT_SCAN` could not find related cache key in current session for this query id
+statement error `RESULT_SCAN` failed: No cache key found in current session for query ID '.*'\.
 SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 
 query I
