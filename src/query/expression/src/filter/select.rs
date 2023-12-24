@@ -220,9 +220,18 @@ impl<'a> Selector<'a> {
                         select_strategy,
                         count,
                     ),
-                    _ => {
-                        todo!("anytype");
-                    }
+                    _ => self.select_type_values::<AnyType>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    ),
                 }
             }
         }
