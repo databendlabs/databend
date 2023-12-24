@@ -167,7 +167,7 @@ pub(crate) async fn dump_tables(
     let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
     let mut tables = Vec::new();
-    let mut databases = Vec::new();
+    let mut databases: Vec<String> = Vec::new();
 
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
@@ -194,23 +194,35 @@ pub(crate) async fn dump_tables(
         }
     }
 
+    let visibility_checker = ctx.get_visibility_checker().await?;
+
+    let mut final_dbs: Vec<(String, u64)> = Vec::new();
+
     if databases.is_empty() {
         let all_databases = catalog.list_databases(tenant.as_str()).await?;
         for db in all_databases {
-            databases.push(db.name().to_string());
+            let db_id = db.get_db_info().ident.db_id;
+            let db_name = db.name();
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+                final_dbs.push((db_name.to_string(), db_id));
+            }
+        }
+    } else {
+        for db in databases {
+            let db_id = catalog
+                .get_database(&tenant, &db)
+                .await?
+                .get_db_info()
+                .ident
+                .db_id;
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
+                final_dbs.push((db.to_string(), db_id));
+            }
         }
     }
 
-    let visibility_checker = ctx.get_visibility_checker().await?;
-
-    let final_dbs: Vec<String> = databases
-        .iter()
-        .filter(|db| visibility_checker.check_database_visibility(CATALOG_DEFAULT, db))
-        .cloned()
-        .collect();
-
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
-    for database in final_dbs {
+    for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
             if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
                 table
@@ -228,7 +240,13 @@ pub(crate) async fn dump_tables(
         };
         let mut filtered_tables = Vec::with_capacity(tables.len());
         for table in tables {
-            if visibility_checker.check_table_visibility(CATALOG_DEFAULT, &database, table.name()) {
+            if visibility_checker.check_table_visibility(
+                CATALOG_DEFAULT,
+                &database,
+                table.name(),
+                db_id,
+                table.get_id(),
+            ) {
                 filtered_tables.push(table);
             }
         }
