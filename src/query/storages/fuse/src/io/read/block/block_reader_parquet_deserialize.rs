@@ -109,9 +109,23 @@ impl BlockReader {
             parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
         for column_node in &self.project_column_nodes {
-            let r = self.deserialize_field(&field_deserialization_ctx, column_node);
+            let deser_ctx = &field_deserialization_ctx;
+            // temp debug messages
+            {
+                info!(
+                    "deserialize_field msg, location {}:  column_node {:?}, column_meta {:?}, ",
+                    block_path, deser_ctx.column_metas, column_node,
+                );
+            }
+
+            let r = self.deserialize_field(block_path, &field_deserialization_ctx, column_node);
+
             if let Err(e) = &r {
-                error!("deserialize_field error, location {}: {:?}", block_path, e);
+                let deser_ctx = &field_deserialization_ctx;
+                error!(
+                    "deserialize_field failed, location {}:  column_node {:?}, column_meta {:?}, err: {}",
+                    block_path, deser_ctx.column_metas, column_node, e
+                );
             }
             match r? {
                 None => {
@@ -246,6 +260,7 @@ impl BlockReader {
     }
     pub fn deserialize_field<'a>(
         &self,
+        path: &str,
         deserialization_context: &'a FieldDeserializationContext,
         column: &ColumnNode,
     ) -> Result<Option<DeserializedArray<'a>>> {
@@ -267,6 +282,16 @@ impl BlockReader {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
+                            use sha2::Digest;
+                            use sha2::Sha256;
+                            let digest = Sha256::digest(data);
+                            info!(
+                                "path {}, column {:?}, data size: {}, data digest: {:x}",
+                                path,
+                                column,
+                                data.len(),
+                                digest
+                            );
                             let column_descriptor = if let Some(parquet_schema_descriptor) =
                                 deserialization_context.parquet_schema_descriptor
                             {

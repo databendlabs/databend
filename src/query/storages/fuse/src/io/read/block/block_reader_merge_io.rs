@@ -125,7 +125,7 @@ impl MergeIOReadResult {
         Ok(res)
     }
 
-    fn get_chunk(&self, index: usize, path: &str) -> Result<Bytes> {
+    pub(crate) fn get_chunk(&self, index: usize, path: &str) -> Result<Bytes> {
         self.owner_memory.get_chunk(index, path)
     }
 
@@ -149,6 +149,7 @@ impl MergeIOReadResult {
                 table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data));
             }
         }
+
         self.columns_chunk_offsets
             .insert(column_id, (chunk_index, range));
     }

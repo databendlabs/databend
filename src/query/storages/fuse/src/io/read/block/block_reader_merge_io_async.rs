@@ -28,6 +28,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
+use log::info;
 use opendal::Operator;
 
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
@@ -124,6 +125,31 @@ impl BlockReader {
             let start = (column_range.start - merged_range.start) as usize;
             let end = (column_range.end - merged_range.start) as usize;
             let column_id = *raw_idx as ColumnId;
+
+            {
+                use sha2::Digest;
+                use sha2::Sha256;
+                if let Ok(chunk_data) = read_res.get_chunk(merged_range_idx, location) {
+                    let data = chunk_data.slice(start..end);
+                    let digest = Sha256::digest(data);
+                    info!(
+                        "split merged result, location : {}, column_id {}, column data range {:?}, data range {:?}, data digest {:x}",
+                        location,
+                        column_id,
+                        column_range,
+                        start..end,
+                        digest
+                    );
+                } else {
+                    info!(
+                        "split merged result [not found], location : {}, column_id {}, column data range {:?}, data range {:?}",
+                        location,
+                        column_id,
+                        column_range,
+                        start..end
+                    );
+                }
+            };
             read_res.add_column_chunk(merged_range_idx, column_id, column_range, start..end);
         }
 

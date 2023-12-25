@@ -40,6 +40,7 @@ use crate::io::read::block::FieldDeserializationContext;
 use crate::io::read::utils::build_columns_meta;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
+use crate::io::TableMetaLocationGenerator;
 use crate::FusePartInfo;
 use crate::MergeIOReadResult;
 
@@ -217,10 +218,14 @@ impl VirtualColumnReader {
                 for (i, f) in schema.fields.iter().enumerate() {
                     if f.name == virtual_column.name {
                         let column_node = &column_nodes.column_nodes[i];
-                        if let Some(v) = self
-                            .reader
-                            .deserialize_field(&field_deserialization_ctx, column_node)?
-                        {
+
+                        let virtual_colum_loc =
+                            TableMetaLocationGenerator::gen_virtual_block_location(&part.location);
+                        if let Some(v) = self.reader.deserialize_field(
+                            &virtual_colum_loc,
+                            &field_deserialization_ctx,
+                            column_node,
+                        )? {
                             let array = match v {
                                 DeserializedArray::Deserialized((_, array, ..)) => array,
                                 DeserializedArray::NoNeedToCache(array) => array,
