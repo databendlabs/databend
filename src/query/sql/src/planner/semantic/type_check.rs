@@ -3670,7 +3670,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
         &sql_tokens,
         databend_common_ast::Dialect::default(),
         false,
-        |i| databend_common_ast::parser::expr::type_name(i),
+        databend_common_ast::parser::expr::type_name,
     )?;
     resolve_type_name(&ast, not_null)
 }
