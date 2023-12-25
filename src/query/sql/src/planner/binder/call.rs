@@ -33,7 +33,7 @@ impl Binder {
         let query = if table_function_name.eq_ignore_ascii_case("search_tables") {
             if stmt.args.len() != 1 {
                 return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "Incorrect number of arguments to function {}. Expected 1, got {}",
+                    "Function '{}' requires exactly 1 argument, but {} were provided.",
                     stmt.name,
                     stmt.args.len()
                 )));

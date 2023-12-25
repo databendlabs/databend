@@ -64,9 +64,9 @@ impl<'a> Binder {
                     .await?;
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr)? {
-                        return Err(ErrorCode::SemanticError(
-                            "copy into location source can't contain udf functions".to_string(),
-                        ));
+                        return Err(ErrorCode::SyntaxException(format!(
+                            "COPY INTO <location> FROM <source>: expected a valid query as source, but received a non-query statement.",
+                        )));
                     }
                 }
                 Ok(select_plan)

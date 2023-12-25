@@ -57,9 +57,10 @@ impl Binder {
                     )?;
                     if field.computed_expr().is_some() {
                         Err(ErrorCode::BadArguments(format!(
-                            "The value specified for computed column '{}' is not allowed",
+                            "Computed column error: '{}' cannot accept specified values as it's a computed column",
                             field.name()
                         )))
+
                     } else {
                         Ok(field.clone())
                     }
@@ -155,7 +156,7 @@ impl Binder {
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr)? {
                         return Err(ErrorCode::SemanticError(
-                            "insert source can't contain udf functions".to_string(),
+                            "Insert source error: UDF (User-Defined Functions) are not permitted in insert source queries",
                         ));
                     }
                 }

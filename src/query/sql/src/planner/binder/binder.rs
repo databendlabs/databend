@@ -165,7 +165,7 @@ impl<'a> Binder {
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');
                         tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
+                            ErrorCode::InvalidTimezone(format!("Invalid timezone '{}'. Please ensure it is a valid IANA timezone format.", tz))
                         })?;
                     }
                     hint_settings.entry(variable.to_string()).or_insert(value);

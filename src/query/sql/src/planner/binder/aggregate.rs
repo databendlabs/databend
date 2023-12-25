@@ -691,7 +691,7 @@ impl Binder {
             finder.visit(&item.scalar)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
-                    "GROUP BY items can't contain aggregate functions or window functions"
+                    "Invalid GROUP BY item: Cannot contain aggregate or window functions."
                         .to_string(),
                 )
                 .set_span(item.scalar.span()));
@@ -739,7 +739,7 @@ impl Binder {
         // Convert to zero-based index
         if index < 1 {
             return Err(ErrorCode::SemanticError(format!(
-                "GROUP BY position {} is illegal",
+                "Invalid GROUP BY position: Position {} is not allowed.",
                 index
             ))
             .set_span(expr.span()));
@@ -747,21 +747,24 @@ impl Binder {
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(format!(
-                "GROUP BY position {} is not in select list",
+                "GROUP BY Error: Position {} is beyond the range of the select list.",
                 index + 1
             ))
             .set_span(expr.span()));
         }
-        let item = select_list
-            .items
-            .get(index)
-            .ok_or_else(|| ErrorCode::Internal("Should not fail"))?;
+        let item = select_list.items.get(index).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Internal Error: Failed to retrieve item at position {} from the select list.",
+                index + 1,
+            ))
+        })?;
 
         let scalar = item.scalar.clone();
         let alias = item.alias.clone();
 
         Ok((scalar, alias))
     }
+
     fn resolve_alias_item(
         bind_context: &mut BindContext,
         expr: &Expr,
@@ -789,10 +792,11 @@ impl Binder {
         if result.is_empty() {
             Err(original_error)
         } else if result.len() > 1 {
-            Err(
-                ErrorCode::SemanticError(format!("GROUP BY \"{}\" is ambiguous", expr))
-                    .set_span(expr.span()),
-            )
+            Err(ErrorCode::SemanticError(format!(
+                "Ambiguous GROUP BY reference: \"{}\". Multiple potential matches found.",
+                expr
+            ))
+            .set_span(expr.span()))
         } else {
             let (column_binding, scalar) = available_aliases[result[0]].clone();
             // We will add the alias to BindContext, so we can reference it

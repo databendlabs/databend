@@ -72,9 +72,7 @@ impl Binder {
         finder.visit(&having)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
-                "Having clause can't contain window functions".to_string(),
-            )
-            .set_span(having.span()));
+                           "Invalid 'HAVING' Clause: Window functions are not allowed within the 'HAVING' clause.",)).set_span(having.span());
         }
 
         let scalar = if bind_context.in_grouping {

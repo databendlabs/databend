@@ -58,7 +58,11 @@ impl Binder {
             ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
         match new_expr {
             databend_common_expression::Expr::Constant { scalar, .. } => {
-                let value = String::from_utf8(scalar.into_string().unwrap())?;
+                let value = String::from_utf8(scalar.into_string().unwrap()).map_err(|_| {
+                    ErrorCode::BadArguments(
+                        "Conversion error: Scalar value could not be converted to UTF-8 string.",
+                    )
+                })?;
                 let vars = vec![VarValue {
                     is_global,
                     variable,
@@ -66,7 +70,9 @@ impl Binder {
                 }];
                 Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
             }
-            _ => Err(ErrorCode::SemanticError("value must be constant value")),
+            _ => Err(ErrorCode::SemanticError(
+                "Semantic error: Set variable operation requires the expression to be a constant value.",
+            )),
         }
     }
 

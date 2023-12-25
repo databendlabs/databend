@@ -116,8 +116,13 @@ impl<'a> Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-            .map_err(ErrorCode::SyntaxException)?;
+        let validation_mode =
+            ValidationMode::from_str(stmt.validation_mode.as_str()).map_err(|_| {
+                ErrorCode::SyntaxException(format!(
+                    "Invalid validation mode: '{}'. Please specify a valid validation mode.",
+                    stmt.validation_mode
+                ))
+            })?;
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         self.apply_copy_into_table_options(stmt, &mut stage_info)
@@ -338,8 +343,7 @@ impl<'a> Binder {
             if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|udf|join functions"
-                        .to_string(),
+                    "Unsupported Functions Error: The source for 'COPY INTO TABLE' cannot contain window functions, aggregate functions, UDFs, or join operations.",
                 ));
             };
         }
@@ -399,8 +403,8 @@ impl<'a> Binder {
         let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
-            return Err(ErrorCode::SemanticError(format!(
-                "need {} fields in values, got only {}",
+            Err(ErrorCode::SemanticError(format!(
+                "Field Count Mismatch: Expected {} fields in 'VALUES', but only {} were provided.",
                 source_schema.num_fields(),
                 expr_or_placeholders.len()
             )));
@@ -489,7 +493,7 @@ fn check_transform_query(
                         return Ok((&select.select_list, location, alias));
                     } else {
                         return Err(ErrorCode::SyntaxException(
-                            "stage table function inside copy not allow options, apply them in the outer copy stmt instead.",
+                            "Invalid Stage Table Options: stage table function inside copy not allow options, apply them in the outer copy stmt instead.",
                         ));
                     }
                 }
@@ -497,7 +501,7 @@ fn check_transform_query(
         }
     }
     Err(ErrorCode::SyntaxException(
-        "query as source of copy only allow projection on one stage table",
+        "Query Source Constraint: When using a query as a source for 'COPY', only a single stage table projection is allowed.",
     ))
 }
 
@@ -559,7 +563,7 @@ pub async fn resolve_file_location(
             let (storage_params, path) = parse_uri_location(&mut uri, Some(ctx)).await?;
             if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 Err(ErrorCode::StorageInsecure(
-                    "copy from insecure storage is not allowed",
+                    "Insecure Storage Prohibited: Copying data from an insecure storage source is not allowed.",
                 ))
             } else {
                 let stage_info = StageInfo::new_external_stage(storage_params, &path, true);

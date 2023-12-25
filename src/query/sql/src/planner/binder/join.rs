@@ -78,12 +78,12 @@ impl Binder {
                 if join.condition == JoinCondition::None =>
             {
                 return Err(ErrorCode::SemanticError(
-                    "outer join should contain join conditions".to_string(),
+                    "Outer join error: Join conditions are required for outer joins.",
                 ));
             }
             JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
                 return Err(ErrorCode::SemanticError(
-                    "cross join should not contain join conditions".to_string(),
+                    "Cross join error: Join conditions are not allowed in cross joins.",
                 ));
             }
             _ => (),
@@ -193,7 +193,7 @@ impl Binder {
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
             return Err(ErrorCode::SemanticError(
-                "Join conditions should be empty in cross join",
+                "Cross join error: Join conditions are not allowed in a cross join.",
             ));
         }
         self.push_down_other_conditions(
@@ -411,7 +411,7 @@ pub fn check_duplicate_join_tables(
         if let Some(right) = right_table_name {
             if left.eq(right) {
                 return Err(ErrorCode::SemanticError(format!(
-                    "Duplicated table name {} in the same FROM clause",
+                    "Join error: Duplicated table name '{}' detected in the same FROM clause.",
                     left
                 )));
             }
@@ -548,9 +548,9 @@ impl<'a> JoinConditionResolver<'a> {
             finder.visit(scalar)?;
             if !finder.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
-                    "Join condition can't contain aggregate or window functions".to_string(),
+                    "Join condition error: Aggregate or window functions are not permitted in join conditions.",
                 )
-                .set_span(scalar.span()));
+                    .set_span(scalar.span()));
             }
         }
         Ok(())
@@ -666,10 +666,10 @@ impl<'a> JoinConditionResolver<'a> {
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
-                    "column {} specified in USING clause does not exist in left table",
+                    "Using clause error: Column '{}' specified in USING clause is not found in the left table.",
                     join_key_name
                 ))
-                .set_span(*span));
+                    .set_span(*span));
             };
 
             let right_scalar = if let Some(col_binding) = self.join_context.columns
@@ -683,10 +683,10 @@ impl<'a> JoinConditionResolver<'a> {
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
-                    "column {} specified in USING clause does not exist in right table",
+                    "Using clause error: Column '{}' specified in USING clause is not found in the right table.",
                     join_key_name
                 ))
-                .set_span(*span));
+                    .set_span(*span));
             };
             let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
             if let Some(col_binding) = self

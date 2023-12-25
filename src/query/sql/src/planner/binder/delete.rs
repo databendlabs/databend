@@ -76,9 +76,8 @@ impl<'a> Binder {
         {
             self.normalize_object_identifier_triple(catalog, database, table)
         } else {
-            // we do not support USING clause yet
             return Err(ErrorCode::Internal(
-                "should not happen, parser should have report error already",
+                "Unexpected State: This situation should not occur as it's expected to be handled earlier by the parser.",
             ));
         };
 
@@ -102,10 +101,8 @@ impl<'a> Binder {
         if let Some(selection) = &selection {
             if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
-                    "selection in delete statement can't contain window|aggregate|udf functions"
-                        .to_string(),
-                )
-                .set_span(selection.span()));
+                    "Invalid Selection in Delete: The selection expression in a DELETE statement cannot contain window functions, aggregate functions, or UDFs.",
+                ).set_span(selection.span()));
             }
         }
 
@@ -129,8 +126,8 @@ impl Binder {
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
         if subquery_expr.data_type() != DataType::Nullable(Box::new(DataType::Boolean)) {
-            return Err(ErrorCode::from_string(
-                "subquery data type in delete statement should be boolean".to_string(),
+            return Err(ErrorCode::SemanticError(
+                "Subquery Data Type Error: In a DELETE statement, the data type of a subquery must be Boolean.",
             ));
         }
         let mut outer_columns = Default::default();

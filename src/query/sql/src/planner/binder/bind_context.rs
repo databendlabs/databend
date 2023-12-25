@@ -235,7 +235,7 @@ impl BindContext {
 
         if alias.columns.len() > self.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
-                "table has {} columns available but {} columns specified",
+                "Alias error: Table contains {} columns, but {} were specified in the alias.",
                 self.columns.len(),
                 alias.columns.len()
             ))
@@ -267,10 +267,12 @@ impl BindContext {
         if name_resolution_ctx.deny_column_reference {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
-                    "invalid identifier {name}, do you mean '{name}'?"
+                    "Invalid identifier: {name} is unrecognized. Did you mean to reference '{name}'?"
                 ))
             } else {
-                ErrorCode::SemanticError(format!("invalid identifier {name}"))
+                ErrorCode::SemanticError(format!(
+                    "Invalid identifier: {name} is not recognized in the current context."
+                ))
             };
             return Err(err.set_span(column.span));
         }
@@ -310,19 +312,18 @@ impl BindContext {
         }
 
         if result.len() > 1 && !result.iter().all_equal() {
-            return Err(ErrorCode::SemanticError(format!(
-                "column {name} reference or alias is ambiguous, please use another alias name",
-            ))
-            .set_span(column.span));
+            ErrorCode::SemanticError(format!(
+                "Ambiguous reference: Column or alias {name} is ambiguous. Please specify a more distinct alias."
+            )).set_span(column.span)
         }
 
         if result.is_empty() {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
-                    "column {name} doesn't exist, do you mean '{name}'?"
+                    "Column not found: {name} does not exist. Did you mean to reference '{name}'?"
                 ))
             } else {
-                ErrorCode::SemanticError(format!("column {name} doesn't exist"))
+                ErrorCode::SemanticError(format!("Column not found: {name} does not exist."))
             };
             Err(err.set_span(column.span))
         } else {
@@ -350,10 +351,10 @@ impl BindContext {
         }
 
         if result.is_empty() {
-            Err(
-                ErrorCode::SemanticError(format!("column position {column} doesn't exist"))
-                    .set_span(span),
-            )
+            Err(ErrorCode::SemanticError(format!(
+                "Column Position Error: No column exists at position {column}."
+            ))
+            .set_span(span))
         } else {
             Ok(result.remove(0))
         }
@@ -498,9 +499,10 @@ impl BindContext {
             metadata
                 .get_table_index(column_binding.database_name.as_deref(), table_name)
                 .ok_or_else(|| {
-                    ErrorCode::TableInfoError(format!(
-                        "Table `{table_name}` is not found in the metadata"
+                   ErrorCode::TableInfoError(format!(
+                        "Metadata Error: Table `{table_name}` was not found in the current metadata context."
                     ))
+
                 })
         } else {
             let tables = metadata
@@ -511,10 +513,10 @@ impl BindContext {
             debug_assert!(!tables.is_empty());
 
             if tables.len() > 1 {
-                return Err(ErrorCode::SemanticError(format!(
-                    "The table of the internal column `{}` is ambiguous",
+                ErrorCode::SemanticError(format!(
+                    "Ambiguity Error: The table associated with the internal column `{}` is ambiguous due to multiple potential matches.",
                     column_binding.internal_column.column_name()
-                )));
+                ))
             }
 
             Ok(tables[0].index())
@@ -530,10 +532,10 @@ impl BindContext {
         visible: bool,
     ) -> Result<ColumnBinding> {
         if !self.allow_internal_columns {
-            return Err(ErrorCode::SemanticError(format!(
-                "Internal column `{}` is not allowed in current statement",
+            ErrorCode::SemanticError(format!(
+                "Usage Error: The column '{}' is internal and not permitted for use in this statement.",
                 column_binding.internal_column.column_name()
-            )));
+            ))
         }
 
         let column_id = column_binding.internal_column.column_id();
@@ -556,11 +558,11 @@ impl BindContext {
         let metadata = metadata.read();
         let table = metadata.table(table_index);
         if !table.table().supported_internal_column(column_id) {
-            return Err(ErrorCode::SemanticError(format!(
-                "Unsupported internal column '{}' in table '{}'.",
+            ErrorCode::SemanticError(format!(
+                "Table Constraint: The internal column '{}' cannot be used with the table '{}'.",
                 column_binding.internal_column.column_name(),
                 table.table().name()
-            )));
+            ));
         }
 
         let column = metadata.column(column_index);
