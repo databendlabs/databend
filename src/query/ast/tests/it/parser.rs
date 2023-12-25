@@ -141,7 +141,7 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
-        r#"CREATE TABLE t(c1 varbinary);"#,
+        r#"CREATE TABLE t(c1 varbinary, c2 binary(10));"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
