@@ -34,9 +34,6 @@ INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
 statement ok
 CREATE AGGREGATING INDEX testi AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b
 
-statement ok
-REFRESH AGGREGATING INDEX testi
-
 query I
 SELECT b from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
