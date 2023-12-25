@@ -65,6 +65,9 @@ impl AlterTaskInterpreter {
             schedule_options: None,
             warehouse_options: None,
             suspend_task_after_num_failures: None,
+            when_condition: None,
+            add_after: vec![],
+            remove_after: vec![],
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -95,6 +98,18 @@ impl AlterTaskInterpreter {
             AlterTaskOptions::ModifyAs(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyAs as i32;
                 req.query_text = Some(sql);
+            }
+            AlterTaskOptions::AddAfter(tasks) => {
+                req.alter_task_type = AlterTaskType::AddAfter as i32;
+                req.add_after = tasks;
+            }
+            AlterTaskOptions::RemoveAfter(tasks) => {
+                req.alter_task_type = AlterTaskType::RemoveAfter as i32;
+                req.remove_after = tasks;
+            }
+            AlterTaskOptions::ModifyWhen(sql) => {
+                req.alter_task_type = AlterTaskType::ModifyWhen as i32;
+                req.when_condition = Some(sql);
             }
         }
         req

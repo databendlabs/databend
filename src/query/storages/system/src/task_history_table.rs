@@ -46,6 +46,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut id: Vec<u64> = Vec::with_capacity(task_runs.len());
     let mut owner: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
     let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
     let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
@@ -57,6 +58,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut attempt_number: Vec<i32> = Vec::with_capacity(task_runs.len());
     let mut scheduled_time: Vec<i64> = Vec::with_capacity(task_runs.len());
     let mut completed_time: Vec<Option<i64>> = Vec::with_capacity(task_runs.len());
+    let mut root_task_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
         let tr: common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
@@ -73,11 +75,13 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         exception_code.push(tr.error_code);
         exception_text.push(tr.error_message.map(|s| s.into_bytes()));
         definition.push(tr.query_text.into_bytes());
+        condition_text.push(tr.condition_text.into_bytes());
         run_id.push(tr.run_id.into_bytes());
         query_id.push(tr.query_id.into_bytes());
         attempt_number.push(tr.attempt_number);
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
+        root_task_id.push(tr.root_task_id.into_bytes());
     }
     Ok(DataBlock::new_from_columns(vec![
         StringType::from_data(name),
@@ -88,6 +92,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         StringType::from_opt_data(warehouse),
         StringType::from_data(state),
         StringType::from_data(definition),
+        StringType::from_data(condition_text),
         StringType::from_data(run_id),
         StringType::from_data(query_id),
         Int64Type::from_data(exception_code),
@@ -95,6 +100,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         Int32Type::from_data(attempt_number),
         TimestampType::from_opt_data(completed_time),
         TimestampType::from_data(scheduled_time),
+        StringType::from_data(root_task_id),
     ]))
 }
 

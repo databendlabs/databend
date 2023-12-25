@@ -38,7 +38,7 @@ use crate::Binder;
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
     if schedule_opts.is_none() {
-        return Ok(())
+        return Ok(());
     }
     let schedule_opts = schedule_opts.clone().unwrap();
     if let common_ast::ast::ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
@@ -73,9 +73,15 @@ impl Binder {
             comments,
             after,
             when_condition,
-            sql, 
+            sql,
         } = stmt;
-        // TODO( build expression EXPR)
+        if (schedule_opts.is_none() && after.is_empty())
+            || (schedule_opts.is_some() && !after.is_empty())
+        {
+            return Err(ErrorCode::SyntaxException(
+                "task must be defined with either given time schedule as a root task or run after other task as a DAG".to_string(),
+            ));
+        }
         verify_scheduler_option(schedule_opts)?;
 
         let tenant = self.ctx.get_tenant();
@@ -86,6 +92,8 @@ impl Binder {
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
             suspend_task_after_num_failures: *suspend_task_after_num_failures,
+            after: after.clone(),
+            when_condition: when_condition.clone(),
             comment: comments.clone(),
             sql: sql.clone(),
         };
@@ -119,8 +127,8 @@ impl Binder {
                     "alter task must set at least one option".to_string(),
                 ));
             }
-            if let Some(schedule) = schedule {
-                // verify_scheduler_option(schedule)?;
+            if schedule.is_some() {
+                verify_scheduler_option(schedule)?;
             }
         }
 

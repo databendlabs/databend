@@ -8,10 +8,11 @@ message ScheduleOptions {
     interval_type = 0;
     cron_type = 1;
   }
-  optional int32 interval = 1; // Only support minute, INTERVAL= '5 MINUTE' means execute sql every 5 minutes
+  optional int32 interval = 1; //  minute, INTERVAL= '5 MINUTE' means execute sql every 5 minutes
   optional string cron = 2; // CRON = '0 2 * * *' means Every night at 2 AM. UTC time zone.
   optional string time_zone = 3; // "UTC..."
   ScheduleType schedule_type = 4;
+  optional int32 interval_second = 5; // second, INTERVAL_SECOND = '5' means execute sql every 5 seconds
 }
 
 message WarehouseOptions {
@@ -30,6 +31,9 @@ message CreateTaskRequest {
 
   optional int32 suspend_task_after_num_failures = 9; //SUSPEND_TASK_AFTER_NUM_FAILURES
   bool if_not_exist = 10;
+  // DAG
+  repeated string after = 11; //
+  optional string when_condition = 12;
 }
 
 message TaskError {
@@ -85,7 +89,10 @@ message Task {
   string created_at = 14; // RFC 3339 format time
   string updated_at = 15;
   optional string last_suspended_at = 16;
+  repeated string after = 17;
+  optional string when_condition = 18;
 }
+
 
 message DescribeTaskResponse {
   Task task = 1;
@@ -111,6 +118,9 @@ message AlterTaskRequest {
     Resume = 1;
     Set = 2;
     ModifyAs = 3;
+    ModifyWhen = 4;
+    AddAfter = 5;
+    RemoveAfter = 6;
   }
   string task_name = 1;
   string tenant_id = 2;
@@ -122,7 +132,9 @@ message AlterTaskRequest {
   bool if_exist = 8;
   WarehouseOptions warehouse_options = 9;
   optional int32 suspend_task_after_num_failures = 10; //SUSPEND_TASK_AFTER_NUM_FAILURES
-
+  optional string when_condition = 11;
+  repeated string add_after = 12;
+  repeated string remove_after = 13;
 }
 
 message AlterTaskResponse {
@@ -151,7 +163,6 @@ message TaskRun {
   }
   uint64 task_id = 1;
   string task_name = 2;
-  string tenant_id =3;
   string query_text = 4;
   optional string comment = 5;
   string owner = 6;
@@ -167,6 +178,8 @@ message TaskRun {
   optional string completed_time = 16;
 
   string query_id = 17;
+  string condition_text = 18;
+  string root_task_id = 19;
 }
 
 message ShowTaskRunsResponse {

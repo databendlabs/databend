@@ -26,11 +26,12 @@ use crate::sessions::QueryContext;
 
 pub fn make_schedule_options(opt: ScheduleOptions) -> common_cloud_control::pb::ScheduleOptions {
     match opt {
-        ScheduleOptions::IntervalMinutes(minute) => common_cloud_control::pb::ScheduleOptions {
+        ScheduleOptions::Interval(minute, secs) => common_cloud_control::pb::ScheduleOptions {
             interval: Some(minute as i32),
             cron: None,
             time_zone: None,
             schedule_type: i32::from(ScheduleType::IntervalType),
+            interval_second: Some(secs as i32),
         },
         ScheduleOptions::CronExpression(expr, timezone) => {
             common_cloud_control::pb::ScheduleOptions {
@@ -38,6 +39,7 @@ pub fn make_schedule_options(opt: ScheduleOptions) -> common_cloud_control::pb::
                 cron: Some(expr),
                 time_zone: timezone,
                 schedule_type: i32::from(ScheduleType::CronType),
+                interval_second: None,
             }
         }
     }

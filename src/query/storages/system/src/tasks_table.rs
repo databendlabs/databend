@@ -49,6 +49,8 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut status: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut after: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
@@ -68,11 +70,21 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
         status.push(tsk.status.to_string().into_bytes());
         definition.push(tsk.query_text.into_bytes());
+        condition_text.push(tsk.condition_text.into_bytes());
+        // join by comma
+        after.push(
+            tsk.after
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(",")
+                .into_bytes(),
+        );
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
     }
+
     Ok(DataBlock::new_from_columns(vec![
         TimestampType::from_data(created_on),
         StringType::from_data(name),
@@ -83,6 +95,8 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         StringType::from_opt_data(schedule),
         StringType::from_data(status),
         StringType::from_data(definition),
+        StringType::from_data(condition_text),
+        StringType::from_data(after),
         UInt64Type::from_opt_data(suspend_after_num_failures),
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),

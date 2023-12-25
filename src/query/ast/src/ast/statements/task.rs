@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::{Expr, ShowLimit};
+use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTaskStmt {
@@ -50,11 +50,11 @@ impl Display for CreateTaskStmt {
         if !self.comments.is_empty() {
             write!(f, " COMMENTS = '{}'", self.comments)?;
         }
-        
+
         if !self.after.is_empty() {
             write!(f, "AFTER = '{:?}'", self.after)?;
         }
-        
+
         if self.when_condition.is_some() {
             write!(f, "WHEN = '{:?}'", self.when_condition)?;
         }
@@ -80,15 +80,15 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleOptions {
-    IntervalMinutes(u64),
+    Interval(u64, u64),
     CronExpression(String, Option<String>),
 }
 
 impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ScheduleOptions::IntervalMinutes(mins) => {
-                write!(f, " SCHEDULE {} MINUTE", mins)
+            ScheduleOptions::Interval(mins, secs) => {
+                write!(f, " SCHEDULE {} MINUTE {} SECOND", mins, secs)
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, " SCHEDULE CRON '{}'", expr)?;
@@ -123,6 +123,9 @@ pub enum AlterTaskOptions {
     },
     // Change SQL
     ModifyAs(String),
+    ModifyWhen(String),
+    AddAfter(Vec<String>),
+    RemoveAfter(Vec<String>),
 }
 
 impl Display for AlterTaskOptions {
@@ -157,6 +160,9 @@ impl Display for AlterTaskOptions {
                 Ok(())
             }
             AlterTaskOptions::ModifyAs(sql) => write!(f, " AS {}", sql),
+            AlterTaskOptions::ModifyWhen(when) => write!(f, " WHEN {}", when),
+            AlterTaskOptions::AddAfter(after) => write!(f, " ADD AFTER = '{:?}'", after),
+            AlterTaskOptions::RemoveAfter(after) => write!(f, " REMOVE AFTER = '{:?}'", after),
         }
     }
 }

@@ -139,18 +139,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
-                after: match after_tasks { 
-                    Some((_,  tasks)) => {
-                        tasks
-                    }
-                    None => Vec::new()
+                after: match after_tasks {
+                    Some((_, tasks)) => tasks,
+                    None => Vec::new(),
                 },
-                when_condition: match when_conditions {
-                    Some((_, cond)) => {
-                        Some(cond.to_string())
-                    }
-                    None => None
-                },
+                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
             })
         },
@@ -1832,7 +1825,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 AS
   <sql>`"
          | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
@@ -2787,6 +2780,28 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
             AlterTaskOptions::ModifyAs(sql)
         },
     );
+    let modify_when = map(
+        rule! {
+             MODIFY ~ WHEN ~ #expr
+        },
+        |(_, _, expr)| {
+            let when = expr.to_string();
+            AlterTaskOptions::ModifyWhen(when)
+        },
+    );
+    let add_after = map(
+        rule! {
+             ADD ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::AddAfter(after),
+    );
+    let remove_after = map(
+        rule! {
+             REMOVE ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::RemoveAfter(after),
+    );
+
     let set = map(
         rule! {
              SET
@@ -2814,6 +2829,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+        | #modify_when
+        | #add_after
+        | #remove_after
     )(i)
 }
 
@@ -2864,9 +2882,9 @@ pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
     let interval = map(
         rule! {
-             #literal_u64 ~ MINUTE
+             #literal_u64 ~ MINUTE ~ (#literal_u64 ~ SECOND)?
         },
-        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+        |(minutes, _, sec)| ScheduleOptions::Interval(minutes, sec.map_or(0, |(s, _)| s)),
     );
     let cron_expr = map(
         rule! {
