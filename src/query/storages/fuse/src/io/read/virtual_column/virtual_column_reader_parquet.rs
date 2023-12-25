@@ -219,10 +219,10 @@ impl VirtualColumnReader {
                     if f.name == virtual_column.name {
                         let column_node = &column_nodes.column_nodes[i];
 
-                        let virtual_colum_loc =
+                        let virtual_column_loc =
                             TableMetaLocationGenerator::gen_virtual_block_location(&part.location);
                         if let Some(v) = self.reader.deserialize_field(
-                            &virtual_colum_loc,
+                            &virtual_column_loc,
                             &field_deserialization_ctx,
                             column_node,
                         )? {
