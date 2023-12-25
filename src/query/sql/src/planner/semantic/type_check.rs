@@ -1798,10 +1798,13 @@ impl<'a> TypeChecker<'a> {
                     ]
                 }
                 DataType::Nullable(box ty) => {
-                    vec![DataType::Nullable(Box::new(ty.clone())), DataType::Nullable(Box::new(ty.clone())),]
+                    vec![
+                        DataType::Nullable(Box::new(ty.clone())),
+                        DataType::Nullable(Box::new(ty.clone())),
+                    ]
                 }
                 DataType::Null => {
-                    vec![DataType::Null, DataType::Null,]
+                    vec![DataType::Null, DataType::Null]
                 }
                 _ =>
                     return Err(ErrorCode::BadDataValueType(format!(

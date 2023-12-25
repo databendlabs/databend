@@ -968,13 +968,19 @@ impl<'a> Evaluator<'a> {
             let entries = if expr.data_type().is_nullable() {
                 vec![
                     BlockEntry::new(
-                        if arg0.is_null() {DataType::Null}
-                        else {DataType::Nullable(Box::new(arg0.infer_data_type()))},
+                        if arg0.is_null() {
+                            DataType::Null
+                        } else {
+                            DataType::Nullable(Box::new(arg0.infer_data_type()))
+                        },
                         Value::Scalar(arg0.to_owned()),
                     ),
                     BlockEntry::new(
-                        if arg1.is_null() {DataType::Null}
-                        else {DataType::Nullable(Box::new(arg1.infer_data_type()))},
+                        if arg1.is_null() {
+                            DataType::Null
+                        } else {
+                            DataType::Nullable(Box::new(arg1.infer_data_type()))
+                        },
                         Value::Scalar(arg1.to_owned()),
                     ),
                 ]
