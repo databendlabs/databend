@@ -139,8 +139,8 @@ mod test_accessor {
         type BlockingReader = ();
         type Writer = ();
         type BlockingWriter = ();
-        type Pager = ();
-        type BlockingPager = ();
+        type Lister = ();
+        type BlockingLister = ();
 
         fn info(&self) -> AccessorInfo {
             let mut info = AccessorInfo::default();
@@ -149,7 +149,6 @@ mod test_accessor {
             cap.batch = true;
             cap.delete = true;
             cap.list = true;
-            cap.list_with_delimiter_slash = true;
             info
         }
 
@@ -166,7 +165,11 @@ mod test_accessor {
             ))
         }
 
-        async fn list(&self, _path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Pager)> {
+        async fn list(
+            &self,
+            _path: &str,
+            _args: OpList,
+        ) -> opendal::Result<(RpList, Self::Lister)> {
             Ok((RpList::default(), ()))
         }
     }
