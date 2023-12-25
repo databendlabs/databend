@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
@@ -45,6 +48,7 @@ pub struct AggIndexSink {
     keep_block_name_col: bool,
     location_data: HashMap<String, Vec<BlockRowIndex>>,
     blocks: Vec<DataBlock>,
+    max_memory_usage: usize,
 }
 
 impl AggIndexSink {
@@ -59,6 +63,11 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
+        let max_memory_usage = if let Ok(usage) = ctx.get_settings().get_max_memory_usage() {
+            usage as usize
+        } else {
+            usize::MAX
+        };
         let sinker = AsyncSinker::create(input, ctx, AggIndexSink {
             data_accessor,
             index_id,
@@ -68,12 +77,36 @@ impl AggIndexSink {
             keep_block_name_col,
             location_data: HashMap::new(),
             blocks: vec![],
+            max_memory_usage,
         });
 
         Ok(ProcessorPtr::create(sinker))
     }
 
-    fn process_block(&mut self, block: &mut DataBlock) {
+    fn check_memory_limit(&self, block: &DataBlock) -> Result<()> {
+        if unlikely(block.is_empty()) {
+            return Ok(());
+        }
+        let used_memory = GLOBAL_MEM_STAT.get_memory_usage();
+        let used_memory = if used_memory <= 0 {
+            0
+        } else {
+            used_memory as usize
+        };
+        if used_memory + block.memory_size() >= self.max_memory_usage {
+            // todo: refine error message when docs updated.
+            return Err(ErrorCode::AbortedQuery(format!(
+                "The automatic generation of aggregating index({}) exceeds the memory limit.\
+                 Please create async aggregating index and generate them using `refresh with limit` manually, see: {} for details",
+                self.index_id,
+                "https://databend.rs/sql/sql-commands/ddl/aggregating-index/refresh-aggregating-index",
+            )));
+        }
+        Ok(())
+    }
+
+    fn process_block(&mut self, block: &mut DataBlock) -> Result<()> {
+        self.check_memory_limit(block)?;
         let col = block.get_by_offset(self.block_name_offset);
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
@@ -99,6 +132,7 @@ impl AggIndexSink {
         }
 
         self.blocks.push(result);
+        Ok(())
     }
 }
 
@@ -133,7 +167,7 @@ impl AsyncSink for AggIndexSink {
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         let mut block = data_block;
-        self.process_block(&mut block);
+        self.process_block(&mut block)?;
 
         Ok(false)
     }

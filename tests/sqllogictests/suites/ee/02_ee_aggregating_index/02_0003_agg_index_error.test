@@ -78,6 +78,20 @@ onlyif mysql
 statement error 1105
 CREATE AGGREGATING INDEX testi AS select sum(a) from t group by rand()
 
+# test oom for sync agg index
+statement ok
+SET max_memory_usage = 10
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select sum(a) as ai from t
+
+onlyif mysql
+statement error 1043
+INSERT INTO t(a) SELECT * FROM numbers(100000);
+
+statement ok
+UNSET max_memory_usage
+
 statement ok
 DROP TABLE t
 
