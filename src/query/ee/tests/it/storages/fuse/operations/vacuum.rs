@@ -146,9 +146,11 @@ mod test_accessor {
             let mut info = AccessorInfo::default();
             let cap = info.full_capability_mut();
             cap.stat = true;
+            cap.create_dir = true;
             cap.batch = true;
             cap.delete = true;
             cap.list = true;
+            cap.list_without_recursive = true;
             info
         }
 
