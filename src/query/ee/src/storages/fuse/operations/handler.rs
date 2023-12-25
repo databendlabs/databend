@@ -16,13 +16,13 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::GlobalInstance;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_storages_fuse::FuseTable;
-use vacuum_handler::VacuumHandler;
-use vacuum_handler::VacuumHandlerWrapper;
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::VacuumHandler;
+use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::do_vacuum_drop_tables;

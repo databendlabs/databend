@@ -14,20 +14,20 @@
 
 use std::collections::HashMap;
 
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::utils::expr2prdicate;
 use super::utils::get_and;
@@ -65,7 +65,7 @@ impl UpdateByExprMutator {
     pub fn update_by_expr(&self, data_block: DataBlock) -> Result<DataBlock> {
         let const_expr = Expr::Constant {
             span: None,
-            scalar: common_expression::Scalar::Boolean(true),
+            scalar: databend_common_expression::Scalar::Boolean(true),
             data_type: DataType::Boolean,
         };
         let mut expr = if self.expr.is_none() {

@@ -17,11 +17,11 @@
 
 mod entry;
 
-use common_base::mem_allocator::GlobalAllocator;
-use common_base::runtime::Runtime;
-use common_config::InnerConfig;
-use common_exception::Result;
-use enterprise_query::enterprise_services::EnterpriseServices;
+use databend_common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::runtime::Runtime;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_enterprise_query::enterprise_services::EnterpriseServices;
 
 use crate::entry::init_services;
 use crate::entry::run_cmd;

@@ -18,14 +18,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::base::GlobalUniqName;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::arrow::deserialize_column;
-use common_expression::arrow::serialize_column;
-use common_expression::DataBlock;
-use common_hashtable::hash2bucket;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::hash2bucket;
 use log::info;
 use opendal::Operator;
 

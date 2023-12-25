@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_core::processors::create_resize_item;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::create_resize_item;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::create_dummy_item;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;

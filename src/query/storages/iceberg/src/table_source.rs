@@ -15,20 +15,20 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSFullReader;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_storages_parquet::ParquetPart;
+use databend_common_storages_parquet::ParquetRSFullReader;
 use opendal::Reader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
@@ -130,7 +130,7 @@ impl Processor for IcebergTableSource {
                     assert_eq!(files.files.len(), 1);
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(&files.files[0].0)
+                        .prepare_data_stream(&files.files[0].0, None)
                         .await?;
                     self.stream = Some(stream);
                 }

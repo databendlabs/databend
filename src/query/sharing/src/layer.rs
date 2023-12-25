@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use common_auth::RefreshableToken;
-use common_exception::ErrorCode;
+use databend_common_auth::RefreshableToken;
+use databend_common_exception::ErrorCode;
 use http::Request;
 use http::Response;
 use http::StatusCode;
@@ -58,7 +58,7 @@ pub fn create_share_table_operator(
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
-) -> common_exception::Result<Operator> {
+) -> databend_common_exception::Result<Operator> {
     let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(

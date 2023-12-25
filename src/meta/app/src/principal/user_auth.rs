@@ -14,8 +14,8 @@
 
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use sha2::Digest;
 use sha2::Sha256;
 

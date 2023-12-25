@@ -16,9 +16,9 @@
 
 use std::error::Error;
 
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::RaftError;
+use databend_common_meta_types::protobuf::RaftReply;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::RaftError;
 
 pub struct GrpcHelper;
 
@@ -26,7 +26,7 @@ impl GrpcHelper {
     /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
     pub fn traced_req<T>(t: T) -> tonic::Request<T> {
         let req = tonic::Request::new(t);
-        common_tracing::inject_span_to_tonic_request(req)
+        databend_common_tracing::inject_span_to_tonic_request(req)
     }
 
     pub fn encode_raft_request<T>(v: &T) -> Result<RaftRequest, serde_json::Error>

@@ -16,31 +16,31 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::base::tokio::sync::mpsc;
-use common_base::base::tokio::time::Instant;
-use common_grpc::GrpcClaim;
-use common_grpc::GrpcToken;
-use common_meta_client::MetaGrpcReadReq;
-use common_meta_client::MetaGrpcReq;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::protobuf::meta_service_server::MetaService;
-use common_meta_types::protobuf::ClientInfo;
-use common_meta_types::protobuf::ClusterStatus;
-use common_meta_types::protobuf::Empty;
-use common_meta_types::protobuf::ExportedChunk;
-use common_meta_types::protobuf::HandshakeRequest;
-use common_meta_types::protobuf::HandshakeResponse;
-use common_meta_types::protobuf::MemberListReply;
-use common_meta_types::protobuf::MemberListRequest;
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_metrics::count::Count;
+use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use databend_common_base::base::tokio::sync::mpsc;
+use databend_common_base::base::tokio::time::Instant;
+use databend_common_grpc::GrpcClaim;
+use databend_common_grpc::GrpcToken;
+use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_client::MetaGrpcReq;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::protobuf::meta_service_server::MetaService;
+use databend_common_meta_types::protobuf::ClientInfo;
+use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::Empty;
+use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::HandshakeRequest;
+use databend_common_meta_types::protobuf::HandshakeResponse;
+use databend_common_meta_types::protobuf::MemberListReply;
+use databend_common_meta_types::protobuf::MemberListRequest;
+use databend_common_meta_types::protobuf::RaftReply;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_metrics::count::Count;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -259,7 +259,7 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         let reply = self.handle_kv_api(request).in_span(root).await?;
 
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -276,7 +276,7 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         let strm = self.handle_kv_read_v1(request).in_span(root).await?;
 
@@ -292,7 +292,7 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         let reply = self.handle_txn(request).in_span(root).await?;
 
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -308,7 +308,7 @@ impl MetaService for MetaServiceImpl {
     /// The exported data is a series of JSON encoded strings of `RaftStoreEntry`.
     async fn export(
         &self,
-        _request: Request<common_meta_types::protobuf::Empty>,
+        _request: Request<databend_common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
         let _guard = RequestInFlight::guard();
 

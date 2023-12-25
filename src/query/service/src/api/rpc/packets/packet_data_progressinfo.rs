@@ -20,9 +20,9 @@ use std::sync::Arc;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use common_base::base::ProgressValues;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::ProgressValues;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

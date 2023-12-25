@@ -18,29 +18,28 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Barrier;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::arrow::and_validities;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::with_join_hash_method;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashJoinHashtableLike;
-use common_sql::ColumnSet;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::and_validities;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::with_join_hash_method;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodKind;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
@@ -377,7 +376,7 @@ impl HashJoinProbeState {
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
-        if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+        if self.hash_join_state.enable_spill {
             worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
             self.spill_workers.fetch_add(1, Ordering::Relaxed);
         }

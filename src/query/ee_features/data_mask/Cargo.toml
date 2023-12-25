@@ -1,5 +1,5 @@
 [package]
-name = "data-mask-feature"
+name = "databend-enterprise-data-mask-feature"
 description = "data mask"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,10 +13,10 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
-common-meta-store = { path = "../../../meta/store" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-meta-store = { path = "../../../meta/store" }
 
 async-trait = { workspace = true }
 

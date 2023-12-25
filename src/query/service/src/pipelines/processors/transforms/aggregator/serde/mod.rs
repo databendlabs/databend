@@ -35,15 +35,15 @@ pub use transform_group_by_spill_writer::*;
 pub use transform_spill_reader::*;
 
 pub mod exchange_defines {
-    use common_arrow::arrow::datatypes::Field;
-    use common_arrow::arrow::io::flight::default_ipc_fields;
-    use common_arrow::arrow::io::flight::WriteOptions;
-    use common_arrow::arrow::io::ipc::IpcField;
-    use common_arrow::arrow::io::ipc::IpcSchema;
-    use common_expression::types::DataType;
-    use common_expression::types::NumberDataType;
-    use common_expression::DataField;
-    use common_expression::DataSchema;
+    use databend_common_arrow::arrow::datatypes::Field;
+    use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+    use databend_common_arrow::arrow::io::flight::WriteOptions;
+    use databend_common_arrow::arrow::io::ipc::IpcField;
+    use databend_common_arrow::arrow::io::ipc::IpcSchema;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
     use once_cell::sync::OnceCell;
 
     pub fn spilled_schema() -> DataSchema {

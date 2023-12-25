@@ -16,7 +16,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
@@ -252,7 +254,17 @@ pub enum NumberDataType {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum NumberScalar {
     UInt8(u8),
     UInt16(u16),
@@ -487,6 +499,14 @@ impl NumberScalar {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberScalar::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
+    }
+}
+
+impl<T> From<T> for NumberScalar
+where T: Number
+{
+    fn from(value: T) -> Self {
+        T::upcast_scalar(value)
     }
 }
 

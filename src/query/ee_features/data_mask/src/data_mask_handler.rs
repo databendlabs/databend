@@ -28,12 +28,12 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_app::data_mask::CreateDatamaskReq;
-use common_meta_app::data_mask::DatamaskMeta;
-use common_meta_app::data_mask::DropDatamaskReq;
-use common_meta_store::MetaStore;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_store::MetaStore;
 
 #[async_trait::async_trait]
 pub trait DatamaskHandler: Sync + Send {

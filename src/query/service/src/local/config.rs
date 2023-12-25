@@ -16,8 +16,8 @@
 
 use std::path::Path;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Default, Deserialize)]

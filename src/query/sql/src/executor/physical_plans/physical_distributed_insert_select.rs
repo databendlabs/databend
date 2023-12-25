@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::DataSchemaRef;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
 
 use crate::executor::PhysicalPlan;
 use crate::ColumnBinding;

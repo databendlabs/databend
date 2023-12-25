@@ -2,7 +2,7 @@ Error: APIError: ResponseError with 1065: error:
   --> SQL:1:8
   |
 1 | select *
-  |        ^ SELECT * with no tables specified is not valid
+  |        ^ 'SELECT *' is used without specifying any tables in the FROM clause.
 
 
 Error: APIError: ResponseError with 1025: error: 
@@ -45,4 +45,4 @@ Error: APIError: ResponseError with 1065: error:
   |                                 ^ column c specified in USING clause does not exist in left table
 
 
-Error: APIError: ResponseError with 1025: Unknown table `default`.`t` in catalog 'default'
+Error: APIError: ResponseError with 1025: Unknown table 't'

@@ -14,17 +14,17 @@
 
 use std::sync::atomic::Ordering;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::KeyAccessor;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
-use common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::KeyAccessor;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::RowPtr;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;

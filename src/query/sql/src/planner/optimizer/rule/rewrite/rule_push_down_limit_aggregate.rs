@@ -75,7 +75,11 @@ impl Rule for RulePushDownLimitAggregate {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if let Some(mut count) = limit.limit {
             count += limit.offset;

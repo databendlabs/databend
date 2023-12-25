@@ -17,12 +17,12 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use bytes::Bytes;
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_metrics::cache::*;
 use crossbeam_channel::TrySendError;
+use databend_common_cache::Count;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::cache::*;
 use log::error;
 use log::info;
 

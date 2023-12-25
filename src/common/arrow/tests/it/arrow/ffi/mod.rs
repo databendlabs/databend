@@ -16,10 +16,12 @@
 mod data;
 mod stream;
 
+use databend_common_arrow::arrow::ffi::mmap;
+
 #[test]
 fn mmap_slice() {
     let slice = &[1, 2, 3];
-    let array = unsafe { common_arrow::arrow::ffi::mmap::slice(slice) };
+    let array = unsafe { mmap::slice(slice) };
     assert_eq!(array.values().as_ref(), &[1, 2, 3]);
     // note: when `slice` is dropped, array must be dropped as-well since by construction of `slice` they share their lifetimes.
 }
@@ -27,7 +29,7 @@ fn mmap_slice() {
 #[test]
 fn mmap_bitmap() {
     let slice = &[123u8, 255];
-    let array = unsafe { common_arrow::arrow::ffi::mmap::bitmap(slice, 2, 14) }.unwrap();
+    let array = unsafe { mmap::bitmap(slice, 2, 14) }.unwrap();
     assert_eq!(array.values_iter().collect::<Vec<_>>(), &[
         false, true, true, true, true, false, true, true, true, true, true, true, true, true
     ]);

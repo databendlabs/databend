@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-app"
+name = "databend-common-meta-app"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,11 +14,11 @@ test = true
 storage-hdfs = []
 
 [dependencies]
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../../query/expression" }
-common-io = { path = "../../common/io" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-types = { path = "../types" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-io = { path = "../../common/io" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-types = { path = "../types" }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
@@ -44,6 +44,6 @@ anyhow = { workspace = true }
 ignored = ["num-traits"]
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }
 
 tonic-build = { workspace = true }

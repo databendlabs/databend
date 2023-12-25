@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::RoleInfo;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::role_mgr::BUILTIN_ROLE_PUBLIC;

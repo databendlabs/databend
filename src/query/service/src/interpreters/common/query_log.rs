@@ -16,12 +16,13 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storages_system::LogType;
-use common_storages_system::QueryLogElement;
-use common_storages_system::QueryLogQueue;
+use databend_common_config::GlobalConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_storages_system::LogType;
+use databend_common_storages_system::QueryLogElement;
+use databend_common_storages_system::QueryLogQueue;
 use log::error;
 use log::info;
 use serde_json;
@@ -182,7 +183,7 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
             has_profiles: false,
@@ -319,7 +320,7 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
             has_profiles,

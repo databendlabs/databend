@@ -14,9 +14,9 @@
 
 use std::ops::Range;
 
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;

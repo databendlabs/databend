@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,3 +69,7 @@ mod v062_table_lock_meta;
 mod v063_connection;
 mod v064_ndjson_format_params;
 mod v065_least_visible_time;
+mod v066_stage_create_on;
+mod v067_password_policy;
+mod v068_index_meta;
+mod v069_user_grant_id;

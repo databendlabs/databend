@@ -18,9 +18,9 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::Result;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::KeyError;
+use databend_common_exception::Result;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KeyError;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
@@ -179,7 +179,7 @@ pub struct TableLockKey {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::TableLockKey;
     use crate::schema::PREFIX_TABLE_LOCK;

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Range;
-use common_exception::Span;
+use databend_common_exception::Range;
+use databend_common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::Offset;

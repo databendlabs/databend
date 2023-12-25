@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-information-schema"
+name = "databend-common-storages-information-schema"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,10 +12,10 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = "../../../query/ast" }
-common-catalog = { path = "../../catalog" }
-common-meta-app = { path = "../../../meta/app" }
-common-storages-view = { path = "../view" }
+databend-common-ast = { path = "../../../query/ast" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-storages-view = { path = "../view" }
 
 [build-dependencies]
-common-building = { path = "../../../common/building" }
+databend-common-building = { path = "../../../common/building" }

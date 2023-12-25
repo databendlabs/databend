@@ -14,9 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::number::Int64Type;
-use common_expression::types::StringType;
-use common_expression::FromData;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;

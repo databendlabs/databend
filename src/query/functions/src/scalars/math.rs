@@ -17,25 +17,29 @@ use std::f64::consts::E;
 use std::f64::consts::PI;
 use std::marker::PhantomData;
 
-use common_expression::types::number::SimpleDomain;
-use common_expression::types::number::F64;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::ALL_FLOAT_TYPES;
-use common_expression::types::ALL_INTEGER_TYPES;
-use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::with_number_mapped_type;
-use common_expression::FunctionDomain;
-use common_expression::FunctionRegistry;
-use common_expression::Value;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use num_traits::AsPrimitive;
 use num_traits::Float;
 use num_traits::Pow;
 use ordered_float::OrderedFloat;
 
+use crate::scalars::decimal::register_decimal_math;
+
 pub fn register(registry: &mut FunctionRegistry) {
+    register_decimal_math(registry);
+
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "sin",
         |_, _| {

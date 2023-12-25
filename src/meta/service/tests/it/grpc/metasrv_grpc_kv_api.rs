@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;

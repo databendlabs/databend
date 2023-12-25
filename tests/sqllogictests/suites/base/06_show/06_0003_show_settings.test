@@ -31,12 +31,12 @@ SHOW SETTINGS LIKE 'enable%'
 query TT
 SHOW SETTINGS LIKE 'max%' LIMIT 1
 ----
-max_block_size 65536 65536 SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
 
 query TT
 SHOW SETTINGS WHERE name='max_block_size' LIMIT 1
 ----
-max_block_size 65536 65536 SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
 
 statement error
 SHOW SETTINGS ilike 'ff%' LIMIT 1
@@ -49,11 +49,11 @@ statement ok
 set max_memory_usage = 1024*1024*1024*1.5
 
 onlyif mysql
-statement error 1006
+statement error 1105
 set max_memory_usage = 1024*1024*1024*1.3
 
 onlyif mysql
-statement error 1001
+statement error 1105
 set max_memory_usage = true
 
 onlyif mysql

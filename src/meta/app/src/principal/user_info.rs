@@ -15,8 +15,8 @@
 use core::fmt;
 use std::convert::TryFrom;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 use serde::Deserialize;
@@ -107,6 +107,8 @@ pub struct UserOption {
     default_role: Option<String>,
 
     network_policy: Option<String>,
+
+    password_policy: Option<String>,
 }
 
 impl UserOption {
@@ -115,6 +117,7 @@ impl UserOption {
             flags,
             default_role: None,
             network_policy: None,
+            password_policy: None,
         }
     }
 
@@ -137,6 +140,11 @@ impl UserOption {
         self
     }
 
+    pub fn with_password_policy(mut self, password_policy: Option<String>) -> Self {
+        self.password_policy = password_policy;
+        self
+    }
+
     pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
         self.flags.insert(flag);
         self
@@ -154,12 +162,20 @@ impl UserOption {
         self.network_policy.as_ref()
     }
 
+    pub fn password_policy(&self) -> Option<&String> {
+        self.password_policy.as_ref()
+    }
+
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
     }
 
     pub fn set_network_policy(&mut self, network_policy: Option<String>) {
         self.network_policy = network_policy;
+    }
+
+    pub fn set_password_policy(&mut self, password_policy: Option<String>) {
+        self.password_policy = password_policy;
     }
 
     pub fn set_all_flag(&mut self) {

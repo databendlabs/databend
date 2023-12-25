@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_meta_sled_store::openraft;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::ErrorSubject;
-use common_meta_types::StorageError;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::StorageError;
 use openraft::ErrorVerb;
 use openraft::StorageIOError;
 
-/// Convert MetaStorageError to openraft::StorageError;  
+/// Convert MetaStorageError to openraft::StorageError;
 pub trait ToStorageError<T> {
     fn map_to_sto_err(self, subject: ErrorSubject, verb: ErrorVerb) -> Result<T, StorageError>;
 }

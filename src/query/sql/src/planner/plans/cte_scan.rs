@@ -15,9 +15,10 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataField;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataField;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -72,6 +73,7 @@ impl Operator for CteScan {
             output_columns: self.used_columns()?,
             outer_columns: ColumnSet::new(),
             used_columns: self.used_columns()?,
+            orderings: vec![],
         }))
     }
 
@@ -81,7 +83,7 @@ impl Operator for CteScan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: self.stat.cardinality,
             statistics: self.stat.statistics.clone(),
@@ -95,6 +97,19 @@ impl Operator for CteScan {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        unreachable!()
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for CteScan".to_string(),
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for CteScan".to_string(),
+        ))
     }
 }

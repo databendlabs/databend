@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::traits::HashJoinHashtableLike;
 use super::traits::Keyable;

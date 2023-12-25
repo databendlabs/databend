@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
 

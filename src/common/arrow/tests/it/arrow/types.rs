@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::types::days_ms;
-use common_arrow::arrow::types::months_days_ns;
-use common_arrow::arrow::types::BitChunkIter;
-use common_arrow::arrow::types::BitChunkOnes;
-use common_arrow::arrow::types::NativeType;
+use databend_common_arrow::arrow::types::days_ms;
+use databend_common_arrow::arrow::types::months_days_ns;
+use databend_common_arrow::arrow::types::BitChunkIter;
+use databend_common_arrow::arrow::types::BitChunkOnes;
+use databend_common_arrow::arrow::types::NativeType;
 
 #[test]
 fn test_basic1() {

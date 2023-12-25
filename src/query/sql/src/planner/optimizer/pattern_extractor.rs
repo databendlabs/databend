@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::optimizer::group::Group;
 use crate::optimizer::m_expr::MExpr;

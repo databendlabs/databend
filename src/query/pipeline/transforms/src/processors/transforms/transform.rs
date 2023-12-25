@@ -16,15 +16,16 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -44,6 +45,8 @@ pub trait Transform: Send {
     fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
+
+    fn record_profile(&self, _: &Profile) {}
 }
 
 pub struct Transformer<T: Transform + 'static> {
@@ -121,6 +124,10 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
         }
 
         Ok(())
+    }
+
+    fn record_profile(&self, profile: &Profile) {
+        self.transform.record_profile(profile)
     }
 }
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bytes::BufMut;
-use common_exception::Result;
+use databend_common_exception::Result;
 use micromarshal::Marshal;
 
 use crate::stat_buffer::StatBuffer;

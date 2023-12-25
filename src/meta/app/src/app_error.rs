@@ -14,8 +14,8 @@
 
 use std::fmt::Display;
 
-use common_exception::ErrorCode;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_types::MatchSeq;
 use serde::Deserialize;
 use serde::Serialize;
 

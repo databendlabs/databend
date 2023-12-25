@@ -1,5 +1,5 @@
 [package]
-name = "common-storage"
+name = "databend-common-storage"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -7,17 +7,17 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-storage-hdfs = ["common-meta-app/storage-hdfs"]
+storage-hdfs = ["databend-common-meta-app/storage-hdfs"]
 
 [dependencies]
-common-arrow = { path = "../arrow" }
-common-auth = { path = "../auth" }
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
-common-expression = { path = "../../query/expression" }
-common-meta-app = { path = "../../meta/app" }
-common-metrics = { path = "../metrics" }
-storage-encryption = { path = "../../query/ee_features/storage_encryption" }
+databend-common-arrow = { path = "../arrow" }
+databend-common-auth = { path = "../auth" }
+databend-common-base = { path = "../base" }
+databend-common-exception = { path = "../exception" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-metrics = { path = "../metrics" }
+databend-enterprise-storage-encryption = { path = "../../query/ee_features/storage_encryption" }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }

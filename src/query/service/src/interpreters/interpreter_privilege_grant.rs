@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::principal::UserPrivilegeType::Ownership;
-use common_sql::plans::GrantPrivilegePlan;
-use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
+use databend_common_sql::plans::GrantPrivilegePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
 
@@ -59,7 +59,7 @@ impl GrantPrivilegeInterpreter {
         let current_role = match self.ctx.get_current_role() {
             Some(current_role) => current_role,
             None => {
-                return Err(common_exception::ErrorCode::UnknownRole(
+                return Err(databend_common_exception::ErrorCode::UnknownRole(
                     "No current role, cannot grant ownership",
                 ));
             }
@@ -115,6 +115,15 @@ impl GrantPrivilegeInterpreter {
                     table_id,
                 }
             }
+            GrantObject::TableById(_, db_id, table_id) => GrantObjectByID::Table {
+                catalog_name,
+                db_id: *db_id,
+                table_id: *table_id,
+            },
+            GrantObject::DatabaseById(_, db_id) => GrantObjectByID::Database {
+                catalog_name,
+                db_id: *db_id,
+            },
             _ => {
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
@@ -202,7 +211,7 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(common_exception::ErrorCode::IllegalGrant(
+        return Err(databend_common_exception::ErrorCode::IllegalGrant(
             "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
         ));
     }

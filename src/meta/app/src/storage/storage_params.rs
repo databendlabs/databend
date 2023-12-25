@@ -17,8 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 

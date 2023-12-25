@@ -33,7 +33,7 @@ pub mod variant;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;

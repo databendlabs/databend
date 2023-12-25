@@ -14,28 +14,28 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_users::GrantObjectVisibilityChecker;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::GrantObjectVisibilityChecker;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -224,10 +224,17 @@ where TablesTable<T>: HistoryAware
 
             let final_dbs = dbs
                 .into_iter()
-                .filter(|db| visibility_checker.check_database_visibility(ctl_name, db.name()))
+                .filter(|db| {
+                    visibility_checker.check_database_visibility(
+                        ctl_name,
+                        db.name(),
+                        db.get_db_info().ident.db_id,
+                    )
+                })
                 .collect::<Vec<_>>();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
+                let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
@@ -251,8 +258,13 @@ where TablesTable<T>: HistoryAware
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
-                    if visibility_checker.check_table_visibility(ctl_name, db.name(), table.name())
-                        && table.engine() != "STREAM"
+                    if visibility_checker.check_table_visibility(
+                        ctl_name,
+                        db.name(),
+                        table.name(),
+                        db_id,
+                        table.get_id(),
+                    ) && table.engine() != "STREAM"
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());
@@ -278,7 +290,7 @@ where TablesTable<T>: HistoryAware
                     .as_ref()
                     .map(|v| v.owner_role_name.as_bytes().to_vec()),
             );
-            let stats = match tbl.table_statistics().await {
+            let stats = match tbl.table_statistics(ctx.clone()).await {
                 Ok(stats) => stats,
                 Err(err) => {
                     ctx.push_warning(format!(

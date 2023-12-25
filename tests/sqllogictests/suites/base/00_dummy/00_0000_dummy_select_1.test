@@ -51,7 +51,7 @@ SELECT 'That\'s good.'
 ----
 That's good.
 
-statement error (?s)1065.*SELECT \* with no tables specified is not valid
+statement error (?s)1065.*'SELECT \*' is used without specifying any tables in the FROM clause\.
 SELECT *
 
 query T

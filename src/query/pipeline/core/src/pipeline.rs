@@ -18,8 +18,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
@@ -62,7 +62,7 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
-    pub plans_scope: Vec<PlanScope>,
+    plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
 }
 
@@ -112,7 +112,7 @@ impl Pipeline {
         match self.pipes.first() {
             Some(pipe) => Ok(pipe.input_length != 0),
             None => Err(ErrorCode::Internal(
-                "Logical error, call is_pushing on empty pipeline.",
+                "Logical error: Attempted to call 'is_pushing_pipeline' on an empty pipeline.",
             )),
         }
     }
@@ -122,7 +122,7 @@ impl Pipeline {
         match self.pipes.last() {
             Some(pipe) => Ok(pipe.output_length != 0),
             None => Err(ErrorCode::Internal(
-                "Logical error, call is_pulling on empty pipeline.",
+                "Logical error: 'is_pulling_pipeline' called on an empty pipeline.",
             )),
         }
     }
@@ -139,11 +139,11 @@ impl Pipeline {
     pub fn finalize(mut self) -> Pipeline {
         for pipe in &mut self.pipes {
             if let Some(uninitialized_scope) = &mut pipe.scope {
-                if uninitialized_scope.parent_id == 0 {
+                if uninitialized_scope.parent_id.is_none() {
                     for (index, scope) in self.plans_scope.iter().enumerate() {
                         if scope.id == uninitialized_scope.id && index != 0 {
                             if let Some(parent_scope) = self.plans_scope.get(index - 1) {
-                                uninitialized_scope.parent_id = parent_scope.id;
+                                uninitialized_scope.parent_id = Some(parent_scope.id);
                             }
                         }
                     }
@@ -154,6 +154,11 @@ impl Pipeline {
         self
     }
 
+    pub fn get_scopes(&self) -> Vec<PlanScope> {
+        let scope_size = self.scope_size.load(Ordering::SeqCst);
+        self.plans_scope[..scope_size].to_vec()
+    }
+
     pub fn add_pipe(&mut self, mut pipe: Pipe) {
         let (scope_idx, _) = self.scope_size.load(Ordering::SeqCst).overflowing_sub(1);
 
@@ -162,8 +167,8 @@ impl Pipeline {
             // set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
             for pipe in &mut self.pipes {
                 if let Some(children) = &mut pipe.scope {
-                    if children.parent_id == 0 && children.id != scope.id {
-                        children.parent_id = scope.id;
+                    if children.parent_id.is_none() && children.id != scope.id {
+                        children.parent_id = Some(scope.id);
                     }
                 }
             }
@@ -454,7 +459,7 @@ impl Pipeline {
 
         if self.plans_scope.len() > scope_idx {
             self.plans_scope[scope_idx] = scope;
-            self.plans_scope.shrink_to(scope_idx + 1);
+            self.plans_scope.truncate(scope_idx + 1);
             return PlanScopeGuard::create(self.scope_size.clone(), scope_idx);
         }
 

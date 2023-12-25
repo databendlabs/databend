@@ -17,20 +17,19 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_ast::ast::Identifier;
-use common_ast::ast::Query;
-use common_ast::ast::TableAlias;
-use common_ast::ast::WindowSpec;
-use common_catalog::plan::InternalColumn;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::is_internal_stream_column_id;
-use common_expression::ColumnId;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::WindowSpec;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -556,9 +555,9 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
-        if table.table().engine() != "STREAM" && is_internal_stream_column_id(column_id) {
+        if !table.table().supported_internal_column(column_id) {
             return Err(ErrorCode::SemanticError(format!(
-                "Internal column `{}` is not allowed in table `{}`",
+                "Unsupported internal column '{}' in table '{}'.",
                 column_binding.internal_column.column_name(),
                 table.table().name()
             )));

@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-pruner"
+name = "databend-storages-common-pruner"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,12 +12,12 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception = { path = "../../../../common/exception" }
-common-expression = { path = "../../../expression" }
-common-functions = { path = "../../../functions" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-common-expression = { path = "../../../expression" }
+databend-common-functions = { path = "../../../functions" }
 
-storages-common-index = { path = "../index" }
-storages-common-table-meta = { path = "../table_meta" }
+databend-storages-common-index = { path = "../index" }
+databend-storages-common-table-meta = { path = "../table_meta" }
 
 log = { workspace = true }
 serde = { workspace = true }

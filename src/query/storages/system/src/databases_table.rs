@@ -14,23 +14,23 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -73,7 +73,13 @@ impl AsyncSystemTable for DatabasesTable {
             let databases = catalog.list_databases(tenant.as_str()).await?;
             let final_dbs = databases
                 .into_iter()
-                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, db.name()))
+                .filter(|db| {
+                    visibility_checker.check_database_visibility(
+                        &ctl_name,
+                        db.name(),
+                        db.get_db_info().ident.db_id,
+                    )
+                })
                 .collect::<Vec<_>>();
 
             for db in final_dbs {

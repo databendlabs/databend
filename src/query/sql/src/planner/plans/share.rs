@@ -16,19 +16,19 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_meta_app::share::CreateShareEndpointReq;
-use common_meta_app::share::CreateShareReq;
-use common_meta_app::share::DropShareEndpointReq;
-use common_meta_app::share::DropShareReq;
-use common_meta_app::share::GetShareEndpointReq;
-use common_meta_app::share::ShareEndpointIdent;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::share::CreateShareEndpointReq;
+use databend_common_meta_app::share::CreateShareReq;
+use databend_common_meta_app::share::DropShareEndpointReq;
+use databend_common_meta_app::share::DropShareReq;
+use databend_common_meta_app::share::GetShareEndpointReq;
+use databend_common_meta_app::share::ShareEndpointIdent;
+use databend_common_meta_app::share::ShareGrantObjectName;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareNameIdent;
 
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]

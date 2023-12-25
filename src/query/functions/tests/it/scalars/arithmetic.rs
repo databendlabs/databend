@@ -14,11 +14,11 @@
 
 use std::io::Write;
 
-use common_expression::types::decimal::DecimalColumn;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::number::*;
-use common_expression::Column;
-use common_expression::FromData;
+use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::number::*;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
 use ethnum::i256;
 use goldenfile::Mint;
 

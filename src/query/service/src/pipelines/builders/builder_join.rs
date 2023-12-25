@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Barrier;
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sinks::Sinker;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::executor::physical_plans::HashJoin;
-use common_sql::executor::physical_plans::MaterializedCte;
-use common_sql::executor::physical_plans::RangeJoin;
-use common_sql::executor::PhysicalPlan;
-use common_sql::ColumnBinding;
-use common_sql::IndexType;
+use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::Sinker;
+use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use databend_common_pipeline_transforms::processors::ProfileStub;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializedCte;
+use databend_common_sql::executor::physical_plans::RangeJoin;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::IndexType;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -99,7 +99,7 @@ impl PipelineBuilder {
             right_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
@@ -154,7 +154,7 @@ impl PipelineBuilder {
             build_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
         let mut build_res = build_side_builder.finalize(build)?;
@@ -169,13 +169,13 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
-            join_state,
+            join_state.clone(),
             barrier,
             restore_barrier,
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
+            let spill_state = if join_state.enable_spill {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -217,7 +217,7 @@ impl PipelineBuilder {
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             self.func_ctx.clone(),
-            state,
+            state.clone(),
             &join.probe_projections,
             &join.probe_keys,
             join.probe.output_schema()?,
@@ -232,7 +232,7 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
+            let probe_spill_state = if state.enable_spill {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
@@ -317,7 +317,7 @@ impl PipelineBuilder {
             left_side_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         left_side_builder.cte_state = self.cte_state.clone();
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;

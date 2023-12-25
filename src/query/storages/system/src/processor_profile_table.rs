@@ -15,21 +15,21 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt32Type;
-use common_expression::types::UInt64Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -62,6 +62,8 @@ impl SyncSystemTable for ProcessorProfileTable {
         let mut plan_name: Vec<Option<Vec<u8>>> = Vec::with_capacity(total_size);
         let mut cpu_time: Vec<u64> = Vec::with_capacity(total_size);
         let mut wait_time: Vec<u64> = Vec::with_capacity(total_size);
+        let mut exchange_rows: Vec<u64> = Vec::with_capacity(total_size);
+        let mut exchange_bytes: Vec<u64> = Vec::with_capacity(total_size);
 
         for (query_id, query_profiles) in queries_profiles {
             for query_profile in query_profiles {
@@ -75,6 +77,8 @@ impl SyncSystemTable for ProcessorProfileTable {
 
                 cpu_time.push(query_profile.cpu_time.load(Ordering::Relaxed));
                 wait_time.push(query_profile.wait_time.load(Ordering::Relaxed));
+                exchange_rows.push(query_profile.exchange_rows.load(Ordering::Relaxed) as u64);
+                exchange_bytes.push(query_profile.exchange_bytes.load(Ordering::Relaxed) as u64);
             }
         }
 
@@ -88,6 +92,8 @@ impl SyncSystemTable for ProcessorProfileTable {
             StringType::from_opt_data(plan_name),
             UInt64Type::from_data(cpu_time),
             UInt64Type::from_data(wait_time),
+            UInt64Type::from_data(exchange_rows),
+            UInt64Type::from_data(exchange_bytes),
         ]))
     }
 }
@@ -113,6 +119,14 @@ impl ProcessorProfileTable {
             ),
             TableField::new("cpu_time", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("wait_time", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "exchange_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "exchange_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ]);
 
         let table_info = TableInfo {

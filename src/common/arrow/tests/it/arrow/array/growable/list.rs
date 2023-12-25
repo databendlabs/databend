@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::growable::Growable;
-use common_arrow::arrow::array::growable::GrowableList;
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ListArray;
-use common_arrow::arrow::array::MutableListArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
-use common_arrow::arrow::array::TryExtend;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::growable::Growable;
+use databend_common_arrow::arrow::array::growable::GrowableList;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::ListArray;
+use databend_common_arrow::arrow::array::MutableListArray;
+use databend_common_arrow::arrow::array::MutablePrimitiveArray;
+use databend_common_arrow::arrow::array::TryExtend;
+use databend_common_arrow::arrow::datatypes::DataType;
 
 fn create_list_array(data: Vec<Option<Vec<Option<i32>>>>) -> ListArray<i32> {
     let mut array = MutableListArray::<i32, MutablePrimitiveArray<i32>>::new();

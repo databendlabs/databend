@@ -15,20 +15,20 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_ast::ast::Engine;
-use common_catalog::table::NavigationPoint;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::storage::StorageParams;
+use databend_common_ast::ast::Engine;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::storage::StorageParams;
 
 use crate::plans::Plan;
 
@@ -44,6 +44,7 @@ pub struct CreateTablePlan {
 
     pub schema: TableSchemaRef,
     pub engine: Engine,
+    pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
     pub read_only_attach: bool,
     pub part_prefix: String,

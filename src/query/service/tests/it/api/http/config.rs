@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
+use databend_common_base::base::tokio;
 use databend_query::api::http::v1::config::config_handler;
 use databend_query::test_kits::*;
 use poem::get;
@@ -25,7 +25,7 @@ use poem::Route;
 use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_config() -> common_exception::Result<()> {
+async fn test_config() -> databend_common_exception::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let cluster_router = Route::new().at("/v1/config", get(config_handler));

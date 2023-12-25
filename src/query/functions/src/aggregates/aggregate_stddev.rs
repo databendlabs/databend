@@ -15,31 +15,30 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::Decimal128Type;
-use common_expression::types::decimal::Decimal256Type;
-use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
-use common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
-use common_expression::types::number::Number;
-use common_expression::types::number::F64;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::DecimalSize;
-use common_expression::types::Float64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::ValueType;
-use common_expression::with_number_mapped_type;
-use common_expression::Scalar;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::types::decimal::Decimal256Type;
+use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
+use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -52,7 +51,7 @@ const SAMP: u8 = 1;
 const OVERFLOW_PRECISION: u8 = 18;
 const VARIANCE_PRECISION: u8 = 4;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, BorshSerialize, BorshDeserialize)]
 struct NumberAggregateStddevState<const TYPE: u8> {
     pub sum: f64,
     pub count: u64,
@@ -109,12 +108,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 
@@ -128,7 +127,7 @@ impl FunctionData for DecimalFuncData {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(BorshDeserialize, BorshSerialize)]
 pub struct DecimalNumberAggregateStddevState<const OVERFLOW: bool, T, const TYPE: u8>
 where
     T: ValueType,
@@ -143,7 +142,7 @@ impl<const OVERFLOW: bool, T, const TYPE: u8> Default
     for DecimalNumberAggregateStddevState<OVERFLOW, T, TYPE>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
@@ -158,7 +157,7 @@ impl<const OVERFLOW: bool, T, const TYPE: u8> UnaryState<T, T>
     for DecimalNumberAggregateStddevState<OVERFLOW, T, TYPE>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         let value = T::to_owned_scalar(other);
@@ -174,7 +173,7 @@ where
         self.count += 1;
         if self.count > 1 {
             let t = match value
-                .checked_mul(T::Scalar::from_u64(self.count))
+                .checked_mul(T::Scalar::from_i128(self.count))
                 .and_then(|v| v.checked_sub(self.sum))
                 .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32)))
             {
@@ -205,7 +204,7 @@ where
                 }
             };
 
-            let count = T::Scalar::from_u64(self.count * (self.count - 1));
+            let count = T::Scalar::from_i128(self.count * (self.count - 1));
 
             let add_variance = match t.checked_div(count) {
                 Some(t) => t,
@@ -237,8 +236,8 @@ where
             return Ok(());
         }
 
-        let other_count = T::Scalar::from_u64(other.count);
-        let self_count = T::Scalar::from_u64(self.count);
+        let other_count = T::Scalar::from_i128(other.count);
+        let self_count = T::Scalar::from_i128(self.count);
         let t = match other_count
             .checked_mul(self.sum)
             .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32)))
@@ -342,12 +341,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 

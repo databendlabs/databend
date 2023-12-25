@@ -15,10 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 pub type F64 = OrderedFloat<f64>;

@@ -17,7 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 use futures::Future;
 use log::error;
 use log::info;
@@ -55,7 +55,9 @@ impl<E: Error + Send + 'static> StopHandle<E> {
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            return Err(ErrorCode::AlreadyStopped("StopHandle is shutting down"));
+            return Err(ErrorCode::AlreadyStopped(
+                "StopHandle is already shutting down",
+            ));
         }
 
         let mut handles = vec![];

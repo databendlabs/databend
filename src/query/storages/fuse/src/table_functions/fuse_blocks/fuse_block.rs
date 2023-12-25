@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use common_expression::Value;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::Value;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;

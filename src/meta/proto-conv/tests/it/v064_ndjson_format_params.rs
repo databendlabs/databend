@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::principal::JsonNullAs;
-use common_meta_app::principal::NdJsonFileFormatParams;
-use common_meta_app::principal::StageFileCompression;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::JsonNullAs;
+use databend_common_meta_app::principal::NdJsonFileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use minitrace::func_name;
 
 use crate::common;

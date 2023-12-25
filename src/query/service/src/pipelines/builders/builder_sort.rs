@@ -14,26 +14,23 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::query_spill_prefix;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_pipeline_transforms::processors::TransformSortMergeBuilder;
-use common_pipeline_transforms::processors::TransformSortPartial;
-use common_profile::SharedProcessorProfiles;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::Sort;
-use common_storage::DataOperator;
-use common_storages_fuse::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
+use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
+use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
+use databend_common_pipeline_transforms::processors::TransformSortPartial;
+use databend_common_profile::SharedProcessorProfiles;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::Sort;
+use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::create_transform_sort_spill;
 use crate::pipelines::PipelineBuilder;
@@ -76,24 +73,24 @@ impl PipelineBuilder {
             }
         }
 
-        let input_schema = sort.output_schema()?;
+        let plan_schema = sort.output_schema()?;
 
         let sort_desc = sort
             .order_by
             .iter()
             .map(|desc| {
-                let offset = input_schema.index_of(&desc.order_by.to_string())?;
+                let offset = plan_schema.index_of(&desc.order_by.to_string())?;
                 Ok(SortColumnDescription {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
-                    is_nullable: input_schema.field(offset).is_nullable(),  // This information is not needed here.
+                    is_nullable: plan_schema.field(offset).is_nullable(),  // This information is not needed here.
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
         self.build_sort_pipeline(
-            input_schema,
+            plan_schema,
             sort_desc,
             sort.plan_id,
             sort.limit,
@@ -103,7 +100,7 @@ impl PipelineBuilder {
 
     pub(crate) fn build_sort_pipeline(
         &mut self,
-        input_schema: DataSchemaRef,
+        plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
@@ -124,7 +121,7 @@ impl PipelineBuilder {
         };
 
         let mut builder =
-            SortPipelineBuilder::create(self.ctx.clone(), input_schema.clone(), sort_desc.clone())
+            SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
                 .with_partial_block_size(block_size)
                 .with_final_block_size(block_size)
                 .with_limit(limit)
@@ -139,7 +136,7 @@ impl PipelineBuilder {
                 if self.main_pipeline.output_len() > 1 {
                     try_add_multi_sort_merge(
                         &mut self.main_pipeline,
-                        input_schema,
+                        plan_schema,
                         block_size,
                         limit,
                         sort_desc,
@@ -293,11 +290,17 @@ impl SortPipelineBuilder {
 
         let may_spill = max_memory_usage != 0 && bytes_limit_per_proc != 0;
 
+        let sort_merge_output_schema = if output_order_col || may_spill {
+            add_order_field(self.schema.clone(), &self.sort_desc)
+        } else {
+            self.schema.clone()
+        };
+
         pipeline.add_transform(|input, output| {
             let builder = TransformSortMergeBuilder::create(
                 input,
                 output,
-                self.schema.clone(),
+                sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
                 self.partial_block_size,
             )
@@ -320,18 +323,8 @@ impl SortPipelineBuilder {
         })?;
 
         if may_spill {
+            let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
             let config = SpillerConfig::create(query_spill_prefix(&self.ctx.get_tenant()));
-            // The input of the processor must contain an order column.
-            let schema = if let Some(f) = self.schema.fields.last() && f.name() == "_order_col" {
-                self.schema.clone()
-            } else {
-                let mut fields = self.schema.fields().clone();
-                fields.push(DataField::new(
-                    "_order_col",
-                    order_column_type(&self.sort_desc, &self.schema),
-                ));
-                DataSchemaRefExt::create(fields)
-            };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =
@@ -341,6 +334,7 @@ impl SortPipelineBuilder {
                     output,
                     schema.clone(),
                     self.sort_desc.clone(),
+                    self.limit,
                     spiller,
                     output_order_col,
                 );
@@ -360,7 +354,7 @@ impl SortPipelineBuilder {
             // Multi-pipelines merge sort
             try_add_multi_sort_merge(
                 pipeline,
-                self.schema,
+                self.schema.clone(),
                 self.final_block_size,
                 self.limit,
                 self.sort_desc,
@@ -371,18 +365,4 @@ impl SortPipelineBuilder {
 
         Ok(())
     }
-}
-
-fn order_column_type(desc: &[SortColumnDescription], schema: &DataSchema) -> DataType {
-    debug_assert!(!desc.is_empty());
-    if desc.len() == 1 {
-        let order_by_field = schema.field(desc[0].offset);
-        if matches!(
-            order_by_field.data_type(),
-            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
-        ) {
-            return order_by_field.data_type().clone();
-        }
-    }
-    DataType::String
 }

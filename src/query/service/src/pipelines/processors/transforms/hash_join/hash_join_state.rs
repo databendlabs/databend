@@ -20,22 +20,22 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::watch;
-use common_base::base::tokio::sync::watch::Receiver;
-use common_base::base::tokio::sync::watch::Sender;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::HashMethodFixedKeys;
-use common_expression::HashMethodSerializer;
-use common_expression::HashMethodSingleString;
-use common_hashtable::HashJoinHashMap;
-use common_hashtable::HashtableKeyable;
-use common_hashtable::StringHashJoinHashMap;
-use common_sql::plans::JoinType;
-use common_sql::ColumnSet;
-use common_sql::IndexType;
+use databend_common_base::base::tokio::sync::watch;
+use databend_common_base::base::tokio::sync::watch::Receiver;
+use databend_common_base::base::tokio::sync::watch::Sender;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::HashMethodFixedKeys;
+use databend_common_expression::HashMethodSerializer;
+use databend_common_expression::HashMethodSingleString;
+use databend_common_hashtable::HashJoinHashMap;
+use databend_common_hashtable::HashtableKeyable;
+use databend_common_hashtable::StringHashJoinHashMap;
+use databend_common_sql::plans::JoinType;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
@@ -120,6 +120,7 @@ pub struct HashJoinState {
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
     pub(crate) partition_id: AtomicI8,
+    pub(crate) enable_spill: bool,
 
     /// If the join node generate runtime filters, the scan node will use it to do prune.
     pub(crate) table_index: IndexType,
@@ -145,6 +146,12 @@ impl HashJoinState {
         }
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
+        let mut enable_spill = false;
+        if hash_join_desc.join_type == JoinType::Inner
+            && ctx.get_settings().get_join_spilling_threshold()? != 0
+        {
+            enable_spill = true;
+        }
         Ok(Arc::new(HashJoinState {
             ctx: ctx.clone(),
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
@@ -161,6 +168,7 @@ impl HashJoinState {
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
+            enable_spill,
             table_index,
         }))
     }

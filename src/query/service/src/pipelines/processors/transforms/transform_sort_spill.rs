@@ -13,43 +13,41 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::with_number_mapped_type;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
-use common_metrics::transform::metrics_inc_sort_spill_read_bytes;
-use common_metrics::transform::metrics_inc_sort_spill_read_count;
-use common_metrics::transform::metrics_inc_sort_spill_read_milliseconds;
-use common_metrics::transform::metrics_inc_sort_spill_write_bytes;
-use common_metrics::transform::metrics_inc_sort_spill_write_count;
-use common_metrics::transform::metrics_inc_sort_spill_write_milliseconds;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::sort::utils::find_bigger_child_of_root;
-use common_pipeline_transforms::processors::sort::CommonRows;
-use common_pipeline_transforms::processors::sort::Cursor;
-use common_pipeline_transforms::processors::sort::DateRows;
-use common_pipeline_transforms::processors::sort::Rows;
-use common_pipeline_transforms::processors::sort::SimpleRows;
-use common_pipeline_transforms::processors::sort::SortSpillMeta;
-use common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
-use common_pipeline_transforms::processors::sort::StringRows;
-use common_pipeline_transforms::processors::sort::TimestampRows;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_metrics::transform::metrics_inc_sort_spill_read_bytes;
+use databend_common_metrics::transform::metrics_inc_sort_spill_read_count;
+use databend_common_metrics::transform::metrics_inc_sort_spill_read_milliseconds;
+use databend_common_metrics::transform::metrics_inc_sort_spill_write_bytes;
+use databend_common_metrics::transform::metrics_inc_sort_spill_write_count;
+use databend_common_metrics::transform::metrics_inc_sort_spill_write_milliseconds;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::sort::CommonRows;
+use databend_common_pipeline_transforms::processors::sort::DateRows;
+use databend_common_pipeline_transforms::processors::sort::HeapMerger;
+use databend_common_pipeline_transforms::processors::sort::Rows;
+use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
+use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
+use databend_common_pipeline_transforms::processors::sort::SortedStream;
+use databend_common_pipeline_transforms::processors::sort::StringRows;
+use databend_common_pipeline_transforms::processors::sort::TimestampRows;
 
 use crate::spillers::Spiller;
 
@@ -62,17 +60,18 @@ enum State {
     Spill,
     /// This state means the processor is doing external merge sort.
     Merging,
-    /// Merge finished, we can output the sorted data now.
-    MergeFinished,
+    /// This state is used to merge the last few sorted streams and output directly.
+    MergeFinal,
     /// Finish the process.
     Finish,
 }
 
-pub struct TransformSortSpill<R> {
+pub struct TransformSortSpill<R: Rows> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     output_order_col: bool,
+    limit: Option<usize>,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
@@ -85,6 +84,10 @@ pub struct TransformSortSpill<R> {
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
     unmerged_blocks: VecDeque<VecDeque<String>>,
+
+    /// If `ummerged_blocks.len()` < `num_merge`,
+    /// we can use a final merger to merge the last few sorted streams to reduce IO.
+    final_merger: Option<HeapMerger<R, BlockStream>>,
 
     sort_desc: Arc<Vec<SortColumnDescription>>,
 
@@ -121,21 +124,21 @@ where R: Rows + Send + Sync + 'static
             return Ok(Event::Finished);
         }
 
-        if matches!(self.state, State::Finish) {
-            debug_assert!(self.input.is_finished());
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if !self.output.can_push() {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
 
         if let Some(block) = self.output_data.take() {
-            debug_assert!(matches!(self.state, State::MergeFinished));
+            debug_assert!(matches!(self.state, State::MergeFinal | State::Finish));
             self.output_block(block);
             return Ok(Event::NeedConsume);
+        }
+
+        if matches!(self.state, State::Finish) {
+            debug_assert!(self.input.is_finished());
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input_data.is_some() {
@@ -195,8 +198,7 @@ where R: Rows + Send + Sync + 'static
                     self.state = State::Merging;
                     Ok(Event::Async)
                 }
-                State::Merging => Ok(Event::Async),
-                State::MergeFinished => Ok(Event::Async),
+                State::Merging | State::MergeFinal => Ok(Event::Async),
             };
         }
 
@@ -215,21 +217,11 @@ where R: Rows + Send + Sync + 'static
                 let block = self.input_data.take();
                 self.merge_sort(block).await?;
             }
-            State::MergeFinished => {
-                debug_assert_eq!(self.unmerged_blocks.len(), 1);
-                // TODO: pass the spilled locations to next processor directly.
-                // The next processor will read and process the spilled files.
-                if let Some(file) = self.unmerged_blocks[0].pop_front() {
-                    let ins = Instant::now();
-                    let (block, bytes) = self.spiller.read_spilled(&file).await?;
-
-                    // perf
-                    {
-                        metrics_inc_sort_spill_read_count();
-                        metrics_inc_sort_spill_read_bytes(bytes);
-                        metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
-                    }
-
+            State::MergeFinal => {
+                debug_assert!(self.final_merger.is_some());
+                debug_assert!(self.unmerged_blocks.is_empty());
+                let merger = self.final_merger.as_mut().unwrap();
+                if let Some(block) = merger.async_next_block().await? {
                     self.output_data = Some(block);
                 } else {
                     self.state = State::Finish;
@@ -249,6 +241,7 @@ where R: Rows + Sync + Send + 'static
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
+        limit: Option<usize>,
         spiller: Spiller,
         output_order_col: bool,
     ) -> Self {
@@ -256,6 +249,7 @@ where R: Rows + Sync + Send + 'static
             input,
             output,
             schema,
+            limit,
             output_order_col,
             input_data: None,
             output_data: None,
@@ -263,6 +257,7 @@ where R: Rows + Sync + Send + 'static
             state: State::Init,
             num_merge: 0,
             unmerged_blocks: VecDeque::new(),
+            final_merger: None,
             batch_size: 0,
             sort_desc,
             _r: PhantomData,
@@ -294,25 +289,15 @@ where R: Rows + Sync + Send + 'static
         Ok(())
     }
 
-    /// Do an external merge sort until there is only one sorted stream.
-    /// If `block` is not [None], we need to merge it with spilled files.
-    async fn merge_sort(&mut self, mut block: Option<DataBlock>) -> Result<()> {
-        while (self.unmerged_blocks.len() + block.is_some() as usize) > 1 {
-            let b = block.take();
-            self.merge_sort_one_round(b).await?;
-        }
-        self.state = State::MergeFinished;
-        Ok(())
-    }
-
-    /// Merge certain number of sorted streams to one sorted stream.
-    async fn merge_sort_one_round(&mut self, block: Option<DataBlock>) -> Result<()> {
-        let num_streams =
-            (self.unmerged_blocks.len() + block.is_some() as usize).min(self.num_merge);
-        debug_assert!(num_streams > 1);
+    fn create_merger(
+        &mut self,
+        memory_block: Option<DataBlock>,
+        num_streams: usize,
+    ) -> HeapMerger<R, BlockStream> {
+        debug_assert!(num_streams <= self.unmerged_blocks.len() + memory_block.is_some() as usize);
 
         let mut streams = Vec::with_capacity(num_streams);
-        if let Some(block) = block {
+        if let Some(block) = memory_block {
             streams.push(BlockStream::Block(Some(block)));
         }
 
@@ -326,15 +311,63 @@ where R: Rows + Sync + Send + 'static
             streams.push(stream);
         }
 
-        let mut merger = Merger::<R>::create(
+        HeapMerger::<R, BlockStream>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
             self.batch_size,
-        );
+            self.limit,
+        )
+    }
+
+    /// Do an external merge sort until there is only one sorted stream.
+    /// If `block` is not [None], we need to merge it with spilled files.
+    async fn merge_sort(&mut self, mut block: Option<DataBlock>) -> Result<()> {
+        while (self.unmerged_blocks.len() + block.is_some() as usize) > self.num_merge {
+            let b = block.take();
+            self.merge_sort_one_round(b).await?;
+        }
+
+        // Deal with a corner case:
+        // If this thread only has one spilled file.
+        if self.unmerged_blocks.len() == 1 {
+            let files = self.unmerged_blocks.pop_front().unwrap();
+            debug_assert!(files.len() == 1);
+
+            let ins = Instant::now();
+            let (block, bytes) = self.spiller.read_spilled(&files[0]).await?;
+
+            // perf
+            {
+                metrics_inc_sort_spill_read_count();
+                metrics_inc_sort_spill_read_bytes(bytes);
+                metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+            }
+
+            self.output_data = Some(block);
+            self.state = State::Finish;
+
+            return Ok(());
+        }
+
+        let num_streams = self.unmerged_blocks.len() + block.is_some() as usize;
+        debug_assert!(num_streams <= self.num_merge && num_streams > 1);
+
+        self.final_merger = Some(self.create_merger(block, num_streams));
+        self.state = State::MergeFinal;
+
+        Ok(())
+    }
+
+    /// Merge certain number of sorted streams to one sorted stream.
+    async fn merge_sort_one_round(&mut self, block: Option<DataBlock>) -> Result<()> {
+        let num_streams =
+            (self.unmerged_blocks.len() + block.is_some() as usize).min(self.num_merge);
+        debug_assert!(num_streams > 1);
+        let mut merger = self.create_merger(block, num_streams);
 
         let mut spilled = VecDeque::new();
-        while let Some(block) = merger.next().await? {
+        while let Some(block) = merger.async_next_block().await? {
             let ins = Instant::now();
             let (location, bytes) = self.spiller.spill_block(block).await?;
 
@@ -347,6 +380,8 @@ where R: Rows + Sync + Send + 'static
 
             spilled.push_back(location);
         }
+
+        debug_assert!(merger.is_finished());
         self.unmerged_blocks.push_back(spilled);
 
         Ok(())
@@ -358,8 +393,9 @@ enum BlockStream {
     Block(Option<DataBlock>),
 }
 
-impl BlockStream {
-    async fn next(&mut self) -> Result<Option<DataBlock>> {
+#[async_trait::async_trait]
+impl SortedStream for BlockStream {
+    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         let block = match self {
             BlockStream::Block(block) => block.take(),
             BlockStream::Spilled((files, spiller)) => {
@@ -380,149 +416,13 @@ impl BlockStream {
                 }
             }
         };
-        Ok(block)
-    }
-}
-
-/// A merge sort operator to merge multiple sorted streams.
-///
-/// TODO: reuse this operator in other places such as `TransformMultiSortMerge` and `TransformSortMerge`.
-struct Merger<R: Rows> {
-    schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-    unsorted_streams: Vec<BlockStream>,
-    heap: BinaryHeap<Reverse<Cursor<R>>>,
-    buffer: Vec<DataBlock>,
-    pending_stream: VecDeque<usize>,
-    batch_size: usize,
-}
-
-impl<R: Rows> Merger<R> {
-    fn create(
-        schema: DataSchemaRef,
-        streams: Vec<BlockStream>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
-        batch_size: usize,
-    ) -> Self {
-        // We only create a merger when there are at least two streams.
-        debug_assert!(streams.len() > 1);
-        let heap = BinaryHeap::with_capacity(streams.len());
-        let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
-        let pending_stream = (0..streams.len()).collect();
-
-        Self {
-            schema,
-            unsorted_streams: streams,
-            heap,
-            buffer,
-            batch_size,
-            sort_desc,
-            pending_stream,
-        }
-    }
-
-    // This method can only be called when there is no data of the stream in the heap.
-    async fn poll_pending_stream(&mut self) -> Result<()> {
-        while let Some(i) = self.pending_stream.pop_front() {
-            debug_assert!(self.buffer[i].is_empty());
-            if let Some(block) = self.unsorted_streams[i].next().await? {
-                let order_col = block.columns().last().unwrap().value.as_column().unwrap();
-                let rows = R::from_column(order_col.clone(), &self.sort_desc)
-                    .ok_or_else(|| ErrorCode::BadDataValueType("Order column type mismatched."))?;
-                let cursor = Cursor::new(i, rows);
-                self.heap.push(Reverse(cursor));
-                self.buffer[i] = block;
-            }
-        }
-        Ok(())
-    }
-
-    async fn next(&mut self) -> Result<Option<DataBlock>> {
-        if !self.pending_stream.is_empty() {
-            self.poll_pending_stream().await?;
-        }
-
-        if self.heap.is_empty() {
-            return Ok(None);
-        }
-
-        let mut num_rows = 0;
-
-        // (input_index, row_start, count)
-        let mut output_indices = Vec::new();
-        let mut temp_sorted_blocks = Vec::new();
-
-        while let Some(Reverse(cursor)) = self.heap.peek() {
-            let mut cursor = cursor.clone();
-            if self.heap.len() == 1 {
-                let start = cursor.row_index;
-                let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
-                num_rows += count;
-                cursor.row_index += count;
-                output_indices.push((cursor.input_index, start, count));
-            } else {
-                let next_cursor = &find_bigger_child_of_root(&self.heap).0;
-                if cursor.last().le(&next_cursor.current()) {
-                    // Short Path:
-                    // If the last row of current block is smaller than the next cursor,
-                    // we can drain the whole block.
-                    let start = cursor.row_index;
-                    let count = (cursor.num_rows() - start).min(self.batch_size - num_rows);
-                    num_rows += count;
-                    cursor.row_index += count;
-                    output_indices.push((cursor.input_index, start, count));
-                } else {
-                    // We copy current cursor for advancing,
-                    // and we will use this copied cursor to update the top of the heap at last
-                    // (let heap adjust itself without popping and pushing any element).
-                    let start = cursor.row_index;
-                    while !cursor.is_finished()
-                        && cursor.le(next_cursor)
-                        && num_rows < self.batch_size
-                    {
-                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                        num_rows += 1;
-                        cursor.advance();
-                    }
-                    output_indices.push((cursor.input_index, start, cursor.row_index - start));
-                }
-            }
-
-            if !cursor.is_finished() {
-                // Update the top of the heap.
-                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
-                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-                self.heap.peek_mut().unwrap().0 = cursor;
-            } else {
-                // Pop the current `cursor`.
-                self.heap.pop();
-                // We have read all rows of this block, need to release the old memory and read a new one.
-                let temp_block = DataBlock::take_by_slices_limit_from_blocks(
-                    &self.buffer,
-                    &output_indices,
-                    None,
-                );
-                self.buffer[cursor.input_index] = DataBlock::empty_with_schema(self.schema.clone());
-                temp_sorted_blocks.push(temp_block);
-                output_indices.clear();
-                self.pending_stream.push_back(cursor.input_index);
-                self.poll_pending_stream().await?;
-            }
-
-            if num_rows == self.batch_size {
-                break;
-            }
-        }
-
-        if !output_indices.is_empty() {
-            let block =
-                DataBlock::take_by_slices_limit_from_blocks(&self.buffer, &output_indices, None);
-            temp_sorted_blocks.push(block);
-        }
-
-        let block = DataBlock::concat(&temp_sorted_blocks)?;
-        debug_assert!(block.num_rows() <= self.batch_size);
-        Ok(Some(block))
+        Ok((
+            block.map(|b| {
+                let col = b.get_last_column().clone();
+                (b, col)
+            }),
+            false,
+        ))
     }
 }
 
@@ -531,6 +431,7 @@ pub fn create_transform_sort_spill(
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
+    limit: Option<usize>,
     spiller: Spiller,
     output_order_col: bool,
 ) -> Box<dyn Processor> {
@@ -545,6 +446,7 @@ pub fn create_transform_sort_spill(
                     output,
                     schema,
                     sort_desc,
+                    limit,
                     spiller,
                     output_order_col
                 )),
@@ -554,6 +456,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -562,6 +465,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -570,6 +474,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -578,6 +483,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -588,6 +494,7 @@ pub fn create_transform_sort_spill(
             output,
             schema,
             sort_desc,
+            limit,
             spiller,
             output_order_col,
         ))
@@ -598,27 +505,26 @@ pub fn create_transform_sort_spill(
 mod tests {
     use std::sync::Arc;
 
-    use common_base::base::tokio;
-    use common_exception::Result;
-    use common_expression::block_debug::pretty_format_blocks;
-    use common_expression::types::DataType;
-    use common_expression::types::Int32Type;
-    use common_expression::types::NumberDataType;
-    use common_expression::DataBlock;
-    use common_expression::DataField;
-    use common_expression::DataSchemaRefExt;
-    use common_expression::FromData;
-    use common_expression::SortColumnDescription;
-    use common_pipeline_core::processors::InputPort;
-    use common_pipeline_core::processors::OutputPort;
-    use common_pipeline_transforms::processors::sort::SimpleRows;
-    use common_storage::DataOperator;
+    use databend_common_base::base::tokio;
+    use databend_common_exception::Result;
+    use databend_common_expression::block_debug::pretty_format_blocks;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
+    use databend_common_pipeline_core::processors::InputPort;
+    use databend_common_pipeline_core::processors::OutputPort;
+    use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+    use databend_common_storage::DataOperator;
     use itertools::Itertools;
     use rand::rngs::ThreadRng;
     use rand::Rng;
 
     use super::TransformSortSpill;
-    use crate::pipelines::processors::transforms::transform_sort_spill::BlockStream;
     use crate::sessions::QueryContext;
     use crate::spillers::Spiller;
     use crate::spillers::SpillerConfig;
@@ -627,6 +533,7 @@ mod tests {
 
     async fn create_test_transform(
         ctx: Arc<QueryContext>,
+        limit: Option<usize>,
     ) -> Result<TransformSortSpill<SimpleRows<Int32Type>>> {
         let op = DataOperator::instance().operator();
         let spiller = Spiller::create(
@@ -651,6 +558,7 @@ mod tests {
                 DataType::Number(NumberDataType::Int32),
             )]),
             sort_desc,
+            limit,
             spiller,
             false,
         );
@@ -659,7 +567,7 @@ mod tests {
     }
 
     /// Returns (input, expected)
-    fn basic_test_data() -> (Vec<DataBlock>, DataBlock) {
+    fn basic_test_data(limit: Option<usize>) -> (Vec<DataBlock>, DataBlock) {
         let data = vec![
             vec![1, 3, 5, 7],
             vec![1, 2, 3, 4],
@@ -674,13 +582,21 @@ mod tests {
             .map(|v| DataBlock::new_from_columns(vec![Int32Type::from_data(v)]))
             .collect::<Vec<_>>();
         let result = data.into_iter().flatten().sorted().collect::<Vec<_>>();
+        let result = if let Some(limit) = limit {
+            result.into_iter().take(limit).collect::<Vec<_>>()
+        } else {
+            result
+        };
         let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
         (input, result)
     }
 
     /// Returns (input, expected, batch_size, num_merge)
-    fn random_test_data(rng: &mut ThreadRng) -> (Vec<DataBlock>, DataBlock, usize, usize) {
+    fn random_test_data(
+        rng: &mut ThreadRng,
+        limit: Option<usize>,
+    ) -> (Vec<DataBlock>, DataBlock, usize, usize) {
         let random_batch_size = rng.gen_range(1..=10);
         let random_num_streams = rng.gen_range(5..=10);
         let random_num_merge = rng.gen_range(2..=10);
@@ -705,6 +621,11 @@ mod tests {
             .flatten()
             .sorted()
             .collect::<Vec<_>>();
+        let result = if let Some(limit) = limit {
+            result.into_iter().take(limit).collect::<Vec<_>>()
+        } else {
+            result
+        };
         let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
         (input, result, random_batch_size, random_num_merge)
@@ -717,8 +638,9 @@ mod tests {
         batch_size: usize,
         num_merge: usize,
         has_memory_block: bool,
+        limit: Option<usize>,
     ) -> Result<()> {
-        let mut transform = create_test_transform(ctx).await?;
+        let mut transform = create_test_transform(ctx, limit).await?;
 
         transform.num_merge = num_merge;
         transform.batch_size = batch_size;
@@ -730,16 +652,15 @@ mod tests {
         }
         transform.merge_sort(memory_block).await?;
 
-        debug_assert_eq!(transform.unmerged_blocks.len(), 1);
-        let mut block_stream = BlockStream::Spilled((
-            transform.unmerged_blocks[0].clone(),
-            Arc::new(transform.spiller.clone()),
-        ));
-
         let mut result = Vec::new();
-        while let Some(block) = block_stream.next().await? {
+
+        debug_assert!(transform.final_merger.is_some());
+        debug_assert!(transform.unmerged_blocks.is_empty());
+        let merger = transform.final_merger.as_mut().unwrap();
+        while let Some(block) = merger.async_next_block().await? {
             result.push(block);
         }
+        debug_assert!(merger.is_finished());
 
         let result = pretty_format_blocks(&result).unwrap();
         let expected = pretty_format_blocks(&[expected]).unwrap();
@@ -756,28 +677,48 @@ mod tests {
     async fn test_two_way_merge_sort() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
+        let (input, expected) = basic_test_data(None);
 
-        test(ctx, input, expected, 4, 2, false).await
+        test(ctx, input, expected, 4, 2, false, None).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_two_way_merge_sort_with_memory_block() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
+        let (input, expected) = basic_test_data(None);
 
-        test(ctx, input, expected, 4, 2, true).await
+        test(ctx, input, expected, 4, 2, true, None).await
+    }
+
+    async fn basic_test(
+        ctx: Arc<QueryContext>,
+        batch_size: usize,
+        num_merge: usize,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let (input, expected) = basic_test_data(limit);
+
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            false,
+            limit,
+        )
+        .await?;
+        test(ctx, input, expected, batch_size, num_merge, true, limit).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_three_way_merge_sort() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
 
-        test(ctx.clone(), input.clone(), expected.clone(), 4, 3, false).await?;
-        test(ctx, input, expected, 4, 3, true).await
+        basic_test(ctx.clone(), 4, 3, None).await?;
+        basic_test(ctx, 4, 3, Some(2)).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -785,10 +726,37 @@ mod tests {
         // Test if `num_merge` is bigger than the number of streams.
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
 
-        test(ctx.clone(), input.clone(), expected.clone(), 4, 10, false).await?;
-        test(ctx, input, expected, 4, 10, true).await
+        basic_test(ctx.clone(), 4, 10, None).await?;
+        basic_test(ctx, 4, 10, Some(2)).await
+    }
+
+    async fn random_test(
+        ctx: Arc<QueryContext>,
+        rng: &mut ThreadRng,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let (input, expected, batch_size, num_merge) = random_test_data(rng, limit);
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            false,
+            limit,
+        )
+        .await?;
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            true,
+            limit,
+        )
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -798,25 +766,10 @@ mod tests {
 
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
-            let (input, expected, batch_size, num_merge) = random_test_data(&mut rng);
-            test(
-                ctx.clone(),
-                input.clone(),
-                expected.clone(),
-                batch_size,
-                num_merge,
-                false,
-            )
-            .await?;
-            test(
-                ctx.clone(),
-                input.clone(),
-                expected.clone(),
-                batch_size,
-                num_merge,
-                true,
-            )
-            .await?;
+            random_test(ctx.clone(), &mut rng, None).await?;
+
+            let limit = rng.gen_range(1..=5);
+            random_test(ctx.clone(), &mut rng, Some(limit)).await?;
         }
 
         Ok(())

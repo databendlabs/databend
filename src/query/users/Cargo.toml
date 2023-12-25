@@ -1,5 +1,5 @@
 [package]
-name = "common-users"
+name = "databend-common-users"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,18 +11,18 @@ doctest = false
 test = false
 
 [features]
-io-uring = ["common-meta-store/io-uring"]
+io-uring = ["databend-common-meta-store/io-uring"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../../common/base" }
-common-exception = { path = "../../common/exception" }
-common-grpc = { path = "../../common/grpc" }
-common-management = { path = "../management" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-kvapi = { path = "../../meta/kvapi" }
-common-meta-store = { path = "../../meta/store" }
-common-meta-types = { path = "../../meta/types" }
+databend-common-base = { path = "../../common/base" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-management = { path = "../management" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-kvapi = { path = "../../meta/kvapi" }
+databend-common-meta-store = { path = "../../meta/store" }
+databend-common-meta-types = { path = "../../meta/types" }
 
 # GitHub dependencies
 
@@ -41,6 +41,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-common-expression = { path = "../expression" }
+databend-common-expression = { path = "../expression" }
 pretty_assertions = "1.3.0"
 wiremock = "0.5.14"

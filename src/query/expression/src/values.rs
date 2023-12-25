@@ -15,23 +15,26 @@
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
+use std::io::Write;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_arrow::arrow::bitmap::and;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute::cast as arrow_cast;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::offset::OffsetsBuffer;
-use common_arrow::arrow::trusted_len::TrustedLen;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::prelude::BinaryRead;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::and;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::compute::cast as arrow_cast;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
@@ -56,6 +59,7 @@ use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -99,7 +103,9 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
+)]
 pub enum Scalar {
     Null,
     EmptyArray,
@@ -279,6 +285,15 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl<T: Decimal> Value<DecimalType<T>> {
+    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
+            Value::Column(col) => Value::Column(T::upcast_column(col, size)),
+        }
+    }
+}
+
 impl Value<AnyType> {
     pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
         match self {
@@ -391,6 +406,23 @@ impl Scalar {
             Scalar::Timestamp(t) => *t > 0,
             Scalar::Date(d) => *d > 0,
             _ => unreachable!("is_positive() called on non-numeric scalar"),
+        }
+    }
+
+    pub fn get_i64(&self) -> Option<i64> {
+        match self {
+            Scalar::Number(n) => match n {
+                NumberScalar::Int8(x) => Some(*x as _),
+                NumberScalar::Int16(x) => Some(*x as _),
+                NumberScalar::Int32(x) => Some(*x as _),
+                NumberScalar::Int64(x) => Some(*x as _),
+                NumberScalar::UInt8(x) => Some(*x as _),
+                NumberScalar::UInt16(x) => Some(*x as _),
+                NumberScalar::UInt32(x) => Some(*x as _),
+                NumberScalar::UInt64(x) => i64::try_from(*x).ok(),
+                _ => None,
+            },
+            _ => None,
         }
     }
 }
@@ -951,20 +983,20 @@ impl Column {
         ArrowField::new(dummy, arrow_type, is_nullable)
     }
 
-    pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
+    pub fn as_arrow(&self) -> Box<dyn databend_common_arrow::arrow::array::Array> {
         let arrow_type = self.arrow_field().data_type().clone();
         match self {
-            Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                arrow_type, *len,
-            )),
-            Column::EmptyArray { len } => Box::new(
-                common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+            Column::Null { len } => Box::new(
+                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
-            Column::EmptyMap { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                arrow_type, *len,
-            )),
+            Column::EmptyArray { len } => Box::new(
+                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+            ),
+            Column::EmptyMap { len } => Box::new(
+                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+            ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -972,7 +1004,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::UInt16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -980,7 +1012,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::UInt32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -988,7 +1020,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::UInt64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -996,7 +1028,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::Int8(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1004,7 +1036,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::Int16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1012,7 +1044,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::Int32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1020,7 +1052,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Number(NumberColumn::Int64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1031,7 +1063,7 @@ impl Column {
                 let values =
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
+                    databend_common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
                         arrow_type, values, None,
                     )
                     .unwrap(),
@@ -1041,14 +1073,14 @@ impl Column {
                 let values =
                     unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
+                    databend_common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
                         arrow_type, values, None,
                     )
                     .unwrap(),
                 )
             }
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i128>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i128>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1058,23 +1090,25 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
                 let values = unsafe { std::mem::transmute(col.clone()) };
                 Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
-                        arrow_type,
-                        values,
-                        None,
-                    )
-                        .unwrap()
+                    databend_common_arrow::arrow::array::PrimitiveArray::<
+                        databend_common_arrow::arrow::types::i256,
+                    >::try_new(arrow_type, values, None)
+                    .unwrap(),
                 )
             }
             Column::Boolean(col) => Box::new(
-                common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
-                    .unwrap(),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    col.clone(),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::String(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data().clone(),
@@ -1085,7 +1119,7 @@ impl Column {
             }
 
             Column::Timestamp(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1093,7 +1127,7 @@ impl Column {
                 .unwrap(),
             ),
             Column::Date(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
+                databend_common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
                     arrow_type,
                     col.clone(),
                     None,
@@ -1104,7 +1138,7 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    common_arrow::arrow::array::ListArray::<i64>::try_new(
+                    databend_common_arrow::arrow::array::ListArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.values.as_arrow(),
@@ -1120,7 +1154,7 @@ impl Column {
                     (ArrowDataType::Map(inner_field, _), Column::Tuple(fields)) => {
                         let inner_type = inner_field.data_type.clone();
                         Box::new(
-                            common_arrow::arrow::array::StructArray::try_new(
+                            databend_common_arrow::arrow::array::StructArray::try_new(
                                 inner_type,
                                 fields.iter().map(|field| field.as_arrow()).collect(),
                                 None,
@@ -1131,7 +1165,7 @@ impl Column {
                     (_, _) => unreachable!(),
                 };
                 Box::new(
-                    common_arrow::arrow::array::MapArray::try_new(
+                    databend_common_arrow::arrow::array::MapArray::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         values,
@@ -1144,7 +1178,7 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data().clone(),
@@ -1158,7 +1192,7 @@ impl Column {
                 Self::set_validity(arrow_array.clone(), &col.validity)
             }
             Column::Tuple(fields) => Box::new(
-                common_arrow::arrow::array::StructArray::try_new(
+                databend_common_arrow::arrow::array::StructArray::try_new(
                     arrow_type,
                     fields.iter().map(|field| field.as_arrow()).collect(),
                     None,
@@ -1169,7 +1203,7 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data().clone(),
@@ -1182,9 +1216,9 @@ impl Column {
     }
 
     pub fn set_validity(
-        arrow_array: Box<dyn common_arrow::arrow::array::Array>,
+        arrow_array: Box<dyn databend_common_arrow::arrow::array::Array>,
         validity: &Bitmap,
-    ) -> Box<dyn common_arrow::arrow::array::Array> {
+    ) -> Box<dyn databend_common_arrow::arrow::array::Array> {
         // merge Struct validity with the inner fields validity
         let validity = match arrow_array.validity() {
             Some(inner_validity) => and(inner_validity, validity),
@@ -1197,7 +1231,7 @@ impl Column {
             ArrowDataType::Struct(_) => {
                 let struct_array = arrow_array
                     .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                    .downcast_ref::<databend_common_arrow::arrow::array::StructArray>()
                     .expect("fail to read from arrow: array should be `StructArray`");
                 let fields = struct_array
                     .values()
@@ -1208,7 +1242,7 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
                 Box::new(
-                    common_arrow::arrow::array::StructArray::try_new(
+                    databend_common_arrow::arrow::array::StructArray::try_new(
                         arrow_array.data_type().clone(),
                         fields,
                         Some(validity),
@@ -1251,11 +1285,11 @@ impl Column {
     }
 
     pub fn from_arrow(
-        arrow_col: &dyn common_arrow::arrow::array::Array,
+        arrow_col: &dyn databend_common_arrow::arrow::array::Array,
         data_type: &DataType,
     ) -> Column {
         fn from_arrow_by_array_type(
-            arrow_col: &dyn common_arrow::arrow::array::Array,
+            arrow_col: &dyn databend_common_arrow::arrow::array::Array,
             array_type: &ArrowDataType,
             data_type: &DataType,
         ) -> Column {
@@ -1286,7 +1320,7 @@ impl Column {
                 ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::UInt8Array>()
                         .expect("fail to read from arrow: array should be `UInt8Array`")
                         .values()
                         .clone(),
@@ -1294,7 +1328,7 @@ impl Column {
                 ArrowDataType::UInt16 => Column::Number(NumberColumn::UInt16(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::UInt16Array>()
                         .expect("fail to read from arrow: array should be `UInt16Array`")
                         .values()
                         .clone(),
@@ -1302,7 +1336,7 @@ impl Column {
                 ArrowDataType::UInt32 => Column::Number(NumberColumn::UInt32(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::UInt32Array>()
                         .expect("fail to read from arrow: array should be `UInt32Array`")
                         .values()
                         .clone(),
@@ -1310,7 +1344,7 @@ impl Column {
                 ArrowDataType::UInt64 => Column::Number(NumberColumn::UInt64(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::UInt64Array>()
                         .expect("fail to read from arrow: array should be `UInt64Array`")
                         .values()
                         .clone(),
@@ -1318,7 +1352,7 @@ impl Column {
                 ArrowDataType::Int8 => Column::Number(NumberColumn::Int8(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int8Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int8Array>()
                         .expect("fail to read from arrow: array should be `Int8Array`")
                         .values()
                         .clone(),
@@ -1326,7 +1360,7 @@ impl Column {
                 ArrowDataType::Int16 => Column::Number(NumberColumn::Int16(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int16Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int16Array>()
                         .expect("fail to read from arrow: array should be `Int16Array`")
                         .values()
                         .clone(),
@@ -1334,7 +1368,7 @@ impl Column {
                 ArrowDataType::Int32 => Column::Number(NumberColumn::Int32(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int32Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int32Array>()
                         .expect("fail to read from arrow: array should be `Int32Array`")
                         .values()
                         .clone(),
@@ -1342,7 +1376,7 @@ impl Column {
                 ArrowDataType::Int64 => Column::Number(NumberColumn::Int64(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int64Array>()
                         .expect("fail to read from arrow: array should be `Int64Array`")
                         .values()
                         .clone(),
@@ -1350,7 +1384,7 @@ impl Column {
                 ArrowDataType::Float32 => {
                     let col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Float32Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Float32Array>()
                         .expect("fail to read from arrow: array should be `Float32Array`")
                         .values()
                         .clone();
@@ -1360,7 +1394,7 @@ impl Column {
                 ArrowDataType::Float64 => {
                     let col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Float64Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Float64Array>()
                         .expect("fail to read from arrow: array should be `Float64Array`")
                         .values()
                         .clone();
@@ -1370,7 +1404,7 @@ impl Column {
                 ArrowDataType::Boolean => Column::Boolean(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BooleanArray>()
                         .expect("fail to read from arrow: array should be `BooleanArray`")
                         .values()
                         .clone(),
@@ -1378,7 +1412,7 @@ impl Column {
                 ArrowDataType::LargeBinary => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
                         .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
                     let offsets = arrow_col.offsets().clone().into_inner();
 
@@ -1399,7 +1433,7 @@ impl Column {
                 ArrowDataType::Binary => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
                         .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
                     let offsets = arrow_col
                         .offsets()
@@ -1427,7 +1461,7 @@ impl Column {
                 ArrowDataType::FixedSizeBinary(size) => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::FixedSizeBinaryArray>()
                         .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
 
                     let offsets = (0..arrow_col.len() as u64 + 1)
@@ -1444,7 +1478,7 @@ impl Column {
                 ArrowDataType::Utf8 => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i32>>()
                         .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
                     let offsets = arrow_col
                         .offsets()
@@ -1462,7 +1496,7 @@ impl Column {
                 ArrowDataType::LargeUtf8 => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i64>>()
                         .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
                     let offsets = arrow_col
                         .offsets()
@@ -1479,7 +1513,7 @@ impl Column {
                 ArrowDataType::Timestamp(uint, _) => {
                     let values = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int64Array>()
                         .expect("fail to read from arrow: array should be `Int64Array`")
                         .values();
                     let convert = match uint {
@@ -1503,7 +1537,7 @@ impl Column {
                 ArrowDataType::Date32 => Column::Date(
                     arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::Int32Array>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Int32Array>()
                         .expect("fail to read from arrow: array should be `Int32Array`")
                         .values()
                         .clone(),
@@ -1513,7 +1547,7 @@ impl Column {
                         ArrowDataType::LargeBinary => {
                             let arrow_col = arrow_col
                                 .as_any()
-                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
                                 .expect(
                                     "fail to read from arrow: array should be `BinaryArray<i64>`",
                                 );
@@ -1527,7 +1561,7 @@ impl Column {
                         ArrowDataType::Binary => {
                             let arrow_col = arrow_col
                                 .as_any()
-                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
                                 .expect(
                                     "fail to read from arrow: array should be `BinaryArray<i32>`",
                                 );
@@ -1560,7 +1594,7 @@ impl Column {
 
                     let values_col = array_list
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::ListArray<i64>>()
                         .expect("fail to read from arrow: array should be `ListArray<i64>`");
 
                     let array_type = data_type.as_array().unwrap();
@@ -1579,7 +1613,7 @@ impl Column {
                 ArrowDataType::LargeList(_) => {
                     let values_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::ListArray<i64>>()
                         .expect("fail to read from arrow: array should be `ListArray<i64>`");
 
                     let array_type = data_type.as_array().unwrap();
@@ -1599,7 +1633,7 @@ impl Column {
                     let map_type = data_type.as_map().unwrap();
                     let map_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::MapArray>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::MapArray>()
                         .expect("fail to read from arrow: array should be `MapArray`");
 
                     let values = Column::from_arrow(&**map_col.field(), map_type.as_ref());
@@ -1618,7 +1652,7 @@ impl Column {
                     let struct_type = data_type.as_tuple().unwrap();
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::StructArray>()
                         .expect("fail to read from arrow: array should be `StructArray`");
                     let fields = arrow_col
                         .values()
@@ -1631,7 +1665,7 @@ impl Column {
                 ArrowDataType::Decimal(precision, scale) => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
+                        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<i128>>()
                         .expect("fail to read from arrow: array should be `DecimalArray`");
                     Column::Decimal(DecimalColumn::Decimal128(
                         arrow_col.values().clone(),
@@ -1642,13 +1676,12 @@ impl Column {
                     ))
                 }
                 ArrowDataType::Decimal256(precision, scale) => {
-                    let arrow_col =
-                        arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<
-                                common_arrow::arrow::types::i256,
-                            >>()
-                            .expect("fail to read from arrow: array should be `DecimalArray`");
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<
+                            databend_common_arrow::arrow::types::i256,
+                        >>()
+                        .expect("fail to read from arrow: array should be `DecimalArray`");
 
                     let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
                     Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
@@ -1661,7 +1694,7 @@ impl Column {
                         ArrowDataType::LargeBinary => {
                             let arrow_col = arrow_col
                                 .as_any()
-                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
                                 .expect(
                                     "fail to read from arrow: array should be `BinaryArray<i64>`",
                                 );
@@ -1674,7 +1707,7 @@ impl Column {
                         ArrowDataType::Binary => {
                             let arrow_col = arrow_col
                                 .as_any()
-                                .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
                                 .expect(
                                     "fail to read from arrow: array should be `BinaryArray<i32>`",
                                 );
@@ -1974,6 +2007,22 @@ impl<'de> Deserialize<'de> for Column {
         }
 
         deserializer.deserialize_string(ColumnVisitor)
+    }
+}
+
+impl BorshSerialize for Column {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let bytes = serialize_column(self);
+        BorshSerialize::serialize(&bytes, writer)
+    }
+}
+
+impl BorshDeserialize for Column {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let bytes: Vec<u8> = borsh::BorshDeserialize::deserialize_reader(reader)?;
+        let column =
+            deserialize_column(&bytes).expect("expecting an arrow chunk with exactly one column");
+        Ok(column)
     }
 }
 

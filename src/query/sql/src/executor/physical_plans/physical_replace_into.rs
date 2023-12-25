@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::BlockThresholds;
-use common_expression::FieldIndex;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::BlockSlotDescription;
-use storages_common_table_meta::meta::Location;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::FieldIndex;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::BlockSlotDescription;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::executor::physical_plans::common::OnConflictField;
 use crate::executor::PhysicalPlan;

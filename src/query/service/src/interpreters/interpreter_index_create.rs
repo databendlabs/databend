@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use aggregating_index::get_agg_index_handler;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use common_meta_app::schema::IndexType;
-use common_sql::plans::CreateIndexPlan;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexType;
+use databend_common_sql::plans::CreateIndexPlan;
+use databend_enterprise_aggregating_index::get_agg_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -75,6 +75,7 @@ impl Interpreter for CreateIndexInterpreter {
                 created_on: Utc::now(),
                 dropped_on: None,
                 updated_on: None,
+                original_query: self.plan.original_query.clone(),
                 query: self.plan.query.clone(),
                 sync_creation: self.plan.sync_creation,
             },

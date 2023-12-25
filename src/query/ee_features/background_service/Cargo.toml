@@ -1,5 +1,5 @@
 [package]
-name = "background-service"
+name = "databend-enterprise-background-service"
 description = "background service to run automatic optimization for databend cluster"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,9 +13,9 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
 
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }

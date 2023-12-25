@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::group_by_hash::HashMethodKeysU16;
 use super::group_by_hash::HashMethodKeysU32;

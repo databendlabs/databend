@@ -15,9 +15,9 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_catalog::plan::PartInfoPtr;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -48,14 +48,14 @@ impl Debug for NativeDataSourceMeta {
 }
 
 impl serde::Serialize for NativeDataSourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize NativeDataSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for NativeDataSourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize NativeDataSourceMeta")
     }

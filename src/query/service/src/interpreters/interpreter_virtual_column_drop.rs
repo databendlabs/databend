@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::Result;
-use common_license::license::Feature::VirtualColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::VirtualColumnNameIdent;
-use common_sql::plans::DropVirtualColumnPlan;
-use virtual_column::get_virtual_column_handler;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::VirtualColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_sql::plans::DropVirtualColumnPlan;
+use databend_enterprise_virtual_column::get_virtual_column_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,6 +68,7 @@ impl Interpreter for DropVirtualColumnInterpreter {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let drop_virtual_column_req = DropVirtualColumnReq {
+            if_exists: self.plan.if_exists,
             name_ident: VirtualColumnNameIdent { tenant, table_id },
         };
 

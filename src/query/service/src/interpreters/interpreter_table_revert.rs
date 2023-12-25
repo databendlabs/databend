@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::NavigationDescriptor;
-use common_catalog::table::TableExt;
-use common_exception::Result;
-use common_sql::plans::RevertTablePlan;
+use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::Result;
+use databend_common_sql::plans::RevertTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -15,9 +15,9 @@
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::AnyType;
 use crate::property::Domain;
@@ -298,7 +298,7 @@ impl NullableColumn<AnyType> {
 
 pub struct NullableIterator<'a, T: ValueType> {
     iter: T::ColumnIterator<'a>,
-    validity: common_arrow::arrow::bitmap::utils::BitmapIter<'a>,
+    validity: databend_common_arrow::arrow::bitmap::utils::BitmapIter<'a>,
 }
 
 impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {

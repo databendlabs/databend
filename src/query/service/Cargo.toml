@@ -13,87 +13,87 @@ test = false
 
 [features]
 default = ["simd", "z3-prove"]
-simd = ["common-arrow/simd"]
+simd = ["databend-common-arrow/simd"]
 
-z3-prove = ["common-sql/z3-prove"]
-disable_initial_exec_tls = ["common-base/disable_initial_exec_tls"]
+z3-prove = ["databend-common-sql/z3-prove"]
+disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
-tokio-console = ["common-tracing/console", "common-base/tracing"]
-memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
-storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
+tokio-console = ["databend-common-tracing/console", "databend-common-base/tracing"]
+memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
+storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
-    # "common-meta-embedded/io-uring",
-    "common-meta-store/io-uring",
-    # "common-meta-sled-store/io-uring",
-    # "common-meta-raft-store/io-uring",
+    # "databend-common-meta-embedded/io-uring",
+    "databend-common-meta-store/io-uring",
+    # "databend-common-meta-sled-store/io-uring",
+    # "databend-common-meta-raft-store/io-uring",
 ]
 
 [dependencies]
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
-common-ast = { path = "../ast" }
-common-base = { path = "../../common/base" }
-common-cache = { path = "../../common/cache" }
-common-catalog = { path = "../catalog" }
-common-compress = { path = "../../common/compress" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-formats = { path = "../formats" }
-common-functions = { path = "../functions" }
-common-grpc = { path = "../../common/grpc" }
-common-hashtable = { path = "../../common/hashtable" }
-common-http = { path = "../../common/http" }
-common-io = { path = "../../common/io" }
-common-management = { path = "../management" }
-common-meta-api = { path = "../../meta/api" }
-common-meta-app = { path = "../../meta/app" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-ast = { path = "../ast" }
+databend-common-base = { path = "../../common/base" }
+databend-common-cache = { path = "../../common/cache" }
+databend-common-catalog = { path = "../catalog" }
+databend-common-compress = { path = "../../common/compress" }
+databend-common-config = { path = "../config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-formats = { path = "../formats" }
+databend-common-functions = { path = "../functions" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-hashtable = { path = "../../common/hashtable" }
+databend-common-http = { path = "../../common/http" }
+databend-common-io = { path = "../../common/io" }
+databend-common-management = { path = "../management" }
+databend-common-meta-api = { path = "../../meta/api" }
+databend-common-meta-app = { path = "../../meta/app" }
 
-aggregating-index = { path = "../ee_features/aggregating_index" }
-background-service = { path = "../ee_features/background_service" }
-common-cloud-control = { path = "../../common/cloud_control" }
-common-license = { path = "../../common/license" }
-common-meta-embedded = { path = "../../meta/embedded" }
-common-meta-kvapi = { path = "../../meta/kvapi" }
-common-meta-store = { path = "../../meta/store" }
-common-meta-types = { path = "../../meta/types" }
-common-metrics = { path = "../../common/metrics" }
-common-openai = { path = "../../common/openai" }
-common-pipeline-core = { path = "../pipeline/core" }
-common-pipeline-sinks = { path = "../pipeline/sinks" }
-common-pipeline-sources = { path = "../pipeline/sources" }
-common-pipeline-transforms = { path = "../pipeline/transforms" }
-common-profile = { path = "../profile" }
-common-settings = { path = "../settings" }
-common-sharing = { path = "../sharing" }
-common-sql = { path = "../sql" }
-common-storage = { path = "../../common/storage" }
-common-storages-delta = { path = "../storages/delta" }
-common-storages-factory = { path = "../storages/factory" }
-common-storages-fuse = { path = "../storages/fuse" }
-common-storages-hive = { path = "../storages/hive/hive" }
-common-storages-iceberg = { path = "../storages/iceberg" }
-common-storages-information-schema = { path = "../storages/information_schema" }
-common-storages-null = { path = "../storages/null" }
-common-storages-parquet = { path = "../storages/parquet" }
-common-storages-result-cache = { path = "../storages/result_cache" }
-common-storages-share = { path = "../storages/share" }
-common-storages-stage = { path = "../storages/stage" }
-common-storages-stream = { path = "../storages/stream" }
-common-storages-system = { path = "../storages/system" }
-common-storages-view = { path = "../storages/view" }
-common-tracing = { path = "../../common/tracing" }
-common-users = { path = "../users" }
-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-common-cloud-control = { path = "../../common/cloud_control" }
+databend-common-license = { path = "../../common/license" }
+databend-common-meta-embedded = { path = "../../meta/embedded" }
+databend-common-meta-kvapi = { path = "../../meta/kvapi" }
+databend-common-meta-store = { path = "../../meta/store" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-metrics = { path = "../../common/metrics" }
+databend-common-openai = { path = "../../common/openai" }
+databend-common-pipeline-core = { path = "../pipeline/core" }
+databend-common-pipeline-sinks = { path = "../pipeline/sinks" }
+databend-common-pipeline-sources = { path = "../pipeline/sources" }
+databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
+databend-common-profile = { path = "../profile" }
+databend-common-settings = { path = "../settings" }
+databend-common-sharing = { path = "../sharing" }
+databend-common-sql = { path = "../sql" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-storages-delta = { path = "../storages/delta" }
+databend-common-storages-factory = { path = "../storages/factory" }
+databend-common-storages-fuse = { path = "../storages/fuse" }
+databend-common-storages-hive = { path = "../storages/hive/hive" }
+databend-common-storages-iceberg = { path = "../storages/iceberg" }
+databend-common-storages-information-schema = { path = "../storages/information_schema" }
+databend-common-storages-null = { path = "../storages/null" }
+databend-common-storages-parquet = { path = "../storages/parquet" }
+databend-common-storages-result-cache = { path = "../storages/result_cache" }
+databend-common-storages-share = { path = "../storages/share" }
+databend-common-storages-stage = { path = "../storages/stage" }
+databend-common-storages-stream = { path = "../storages/stream" }
+databend-common-storages-system = { path = "../storages/system" }
+databend-common-storages-view = { path = "../storages/view" }
+databend-common-tracing = { path = "../../common/tracing" }
+databend-common-users = { path = "../users" }
+databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
+databend-enterprise-background-service = { path = "../ee_features/background_service" }
+databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
+databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
+databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
+databend-storages-common-blocks = { path = "../storages/common/blocks" }
+databend-storages-common-cache = { path = "../storages/common/cache" }
+databend-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
+databend-storages-common-index = { path = "../storages/common/index" }
+databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 jsonb = { workspace = true }
-storages-common-blocks = { path = "../storages/common/blocks" }
-storages-common-cache = { path = "../storages/common/cache" }
-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
-storages-common-index = { path = "../storages/common/index" }
-storages-common-table-meta = { path = "../storages/common/table_meta" }
-stream-handler = { path = "../ee_features/stream_handler" }
-vacuum-handler = { path = "../ee_features/vacuum_handler" }
-virtual-column = { path = "../ee_features/virtual_column" }
 
 # GitHub dependencies
 
@@ -189,7 +189,7 @@ url = "2.3.1"
 wiremock = "0.5.14"
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

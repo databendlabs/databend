@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_expression::DataBlock;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataBlock;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate() -> common_exception::Result<()> {
+async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -84,7 +84,8 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::Result<()> {
+async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_exception::Result<()>
+{
     // the test scenario is as follows:
     // ┌──────┐
     // │  s0  │

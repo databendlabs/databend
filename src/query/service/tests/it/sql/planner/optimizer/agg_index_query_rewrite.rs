@@ -14,37 +14,38 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Engine;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_base::base::tokio;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_sql::optimizer::agg_index;
-use common_sql::optimizer::HeuristicOptimizer;
-use common_sql::optimizer::SExpr;
-use common_sql::optimizer::DEFAULT_REWRITE_RULES;
-use common_sql::plans::AggIndexInfo;
-use common_sql::plans::CreateTablePlan;
-use common_sql::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::BindContext;
-use common_sql::Binder;
-use common_sql::Metadata;
-use common_sql::MetadataRef;
-use common_sql::NameResolutionContext;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_base::base::tokio;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_sql::optimizer::agg_index;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::RecursiveOptimizer;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::DEFAULT_REWRITE_RULES;
+use databend_common_sql::plans::AggIndexInfo;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::BindContext;
+use databend_common_sql::Binder;
+use databend_common_sql::Metadata;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::NameResolutionContext;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use parking_lot::RwLock;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 #[derive(Default)]
 struct TestSuite {
@@ -70,6 +71,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
             TableField::new("c", TableDataType::Number(NumberDataType::Int32)),
         ]),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),
@@ -456,8 +458,11 @@ async fn plan_sql(
     } = plan
     {
         let s_expr = if optimize {
-            let optimizer = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-            optimizer.optimize(*s_expr, &DEFAULT_REWRITE_RULES)?
+            RecursiveOptimizer::new(
+                &DEFAULT_REWRITE_RULES,
+                &OptimizerContext::new(ctx.clone(), metadata.clone()),
+            )
+            .run(&s_expr)?
         } else {
             *s_expr
         };
@@ -477,13 +482,13 @@ fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {
 fn format_selection(info: &AggIndexInfo) -> Vec<String> {
     info.selection
         .iter()
-        .map(|sel| common_sql::format_scalar(&sel.scalar))
+        .map(|sel| databend_common_sql::format_scalar(&sel.scalar))
         .collect()
 }
 
 fn format_filter(info: &AggIndexInfo) -> Vec<String> {
     info.predicates
         .iter()
-        .map(common_sql::format_scalar)
+        .map(databend_common_sql::format_scalar)
         .collect()
 }

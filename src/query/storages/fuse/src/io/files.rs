@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use log::info;
 use opendal::Operator;
 

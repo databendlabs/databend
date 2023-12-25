@@ -15,7 +15,7 @@
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
 
-use common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::LimitMemGuard;
 use log::error;
 
 pub fn set_panic_hook() {

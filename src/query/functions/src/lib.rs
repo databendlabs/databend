@@ -22,8 +22,8 @@
 #![feature(lazy_cell)]
 
 use aggregates::AggregateFunctionFactory;
-use common_expression::FunctionRegistry;
 use ctor::ctor;
+use databend_common_expression::FunctionRegistry;
 
 pub mod aggregates;
 mod cast_rules;

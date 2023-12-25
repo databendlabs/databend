@@ -1,5 +1,5 @@
 [package]
-name = "storage-encryption"
+name = "databend-enterprise-storage-encryption"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,8 +12,8 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-exception = { path = "../../../common/exception" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-exception = { path = "../../../common/exception" }
 
 async-trait = { workspace = true }
 

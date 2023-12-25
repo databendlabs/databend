@@ -15,38 +15,38 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::plan::StageTableInfo;
-use common_exception::Result;
-use common_expression::types::Int32Type;
-use common_expression::types::StringType;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FromData;
-use common_expression::SendableDataBlockStream;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_pipeline_core::Pipeline;
-use common_sql::executor::physical_plans::CopyIntoTable;
-use common_sql::executor::physical_plans::CopyIntoTableSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::QuerySource;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::PhysicalPlan;
-use common_storage::StageFileInfo;
-use common_storages_stage::StageTable;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_exception::Result;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::info;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::hook_refresh;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
-use crate::interpreters::common::RefreshDesc;
+use crate::interpreters::hook::hook_compact;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -358,7 +358,7 @@ impl Interpreter for CopyIntoTableInterpreter {
             .await?;
         }
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),

@@ -16,7 +16,7 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::container::StackContainer;
 use super::table0::Entry;

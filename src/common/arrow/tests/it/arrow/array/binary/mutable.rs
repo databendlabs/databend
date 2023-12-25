@@ -15,12 +15,12 @@
 
 use std::ops::Deref;
 
-use common_arrow::arrow::array::BinaryArray;
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableBinaryArray;
-use common_arrow::arrow::array::TryExtendFromSelf;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::error::Error;
+use databend_common_arrow::arrow::array::BinaryArray;
+use databend_common_arrow::arrow::array::MutableArray;
+use databend_common_arrow::arrow::array::MutableBinaryArray;
+use databend_common_arrow::arrow::array::TryExtendFromSelf;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::error::Error;
 
 #[test]
 fn new() {

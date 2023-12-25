@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
 pub trait FlightScatter: Sync + Send {
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;

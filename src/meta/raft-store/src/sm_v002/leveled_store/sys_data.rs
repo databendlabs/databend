@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use common_meta_types::LogId;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
-use common_meta_types::StoredMembership;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::StoredMembership;
 use log::debug;
 
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_pipeline_core::Pipeline;
-use common_settings::Settings;
-use common_storage::StageFileInfo;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::Settings;
+use databend_common_storage::StageFileInfo;
 use opendal::Operator;
 
 use crate::input_formats::InputContext;

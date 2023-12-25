@@ -15,18 +15,18 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use common_ast::parser::parse_comma_separated_idents;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::is_stream_column_id;
-use common_expression::ComputedExpr;
-use common_expression::FieldIndex;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_settings::Settings;
+use databend_common_ast::parser::parse_comma_separated_idents;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::is_stream_column_id;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_settings::Settings;
 
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;

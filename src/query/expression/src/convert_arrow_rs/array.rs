@@ -28,7 +28,7 @@ impl Column {
     }
 
     pub fn from_arrow_rs(array: Arc<dyn Array>, field: &DataField) -> Result<Self, ArrowError> {
-        let arrow2_array: Box<dyn common_arrow::arrow::array::Array> = array.into();
+        let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = array.into();
 
         Ok(Column::from_arrow(arrow2_array.as_ref(), field.data_type()))
     }

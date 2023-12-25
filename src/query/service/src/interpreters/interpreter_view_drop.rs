@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::DropTableByIdReq;
-use common_sql::plans::DropViewPlan;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_sql::plans::DropViewPlan;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -79,11 +79,16 @@ impl Interpreter for DropViewInterpreter {
             }
 
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let db = catalog
+                .get_database(&self.plan.tenant, &self.plan.database)
+                .await?;
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
                     tenant: self.plan.tenant.clone(),
+                    table_name: self.plan.view_name.clone(),
                     tb_id: table.get_id(),
+                    db_id: db.get_db_info().ident.db_id,
                 })
                 .await?;
         };

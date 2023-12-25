@@ -18,21 +18,21 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::vec;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::ColumnId;
-use common_metrics::storage::*;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_metrics::storage::*;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
@@ -82,7 +82,10 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let limit = self.compact_params.limit.unwrap_or(number_segments);
+        let limit = self
+            .compact_params
+            .num_segment_limit
+            .unwrap_or(number_segments);
 
         // Status.
         self.ctx

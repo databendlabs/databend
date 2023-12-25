@@ -19,11 +19,11 @@ use std::str::FromStr;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_meta_types::ErrorSubject;
-use common_meta_types::SnapshotData;
-use common_meta_types::SnapshotMeta;
-use common_meta_types::StorageError;
-use common_meta_types::StorageIOError;
+use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::SnapshotData;
+use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::StorageError;
+use databend_common_meta_types::StorageIOError;
 use log::error;
 use log::info;
 use log::warn;

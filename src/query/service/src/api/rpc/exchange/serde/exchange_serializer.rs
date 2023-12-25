@@ -14,30 +14,33 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::flight::WriteOptions;
-use common_arrow::arrow::io::ipc::write::Compression;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_io::prelude::bincode_serialize_into_buf;
-use common_io::prelude::BinaryWrite;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::BlockMetaTransform;
-use common_pipeline_transforms::processors::BlockMetaTransformer;
-use common_pipeline_transforms::processors::Transform;
-use common_pipeline_transforms::processors::Transformer;
-use common_pipeline_transforms::processors::UnknownMode;
-use common_settings::FlightCompression;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::serialize_batch;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::BinaryWrite;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_settings::FlightCompression;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -95,6 +98,7 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
 pub struct TransformExchangeSerializer {
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
+    exchange_rows: AtomicUsize,
 }
 
 impl TransformExchangeSerializer {
@@ -120,6 +124,7 @@ impl TransformExchangeSerializer {
             TransformExchangeSerializer {
                 ipc_fields,
                 options: WriteOptions { compression },
+                exchange_rows: AtomicUsize::new(0),
             },
         )))
     }
@@ -129,7 +134,16 @@ impl Transform for TransformExchangeSerializer {
     const NAME: &'static str = "ExchangeSerializerTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        self.exchange_rows
+            .fetch_add(data_block.num_rows(), Ordering::Relaxed);
         serialize_block(0, data_block, &self.ipc_fields, &self.options)
+    }
+
+    fn record_profile(&self, profile: &Profile) {
+        profile.exchange_rows.fetch_add(
+            self.exchange_rows.swap(0, Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
     }
 }
 

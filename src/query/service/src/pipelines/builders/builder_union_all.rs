@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use async_channel::Receiver;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sinks::UnionReceiveSink;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_sql::executor::physical_plans::UnionAll;
-use common_sql::executor::PhysicalPlan;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::UnionReceiveSink;
+use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
+use databend_common_sql::executor::physical_plans::UnionAll;
+use databend_common_sql::executor::PhysicalPlan;
 
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::PipelineBuilder;
@@ -65,9 +65,10 @@ impl PipelineBuilder {
             union_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();
+
         let mut build_res = pipeline_builder.finalize(input)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);

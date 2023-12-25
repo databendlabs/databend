@@ -9,48 +9,52 @@ edition = { workspace = true }
 
 [features]
 default = ["simd", "jemalloc", "z3-prove"]
-memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
+memory-profiling = [
+    "databend-meta/memory-profiling",
+    "databend-query/memory-profiling",
+    "databend-common-base/memory-profiling",
+]
 simd = ["databend-meta/simd", "databend-query/simd"]
 z3-prove = ["databend-query/z3-prove"]
-jemalloc = ["common-base/jemalloc"]
+jemalloc = ["databend-common-base/jemalloc"]
 tokio-console = [
     "databend-meta/tokio-console",
     "databend-query/io-uring",
-    "common-base/tracing",
-    "common-tracing/console",
+    "databend-common-base/tracing",
+    "databend-common-tracing/console",
 ]
 io-uring = [
     "databend-meta/io-uring",
     "databend-query/io-uring",
-    "common-meta-store/io-uring",
-    "common-meta-sled-store/io-uring",
-    "common-meta-raft-store/io-uring",
+    "databend-common-meta-store/io-uring",
+    "databend-common-meta-sled-store/io-uring",
+    "databend-common-meta-raft-store/io-uring",
 ]
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../common/base" }
-common-config = { path = "../query/config" }
-common-exception = { path = "../common/exception" }
-common-grpc = { path = "../common/grpc" }
-common-license = { path = "../common/license" }
-common-meta-api = { path = "../meta/api" }
-common-meta-app = { path = "../meta/app" }
-common-meta-client = { path = "../meta/client" }
-common-meta-kvapi = { path = "../meta/kvapi" }
-common-meta-raft-store = { path = "../meta/raft-store" }
-common-meta-sled-store = { path = "../meta/sled-store" }
-common-meta-store = { path = "../meta/store" }
-common-meta-types = { path = "../meta/types" }
-common-storage = { path = "../common/storage" }
-common-tracing = { path = "../common/tracing" }
+databend-common-base = { path = "../common/base" }
+databend-common-config = { path = "../query/config" }
+databend-common-exception = { path = "../common/exception" }
+databend-common-grpc = { path = "../common/grpc" }
+databend-common-license = { path = "../common/license" }
+databend-common-meta-api = { path = "../meta/api" }
+databend-common-meta-app = { path = "../meta/app" }
+databend-common-meta-client = { path = "../meta/client" }
+databend-common-meta-kvapi = { path = "../meta/kvapi" }
+databend-common-meta-raft-store = { path = "../meta/raft-store" }
+databend-common-meta-sled-store = { path = "../meta/sled-store" }
+databend-common-meta-store = { path = "../meta/store" }
+databend-common-meta-types = { path = "../meta/types" }
+databend-common-storage = { path = "../common/storage" }
+databend-common-tracing = { path = "../common/tracing" }
+databend-enterprise-query = { path = "../query/ee" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
-enterprise-query = { path = "../query/ee" }
-# enterprise-meta = { path = "../meta/ee" }
-background-service = { path = "../query/ee_features/background_service" }
-sharing-endpoint = { path = "../query/sharing_endpoint" }
-storages-common-table-meta = { path = "../query/storages/common/table_meta" }
+# databend-enterprise-meta = { path = "../meta/ee" }
+databend-enterprise-background-service = { path = "../query/ee_features/background_service" }
+databend-sharing-endpoint = { path = "../query/sharing_endpoint" }
+databend-storages-common-table-meta = { path = "../query/storages/common/table_meta" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }

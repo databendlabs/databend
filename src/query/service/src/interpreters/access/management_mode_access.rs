@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -41,12 +41,12 @@ impl AccessChecker for ManagementModeAccess {
         if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
-                    use common_sql::plans::RewriteKind;
+                    use databend_common_sql::plans::RewriteKind;
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
-                            | RewriteKind::ShowTables(_)
-                            | RewriteKind::ShowColumns(_, _)
+                            | RewriteKind::ShowTables(_, _)
+                            | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
                             | RewriteKind::ShowFunctions
@@ -104,6 +104,10 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateNetworkPolicy(_)
                 | Plan::AlterNetworkPolicy(_)
                 | Plan::DropNetworkPolicy(_)
+                // Password policy.
+                | Plan::CreatePasswordPolicy(_)
+                | Plan::AlterPasswordPolicy(_)
+                | Plan::DropPasswordPolicy(_)
 
                 // UDF
                 | Plan::CreateUDF(_)
@@ -122,7 +126,7 @@ impl AccessChecker for ManagementModeAccess {
 
             if !ok {
                 return Err(ErrorCode::ManagementModePermissionDenied(format!(
-                    "Access denied for operation:{:?} in management-mode",
+                    "Management Mode Error: Access denied for operation:{:?} in management-mode",
                     plan.format_indent()
                 )));
             }

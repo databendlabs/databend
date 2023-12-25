@@ -14,10 +14,10 @@
 
 use std::fmt::Display;
 
-use common_exception::Result;
-use common_exception::Span;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use crate::ast::*;
 use crate::visitors::Visitor;
@@ -447,7 +447,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         distinct: bool,
         name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
@@ -455,6 +455,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         for arg in args.iter() {
             self.visit_expr(arg);
             children.push(self.children.pop().unwrap());
+        }
+        for param in params.iter() {
+            self.visit_expr(param);
         }
         let node_name = if distinct {
             format!("Function {name}Distinct")
@@ -1839,6 +1842,32 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_virtual_columns(&mut self, stmt: &'ast ShowVirtualColumnsStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            let database_name = format!("Database {}", database);
+            let database_format_ctx = AstFormatContext::new(database_name);
+            let database_node = FormatTreeNode::new(database_format_ctx);
+            children.push(database_node);
+        }
+
+        if let Some(table) = &stmt.database {
+            let table_name = format!("Table {}", table);
+            let table_format_ctx = AstFormatContext::new(table_name);
+            let table_node = FormatTreeNode::new(table_format_ctx);
+            children.push(table_node);
+        }
+
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "ShowVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_show_users(&mut self) {
         let name = "ShowUsers".to_string();
         let format_ctx = AstFormatContext::new(name);
@@ -2576,6 +2605,50 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let ctx = AstFormatContext::new("ShowNetworkPolicies".to_string());
         let node = FormatTreeNode::new(ctx);
         self.children.push(node);
+    }
+
+    fn visit_create_password_policy(&mut self, stmt: &'ast CreatePasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreatePasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_alter_password_policy(&mut self, stmt: &'ast AlterPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "AlterPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_password_policy(&mut self, stmt: &'ast DropPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DropPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_desc_password_policy(&mut self, stmt: &'ast DescPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DescPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_password_policies(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowPasswordPolicies".to_string());
     }
 
     fn visit_with(&mut self, with: &'ast With) {

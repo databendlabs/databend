@@ -15,15 +15,15 @@
 use std::error::Error;
 use std::sync::LazyLock;
 
-use common_meta_types::MetaError;
-use common_metrics::register_counter_family;
-use common_metrics::register_gauge;
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Gauge;
-use common_metrics::Histogram;
-use common_metrics::VecLabels;
+use databend_common_meta_types::MetaError;
+use databend_common_metrics::register_counter_family;
+use databend_common_metrics::register_gauge;
+use databend_common_metrics::register_histogram_family_in_milliseconds;
+use databend_common_metrics::Counter;
+use databend_common_metrics::Family;
+use databend_common_metrics::Gauge;
+use databend_common_metrics::Histogram;
+use databend_common_metrics::VecLabels;
 
 pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<Family<VecLabels, Histogram>> =
     LazyLock::new(|| {

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,29 +17,27 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
-use common_base::base::tokio::time::sleep;
-use common_meta_client::ClientHandle;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::watch_request::FilterType;
-use common_meta_types::protobuf::Event;
-use common_meta_types::protobuf::KvMeta;
-use common_meta_types::protobuf::SeqV;
-use common_meta_types::protobuf::TxnRequest;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op;
-use common_meta_types::ConditionResult;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteByPrefixRequest;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnPutRequest;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf::watch_request::FilterType;
+use databend_common_meta_types::protobuf::Event;
+use databend_common_meta_types::protobuf::KvMeta;
+use databend_common_meta_types::protobuf::SeqV;
+use databend_common_meta_types::protobuf::TxnRequest;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnDeleteByPrefixRequest;
+use databend_common_meta_types::TxnOp;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -263,21 +261,8 @@ async fn test_watch() -> anyhow::Result<()> {
         }];
 
         let if_then: Vec<TxnOp> = vec![
-            TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: txn_key.clone(),
-                    value: txn_val.clone(),
-                    prev_value: true,
-                    expire_at: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                    key: delete_key.to_string(),
-                    prev_value: true,
-                    match_seq: None,
-                })),
-            },
+            TxnOp::put(txn_key.clone(), txn_val.clone()),
+            TxnOp::delete(delete_key),
             TxnOp {
                 request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
                     prefix: watch_delete_by_prefix_key.to_string(),

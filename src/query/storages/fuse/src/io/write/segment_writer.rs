@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Versioned;
 
 use super::meta_writer::MetaWriter;
 use crate::io::CachedMetaWriter;

@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableBinaryValuesArray;
-use common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::array::MutableArray;
+use databend_common_arrow::arrow::array::MutableBinaryValuesArray;
+use databend_common_arrow::arrow::datatypes::DataType;
 
 #[test]
 fn capacity() {

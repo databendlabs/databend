@@ -36,6 +36,7 @@ impl Config {
                 level: "DEBUG".to_string(),
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
+                limit: 48,
             },
             stderr: StderrConfig {
                 on: true,
@@ -53,6 +54,7 @@ pub struct FileConfig {
     pub level: String,
     pub dir: String,
     pub format: String,
+    pub limit: usize,
 }
 
 impl Display for FileConfig {
@@ -72,6 +74,7 @@ impl Default for FileConfig {
             level: "INFO".to_string(),
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
+            limit: 48,
         }
     }
 }

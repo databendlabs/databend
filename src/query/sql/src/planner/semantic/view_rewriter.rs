@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Identifier;
-use common_ast::ast::TableReference;
-use common_ast::walk_table_reference_mut;
-use common_ast::VisitorMut;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::walk_table_reference_mut;
+use databend_common_ast::VisitorMut;
 
 #[derive(Debug, Clone, Default)]
 pub struct ViewRewriter {

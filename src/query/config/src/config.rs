@@ -25,32 +25,32 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
-use common_base::base::mask_string;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::AuthType;
-use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
-use common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
-use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
-use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
-use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
-use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
-use common_meta_app::tenant::TenantQuota;
-use common_storage::StorageConfig as InnerStorageConfig;
-use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::OTLPConfig as InnerOTLPLogConfig;
-use common_tracing::ProfileLogConfig as InnerProfileLogConfig;
-use common_tracing::QueryLogConfig as InnerQueryLogConfig;
-use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig as InnerTracingConfig;
-use common_users::idm_config::IDMConfig as InnerIDMConfig;
+use databend_common_base::base::mask_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
+use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
+use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::StorageConfig as InnerStorageConfig;
+use databend_common_tracing::Config as InnerLogConfig;
+use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
+use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
+use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -1935,6 +1935,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", value_name = "VALUE", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
 }
 
 impl Default for FileLogConfig {
@@ -1952,6 +1957,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
         })
     }
 }
@@ -1963,6 +1969,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
         }
     }
 }

@@ -15,14 +15,14 @@
 #[macro_use]
 extern crate criterion;
 
-use common_constraint::mir::MirBinaryOperator;
-use common_constraint::mir::MirConstant;
-use common_constraint::mir::MirDataType;
-use common_constraint::mir::MirExpr;
-use common_constraint::problem::variable_must_not_null;
-use common_constraint::simplify::simplify;
 use criterion::black_box;
 use criterion::Criterion;
+use databend_common_constraint::mir::MirBinaryOperator;
+use databend_common_constraint::mir::MirConstant;
+use databend_common_constraint::mir::MirDataType;
+use databend_common_constraint::mir::MirExpr;
+use databend_common_constraint::problem::variable_must_not_null;
+use databend_common_constraint::simplify::simplify;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_solver");

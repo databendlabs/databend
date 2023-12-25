@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::AlterTaskOptions;
-use common_catalog::table_context::TableContext;
-use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::alter_task_request::AlterTaskType;
-use common_cloud_control::pb::AlterTaskRequest;
-use common_cloud_control::pb::WarehouseOptions;
-use common_cloud_control::task_client::make_request;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::AlterTaskPlan;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
+use databend_common_cloud_control::pb::AlterTaskRequest;
+use databend_common_cloud_control::pb::WarehouseOptions;
+use databend_common_cloud_control::task_client::make_request;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::AlterTaskPlan;
 
 use crate::interpreters::common::get_client_config;
 use crate::interpreters::common::make_schedule_options;

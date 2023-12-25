@@ -17,10 +17,10 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::Change;
-use common_meta_types::SeqV;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
 use log::debug;
 use log::warn;
 use minitrace::func_name;

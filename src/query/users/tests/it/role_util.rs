@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_meta_app::principal::RoleInfo;
-use common_users::role_util::find_all_related_roles;
-use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_users::role_util::find_all_related_roles;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 #[test]
 fn test_find_all_related_roles() {

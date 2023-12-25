@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::FunctionRegistry;
+use databend_common_expression::FunctionRegistry;
 
 mod arithmetic;
 mod arithmetic_modulo;
@@ -57,7 +57,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    decimal::register(registry);
+    decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
 }

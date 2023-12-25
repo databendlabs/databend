@@ -15,17 +15,17 @@
 use std::str::FromStr;
 
 use chrono_tz;
-use common_ast::ast::AlterTaskOptions;
-use common_ast::ast::AlterTaskStmt;
-use common_ast::ast::CreateTaskStmt;
-use common_ast::ast::DescribeTaskStmt;
-use common_ast::ast::DropTaskStmt;
-use common_ast::ast::ExecuteTaskStmt;
-use common_ast::ast::ScheduleOptions;
-use common_ast::ast::ShowTasksStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use cron;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::AlterTaskStmt;
+use databend_common_ast::ast::CreateTaskStmt;
+use databend_common_ast::ast::DescribeTaskStmt;
+use databend_common_ast::ast::DropTaskStmt;
+use databend_common_ast::ast::ExecuteTaskStmt;
+use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
@@ -41,7 +41,7 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
         return Ok(());
     }
     let schedule_opts = schedule_opts.clone().unwrap();
-    if let common_ast::ast::ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
+    if let ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
         if cron::Schedule::from_str(&cron_expr).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid cron expression {}",

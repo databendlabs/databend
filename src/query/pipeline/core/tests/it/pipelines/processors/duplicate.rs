@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::Int32Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_pipeline_core::processors::connect;
-use common_pipeline_core::processors::DuplicateProcessor;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
+use databend_common_exception::Result;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::DuplicateProcessor;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_duplicate_output_finish() -> Result<()> {

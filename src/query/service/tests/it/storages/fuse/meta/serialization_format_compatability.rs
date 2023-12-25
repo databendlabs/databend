@@ -14,8 +14,8 @@
 
 use std::io::Cursor;
 
-use common_io::prelude::bincode_deserialize_from_slice;
-use common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 struct BasicOld {

@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_expression::Expr;
+use databend_common_expression::Expr;
 use log::info;
 
 use super::BlockOperator;

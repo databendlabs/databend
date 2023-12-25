@@ -18,62 +18,64 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_catalog::catalog::StorageDescription;
-use common_catalog::lock::Lock;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StreamColumn;
-use common_catalog::table::AppendMode;
-use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::NavigationDescriptor;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::RemoteExpr;
-use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
-use common_expression::ORIGIN_VERSION_COL_NAME;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::Pipeline;
-use common_sharing::create_share_table_operator;
-use common_sql::binder::STREAM_COLUMN_FACTORY;
-use common_sql::parse_exprs;
-use common_sql::BloomIndexColumns;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use common_storage::ShareTableConfig;
-use common_storage::StorageMetrics;
-use common_storage::StorageMetricsLayer;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sharing::create_share_table_operator;
+use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
+use databend_common_sql::parse_exprs;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
+use databend_common_storage::ShareTableConfig;
+use databend_common_storage::StorageMetrics;
+use databend_common_storage::StorageMetricsLayer;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::table_storage_prefix;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::warn;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::Statistics as FuseStatistics;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::table_storage_prefix;
-use storages_common_table_meta::table::TableCompression;
-use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
-use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -436,6 +438,10 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        column_id >= SNAPSHOT_NAME_COLUMN_ID
+    }
+
     fn support_column_projection(&self) -> bool {
         true
     }
@@ -682,7 +688,10 @@ impl Table for FuseTable {
         self.do_analyze(&ctx).await
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
@@ -717,7 +726,10 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
@@ -810,10 +822,6 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        true
-    }
-
-    fn support_row_id_column(&self) -> bool {
         true
     }
 

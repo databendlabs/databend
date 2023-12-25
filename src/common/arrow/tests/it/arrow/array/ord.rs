@@ -15,10 +15,10 @@
 
 use std::cmp::Ordering;
 
-use common_arrow::arrow::array::ord::build_compare;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::ord::build_compare;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn i32() -> Result<()> {

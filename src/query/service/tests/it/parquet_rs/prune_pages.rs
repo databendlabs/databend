@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::plan::ParquetReadOptions;
-use common_expression::FunctionContext;
-use common_expression::TableSchema;
-use common_storages_parquet::ParquetRSPruner;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_storages_parquet::ParquetRSPruner;
 use parquet::arrow::arrow_reader::ArrowReaderMetadata;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -57,12 +57,13 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
         ParquetReadOptions::default()
             .with_prune_row_groups(false)
             .with_prune_pages(true),
+        vec![],
     )
     .unwrap();
 
     let row_groups = (0..parquet_meta.num_row_groups()).collect::<Vec<_>>();
     let selection = pruner
-        .prune_pages(parquet_meta, &row_groups)
+        .prune_pages(parquet_meta, &row_groups, None)
         .unwrap()
         .unwrap();
 

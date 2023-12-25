@@ -33,4 +33,4 @@ databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench
 
 ## More
 
-[Benchmarking Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+[Benchmarking Databend using TPC-H](https://www.databend.com/blog/2022/08/08/benchmark-tpc-h)

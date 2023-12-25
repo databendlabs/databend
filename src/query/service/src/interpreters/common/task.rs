@@ -14,27 +14,32 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::ScheduleOptions;
-use common_ast::ast::WarehouseOptions;
-use common_catalog::table_context::TableContext;
-use common_cloud_control::client_config::build_client_config;
-use common_cloud_control::client_config::ClientConfig;
-use common_cloud_control::pb::schedule_options::ScheduleType;
-use common_exception::Result;
+use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::WarehouseOptions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::ClientConfig;
+use databend_common_cloud_control::pb::schedule_options::ScheduleType;
+use databend_common_exception::Result;
 
 use crate::sessions::QueryContext;
 
-pub fn make_schedule_options(opt: ScheduleOptions) -> common_cloud_control::pb::ScheduleOptions {
+pub fn make_schedule_options(
+    opt: ScheduleOptions,
+) -> databend_common_cloud_control::pb::ScheduleOptions {
     match opt {
-        ScheduleOptions::Interval(minute, secs) => common_cloud_control::pb::ScheduleOptions {
-            interval: Some(minute as i32),
-            cron: None,
-            time_zone: None,
-            schedule_type: i32::from(ScheduleType::IntervalType),
-            interval_second: Some(secs as i32),
-        },
+        ScheduleOptions::Interval(minute, secs) => {
+            databend_common_cloud_control::pb::ScheduleOptions {
+                interval: Some(minute as i32),
+                cron: None,
+                time_zone: None,
+                schedule_type: i32::from(ScheduleType::IntervalType),
+                interval_second: Some(secs as i32),
+            }
+        }
+
         ScheduleOptions::CronExpression(expr, timezone) => {
-            common_cloud_control::pb::ScheduleOptions {
+            databend_common_cloud_control::pb::ScheduleOptions {
                 interval: None,
                 cron: Some(expr),
                 time_zone: timezone,
@@ -45,8 +50,10 @@ pub fn make_schedule_options(opt: ScheduleOptions) -> common_cloud_control::pb::
     }
 }
 
-pub fn make_warehouse_options(opt: WarehouseOptions) -> common_cloud_control::pb::WarehouseOptions {
-    let mut ret = common_cloud_control::pb::WarehouseOptions {
+pub fn make_warehouse_options(
+    opt: WarehouseOptions,
+) -> databend_common_cloud_control::pb::WarehouseOptions {
+    let mut ret = databend_common_cloud_control::pb::WarehouseOptions {
         warehouse: None,
         using_warehouse_size: None,
     };

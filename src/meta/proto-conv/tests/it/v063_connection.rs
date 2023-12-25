@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserDefinedConnection;
 use minitrace::func_name;
 
 use crate::common;
@@ -32,7 +32,7 @@ use crate::common;
 fn test_decode_v62_connection() -> anyhow::Result<()> {
     let user_defined_connection_v62 = vec![
         10, 7, 109, 121, 95, 99, 111, 110, 110, 18, 2, 115, 51, 26, 10, 10, 3, 107, 101, 121, 18,
-        3, 118, 97, 108, 160, 6, 62, 168, 6, 24,
+        3, 118, 97, 108, 160, 6, 63, 168, 6, 24,
     ];
     let want = || UserDefinedConnection {
         name: "my_conn".to_string(),
@@ -43,7 +43,7 @@ fn test_decode_v62_connection() -> anyhow::Result<()> {
     common::test_load_old(
         func_name!(),
         user_defined_connection_v62.as_slice(),
-        62,
+        63,
         want(),
     )?;
     Ok(())

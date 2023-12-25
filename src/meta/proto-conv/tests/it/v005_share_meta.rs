@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::share;
+use databend_common_meta_app::share;
 use minitrace::func_name;
 
 use crate::common;
@@ -31,7 +31,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v5_share_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![

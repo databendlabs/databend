@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::ops::Add;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;

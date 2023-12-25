@@ -18,12 +18,12 @@ extern crate criterion;
 #[path = "../tests/it/scalars/parser.rs"]
 mod parser;
 
-use common_expression::type_check;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_functions::BUILTIN_FUNCTIONS;
 use criterion::Criterion;
+use databend_common_expression::type_check;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_array");

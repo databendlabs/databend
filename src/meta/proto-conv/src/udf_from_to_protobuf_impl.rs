@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::infer_schema_type;
-use common_expression::types::DataType;
-use common_expression::TableDataType;
-use common_meta_app::principal as mt;
-use common_protos::pb;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
+use databend_common_meta_app::principal as mt;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;

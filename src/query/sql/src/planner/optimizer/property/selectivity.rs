@@ -16,13 +16,13 @@ use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::Scalar;
-use common_storage::Datum;
-use common_storage::F64;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_storage::Datum;
+use databend_common_storage::F64;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;

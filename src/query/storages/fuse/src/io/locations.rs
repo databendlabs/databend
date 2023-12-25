@@ -14,13 +14,13 @@
 
 use std::marker::PhantomData;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SnapshotVersion;
-use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
-use storages_common_table_meta::meta::Versioned;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SnapshotVersion;
+use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use databend_storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;

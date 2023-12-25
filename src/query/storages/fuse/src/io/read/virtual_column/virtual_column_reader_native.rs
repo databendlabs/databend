@@ -14,9 +14,9 @@
 
 use std::collections::HashSet;
 
-use common_arrow::native::read as nread;
-use common_expression::ColumnId;
-use storages_common_table_meta::meta::ColumnMeta;
+use databend_common_arrow::native::read as nread;
+use databend_common_expression::ColumnId;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::VirtualColumnReader;
 use crate::io::BlockReader;

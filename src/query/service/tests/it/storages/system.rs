@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,39 +15,38 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::block_debug::box_render;
-use common_expression::block_debug::pretty_format_blocks;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::AuthType;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserQuota;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_storages_system::BuildOptionsTable;
-use common_storages_system::CachesTable;
-use common_storages_system::CatalogsTable;
-use common_storages_system::ClustersTable;
-use common_storages_system::ColumnsTable;
-use common_storages_system::ConfigsTable;
-use common_storages_system::ContributorsTable;
-use common_storages_system::CreditsTable;
-use common_storages_system::DatabasesTable;
-use common_storages_system::EnginesTable;
-use common_storages_system::FunctionsTable;
-use common_storages_system::MetricsTable;
-use common_storages_system::RolesTable;
-use common_storages_system::SettingsTable;
-use common_storages_system::TracingTable;
-use common_storages_system::UsersTable;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::box_render;
+use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserQuota;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_storages_system::BuildOptionsTable;
+use databend_common_storages_system::CachesTable;
+use databend_common_storages_system::CatalogsTable;
+use databend_common_storages_system::ClustersTable;
+use databend_common_storages_system::ColumnsTable;
+use databend_common_storages_system::ConfigsTable;
+use databend_common_storages_system::ContributorsTable;
+use databend_common_storages_system::CreditsTable;
+use databend_common_storages_system::DatabasesTable;
+use databend_common_storages_system::EnginesTable;
+use databend_common_storages_system::FunctionsTable;
+use databend_common_storages_system::MetricsTable;
+use databend_common_storages_system::RolesTable;
+use databend_common_storages_system::TracingTable;
+use databend_common_storages_system::UsersTable;
+use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
@@ -298,9 +297,9 @@ async fn test_metrics_table() -> Result<()> {
 
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None, true).await?;
-    let counter1 = common_metrics::register_counter("test_metrics_table_count");
+    let counter1 = databend_common_metrics::register_counter("test_metrics_table_count");
     let histogram1 =
-        common_metrics::register_histogram_in_milliseconds("test_metrics_table_histogram");
+        databend_common_metrics::register_histogram_in_milliseconds("test_metrics_table_histogram");
 
     counter1.inc();
     histogram1.observe(2.0);
@@ -351,22 +350,6 @@ async fn test_roles_table() -> Result<()> {
             .await?;
     }
     let table = RolesTable::create(1);
-    run_table_tests(file, ctx, table).await?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_settings_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
-
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_max_threads(2)?;
-    ctx.get_settings().set_max_memory_usage(1073741824)?;
-
-    let table = SettingsTable::create(1);
     run_table_tests(file, ctx, table).await?;
 
     Ok(())

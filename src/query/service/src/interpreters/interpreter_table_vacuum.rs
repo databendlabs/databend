@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature::Vacuum;
-use common_license::license_manager::get_license_manager;
-use common_sql::plans::VacuumTablePlan;
-use common_storages_fuse::FuseTable;
-use vacuum_handler::get_vacuum_handler;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::VacuumTablePlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -16,11 +16,11 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::principal::StageType;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;
@@ -219,7 +219,10 @@ impl StageFilesInfo {
                     if path == STDIN_FD {
                         return Ok(vec![stdin_stage_info()?]);
                     }
-                    return Err(ErrorCode::BadArguments("object mode is unknown"));
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unable to determine the mode of the object at path '{}'. The mode is unknown or unsupported.",
+                        path
+                    )));
                 }
             },
             Err(e) => {

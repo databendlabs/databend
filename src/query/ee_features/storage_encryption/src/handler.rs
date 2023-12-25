@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 /// StorageEncryptionHandler is a trait that defines whether we support storage encryption or not.
 #[async_trait::async_trait]

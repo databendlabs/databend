@@ -17,16 +17,16 @@ use std::sync::Arc;
 use arrow_ord::sort::LexicographicalComparator;
 use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::offset::OffsetsBuffer;
-use common_expression::types::decimal::*;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::*;
-use common_expression::Column;
-use common_expression::FromData;
-use common_expression::RowConverter;
-use common_expression::SortField;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::*;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
+use databend_common_expression::RowConverter;
+use databend_common_expression::SortField;
 use ethnum::i256;
 use itertools::Itertools;
 use jsonb::convert_to_comparable;
@@ -474,8 +474,8 @@ fn fuzz_test() {
                             let offsets =
                                 sc.offsets().iter().map(|offset| *offset as i32).collect();
                             let array = Box::new(
-                                common_arrow::arrow::array::Utf8Array::<i32>::try_new(
-                                    common_arrow::arrow::datatypes::DataType::Utf8,
+                                databend_common_arrow::arrow::array::Utf8Array::<i32>::try_new(
+                                    databend_common_arrow::arrow::datatypes::DataType::Utf8,
                                     unsafe { OffsetsBuffer::new_unchecked(offsets) },
                                     sc.data().clone(),
                                     None,

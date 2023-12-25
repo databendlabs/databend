@@ -30,66 +30,66 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use chrono_tz::Tz;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::StageTableInfo;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::MaterializedCtesBlocks;
-use common_catalog::table_context::StageAttachment;
-use common_config::GlobalConfig;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::date_helper::TzFactory;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::UserDefinedConnection;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
-use common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::TableInfo;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::profile::PlanProfile;
-use common_pipeline_core::processors::profile::Profile;
-use common_pipeline_core::InputError;
-use common_settings::Settings;
-use common_sql::IndexType;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::FileStatus;
-use common_storage::MergeStatus;
-use common_storage::StageFileInfo;
-use common_storage::StorageMetrics;
-use common_storages_delta::DeltaTable;
-use common_storages_fuse::TableContext;
-use common_storages_iceberg::IcebergTable;
-use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetRSTable;
-use common_storages_result_cache::ResultScan;
-use common_storages_stage::StageTable;
-use common_users::GrantObjectVisibilityChecker;
-use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::MaterializedCtesBlocks;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_config::GlobalConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::date_helper::TzFactory;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::FileStatus;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StorageMetrics;
+use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_fuse::TableContext;
+use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_parquet::Parquet2Table;
+use databend_common_storages_parquet::ParquetRSTable;
+use databend_common_storages_result_cache::ResultScan;
+use databend_common_storages_stage::StageTable;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -201,8 +201,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };
@@ -461,6 +461,17 @@ impl TableContext for QueryContext {
     fn set_can_scan_from_agg_index(&self, enable: bool) {
         self.shared
             .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
+    }
+
+    // Need compact after write, over the threshold.
+    fn get_need_compact_after_write(&self) -> bool {
+        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    }
+
+    fn set_need_compact_after_write(&self, enable: bool) {
+        self.shared
+            .auto_compact_after_write
             .store(enable, Ordering::Release);
     }
 

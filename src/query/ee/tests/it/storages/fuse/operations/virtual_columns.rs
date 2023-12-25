@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_catalog::plan::Projection;
-use common_exception::Result;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::FuseStorageFormat;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use databend_query::test_kits::*;
-use enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
-use storages_common_cache::LoadParams;
+use databend_storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {

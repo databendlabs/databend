@@ -15,15 +15,15 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use common_ast::ast::CreateStageStmt;
-use common_ast::ast::UriLocation;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::StageInfo;
-use common_storage::init_operator;
+use databend_common_ast::ast::CreateStageStmt;
+use databend_common_ast::ast::UriLocation;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::location::parse_uri_location;

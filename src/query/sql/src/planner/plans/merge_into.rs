@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_ast::ast::TableAlias;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FieldIndex;
-use common_meta_types::MetaId;
+use databend_common_ast::ast::TableAlias;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FieldIndex;
+use databend_common_meta_types::MetaId;
 
 use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
@@ -78,14 +78,14 @@ impl std::fmt::Debug for MergeInto {
             .field("table_id", &self.table_id)
             .field("join", &self.input)
             .field("matched", &self.matched_evaluators)
-            .field("unmateched", &self.unmatched_evaluators)
+            .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
             .finish()
     }
 }
 
-pub const INSERT_NAME: &str = "number of rows insertd";
-pub const UPDTAE_NAME: &str = "number of rows updated";
+pub const INSERT_NAME: &str = "number of rows inserted";
+pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
 impl MergeInto {
@@ -107,33 +107,41 @@ impl MergeInto {
     }
 
     fn merge_into_table_schema(&self) -> Result<DataSchemaRef> {
-        let field_insertd = DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32));
-        let field_updated = DataField::new(UPDTAE_NAME, DataType::Number(NumberDataType::Int32));
-        let field_deleted = DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32));
-        match self.merge_into_mutations() {
-            (true, true, true) => Ok(DataSchemaRefExt::create(vec![
-                field_insertd.clone(),
-                field_updated.clone(),
-                field_deleted.clone(),
-            ])),
-            (true, true, false) => Ok(DataSchemaRefExt::create(vec![
-                field_insertd.clone(),
-                field_updated.clone(),
-            ])),
-            (true, false, true) => Ok(DataSchemaRefExt::create(vec![
-                field_insertd.clone(),
-                field_deleted.clone(),
-            ])),
-            (true, false, false) => Ok(DataSchemaRefExt::create(vec![field_insertd.clone()])),
-            (false, true, true) => Ok(DataSchemaRefExt::create(vec![
-                field_updated.clone(),
-                field_deleted.clone(),
-            ])),
-            (false, true, false) => Ok(DataSchemaRefExt::create(vec![field_updated.clone()])),
-            (false, false, true) => Ok(DataSchemaRefExt::create(vec![field_deleted.clone()])),
-            _ => Err(ErrorCode::BadArguments(
+        let (insert, update, delete) = self.merge_into_mutations();
+
+        let fields = [
+            (
+                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32)),
+                insert,
+            ),
+            (
+                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::Int32)),
+                update,
+            ),
+            (
+                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32)),
+                delete,
+            ),
+        ];
+
+        // Filter and collect the fields to include in the schema.
+        // Only fields with a corresponding true value in the mutation states are included.
+        let schema_fields: Vec<DataField> = fields
+            .iter()
+            .filter_map(
+                |(field, include)| {
+                    if *include { Some(field.clone()) } else { None }
+                },
+            )
+            .collect();
+
+        // Check if any fields are included. If none, return an error. Otherwise, return the schema.
+        if schema_fields.is_empty() {
+            Err(ErrorCode::BadArguments(
                 "at least one matched or unmatched clause for merge into",
-            )),
+            ))
+        } else {
+            Ok(DataSchemaRefExt::create(schema_fields))
         }
     }
 

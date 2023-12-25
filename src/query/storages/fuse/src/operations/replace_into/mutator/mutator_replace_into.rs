@@ -18,32 +18,32 @@ use std::iter::once;
 
 use ahash::HashSet;
 use ahash::HashSetExt;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::TableSchema;
-use common_expression::Value;
-use common_functions::aggregates::eval_aggr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_metrics::storage::*;
-use common_sql::executor::physical_plans::OnConflictField;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableSchema;
+use databend_common_expression::Value;
+use databend_common_functions::aggregates::eval_aggr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::MinMax;
 use log::info;
-use storages_common_index::BloomIndex;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::MinMax;
 
 use crate::operations::replace_into::meta::DeletionByColumn;
 use crate::operations::replace_into::meta::MergeIntoOperation;
@@ -458,9 +458,9 @@ fn on_conflict_key_column_values<'a>(
 
 #[cfg(test)]
 mod tests {
-    use common_expression::types::NumberType;
-    use common_expression::types::StringType;
-    use common_expression::FromData;
+    use databend_common_expression::types::NumberType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::FromData;
 
     use super::*;
 

@@ -14,8 +14,8 @@
 
 use std::string::FromUtf8Error;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use regex::Regex;
 
 /// Function that escapes special characters in a string.

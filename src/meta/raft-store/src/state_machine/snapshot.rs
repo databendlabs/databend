@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::SnapshotMeta;
+use databend_common_meta_types::SnapshotMeta;
 use serde::Deserialize;
 use serde::Serialize;
 

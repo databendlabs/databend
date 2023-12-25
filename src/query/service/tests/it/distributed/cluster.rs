@@ -14,11 +14,11 @@
 
 use std::thread;
 
-use common_base::base::tokio;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_base::base::tokio;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_query::api::RpcService;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
@@ -86,7 +86,7 @@ fn test_simple_cluster() -> Result<()> {
                                 "| 'node5'  | '0.0.0.0' | 6065     |",
                                 "+----------+-----------+----------+",
                             ];
-                            common_expression::block_debug::assert_blocks_sorted_eq(
+                            databend_common_expression::block_debug::assert_blocks_sorted_eq(
                                 expected,
                                 blocks.as_slice(),
                             );

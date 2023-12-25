@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::KeyAccessor;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_hashtable::HashJoinHashtableLike;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::KeyAccessor;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;

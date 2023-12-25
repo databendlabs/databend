@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_grpc::ConnectionFactory;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
 
 use crate::api::FlightClient;
 

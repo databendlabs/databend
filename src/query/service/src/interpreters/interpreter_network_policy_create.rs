@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_exception::Result;
-use common_meta_app::principal::NetworkPolicy;
-use common_sql::plans::CreateNetworkPolicyPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_sql::plans::CreateNetworkPolicyPlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

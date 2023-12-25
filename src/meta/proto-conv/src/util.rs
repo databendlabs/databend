@@ -95,6 +95,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (63, "2023-10-30: Add: connection.proto"),
     (64, "2023-11-16: Add: user.proto/NDJsonFileFormatParams add field `missing_field_as` and `null_field_as`", ),
     (65, "2023-11-16: Retype: use Datetime<Utc> instead of u64 to in lvt.time", ),
+    (66, "2023-12-15: Add: stage.proto/StageInfo::created_on", ),
+    (67, "2023-12-19: Add: user.proto/PasswordPolicy and UserOption::password_policy", ),
+    (68, "2023-12-19: Add: index.proto/IndexMeta add field `original_query` and `user_defined_block_name`"),
+    (69, "2023-12-21: Add: user.proto/GrantTableIdObject and GrantDatabaseIdObject", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

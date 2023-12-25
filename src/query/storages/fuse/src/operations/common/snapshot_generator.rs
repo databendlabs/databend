@@ -17,21 +17,21 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_metrics::storage::*;
-use common_sql::field_default_value;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_common_sql::field_default_value;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 use crate::statistics::merge_statistics;
@@ -420,6 +420,17 @@ impl SnapshotGenerator for AppendGenerator {
                 );
             }
         }
+
+        // check if need to auto compact
+        // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
+        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 1000.
+        let imperfect_count = new_summary.block_count - new_summary.perfect_block_count;
+        let auto_compaction_imperfect_blocks_threshold = self
+            .ctx
+            .get_settings()
+            .get_auto_compaction_imperfect_blocks_threshold()?;
+        let auto_compact = imperfect_count >= auto_compaction_imperfect_blocks_threshold;
+        self.ctx.set_need_compact_after_write(auto_compact);
 
         Ok(TableSnapshot::new(
             Uuid::new_v4(),

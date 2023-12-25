@@ -15,15 +15,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::lock::Lock;
-use common_catalog::table::Table;
-use common_exception::Result;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use metrics::gauge;
 use opendal::Operator;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -95,7 +95,12 @@ impl SegmentCompactMutator {
 
         // need at lease 2 segments to make sense
         let num_segments = base_segment_locations.len();
-        let limit = std::cmp::max(2, self.compact_params.limit.unwrap_or(num_segments));
+        let limit = std::cmp::max(
+            2,
+            self.compact_params
+                .num_segment_limit
+                .unwrap_or(num_segments),
+        );
 
         // prepare compactor
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());

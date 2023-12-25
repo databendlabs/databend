@@ -16,55 +16,55 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::tokio;
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberColumn;
-use common_expression::types::number::NumberScalar;
-use common_expression::BlockThresholds;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::SendableDataBlockStream;
-use common_expression::Value;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_storage::DataOperator;
-use common_storages_fuse::io::serialize_block;
-use common_storages_fuse::io::CompactSegmentInfoReader;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::io::SegmentWriter;
-use common_storages_fuse::io::SegmentsIO;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::io::WriteSettings;
-use common_storages_fuse::operations::CompactOptions;
-use common_storages_fuse::operations::SegmentCompactMutator;
-use common_storages_fuse::operations::SegmentCompactionState;
-use common_storages_fuse::operations::SegmentCompactor;
-use common_storages_fuse::statistics::gen_columns_statistics;
-use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::statistics::sort_by_cluster_stats;
-use common_storages_fuse::statistics::StatisticsAccumulator;
-use common_storages_fuse::FuseStorageFormat;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberColumn;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::Value;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::io::serialize_block;
+use databend_common_storages_fuse::io::CompactSegmentInfoReader;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::WriteSettings;
+use databend_common_storages_fuse::operations::CompactOptions;
+use databend_common_storages_fuse::operations::SegmentCompactMutator;
+use databend_common_storages_fuse::operations::SegmentCompactionState;
+use databend_common_storages_fuse::operations::SegmentCompactor;
+use databend_common_storages_fuse::statistics::gen_columns_statistics;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
+use databend_common_storages_fuse::statistics::StatisticsAccumulator;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::locks::LockManager;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::Versioned;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::Compression;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::Versioned;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
@@ -158,7 +158,10 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
-    let table_statistics = latest_fuse_table.table_statistics().await?.unwrap();
+    let table_statistics = latest_fuse_table
+        .table_statistics(ctx.clone())
+        .await?
+        .unwrap();
 
     assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
 
@@ -261,7 +264,7 @@ async fn build_mutator(
     let compact_params = CompactOptions {
         base_snapshot,
         block_per_seg,
-        limit,
+        num_segment_limit: limit,
     };
 
     let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;

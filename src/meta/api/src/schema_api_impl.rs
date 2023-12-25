@@ -14,184 +14,186 @@
 
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::app_error::AppError;
-use common_meta_app::app_error::CatalogAlreadyExists;
-use common_meta_app::app_error::CreateDatabaseWithDropTime;
-use common_meta_app::app_error::CreateIndexWithDropTime;
-use common_meta_app::app_error::CreateTableWithDropTime;
-use common_meta_app::app_error::DatabaseAlreadyExists;
-use common_meta_app::app_error::DropDbWithDropTime;
-use common_meta_app::app_error::DropIndexWithDropTime;
-use common_meta_app::app_error::DropTableWithDropTime;
-use common_meta_app::app_error::DuplicatedUpsertFiles;
-use common_meta_app::app_error::GetIndexWithDropTime;
-use common_meta_app::app_error::IndexAlreadyExists;
-use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
-use common_meta_app::app_error::StreamAlreadyExists;
-use common_meta_app::app_error::StreamVersionMismatched;
-use common_meta_app::app_error::TableAlreadyExists;
-use common_meta_app::app_error::TableLockExpired;
-use common_meta_app::app_error::TableVersionMismatched;
-use common_meta_app::app_error::TxnRetryMaxTimes;
-use common_meta_app::app_error::UndropDbHasNoHistory;
-use common_meta_app::app_error::UndropDbWithNoDropTime;
-use common_meta_app::app_error::UndropTableAlreadyExists;
-use common_meta_app::app_error::UndropTableHasNoHistory;
-use common_meta_app::app_error::UndropTableWithNoDropTime;
-use common_meta_app::app_error::UnknownCatalog;
-use common_meta_app::app_error::UnknownDatabaseId;
-use common_meta_app::app_error::UnknownIndex;
-use common_meta_app::app_error::UnknownStreamId;
-use common_meta_app::app_error::UnknownTable;
-use common_meta_app::app_error::UnknownTableId;
-use common_meta_app::app_error::ViewAlreadyExists;
-use common_meta_app::app_error::VirtualColumnAlreadyExists;
-use common_meta_app::app_error::WrongShare;
-use common_meta_app::app_error::WrongShareObject;
-use common_meta_app::data_mask::MaskpolicyTableIdList;
-use common_meta_app::data_mask::MaskpolicyTableIdListKey;
-use common_meta_app::schema::CatalogId;
-use common_meta_app::schema::CatalogIdToName;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::CatalogMeta;
-use common_meta_app::schema::CatalogNameIdent;
-use common_meta_app::schema::CountTablesKey;
-use common_meta_app::schema::CountTablesReply;
-use common_meta_app::schema::CountTablesReq;
-use common_meta_app::schema::CreateCatalogReply;
-use common_meta_app::schema::CreateCatalogReq;
-use common_meta_app::schema::CreateDatabaseReply;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateIndexReply;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateLockRevReply;
-use common_meta_app::schema::CreateLockRevReq;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::CreateVirtualColumnReply;
-use common_meta_app::schema::CreateVirtualColumnReq;
-use common_meta_app::schema::DBIdTableName;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseIdToName;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseInfoFilter;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::DbIdList;
-use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteLockRevReq;
-use common_meta_app::schema::DropCatalogReply;
-use common_meta_app::schema::DropCatalogReq;
-use common_meta_app::schema::DropDatabaseReply;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropIndexReply;
-use common_meta_app::schema::DropIndexReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropVirtualColumnReply;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::ExtendLockRevReq;
-use common_meta_app::schema::GcDroppedTableReq;
-use common_meta_app::schema::GcDroppedTableResp;
-use common_meta_app::schema::GetCatalogReq;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetIndexReply;
-use common_meta_app::schema::GetIndexReq;
-use common_meta_app::schema::GetLVTReply;
-use common_meta_app::schema::GetLVTReq;
-use common_meta_app::schema::GetTableCopiedFileReply;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::IndexId;
-use common_meta_app::schema::IndexIdToName;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use common_meta_app::schema::LeastVisibleTime;
-use common_meta_app::schema::LeastVisibleTimeKey;
-use common_meta_app::schema::ListCatalogReq;
-use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListDroppedTableReq;
-use common_meta_app::schema::ListDroppedTableResp;
-use common_meta_app::schema::ListIndexesByIdReq;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::ListLocksReq;
-use common_meta_app::schema::ListTableReq;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::LockInfo;
-use common_meta_app::schema::LockMeta;
-use common_meta_app::schema::RenameDatabaseReply;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::RenameTableReply;
-use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::SetLVTReply;
-use common_meta_app::schema::SetLVTReq;
-use common_meta_app::schema::SetTableColumnMaskPolicyAction;
-use common_meta_app::schema::SetTableColumnMaskPolicyReply;
-use common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::TableCopiedFileNameIdent;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableIdList;
-use common_meta_app::schema::TableIdListKey;
-use common_meta_app::schema::TableIdToName;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TruncateTableReply;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UndropDatabaseReply;
-use common_meta_app::schema::UndropDatabaseReq;
-use common_meta_app::schema::UndropTableReply;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::schema::UpdateIndexReply;
-use common_meta_app::schema::UpdateIndexReq;
-use common_meta_app::schema::UpdateTableMetaReply;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateVirtualColumnReply;
-use common_meta_app::schema::UpdateVirtualColumnReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableOptionReply;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_app::schema::VirtualColumnNameIdent;
-use common_meta_app::share::ShareGrantObject;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_app::share::ShareTableInfoMap;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::txn_op::Request;
-use common_meta_types::txn_op_response::Response;
-use common_meta_types::ConditionResult;
-use common_meta_types::InvalidReply;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::MetaId;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnGetRequest;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnRequest;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CatalogAlreadyExists;
+use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
+use databend_common_meta_app::app_error::CreateIndexWithDropTime;
+use databend_common_meta_app::app_error::CreateTableWithDropTime;
+use databend_common_meta_app::app_error::DatabaseAlreadyExists;
+use databend_common_meta_app::app_error::DropDbWithDropTime;
+use databend_common_meta_app::app_error::DropIndexWithDropTime;
+use databend_common_meta_app::app_error::DropTableWithDropTime;
+use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
+use databend_common_meta_app::app_error::GetIndexWithDropTime;
+use databend_common_meta_app::app_error::IndexAlreadyExists;
+use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
+use databend_common_meta_app::app_error::StreamAlreadyExists;
+use databend_common_meta_app::app_error::StreamVersionMismatched;
+use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableLockExpired;
+use databend_common_meta_app::app_error::TableVersionMismatched;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::app_error::UndropDbHasNoHistory;
+use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
+use databend_common_meta_app::app_error::UndropTableAlreadyExists;
+use databend_common_meta_app::app_error::UndropTableHasNoHistory;
+use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
+use databend_common_meta_app::app_error::UnknownCatalog;
+use databend_common_meta_app::app_error::UnknownDatabaseId;
+use databend_common_meta_app::app_error::UnknownIndex;
+use databend_common_meta_app::app_error::UnknownStreamId;
+use databend_common_meta_app::app_error::UnknownTable;
+use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::app_error::ViewAlreadyExists;
+use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
+use databend_common_meta_app::app_error::WrongShare;
+use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::schema::CatalogId;
+use databend_common_meta_app::schema::CatalogIdToName;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
+use databend_common_meta_app::schema::CountTablesKey;
+use databend_common_meta_app::schema::CountTablesReply;
+use databend_common_meta_app::schema::CountTablesReq;
+use databend_common_meta_app::schema::CreateCatalogReply;
+use databend_common_meta_app::schema::CreateCatalogReq;
+use databend_common_meta_app::schema::CreateDatabaseReply;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateIndexReply;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::CreateLockRevReply;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateVirtualColumnReply;
+use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseInfoFilter;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DbIdList;
+use databend_common_meta_app::schema::DbIdListKey;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DropCatalogReply;
+use databend_common_meta_app::schema::DropCatalogReq;
+use databend_common_meta_app::schema::DropDatabaseReply;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropIndexReply;
+use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropVirtualColumnReply;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GcDroppedTableResp;
+use databend_common_meta_app::schema::GetCatalogReq;
+use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetIndexReply;
+use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetLVTReply;
+use databend_common_meta_app::schema::GetLVTReq;
+use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::IndexId;
+use databend_common_meta_app::schema::IndexIdToName;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::LeastVisibleTimeKey;
+use databend_common_meta_app::schema::ListCatalogReq;
+use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListDroppedTableResp;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::LockInfo;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RenameDatabaseReply;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameTableReply;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetLVTReply;
+use databend_common_meta_app::schema::SetLVTReq;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableCopiedFileNameIdent;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdList;
+use databend_common_meta_app::schema::TableIdListKey;
+use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableInfoFilter;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TruncateTableReply;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UndropDatabaseReply;
+use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableReply;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateIndexReply;
+use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateTableMetaReply;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateVirtualColumnReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::schema::UpsertTableOptionReply;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::ShareGrantObject;
+use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::ShareTableInfoMap;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::txn_op::Request;
+use databend_common_meta_types::txn_op_response::Response;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaId;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use futures::TryStreamExt;
 use log::as_debug;
 use log::as_display;
 use log::debug;
 use log::error;
+use log::warn;
 use minitrace::func_name;
 use ConditionResult::Eq;
 
@@ -485,6 +487,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                     if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?)); // (db_id) -> db_meta
                 }
+
+                // add DbIdListKey if not exists
+                let dbid_idlist = DbIdListKey {
+                    tenant: tenant_dbname.tenant.clone(),
+                    db_name: tenant_dbname.db_name.clone(),
+                };
+                let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                    get_pb_value(self, &dbid_idlist).await?;
+
+                if db_id_list_seq == 0 || db_id_list_opt.is_none() {
+                    warn!(
+                        "drop db:{:?}, db_id:{:?} has no DbIdListKey",
+                        tenant_dbname, db_id
+                    );
+
+                    let mut db_id_list = DbIdList::new();
+                    db_id_list.append(db_id);
+
+                    condition.push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
+                    // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                    if_then.push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
+                };
             }
 
             let txn_req = TxnRequest {
@@ -795,7 +819,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // List tables by tenant, db_id, table_name.
         let dbid_tbname_idlist = DbIdListKey {
-            tenant: req.tenant,
+            tenant: req.tenant.clone(),
             // Using a empty db to to list all
             db_name: "".to_string(),
         };
@@ -863,6 +887,77 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         };
 
                         db_info_list.push(Arc::new(db));
+                    }
+                }
+            }
+        }
+
+        // `list_database` can list db which has no `DbIdListKey`
+        if include_drop_db {
+            // if `include_drop_db` is true, return all db info which not exist in db_info_list
+            let db_id_set: HashSet<u64> = db_info_list
+                .iter()
+                .map(|db_info| db_info.ident.db_id)
+                .collect();
+
+            let all_dbs = self.list_databases(req).await?;
+            for db_info in all_dbs {
+                if !db_id_set.contains(&db_info.ident.db_id) {
+                    warn!(
+                        "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                        db_info.name_ident, db_info.ident.db_id
+                    );
+                    db_info_list.push(db_info);
+                }
+            }
+        } else {
+            // if `include_drop_db` is false, filter out db which drop_on time out of retention time
+            let db_id_set: HashSet<u64> = db_info_list
+                .iter()
+                .map(|db_info| db_info.ident.db_id)
+                .collect();
+
+            let all_dbs = self.list_databases(req).await?;
+            let mut add_dbinfo_map = HashMap::new();
+            let mut db_id_list = Vec::new();
+            for db_info in all_dbs {
+                if !db_id_set.contains(&db_info.ident.db_id) {
+                    warn!(
+                        "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                        db_info.name_ident, db_info.ident.db_id
+                    );
+                    db_id_list.push(DatabaseId {
+                        db_id: db_info.ident.db_id,
+                    });
+                    add_dbinfo_map.insert(db_info.ident.db_id, db_info);
+                }
+            }
+            let inner_keys: Vec<String> = db_id_list
+                .iter()
+                .map(|db_id| db_id.to_string_key())
+                .collect();
+            let mut db_id_list_iter = db_id_list.into_iter();
+            for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
+                let db_meta_seq_meta_vec: Vec<(u64, Option<DatabaseMeta>)> =
+                    mget_pb_values(self, c).await?;
+
+                for (db_meta_seq, db_meta) in db_meta_seq_meta_vec {
+                    let db_id = db_id_list_iter.next().unwrap().db_id;
+                    if db_meta_seq == 0 || db_meta.is_none() {
+                        error!("get_database_history cannot find {:?} db_meta", db_id);
+                        continue;
+                    }
+                    let db_meta = db_meta.unwrap();
+                    // if include drop db, then no need to fill out of retention time db
+                    if is_drop_time_out_of_retention_time(&db_meta.drop_on, &now) {
+                        continue;
+                    }
+                    if let Some(db_info) = add_dbinfo_map.get(&db_id) {
+                        warn!(
+                            "get db history db:{:?}, db_id:{:?} has no DbIdListKey",
+                            db_info.name_ident, db_info.ident.db_id
+                        );
+                        db_info_list.push(db_info.clone());
                     }
                 }
             }
@@ -1307,15 +1402,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 get_pb_value(self, &req.name_ident).await?;
 
             if old_virtual_column_opt.is_some() {
-                return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                    VirtualColumnAlreadyExists::new(
-                        req.name_ident.table_id,
-                        format!(
-                            "create virtual column with tenant: {} table_id: {}",
-                            req.name_ident.tenant, req.name_ident.table_id
+                if req.if_not_exists {
+                    return Ok(CreateVirtualColumnReply {});
+                } else {
+                    return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
+                        VirtualColumnAlreadyExists::new(
+                            req.name_ident.table_id,
+                            format!(
+                                "create virtual column with tenant: {} table_id: {}",
+                                req.name_ident.tenant, req.name_ident.table_id
+                            ),
                         ),
-                    ),
-                )));
+                    )));
+                }
             }
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
@@ -1369,7 +1468,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let (seq, old_virtual_column_meta) =
-                get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
+                match get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
+                    Ok((seq, old_virtual_column_meta)) => (seq, old_virtual_column_meta),
+                    Err(err) => {
+                        if req.if_exists {
+                            return Ok(UpdateVirtualColumnReply {});
+                        } else {
+                            return Err(err);
+                        }
+                    }
+                };
 
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
@@ -1422,7 +1530,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let (_, _) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
+            if let Err(err) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
+                if req.if_exists {
+                    return Ok(DropVirtualColumnReply {});
+                } else {
+                    return Err(err);
+                }
+            }
 
             // Drop virtual column by deleting this record:
             // (tenant, table_id) -> virtual_column_meta
@@ -2388,12 +2502,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (_, table_name_opt): (_, Option<DBIdTableName>) =
                 get_pb_value(self, &table_id_to_name).await?;
 
-            let dbid_tbname = table_name_opt.ok_or_else(|| {
-                KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
-                    table_id,
-                    "drop_table_by_id failed to find db_id",
-                )))
-            })?;
+            let dbid_tbname = if let Some(db_id_table_name) = table_name_opt {
+                db_id_table_name
+            } else {
+                let dbid_tbname = DBIdTableName {
+                    db_id: req.db_id,
+                    table_name: req.table_name.clone(),
+                };
+                warn!(
+                    "drop_table_by_id cannot find {:?}, use {:?} instead",
+                    table_id_to_name, dbid_tbname
+                );
+
+                dbid_tbname
+            };
 
             let db_id = dbid_tbname.db_id;
             let tbname = dbid_tbname.table_name.clone();
@@ -2516,6 +2638,31 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                 }
 
+                // add TableIdListKey if not exist
+                {
+                    // get table id list from _fd_table_id_list/db_id/table_name
+                    let dbid_tbname_idlist = TableIdListKey {
+                        db_id,
+                        table_name: dbid_tbname.table_name.clone(),
+                    };
+                    let (tb_id_list_seq, _tb_id_list_opt): (_, Option<TableIdList>) =
+                        get_pb_value(self, &dbid_tbname_idlist).await?;
+                    if tb_id_list_seq == 0 {
+                        let mut tb_id_list = TableIdList::new();
+                        tb_id_list.append(table_id);
+
+                        warn!(
+                            "drop table:{:?}, table_id:{:?} has no TableIdList",
+                            dbid_tbname, table_id
+                        );
+
+                        condition.push(txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq));
+                        if_then.push(txn_op_put(
+                            &dbid_tbname_idlist,
+                            serialize_struct(&tb_id_list)?,
+                        ));
+                    }
+                }
                 let txn_req = TxnRequest {
                     condition,
                     if_then,
@@ -4167,14 +4314,7 @@ fn build_upsert_table_copied_file_info_conditions(
 
 fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60);
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: deduplicated_label,
-            value: 1_i8.to_le_bytes().to_vec(),
-            prev_value: false,
-            expire_at,
-        })),
-    }
+    TxnOp::put_with_expire(deduplicated_label, 1_i8.to_le_bytes().to_vec(), expire_at)
 }
 
 fn set_update_expire_operation(

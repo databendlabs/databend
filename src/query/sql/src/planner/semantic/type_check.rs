@@ -17,61 +17,61 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::IntervalKind as ASTIntervalKind;
-use common_ast::ast::Lambda;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::Query;
-use common_ast::ast::SubqueryModifier;
-use common_ast::ast::TrimWhere;
-use common_ast::ast::TypeName;
-use common_ast::ast::UnaryOperator;
-use common_ast::ast::Window;
-use common_ast::ast::WindowFrame;
-use common_ast::ast::WindowFrameBound;
-use common_ast::ast::WindowFrameUnits;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::infer_schema_type;
-use common_expression::shrink_scalar;
-use common_expression::type_check;
-use common_expression::type_check::check_number;
-use common_expression::types::decimal::DecimalDataType;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnIndex;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::Expr as EExpr;
-use common_expression::FunctionContext;
-use common_expression::FunctionKind;
-use common_expression::RawExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::is_builtin_function;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use common_functions::GENERAL_WINDOW_FUNCTIONS;
-use common_meta_app::principal::LambdaUDF;
-use common_meta_app::principal::UDFDefinition;
-use common_meta_app::principal::UDFServer;
-use common_users::UserApiProvider;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
+use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SubqueryModifier;
+use databend_common_ast::ast::TrimWhere;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
+use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Expr as EExpr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::is_builtin_function;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
+use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
@@ -827,12 +827,29 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
+                    let mut new_params = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for aggregate function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(
-                            *span, func_name, expr, *distinct, params, &args,
+                            *span, func_name, expr, *distinct, new_params, &args,
                         )
                         .await?;
                     self.in_window_function = in_window;
@@ -858,25 +875,31 @@ impl<'a> TypeChecker<'a> {
                         .await?
                 } else {
                     // Scalar function
-                    let params = params
-                        .iter()
-                        .map(|literal| match literal {
-                            Literal::UInt64(n) => Ok(*n as usize),
-                            lit => Err(ErrorCode::SemanticError(format!(
-                                "invalid parameter {lit} for scalar function"
-                            ))
-                            .set_span(*span)),
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    self.resolve_function(*span, func_name, params, &args)
+                    let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for scalar function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
+                    self.resolve_function(*span, func_name, new_params, &args)
                         .await?
                 }
             }
 
             Expr::CountAll { span, window } => {
                 let (new_agg_func, data_type) = self
-                    .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
+                    .resolve_aggregate_function(*span, "count", expr, false, vec![], &[])
                     .await?;
 
                 if let Some(window) = window {
@@ -1051,10 +1074,10 @@ impl<'a> TypeChecker<'a> {
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
+            if let databend_common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: common_expression::Scalar::Number(NumberScalar::Int64(1)),
+                    value: databend_common_expression::Scalar::Number(1i64.into()),
                 }
                 .into();
             }
@@ -1171,7 +1194,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_literal(
         &self,
         span: Span,
-        literal: &common_ast::ast::Literal,
+        literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (value, data_type) = self.resolve_literal_scalar(literal)?;
 
@@ -1234,7 +1257,7 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr).await?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                if let databend_common_expression::Expr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
                     Err(ErrorCode::SemanticError(
@@ -1596,7 +1619,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         expr: &Expr,
         distinct: bool,
-        params: &[Literal],
+        params: Vec<Scalar>,
         args: &[&Expr],
     ) -> Result<(AggregateFunction, DataType)> {
         if matches!(
@@ -1626,14 +1649,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Check aggregate function
-        let params = params
-            .iter()
-            .map(|literal| {
-                self.resolve_literal_scalar(literal)
-                    .map(|box (value, _)| value)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         self.in_aggregate_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1819,7 +1834,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
@@ -1885,11 +1900,35 @@ impl<'a> TypeChecker<'a> {
         &self,
         span: Span,
         func_name: &str,
-        params: Vec<usize>,
+        mut params: Vec<Scalar>,
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+
+        // inject the params
+        if ["round", "truncate"].contains(&func_name)
+            && !args.is_empty()
+            && params.is_empty()
+            && args[0].data_type()?.remove_nullable().is_decimal()
+        {
+            let scale = if args.len() == 2 {
+                let scalar_expr = &arguments[1];
+                let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
+
+                let scale = check_number::<_, i64>(
+                    expr.span(),
+                    &FunctionContext::default(),
+                    &expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                scale.clamp(-76, 76)
+            } else {
+                0
+            };
+            params.push(Scalar::Number(NumberScalar::Int64(scale)));
+        }
+
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
@@ -1903,7 +1942,7 @@ impl<'a> TypeChecker<'a> {
         // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
         let folded_args = match &expr {
-            common_expression::Expr::FunctionCall {
+            databend_common_expression::Expr::FunctionCall {
                 args: checked_args, ..
             } => {
                 let mut folded_args = Vec::with_capacity(args.len());
@@ -2606,7 +2645,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: common_expression::Scalar::String(" ".as_bytes().to_vec()),
+                value: databend_common_expression::Scalar::String(" ".as_bytes().to_vec()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -2621,7 +2660,7 @@ impl<'a> TypeChecker<'a> {
     /// Resolve literal values.
     pub fn resolve_literal_scalar(
         &self,
-        literal: &common_ast::ast::Literal,
+        literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
@@ -2772,7 +2811,8 @@ impl<'a> TypeChecker<'a> {
                     .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, arguments, udf_def).await?,
+                self.resolve_udf_server(span, name, arguments, udf_def)
+                    .await?,
             )),
         }
     }
@@ -2782,6 +2822,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf_server(
         &mut self,
         span: Span,
+        name: String,
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2828,6 +2869,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             UDFServerCall {
                 span,
+                name,
                 func_name: udf_definition.handler,
                 display_name,
                 server_addr: udf_definition.address,
@@ -2947,7 +2989,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value = FunctionCall {
                         span,
-                        params: vec![idx + 1],
+                        params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3073,7 +3115,7 @@ impl<'a> TypeChecker<'a> {
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![idx],
+                    params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3189,7 +3231,7 @@ impl<'a> TypeChecker<'a> {
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
                         span,
-                        params: vec![idx],
+                        params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3599,10 +3641,10 @@ impl<'a> TypeChecker<'a> {
 
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
-        expr: &common_expression::Expr<Index>,
+        expr: &databend_common_expression::Expr<Index>,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            if let (common_expression::Expr::Constant { scalar, .. }, _) =
+            if let (databend_common_expression::Expr::Constant { scalar, .. }, _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = shrink_scalar(scalar);
@@ -3623,11 +3665,11 @@ impl<'a> TypeChecker<'a> {
 }
 
 pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {
-    let sql_tokens = common_ast::parser::tokenize_sql(name)?;
-    let backtrace = common_ast::Backtrace::new();
-    match common_ast::parser::expr::type_name(common_ast::Input(
+    let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
+    let backtrace = databend_common_ast::Backtrace::new();
+    match databend_common_ast::parser::expr::type_name(databend_common_ast::Input(
         &sql_tokens,
-        common_ast::Dialect::default(),
+        databend_common_ast::Dialect::default(),
         &backtrace,
     )) {
         Ok((_, typename)) => resolve_type_name(&typename, not_null),

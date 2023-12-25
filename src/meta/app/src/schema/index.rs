@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::MetaId;
+use databend_common_meta_types::MetaId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct IndexNameIdent {
@@ -101,6 +101,7 @@ pub struct IndexMeta {
     // if used in CreateIndexReq, `dropped_on` and `updated_on` MUST set to None.
     pub dropped_on: Option<DateTime<Utc>>,
     pub updated_on: Option<DateTime<Utc>>,
+    pub original_query: String,
     pub query: String,
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
@@ -115,6 +116,7 @@ impl Default for IndexMeta {
             created_on: Utc::now(),
             dropped_on: None,
             updated_on: None,
+            original_query: "".to_string(),
             query: "".to_string(),
             sync_creation: false,
         }
@@ -224,7 +226,7 @@ impl ListIndexesByIdReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdToName;

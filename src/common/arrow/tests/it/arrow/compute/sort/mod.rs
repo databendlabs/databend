@@ -16,10 +16,10 @@
 mod lex_sort;
 mod row;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::compute::sort::*;
-use common_arrow::arrow::datatypes::*;
-use common_arrow::arrow::types::NativeType;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::compute::sort::*;
+use databend_common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::types::NativeType;
 
 fn to_indices_boolean_arrays(data: &[Option<bool>], options: SortOptions, expected_data: &[i32]) {
     let output = BooleanArray::from(data);
@@ -561,9 +561,9 @@ fn string_dicts() {
 
 #[test]
 fn consistency() {
-    use common_arrow::arrow::array::new_null_array;
-    use common_arrow::arrow::datatypes::DataType::*;
-    use common_arrow::arrow::datatypes::TimeUnit;
+    use databend_common_arrow::arrow::array::new_null_array;
+    use databend_common_arrow::arrow::datatypes::DataType::*;
+    use databend_common_arrow::arrow::datatypes::TimeUnit;
 
     let datatypes = vec![
         Null,

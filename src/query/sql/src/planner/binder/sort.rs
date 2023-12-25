@@ -16,11 +16,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;
@@ -392,6 +392,7 @@ impl Binder {
                         .collect::<Result<Vec<_>>>()?;
                     Ok(UDFServerCall {
                         span: udf.span,
+                        name: udf.name.clone(),
                         func_name: udf.func_name.clone(),
                         display_name: udf.display_name.clone(),
                         server_addr: udf.server_addr.clone(),

@@ -16,8 +16,8 @@ use std::collections::VecDeque;
 use std::io::Cursor;
 
 use aho_corasick::AhoCorasick;
-use common_exception::Result;
-use common_io::cursor_ext::*;
+use databend_common_exception::Result;
+use databend_common_io::cursor_ext::*;
 
 #[test]
 fn test_positions() -> Result<()> {

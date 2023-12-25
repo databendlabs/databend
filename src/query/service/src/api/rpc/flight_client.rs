@@ -18,14 +18,14 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use common_arrow::arrow_format::flight::data::Action;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::data::Ticket;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
-use common_base::base::tokio::time::Duration;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow_format::flight::data::Action;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_arrow::arrow_format::flight::data::Ticket;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::time::Duration;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::StreamExt;
 use futures_util::future::Either;
 use minitrace::full_name;
@@ -97,7 +97,7 @@ impl FlightClient {
             .with_metadata("x-query-id", query_id)?
             .with_metadata("x-fragment-id", &fragment.to_string())?
             .build();
-        let request = common_tracing::inject_span_to_tonic_request(request);
+        let request = databend_common_tracing::inject_span_to_tonic_request(request);
 
         let streaming = self.get_streaming(request).await?;
 
@@ -167,7 +167,7 @@ impl FlightClient {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
         let request = Request::new(action);
-        let mut request = common_tracing::inject_span_to_tonic_request(request);
+        let mut request = databend_common_tracing::inject_span_to_tonic_request(request);
         request.set_timeout(Duration::from_secs(timeout));
 
         let response = self.inner.do_action(request).await?;

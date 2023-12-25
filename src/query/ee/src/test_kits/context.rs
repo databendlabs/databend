@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license::LicenseInfo;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license::LicenseInfo;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
 use databend_query::test_kits::*;
 use jwt_simple::algorithms::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::Claims;

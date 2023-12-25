@@ -15,29 +15,29 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::catalog::Catalog;
-use common_catalog::lock::LockExt;
-use common_catalog::plan::Partitions;
-use common_catalog::table::CompactTarget;
-use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::Pipeline;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::CompactSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::PhysicalPlan;
-use common_sql::plans::OptimizeTableAction;
-use common_sql::plans::OptimizeTablePlan;
-use common_storages_factory::NavigationPoint;
-use common_storages_fuse::FuseTable;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::lock::LockExt;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::CompactTarget;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::OptimizeTableAction;
+use databend_common_sql::plans::OptimizeTablePlan;
+use databend_common_storages_factory::NavigationPoint;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
@@ -171,17 +171,18 @@ impl OptimizeTableInterpreter {
             .compact_blocks(self.ctx.clone(), self.plan.limit)
             .await?;
 
-        let is_distributed = (!self.ctx.get_cluster().is_empty())
+        let catalog_info = catalog.info();
+        let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
 
-        let catalog_info = catalog.info();
+        // build the compact pipeline.
         let mut compact_pipeline = if let Some((parts, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
                 parts,
                 table_info,
                 snapshot,
                 catalog_info,
-                is_distributed,
+                compact_is_distributed,
                 self.plan.need_lock,
             )?;
 
@@ -193,8 +194,10 @@ impl OptimizeTableInterpreter {
             Pipeline::create()
         };
 
+        // build the recluster pipeline.
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
+        // check if the table need recluster, defined by cluster keys.
         let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         if need_recluster {
             if !compact_pipeline.is_empty() {

@@ -14,11 +14,11 @@
 
 use std::any::Any;
 
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storages_parquet::ParquetPart;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_storages_parquet::ParquetPart;
 
 /// # TODO
 ///

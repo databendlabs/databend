@@ -14,7 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
-extern crate common_meta_types;
+extern crate databend_common_meta_types;
 
 mod background_api;
 mod background_api_impl;

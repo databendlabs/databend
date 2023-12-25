@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_meta_sled_store::sled;
-use common_meta_sled_store::SledBytesError;
-use common_meta_sled_store::SledOrderedSerde;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::LogId;
-use common_meta_types::NodeId;
-use common_meta_types::Vote;
+use databend_common_meta_sled_store::sled;
+use databend_common_meta_sled_store::SledBytesError;
+use databend_common_meta_sled_store::SledOrderedSerde;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::Vote;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -129,11 +129,11 @@ impl From<RaftStateValue> for Option<LogId> {
 }
 
 pub(crate) mod compat_with_07 {
-    use common_meta_sled_store::SledBytesError;
-    use common_meta_sled_store::SledSerde;
-    use common_meta_types::compat07;
-    use common_meta_types::compat07::LogId;
-    use common_meta_types::NodeId;
+    use databend_common_meta_sled_store::SledBytesError;
+    use databend_common_meta_sled_store::SledSerde;
+    use databend_common_meta_types::compat07;
+    use databend_common_meta_types::compat07::LogId;
+    use databend_common_meta_types::NodeId;
     use openraft::compat::Upgrade;
 
     use crate::state::RaftStateValue;

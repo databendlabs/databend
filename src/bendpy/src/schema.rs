@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRef;
 use pyo3::prelude::*;
 
 #[pyclass(name = "Schema", module = "databend", subclass)]
