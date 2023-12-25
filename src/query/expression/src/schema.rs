@@ -35,9 +35,11 @@ use crate::with_number_type;
 use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
+use crate::ARROW_EXT_TYPE_BINARY;
 use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_STRING;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
 // Column id of TableField
@@ -1451,6 +1453,8 @@ impl From<&ArrowField> for TableDataType {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+                ARROW_EXT_TYPE_BINARY => TableDataType::Binary,
+                ARROW_EXT_TYPE_STRING => TableDataType::String,
                 ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
                 _ => {
                     let a =
@@ -1530,8 +1534,16 @@ impl From<&DataType> for ArrowDataType {
                 None,
             ),
             DataType::Boolean => ArrowDataType::Boolean,
-            DataType::Binary => ArrowDataType::LargeBinary,
-            DataType::String => ArrowDataType::LargeUtf8,
+            DataType::Binary => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BINARY.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
+            DataType::String => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_STRING.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),

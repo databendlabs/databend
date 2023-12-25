@@ -743,6 +743,8 @@ impl PartialEq for Column {
 pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
+pub const ARROW_EXT_TYPE_BINARY: &str = "Binary";
+pub const ARROW_EXT_TYPE_STRING: &str = "String";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
 pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 
@@ -1139,7 +1141,7 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
+                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data().clone(),
@@ -1439,27 +1441,44 @@ impl Column {
                         .values()
                         .clone(),
                 ),
-                ArrowDataType::LargeBinary => {
-                    let arrow_col = arrow_col
-                        .as_any()
-                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
-                        .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                    let offsets = arrow_col.offsets().clone().into_inner();
-                    let offsets =
-                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BINARY => {
+                    match ty {
+                        ArrowDataType::LargeBinary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i64>`",
+                                );
+                            let offsets = arrow_col.offsets().clone().into_inner();
 
-                    // LargeBinary may be Extension data type variant and bitmap
-                    match data_type {
-                        DataType::Variant => {
-                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        DataType::Bitmap => {
-                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        DataType::Binary => {
+                            let offsets =
+                                unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                             Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!(
+                            "fail to read from arrow: array should be `BinaryArray<i64>`"
+                        ),
+                    }
+                }
+                ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_STRING => {
+                    match ty {
+                        ArrowDataType::LargeBinary => {
+                            let arrow_col = arrow_col
+                                .as_any()
+                                .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                                .expect(
+                                    "fail to read from arrow: array should be `BinaryArray<i64>`",
+                                );
+                            let offsets = arrow_col.offsets().clone().into_inner();
+
+                            let offsets =
+                                unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                            Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        _ => unreachable!(
+                            "fail to read from arrow: array should be `BinaryArray<i64>`"
+                        ),
                     }
                 }
                 ArrowDataType::FixedSizeBinary(size) => {
@@ -1476,17 +1495,6 @@ impl Column {
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
-                }
-                ArrowDataType::LargeUtf8 => {
-                    let arrow_col = arrow_col
-                        .as_any()
-                        .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i64>>()
-                        .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
-                    let offsets = arrow_col.offsets().clone().into_inner();
-                    let offsets =
-                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
                 }
                 ArrowDataType::Timestamp(uint, _) => {
                     let values = arrow_col
@@ -1537,7 +1545,7 @@ impl Column {
                             Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
                         }
                         _ => unreachable!(
-                            "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                            "fail to read from arrow: array should be `BinaryArray<i64>`"
                         ),
                     }
                 }
@@ -1665,7 +1673,7 @@ impl Column {
                             Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
                         }
                         _ => unreachable!(
-                            "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                            "fail to read from arrow: array should be `BinaryArray<i64>`"
                         ),
                     }
                 }
