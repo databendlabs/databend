@@ -1,0 +1,56 @@
+name: 'Publish Binary'
+description: 'Publish Binary to GitHub Releases and Cloudflare R2'
+inputs:
+  os:
+    description: "Operating system"
+    required: true
+  target:
+    description: "Release target"
+    required: true
+  version:
+    description: "Release version"
+    required: true
+runs:
+  using: "composite"
+  steps:
+
+    - name: Pack binary
+      id: package
+      shell: bash
+      run: |
+        mkdir -p dist
+        case ${{ inputs.os }} in
+          linux)
+            tar -czf dist/bendsql-${{ inputs.target }}.tar.gz -C target/${{ inputs.target }}/release bendsql
+            echo "file=bendsql-${{ inputs.target }}.tar.gz" >> $GITHUB_OUTPUT
+            ;;
+          macos)
+            tar -czf dist/bendsql-${{ inputs.target }}.tar.gz -C target/${{ inputs.target }}/release bendsql
+            echo "file=bendsql-${{ inputs.target }}.tar.gz" >> $GITHUB_OUTPUT
+            ;;
+          windows)
+            7z a -tzip dist/bendsql-${{ inputs.target }}.zip target/${{ inputs.target }}/release/bendsql.exe
+            echo "file=bendsql-${{ inputs.target }}.zip" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "Unsupported OS: ${{ inputs.os }}"
+            exit 1
+            ;;
+        esac
+
+    - name: Publish to Github Releases
+      id: name
+      shell: bash
+      run: |
+        gh release upload ${{ inputs.version }} dist/${{ steps.package.outputs.file }} --clobber
+
+    - name: Upload package to Cloudflare R2
+      id: upload
+      shell: bash
+      run: |
+        aws s3 cp dist/${{ steps.name.outputs.file }} s3://repo/bendsql/${{ inputs.version }}/${{ steps.name.outputs.file }} --no-progress
+        gh api /repos/datafuselabs/bendsql/tags > tags.json
+        aws s3 cp ./tags.json s3://repo/bendsql/tags.json
+        gh api /repos/datafuselabs/bendsql/releases > releases.json
+        cat releases.json
+        aws s3 cp ./releases.json s3://repo/bendsql/releases.json

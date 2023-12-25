@@ -32,14 +32,18 @@ jobs:
       shell: bash
       run: |
         cross build --release --target=${{ matrix.target }} --bin=bendsql
-    - name: Publish
-      shell: bash
+    - name: Publish Binary
+      uses: ./.github/actions/publish_binary
       env:
         GH_TOKEN: ${{ github.token }}
-      run: |
-        mkdir -p dist
-        tar -czf dist/bendsql-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release bendsql
-        gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.tar.gz --clobber
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto
+        AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      with:
+        os: linux
+        target: ${{ matrix.target }}
+        version: ${{ github.ref_name }}
 
   build_other:
     name: build ${{ matrix.target }}
@@ -61,24 +65,18 @@ jobs:
       shell: bash
       run: |
         cargo build --release --target=${{ matrix.target }} --bin=bendsql
-    - name: Publish macOS
-      if: matrix.os == 'macos'
-      shell: bash
+    - name: Publish Binary
+      uses: ./.github/actions/publish_binary
       env:
         GH_TOKEN: ${{ github.token }}
-      run: |
-        mkdir -p dist
-        tar -czf dist/bendsql-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release bendsql
-        gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.tar.gz --clobber
-    - name: Publish Windows
-      if: matrix.os == 'windows'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        mkdir -p dist
-        7z a -tzip dist/bendsql-${{ matrix.target }}.zip target/${{ matrix.target }}/release/bendsql.exe
-        gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.zip --clobber
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto
+        AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      with:
+        os: ${{ matrix.os }}
+        target: ${{ matrix.target }}
+        version: ${{ github.ref_name }}
 
   distribution:
     needs: build_linux
