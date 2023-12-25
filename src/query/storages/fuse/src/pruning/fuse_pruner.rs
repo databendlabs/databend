@@ -14,35 +14,35 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
-use common_expression::SEGMENT_NAME_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::field_default_value;
-use common_sql::BloomIndexColumns;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::field_default_value;
+use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::InternalColumnPruner;
+use databend_storages_common_pruner::Limiter;
+use databend_storages_common_pruner::LimiterPrunerCreator;
+use databend_storages_common_pruner::PagePruner;
+use databend_storages_common_pruner::PagePrunerCreator;
+use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_pruner::RangePrunerCreator;
+use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
-use storages_common_index::RangeIndex;
-use storages_common_pruner::BlockMetaIndex;
-use storages_common_pruner::InternalColumnPruner;
-use storages_common_pruner::Limiter;
-use storages_common_pruner::LimiterPrunerCreator;
-use storages_common_pruner::PagePruner;
-use storages_common_pruner::PagePrunerCreator;
-use storages_common_pruner::RangePruner;
-use storages_common_pruner::RangePrunerCreator;
-use storages_common_pruner::TopNPrunner;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
@@ -405,7 +405,7 @@ impl FusePruner {
     }
 
     // Pruning stats.
-    pub fn pruning_stats(&self) -> common_catalog::plan::PruningStatistics {
+    pub fn pruning_stats(&self) -> databend_common_catalog::plan::PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();
 
         let segments_range_pruning_before = stats.get_segments_range_pruning_before() as usize;
@@ -417,7 +417,7 @@ impl FusePruner {
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
 
-        common_catalog::plan::PruningStatistics {
+        databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
             blocks_range_pruning_before,

@@ -15,12 +15,12 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::principal::AuthType;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserOptionFlag;
-use common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserOptionFlag;
+use databend_common_meta_app::principal::UserPrivilegeType;
 
 use crate::ast::write_comma_separated_list;
 
@@ -168,6 +168,8 @@ pub enum UserOptionItem {
     DefaultRole(String),
     SetNetworkPolicy(String),
     UnsetNetworkPolicy,
+    SetPasswordPolicy(String),
+    UnsetPasswordPolicy,
 }
 
 impl UserOptionItem {
@@ -179,6 +181,8 @@ impl UserOptionItem {
             Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
             Self::SetNetworkPolicy(v) => option.set_network_policy(Some(v.clone())),
             Self::UnsetNetworkPolicy => option.set_network_policy(None),
+            Self::SetPasswordPolicy(v) => option.set_password_policy(Some(v.clone())),
+            Self::UnsetPasswordPolicy => option.set_password_policy(None),
         }
     }
 }
@@ -247,6 +251,8 @@ impl Display for UserOptionItem {
             UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
             UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
+            UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
+            UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
         }
     }
 }

@@ -70,4 +70,4 @@ pub use aggregate_sum::*;
 pub use aggregate_unary::*;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
-pub use common_expression::aggregate as aggregate_function;
+pub use databend_common_expression::aggregate as aggregate_function;

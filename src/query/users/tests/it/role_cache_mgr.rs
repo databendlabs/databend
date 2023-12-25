@@ -15,15 +15,15 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_grpc::RpcClientConf;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_users::role_util::find_all_related_roles;
-use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_grpc::RpcClientConf;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_users::role_util::find_all_related_roles;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 pub const CATALOG_DEFAULT: &str = "default";
 

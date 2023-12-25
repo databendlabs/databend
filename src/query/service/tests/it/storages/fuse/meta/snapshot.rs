@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::ops::Add;
 
-use common_expression::TableSchema;
-use storages_common_table_meta::meta::testing::StatisticsV0;
-use storages_common_table_meta::meta::testing::TableSnapshotV1;
-use storages_common_table_meta::meta::testing::TableSnapshotV2;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::meta::testing::StatisticsV0;
+use databend_storages_common_table_meta::meta::testing::TableSnapshotV1;
+use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {

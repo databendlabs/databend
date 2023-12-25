@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::BinaryArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryArray;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::offset::OffsetsBuffer;
 
 mod mutable;
 mod mutable_values;
@@ -88,7 +89,7 @@ fn try_from_trusted_len_iter() {
     let iter = std::iter::repeat(b"hello".as_ref())
         .take(2)
         .map(Some)
-        .map(common_arrow::arrow::error::Result::Ok);
+        .map(Result::Ok);
     let a = BinaryArray::<i32>::try_from_trusted_len_iter(iter).unwrap();
     assert_eq!(a.len(), 2);
 }

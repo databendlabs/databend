@@ -231,7 +231,22 @@ SELECT t2.a FROM t1 LEFT SEMI JOIN t2 ON t1.a = t2.a;
 ---
 
 statement ok
-drop table t1;
+drop table if exists t1;
 
 statement ok
-drop table t2;
+drop table if exists t2;
+
+statement ok
+create table t1(a int, b int, c int, d int);
+
+statement ok
+insert into t1 values(1, 2, 3, 4);
+
+statement ok
+create table t2(a int, b int, c int, d int);
+
+statement ok
+insert into t2 values(1, 2, 3, 4);
+
+statement error 1065
+SELECT tt1.d FROM t1 RIGHT SEMI JOIN t2 USING(b);

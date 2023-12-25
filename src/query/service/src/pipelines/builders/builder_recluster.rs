@@ -12,32 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRefExt;
-use common_expression::SortColumnDescription;
-use common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
-use common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
-use common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::EmptySource;
-use common_pipeline_transforms::processors::build_merge_sort_pipeline;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::physical_plans::ReclusterSink;
-use common_sql::executor::physical_plans::ReclusterSource;
-use common_sql::gen_mutation_stream_operator;
-use common_storages_factory::Table;
-use common_storages_fuse::operations::common::CommitSink;
-use common_storages_fuse::operations::common::MutationGenerator;
-use common_storages_fuse::operations::ReclusterAggregator;
-use common_storages_fuse::operations::TransformSerializeBlock;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
+use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
+use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
+use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::ReclusterSink;
+use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::common::CommitSink;
+use databend_common_storages_fuse::operations::common::MutationGenerator;
+use databend_common_storages_fuse::operations::ReclusterAggregator;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+
+use crate::locks::LockManager;
+use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
@@ -163,17 +166,12 @@ impl PipelineBuilder {
                     })
                     .collect();
 
-                build_merge_sort_pipeline(
-                    &mut self.main_pipeline,
-                    schema,
-                    sort_descs,
-                    None,
-                    partial_block_size,
-                    final_block_size,
-                    None,
-                    false,
-                    true,
-                )?;
+                let sort_pipeline_builder =
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
+                        .with_partial_block_size(partial_block_size)
+                        .with_final_block_size(final_block_size)
+                        .remove_order_col_at_last();
+                sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
                 let output_block_num = task.total_rows.div_ceil(final_block_size);
                 let max_threads = std::cmp::min(
@@ -225,6 +223,7 @@ impl PipelineBuilder {
         })?;
 
         let snapshot_gen = MutationGenerator::new(recluster_sink.snapshot.clone());
+        let lock = LockManager::create_table_lock(recluster_sink.table_info.clone())?;
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -234,7 +233,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                true,
+                Some(lock.clone()),
                 None,
             )
         })

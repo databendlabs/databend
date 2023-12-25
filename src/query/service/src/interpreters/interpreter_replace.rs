@@ -15,43 +15,45 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table::TableExt;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::physical_plans::OnConflictField;
-use common_sql::executor::physical_plans::ReplaceAsyncSourcer;
-use common_sql::executor::physical_plans::ReplaceDeduplicate;
-use common_sql::executor::physical_plans::ReplaceInto;
-use common_sql::executor::physical_plans::ReplaceSelectCtx;
-use common_sql::executor::PhysicalPlan;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::plans::Replace;
-use common_sql::BindContext;
-use common_sql::Metadata;
-use common_sql::NameResolutionContext;
-use common_sql::ScalarBinder;
-use common_storage::StageFileInfo;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::Replace;
+use databend_common_sql::BindContext;
+use databend_common_sql::Metadata;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::ScalarBinder;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::hook::hook_compact;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -104,7 +106,7 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),
@@ -125,6 +127,18 @@ impl Interpreter for ReplaceInterpreter {
                 true,
             )
             .await;
+        }
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
+        {
+            let refresh_desc = RefreshDesc {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            hook_refresh(self.ctx.clone(), &mut pipeline.main_pipeline, refresh_desc).await?;
         }
 
         Ok(pipeline)
@@ -287,7 +301,11 @@ impl ReplaceInterpreter {
             .get_replace_into_bloom_pruning_max_column_number()?;
         let bloom_filter_column_indexes = if !table.cluster_keys(self.ctx.clone()).is_empty() {
             fuse_table
-                .choose_bloom_filter_columns(&on_conflicts, max_num_pruning_columns)
+                .choose_bloom_filter_columns(
+                    self.ctx.clone(),
+                    &on_conflicts,
+                    max_num_pruning_columns,
+                )
                 .await?
         } else {
             vec![]

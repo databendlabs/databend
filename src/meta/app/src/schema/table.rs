@@ -23,12 +23,12 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_types::MatchSeq;
-use common_meta_types::MetaId;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -491,6 +491,10 @@ pub struct DropTableByIdReq {
     pub tenant: String,
 
     pub tb_id: MetaId,
+
+    pub table_name: String,
+
+    pub db_id: MetaId,
 }
 
 impl DropTableByIdReq {
@@ -798,6 +802,12 @@ pub struct TableIdToName {
     pub table_id: u64,
 }
 
+impl Display for TableIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "TableIdToName{{{}}}", self.table_id)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
     pub table_id: u64,
@@ -853,7 +863,7 @@ pub struct TableCopiedFileLockKey {
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
@@ -1043,8 +1053,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_kvapi::kvapi;
-    use common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
 

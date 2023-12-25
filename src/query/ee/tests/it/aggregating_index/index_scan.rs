@@ -16,20 +16,20 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::block_debug::pretty_format_blocks;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
-use common_expression::SortColumnDescription;
-use common_sql::optimizer::SExpr;
-use common_sql::planner::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::SortColumnDescription;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::planner::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::Planner;
+use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
-use enterprise_query::test_kits::context::EESetup;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -885,12 +885,12 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",
@@ -972,9 +972,12 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
     let spill_settings = if spill {
         Some(HashMap::from([
-            ("spilling_memory_ratio".to_string(), "100".to_string()),
             (
-                "spilling_bytes_threshold_per_proc".to_string(),
+                "aggregate_spilling_memory_ratio".to_string(),
+                "100".to_string(),
+            ),
+            (
+                "aggregate_spilling_bytes_threshold_per_proc".to_string(),
                 "1".to_string(),
             ),
         ]))

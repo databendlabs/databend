@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 #![feature(lazy_cell)]
 
-use common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;
 mod pool;

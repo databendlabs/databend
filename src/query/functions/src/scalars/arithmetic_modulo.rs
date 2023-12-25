@@ -14,12 +14,12 @@
 
 use std::ops::Rem;
 
-use common_expression::types::number::*;
-use common_expression::types::ArgType;
-use common_expression::types::ValueType;
-use common_expression::EvalContext;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use num_traits::AsPrimitive;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;

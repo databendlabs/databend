@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-client"
+name = "databend-common-meta-client"
 description = "common meta grpc"
 version = { workspace = true }
 authors = { workspace = true }
@@ -14,17 +14,17 @@ doctest = false
 test = true
 
 [features]
-enable-histogram = ["common-metrics/enable-histogram"]
+enable-histogram = ["databend-common-metrics/enable-histogram"]
 
 [dependencies]
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-grpc = { path = "../../common/grpc" }
-common-meta-api = { path = "../api" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-types = { path = "../types" }
-common-metrics = { path = "../../common/metrics" }
-common-tracing = { path = "../../common/tracing" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-meta-api = { path = "../api" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-types = { path = "../types" }
+databend-common-metrics = { path = "../../common/metrics" }
+databend-common-tracing = { path = "../../common/tracing" }
 
 derive_more = { workspace = true }
 futures = { workspace = true }
@@ -40,11 +40,11 @@ serde_json = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
-common-exception = { path = "../../common/exception" }
-common-meta-app = { path = "../app" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-app = { path = "../app" }
 
 anyhow = { workspace = true }
 rand = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }

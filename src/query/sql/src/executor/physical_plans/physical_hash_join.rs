@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_cast;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
-use common_expression::ROW_NUMBER_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ROW_NUMBER_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -360,10 +360,15 @@ impl PhysicalPlanBuilder {
                         column_projections.contains(&index)
                     {
                         let metadata = self.metadata.read();
+                        let unexpected_column = metadata.column(index);
+                        let unexpected_column_info = if let Some(table_index) = unexpected_column.table_index() {
+                            format!("{:?}.{:?}", metadata.table(table_index).name(), unexpected_column.name())
+                        } else {
+                            unexpected_column.name().to_string()
+                        };
                         return Err(ErrorCode::SemanticError(format!(
-                            "cannot access the {:?}.{:?} in ANTI or SEMI join",
-                            metadata.table(index).name(),
-                            metadata.column(index).name()
+                            "cannot access the {} in ANTI or SEMI join",
+                            unexpected_column_info
                         )));
                     }
                 }

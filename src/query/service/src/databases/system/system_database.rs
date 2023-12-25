@@ -15,49 +15,52 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_config::InnerConfig;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_storages_system::BackgroundJobTable;
-use common_storages_system::BackgroundTaskTable;
-use common_storages_system::BacktraceTable;
-use common_storages_system::BuildOptionsTable;
-use common_storages_system::CachesTable;
-use common_storages_system::CatalogsTable;
-use common_storages_system::ClusteringHistoryTable;
-use common_storages_system::ClustersTable;
-use common_storages_system::ColumnsTable;
-use common_storages_system::ConfigsTable;
-use common_storages_system::ContributorsTable;
-use common_storages_system::CreditsTable;
-use common_storages_system::DatabasesTable;
-use common_storages_system::EnginesTable;
-use common_storages_system::FunctionsTable;
-use common_storages_system::IndexesTable;
-use common_storages_system::MallocStatsTable;
-use common_storages_system::MallocStatsTotalsTable;
-use common_storages_system::MetricsTable;
-use common_storages_system::OneTable;
-use common_storages_system::ProcessesTable;
-use common_storages_system::ProcessorProfileTable;
-use common_storages_system::QueryCacheTable;
-use common_storages_system::QueryLogTable;
-use common_storages_system::QueryProfileTable;
-use common_storages_system::QuerySummaryTable;
-use common_storages_system::RolesTable;
-use common_storages_system::SettingsTable;
-use common_storages_system::StagesTable;
-use common_storages_system::StreamsTable;
-use common_storages_system::TableFunctionsTable;
-use common_storages_system::TablesTableWithHistory;
-use common_storages_system::TablesTableWithoutHistory;
-use common_storages_system::TaskHistoryTable;
-use common_storages_system::TasksTable;
-use common_storages_system::TempFilesTable;
-use common_storages_system::TracingTable;
-use common_storages_system::UsersTable;
+use databend_common_config::InnerConfig;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_storages_system::BackgroundJobTable;
+use databend_common_storages_system::BackgroundTaskTable;
+use databend_common_storages_system::BacktraceTable;
+use databend_common_storages_system::BuildOptionsTable;
+use databend_common_storages_system::CachesTable;
+use databend_common_storages_system::CatalogsTable;
+use databend_common_storages_system::ClusteringHistoryTable;
+use databend_common_storages_system::ClustersTable;
+use databend_common_storages_system::ColumnsTable;
+use databend_common_storages_system::ConfigsTable;
+use databend_common_storages_system::ContributorsTable;
+use databend_common_storages_system::CreditsTable;
+use databend_common_storages_system::DatabasesTable;
+use databend_common_storages_system::EnginesTable;
+use databend_common_storages_system::FunctionsTable;
+use databend_common_storages_system::IndexesTable;
+use databend_common_storages_system::LocksTable;
+use databend_common_storages_system::MallocStatsTable;
+use databend_common_storages_system::MallocStatsTotalsTable;
+use databend_common_storages_system::MetricsTable;
+use databend_common_storages_system::OneTable;
+use databend_common_storages_system::PasswordPoliciesTable;
+use databend_common_storages_system::ProcessesTable;
+use databend_common_storages_system::ProcessorProfileTable;
+use databend_common_storages_system::QueryCacheTable;
+use databend_common_storages_system::QueryLogTable;
+use databend_common_storages_system::QueryProfileTable;
+use databend_common_storages_system::QuerySummaryTable;
+use databend_common_storages_system::RolesTable;
+use databend_common_storages_system::SettingsTable;
+use databend_common_storages_system::StagesTable;
+use databend_common_storages_system::StreamsTable;
+use databend_common_storages_system::TableFunctionsTable;
+use databend_common_storages_system::TablesTableWithHistory;
+use databend_common_storages_system::TablesTableWithoutHistory;
+use databend_common_storages_system::TaskHistoryTable;
+use databend_common_storages_system::TasksTable;
+use databend_common_storages_system::TempFilesTable;
+use databend_common_storages_system::TracingTable;
+use databend_common_storages_system::UsersTable;
+use databend_common_storages_system::VirtualColumnsTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -123,6 +126,9 @@ impl SystemDatabase {
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
             ProcessorProfileTable::create(sys_db_meta.next_table_id()),
+            LocksTable::create(sys_db_meta.next_table_id()),
+            VirtualColumnsTable::create(sys_db_meta.next_table_id()),
+            PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

@@ -14,7 +14,7 @@
 
 use std::fmt::Debug;
 
-use common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStagePlan {

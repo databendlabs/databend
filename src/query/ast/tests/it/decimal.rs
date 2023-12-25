@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Literal;
-use common_ast::parser::expr::parse_float;
-use common_ast::parser::expr::parse_uint;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::parser::expr::parse_float;
+use databend_common_ast::parser::expr::parse_uint;
 use ethnum::i256;
 
 #[test]

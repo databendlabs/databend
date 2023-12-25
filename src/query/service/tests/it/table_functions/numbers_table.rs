@@ -12,12 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_base::base::tokio;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table_args::TableArgs;
-use common_exception::Result;
-use common_expression::Scalar;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::generate_numbers_parts;
@@ -64,7 +64,7 @@ async fn test_number_table() -> Result<()> {
         "| 7        |",
         "+----------+",
     ];
-    common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());
+    databend_common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

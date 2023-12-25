@@ -23,8 +23,8 @@ mod table_args;
 
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_function::TableFunction;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_function::TableFunction;
 pub use fuse_blocks::FuseBlock;
 pub use fuse_blocks::FuseBlockTable;
 pub use fuse_columns::FuseColumn;

@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use common_meta_sled_store::sled;
-use common_meta_sled_store::SledBytesError;
-use common_meta_sled_store::SledSerde;
+use databend_common_meta_sled_store::sled;
+use databend_common_meta_sled_store::SledBytesError;
+use databend_common_meta_sled_store::SledSerde;
 
 use crate::ondisk::DataVersion;
 use crate::ondisk::DATA_VERSION;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_pipeline_core::processors::*;
+pub use databend_common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
 pub use transforms::DeduplicateRowNumber;

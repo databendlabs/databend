@@ -17,8 +17,8 @@ use std::cell::UnsafeCell;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use minitrace::prelude::*;
@@ -245,5 +245,9 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     fn details_status(&self) -> Option<String> {
         (**self).details_status()
+    }
+
+    fn record_profile(&self, profile: &Profile) {
+        (**self).record_profile(profile)
     }
 }

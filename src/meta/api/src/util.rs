@@ -17,57 +17,54 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use common_meta_app::app_error::AppError;
-use common_meta_app::app_error::ShareHasNoGrantedDatabase;
-use common_meta_app::app_error::TxnRetryMaxTimes;
-use common_meta_app::app_error::UnknownDatabase;
-use common_meta_app::app_error::UnknownDatabaseId;
-use common_meta_app::app_error::UnknownShare;
-use common_meta_app::app_error::UnknownShareAccounts;
-use common_meta_app::app_error::UnknownShareEndpoint;
-use common_meta_app::app_error::UnknownShareEndpointId;
-use common_meta_app::app_error::UnknownShareId;
-use common_meta_app::app_error::UnknownTable;
-use common_meta_app::app_error::UnknownTableId;
-use common_meta_app::app_error::VirtualColumnNotFound;
-use common_meta_app::app_error::WrongShare;
-use common_meta_app::app_error::WrongShareObject;
-use common_meta_app::schema::DBIdTableName;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseIdToName;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::IndexId;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableIdToName;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_app::schema::VirtualColumnNameIdent;
-use common_meta_app::share::*;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::txn_condition::Target;
-use common_meta_types::txn_op::Request;
-use common_meta_types::ConditionResult;
-use common_meta_types::InvalidArgument;
-use common_meta_types::InvalidReply;
-use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::Operation;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnRequest;
-use common_proto_conv::FromToProto;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::ShareHasNoGrantedDatabase;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::app_error::UnknownDatabase;
+use databend_common_meta_app::app_error::UnknownDatabaseId;
+use databend_common_meta_app::app_error::UnknownShare;
+use databend_common_meta_app::app_error::UnknownShareAccounts;
+use databend_common_meta_app::app_error::UnknownShareEndpoint;
+use databend_common_meta_app::app_error::UnknownShareEndpointId;
+use databend_common_meta_app::app_error::UnknownShareId;
+use databend_common_meta_app::app_error::UnknownTable;
+use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::app_error::VirtualColumnNotFound;
+use databend_common_meta_app::app_error::WrongShare;
+use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::IndexId;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::*;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::txn_condition::Target;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::InvalidArgument;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnRequest;
+use databend_common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
 use log::as_debug;
 use log::as_display;
@@ -114,7 +111,7 @@ pub async fn get_pb_value<K, T>(
 where
     K: kvapi::Key,
     T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
+    T::PB: databend_common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&k.to_string_key()).await?;
 
@@ -132,7 +129,7 @@ pub async fn mget_pb_values<T>(
 ) -> Result<Vec<(u64, Option<T>)>, MetaError>
 where
     T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
+    T::PB: databend_common_protos::prost::Message + Default,
 {
     let seq_bytes = kv_api.mget_kv(keys).await?;
     let mut seq_values = Vec::with_capacity(keys.len());
@@ -245,14 +242,14 @@ pub async fn fetch_id<T: kvapi::Key>(
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
 where
     T: FromToProto + 'static,
-    T::PB: common_protos::prost::Message,
+    T::PB: databend_common_protos::prost::Message,
 {
     let p = value.to_pb().map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
     let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+    databend_common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -262,9 +259,9 @@ where
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
 where
     T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
+    T::PB: databend_common_protos::prost::Message + Default,
 {
-    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(|e| {
+    let p: T::PB = databend_common_protos::prost::Message::decode(buf).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;
@@ -326,37 +323,17 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
 
 /// Build a txn operation that puts a record.
 pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_string_key(),
-            value,
-            prev_value: true,
-            expire_at: None,
-        })),
-    }
+    TxnOp::put(key.to_string_key(), value)
 }
 
 // TODO: replace it with common_meta_types::with::With
 pub fn txn_op_put_with_expire(key: &impl kvapi::Key, value: Vec<u8>, expire_at: u64) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Put(TxnPutRequest {
-            key: key.to_string_key(),
-            value,
-            prev_value: true,
-            expire_at: Some(expire_at),
-        })),
-    }
+    TxnOp::put_with_expire(key.to_string_key(), value, Some(expire_at))
 }
 
 /// Build a txn operation that deletes a record.
 pub fn txn_op_del(key: &impl kvapi::Key) -> TxnOp {
-    TxnOp {
-        request: Some(Request::Delete(TxnDeleteRequest {
-            key: key.to_string_key(),
-            prev_value: true,
-            match_seq: None,
-        })),
-    }
+    TxnOp::delete(key.to_string_key())
 }
 
 /// Return OK if a db_id or db_meta exists by checking the seq.

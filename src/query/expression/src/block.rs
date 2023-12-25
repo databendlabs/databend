@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::ArrayRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::ArrayRef;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -384,6 +384,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn replace_meta(&mut self, meta: BlockMetaInfoPtr) {
+        self.meta.replace(meta);
+    }
+
+    #[inline]
     pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
         self.meta.as_ref()
     }
@@ -547,6 +552,13 @@ impl DataBlock {
             columns.push(column);
         }
         DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
+
+    #[inline]
+    pub fn get_last_column(&self) -> &Column {
+        debug_assert!(!self.columns.is_empty());
+        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
+        self.columns.last().unwrap().value.as_column().unwrap()
     }
 }
 

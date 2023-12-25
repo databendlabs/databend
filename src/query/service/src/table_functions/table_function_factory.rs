@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_types::MetaId;
-use common_storages_fuse::table_functions::FuseColumnTable;
-use common_storages_fuse::table_functions::FuseEncodingTable;
-use common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::table_functions::FuseColumnTable;
+use databend_common_storages_fuse::table_functions::FuseEncodingTable;
+use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 

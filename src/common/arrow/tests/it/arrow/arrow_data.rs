@@ -15,14 +15,14 @@
 
 use arrow_array::ArrayRef;
 use arrow_data::ArrayDataBuilder;
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::IntegerType;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::datatypes::UnionMode;
-use common_arrow::arrow::offset::Offsets;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::IntegerType;
+use databend_common_arrow::arrow::datatypes::TimeUnit;
+use databend_common_arrow::arrow::datatypes::UnionMode;
+use databend_common_arrow::arrow::offset::Offsets;
 use proptest::num::i32;
 
 fn test_arrow2_roundtrip(array: &dyn arrow_array::Array) {

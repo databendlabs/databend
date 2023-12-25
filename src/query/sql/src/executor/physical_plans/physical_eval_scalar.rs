@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plan::PhysicalPlan;
@@ -189,7 +189,7 @@ impl PhysicalPlanBuilder {
                             if func.func_name == "get" && !func.arguments.is_empty() {
                                 if let ScalarExpr::BoundColumnRef(column_ref) = &func.arguments[0] {
                                     if column_ref.column.index == srf_item.index {
-                                        params.push(func.params[0]);
+                                        params.push(func.params[0].clone());
                                     }
                                 }
                             }

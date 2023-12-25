@@ -378,7 +378,7 @@ impl Display for ListBackgroundJobsReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::background::background_job::BackgroundJobId;
     use crate::background::background_job::BackgroundJobIdent;

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::NetworkPolicyApi;
-use common_meta_app::principal::NetworkPolicy;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::NetworkPolicyApi;
+use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 

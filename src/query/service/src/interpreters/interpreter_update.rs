@@ -17,41 +17,41 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::lock::Lock;
-use common_catalog::plan::Filters;
-use common_catalog::plan::Partitions;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_license::license::Feature::ComputedColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::physical_plans::UpdateSource;
-use common_sql::executor::PhysicalPlan;
-use common_sql::Visibility;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature::ComputedColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::UpdateSource;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::Visibility;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
-use storages_common_locks::LockManager;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
-use crate::interpreters::common::hook_refresh_agg_index;
-use crate::interpreters::common::RefreshAggIndexDesc;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -88,29 +88,32 @@ impl Interpreter for UpdateInterpreter {
         }
 
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
-        // refresh table.
+
+        let db_name = self.plan.database.as_str();
+        let tbl_name = self.plan.table.as_str();
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
-
-        // check mutability
-        tbl.check_mutable()?;
 
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
+        // refresh table.
+        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+
+        // check mutability
+        tbl.check_mutable()?;
+
         let selection = if !self.plan.subquery_desc.is_empty() {
-            let support_row_id = tbl.support_row_id_column();
+            let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
-                return Err(ErrorCode::from_string(
-                    "table doesn't support row_id, so it can't use delete with subquery"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::from_string(format!(
+                    "Update with subquery is not supported for the table '{}', which lacks row_id support.",
+                    tbl.name(),
+                )));
             }
             let table_index = self
                 .plan
@@ -237,19 +240,15 @@ impl Interpreter for UpdateInterpreter {
                     .await?;
 
             // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+            // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
             {
-                let refresh_agg_index_desc = RefreshAggIndexDesc {
+                let refresh_desc = RefreshDesc {
                     catalog: catalog_name.to_string(),
                     database: db_name.to_string(),
                     table: tbl_name.to_string(),
                 };
 
-                hook_refresh_agg_index(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    refresh_agg_index_desc,
-                )
-                .await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
             }
         }
 

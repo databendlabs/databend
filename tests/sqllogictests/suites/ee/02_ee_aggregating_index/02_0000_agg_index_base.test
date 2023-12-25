@@ -233,7 +233,7 @@ DROP TABLE t
 # force using spill
 
 statement ok
-SET spilling_bytes_threshold_per_proc=1;
+SET aggregate_spilling_bytes_threshold_per_proc=1;
 
 statement ok
 CREATE TABLE t (a int, b int, c int)

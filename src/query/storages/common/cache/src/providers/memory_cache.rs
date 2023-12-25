@@ -16,12 +16,12 @@ use std::hash::BuildHasher;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use common_cache::BytesMeter;
-use common_cache::Cache;
-use common_cache::Count;
-use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
+use databend_common_cache::BytesMeter;
+use databend_common_cache::Cache;
+use databend_common_cache::Count;
+use databend_common_cache::CountableMeter;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_cache::LruCache;
 use parking_lot::RwLock;
 
 pub type InMemoryCache<V, S, M> = LruCache<String, Arc<V>, S, M>;

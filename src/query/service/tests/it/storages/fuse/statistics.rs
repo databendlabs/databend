@@ -16,49 +16,49 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::tokio;
-use common_expression::type_check::check;
-use common_expression::types::number::Int32Type;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::BlockThresholds;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::FromData;
-use common_expression::FunctionContext;
-use common_expression::RawExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_functions::aggregates::eval_aggr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::evaluator::BlockOperator;
-use common_storages_fuse::statistics::reducers::reduce_block_metas;
-use common_storages_fuse::statistics::Trim;
-use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
-use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
-use common_storages_fuse::FuseStorageFormat;
+use databend_common_base::base::tokio;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_functions::aggregates::eval_aggr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
+use databend_common_storages_fuse::statistics::Trim;
+use databend_common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
+use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 use rand::Rng;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Compression;
-use storages_common_table_meta::meta::Statistics;
 
 #[test]
-fn test_ft_stats_block_stats() -> common_exception::Result<()> {
+fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::String),
@@ -82,7 +82,7 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
+fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exception::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::String),
@@ -109,7 +109,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
 }
 
 #[test]
-fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
+fn test_ft_tuple_stats_block_stats() -> databend_common_exception::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![TableField::new(
         "a",
         TableDataType::Tuple {
@@ -142,7 +142,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
 }
 
 #[test]
-fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
+fn test_ft_stats_col_stats_reduce() -> databend_common_exception::Result<()> {
     let num_of_blocks = 10;
     let rows_per_block = 3;
     let val_start_with = 1;
@@ -152,7 +152,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col_stats = blocks
         .iter()
         .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, &schema))
-        .collect::<common_exception::Result<Vec<_>>>()?;
+        .collect::<databend_common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats);
     assert_eq!(3, r.len());
     let col0_stats = r.get(&0).unwrap();
@@ -188,7 +188,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 }
 
 #[test]
-fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()> {
+fn test_reduce_block_statistics_in_memory_size() -> databend_common_exception::Result<()> {
     let iter = |mut idx| {
         std::iter::from_fn(move || {
             idx += 1;
@@ -219,7 +219,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 }
 
 #[test]
-fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
+fn test_reduce_cluster_statistics() -> databend_common_exception::Result<()> {
     let default_cluster_key_id = Some(0);
     let cluster_stats_0 = Some(ClusterStatistics::new(
         0,
@@ -312,7 +312,7 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_accumulator() -> common_exception::Result<()> {
+async fn test_accumulator() -> databend_common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
 
@@ -334,7 +334,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
+async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "a",
         DataType::Number(NumberDataType::Int32),
@@ -429,8 +429,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Result<()> {
-    let suite = || -> common_exception::Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_exception::Result<()> {
+    let suite = || -> databend_common_exception::Result<()> {
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
         let mut rand_strings: Vec<String> = vec![];
@@ -482,7 +482,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exception::Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
+-> databend_common_exception::Result<()> {
     // verifies (randomly) the following assumptions:
     //
     // https://github.com/datafuselabs/databend/issues/7829
@@ -491,7 +492,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
     // > the trimmed max should be larger than the non-trimmed one, and the trimmed min
     // > should be lesser than the non-trimmed one.
 
-    let suite = || -> common_exception::Result<()> {
+    let suite = || -> databend_common_exception::Result<()> {
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
         let mut rand_strings: Vec<String> = vec![];
@@ -592,7 +593,7 @@ fn char_len(value: &[u8]) -> usize {
 }
 
 #[test]
-fn test_reduce_block_meta() -> common_exception::Result<()> {
+fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
     let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);

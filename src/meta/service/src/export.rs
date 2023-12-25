@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_raft_store::key_spaces::RaftStoreEntry;
-use common_meta_stoerr::MetaStorageError;
+use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_stoerr::MetaStorageError;
 
 /// Convert one line of serialized key-value into json.
 ///

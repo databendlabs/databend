@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -57,7 +57,7 @@ impl Operator for Exchange {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 
@@ -69,5 +69,14 @@ impl Operator for Exchange {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

@@ -19,35 +19,35 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Parquet2TableInfo;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::Parquet2TableColumnStatisticsProvider;
-use common_catalog::table::Table;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::TableSchema;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::Pipeline;
-use common_storage::init_stage_operator;
-use common_storage::ColumnNodes;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read as pread;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Parquet2TableInfo;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::Parquet2TableColumnStatisticsProvider;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::ColumnNodes;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use crate::parquet2::parquet_table::table::pread::FileMetaData;
@@ -115,7 +115,10 @@ impl Table for Parquet2Table {
         true
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),
@@ -128,7 +131,10 @@ impl Table for Parquet2Table {
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         Ok(Box::new(self.column_statistics_provider.clone()))
     }
 

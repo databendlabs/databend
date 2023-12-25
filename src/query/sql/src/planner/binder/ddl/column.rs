@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::ShowColumnsStmt;
-use common_ast::ast::ShowLimit;
-use common_exception::Result;
+use databend_common_ast::ast::ShowColumnsStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_exception::Result;
 use log::debug;
 
 use crate::normalize_identifier;
@@ -108,7 +108,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowColumns(database, table),
+            RewriteKind::ShowColumns(catalog_name, database, table),
         )
         .await
     }

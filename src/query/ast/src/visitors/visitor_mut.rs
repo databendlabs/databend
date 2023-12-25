@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Span;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::Span;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use super::walk_mut::walk_cte_mut;
 use super::walk_mut::walk_expr_mut;
@@ -256,12 +256,15 @@ pub trait VisitorMut: Sized {
         _distinct: bool,
         _name: &mut Identifier,
         args: &mut Vec<Expr>,
-        _params: &mut Vec<Literal>,
+        params: &mut Vec<Expr>,
         over: &mut Option<Window>,
         lambda: &mut Option<Lambda>,
     ) {
         for arg in args.iter_mut() {
             Self::visit_expr(self, arg);
+        }
+        for param in params.iter_mut() {
+            Self::visit_expr(self, param);
         }
 
         if let Some(over) = over {
@@ -418,6 +421,8 @@ pub trait VisitorMut: Sized {
     fn visit_show_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
+
+    fn visit_show_locks(&mut self, _show_locks: &mut ShowLocksStmt) {}
 
     fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
@@ -590,6 +595,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_refresh_virtual_column(&mut self, _stmt: &mut RefreshVirtualColumnStmt) {}
 
+    fn visit_show_virtual_columns(&mut self, _stmt: &mut ShowVirtualColumnsStmt) {}
+
     fn visit_show_users(&mut self) {}
 
     fn visit_create_user(&mut self, _stmt: &mut CreateUserStmt) {}
@@ -681,6 +688,16 @@ pub trait VisitorMut: Sized {
     fn visit_desc_network_policy(&mut self, _stmt: &mut DescNetworkPolicyStmt) {}
 
     fn visit_show_network_policies(&mut self) {}
+
+    fn visit_create_password_policy(&mut self, _stmt: &mut CreatePasswordPolicyStmt) {}
+
+    fn visit_alter_password_policy(&mut self, _stmt: &mut AlterPasswordPolicyStmt) {}
+
+    fn visit_drop_password_policy(&mut self, _stmt: &mut DropPasswordPolicyStmt) {}
+
+    fn visit_desc_password_policy(&mut self, _stmt: &mut DescPasswordPolicyStmt) {}
+
+    fn visit_show_password_policies(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
 

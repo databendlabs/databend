@@ -14,19 +14,19 @@
 
 use std::collections::HashMap;
 
-use common_arrow::arrow::array::UInt64Array;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_catalog::statistics::BasicColumnStatistics;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::TableDataType;
-use common_storage::ColumnNodes;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_common_arrow::arrow::array::UInt64Array;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::io::parquet::read as pread;
+use databend_common_arrow::parquet::metadata::RowGroupMetaData;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
+use databend_common_storage::ColumnNodes;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 /// Collect statistics of a batch of row groups of the specified columns.
 ///

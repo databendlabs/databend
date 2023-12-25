@@ -14,22 +14,21 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::array::ArrayColumnBuilder;
-use common_expression::types::decimal::*;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::Scalar;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use ethnum::i256;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::deserialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::get_levels;
-use super::serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::QuantileData;
@@ -39,20 +38,19 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
 use crate::with_simple_no_number_mapped_type;
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 struct QuantileState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
     pub value: Vec<T::Scalar>,
 }
 
 impl<T> Default for QuantileState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self { value: vec![] }
@@ -62,7 +60,7 @@ where
 impl<T> UnaryState<T, ArrayType<T>> for QuantileState<T>
 where
     T: ValueType + Sync + Send,
-    T::Scalar: Serialize + DeserializeOwned + Sync + Send + Ord,
+    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
@@ -111,19 +109,19 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 
 impl<T> UnaryState<T, T> for QuantileState<T>
 where
     T: ArgType + Sync + Send,
-    T::Scalar: Serialize + DeserializeOwned + Sync + Send + Ord,
+    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
@@ -165,12 +163,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 

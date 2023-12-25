@@ -14,18 +14,18 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnType;
-use common_expression::BASE_BLOCK_IDS_COL_NAME;
-use common_expression::BASE_ROW_ID_COL_NAME;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_expression::CHANGE_ACTION_COL_NAME;
-use common_expression::CHANGE_IS_UPDATE_COL_NAME;
-use common_expression::CHANGE_ROW_ID_COL_NAME;
-use common_expression::ROW_ID_COL_NAME;
-use common_expression::SEGMENT_NAME_COL_NAME;
-use common_expression::SNAPSHOT_NAME_COL_NAME;
 use ctor::ctor;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
+use databend_common_expression::BASE_ROW_ID_COL_NAME;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::CHANGE_ACTION_COL_NAME;
+use databend_common_expression::CHANGE_IS_UPDATE_COL_NAME;
+use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
 
 #[ctor]
 pub static INTERNAL_COLUMN_FACTORY: InternalColumnFactory = InternalColumnFactory::init();

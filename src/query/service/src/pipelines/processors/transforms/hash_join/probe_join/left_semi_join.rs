@@ -14,13 +14,13 @@
 
 use std::sync::atomic::Ordering;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::KeyAccessor;
-use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::KeyAccessor;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;

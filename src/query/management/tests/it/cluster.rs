@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,21 +14,20 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_management::*;
-use common_meta_embedded::MetaEmbedded;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_store::MetaStore;
-use common_meta_types::MatchSeq;
-use common_meta_types::NodeInfo;
-use common_meta_types::SeqV;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_management::*;
+use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {
-    let current_time = current_seconds_time();
+    let now_ms = SeqV::<()>::now_ms();
     let (kv_api, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
@@ -43,7 +42,7 @@ async fn test_successfully_add_node() -> Result<()> {
             meta,
             data: value,
         }) => {
-            assert!(meta.unwrap().expire_at.unwrap() - current_time >= 60);
+            assert!(meta.unwrap().get_expire_at_ms().unwrap() - now_ms >= 59_000);
             assert_eq!(value, serde_json::to_vec(&node_info)?);
         }
         catch => panic!("GetKVActionReply{:?}", catch),
@@ -116,7 +115,7 @@ async fn test_unknown_node_drop_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_heartbeat_node() -> Result<()> {
-    let current_time = current_seconds_time();
+    let now_ms = SeqV::<()>::now_ms();
     let (kv_api, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
@@ -126,24 +125,19 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
         .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
-    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    let meta = value.unwrap().meta.unwrap();
+    let expire_ms = meta.get_expire_at_ms().unwrap();
+    assert!(expire_ms - now_ms >= 59_000);
 
-    let current_time = current_seconds_time();
+    let now_ms = SeqV::<()>::now_ms();
     cluster_api.heartbeat(&node_info, MatchSeq::GE(1)).await?;
 
     let value = kv_api
         .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
-    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    assert!(value.unwrap().meta.unwrap().get_expire_at_ms().unwrap() - now_ms >= 59_000);
     Ok(())
-}
-
-fn current_seconds_time() -> u64 {
-    let now = std::time::SystemTime::now();
-    now.duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs()
 }
 
 fn create_test_node_info() -> NodeInfo {

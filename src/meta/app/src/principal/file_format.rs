@@ -18,10 +18,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::constants::NULL_BYTES_ESCAPE;
-use common_io::escape_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::constants::NULL_BYTES_ESCAPE;
+use databend_common_io::escape_string;
 use serde::Deserialize;
 use serde::Serialize;
 

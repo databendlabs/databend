@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::utils::BitmapIter;
+use databend_common_arrow::arrow::bitmap::utils::BitmapIter;
 
 #[test]
 fn basic() {

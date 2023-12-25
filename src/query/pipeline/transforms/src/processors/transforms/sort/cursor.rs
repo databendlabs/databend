@@ -14,6 +14,8 @@
 
 use std::cmp::Ordering;
 
+use databend_common_expression::Column;
+
 use super::rows::Rows;
 
 /// A cursor point to a certain row in a data block.
@@ -58,6 +60,16 @@ impl<R: Rows> Cursor<R> {
     #[inline]
     pub fn last(&self) -> R::Item<'_> {
         self.rows.row(self.num_rows - 1)
+    }
+
+    #[inline]
+    pub fn num_rows(&self) -> usize {
+        self.num_rows
+    }
+
+    #[inline]
+    pub fn to_column(&self) -> Column {
+        self.rows.to_column()
     }
 }
 

@@ -21,13 +21,15 @@ use std::io::Read;
 use std::io::Write;
 
 use clap::Parser;
-use common_config::Config;
-use common_config::InnerConfig;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::Result;
-use common_storage::init_operator;
-use common_storage::StorageConfig;
+use databend_common_config::Config;
+use databend_common_config::InnerConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::Result;
+use databend_common_storage::init_operator;
+use databend_common_storage::StorageConfig;
 use databend_query::GlobalServices;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 use opendal::services::Fs;
 use opendal::Operator;
@@ -35,8 +37,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
 use serfig::parsers::Toml;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
 use tokio::io::AsyncReadExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]

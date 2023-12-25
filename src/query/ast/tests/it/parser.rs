@@ -16,19 +16,19 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use common_ast::display_parser_error;
-use common_ast::parser::expr::*;
-use common_ast::parser::parse_sql;
-use common_ast::parser::query::*;
-use common_ast::parser::quote::quote_ident;
-use common_ast::parser::quote::unquote_ident;
-use common_ast::parser::token::*;
-use common_ast::parser::tokenize_sql;
-use common_ast::rule;
-use common_ast::Backtrace;
-use common_ast::Dialect;
-use common_ast::IResult;
-use common_ast::Input;
+use databend_common_ast::display_parser_error;
+use databend_common_ast::parser::expr::*;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::query::*;
+use databend_common_ast::parser::quote::quote_ident;
+use databend_common_ast::parser::quote::unquote_ident;
+use databend_common_ast::parser::token::*;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::rule;
+use databend_common_ast::Backtrace;
+use databend_common_ast::Dialect;
+use databend_common_ast::IResult;
+use databend_common_ast::Input;
 use goldenfile::Mint;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -523,6 +523,7 @@ fn test_statement() {
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
+        r#"SHOW LOCKS IN ACCOUNT"#,
         // pipes
         r#"CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')"#,
         r#"CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv"#,

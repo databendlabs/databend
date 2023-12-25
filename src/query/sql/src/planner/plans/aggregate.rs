@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -183,10 +183,11 @@ impl Operator for Aggregate {
             output_columns,
             outer_columns,
             used_columns,
+            orderings: vec![],
         }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         if self.mode == AggregateMode::Final {
             return rel_expr.derive_cardinality_child(0);
         }
@@ -241,5 +242,61 @@ impl Operator for Aggregate {
                 column_stats: statistics.column_stats,
             },
         }))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+
+        if child_physical_prop.distribution == Distribution::Serial {
+            return Ok(vec![vec![required]]);
+        }
+
+        match self.mode {
+            AggregateMode::Partial => {
+                if self.group_items.is_empty() {
+                    // Scalar aggregation
+                    required.distribution = Distribution::Any;
+                } else {
+                    let settings = ctx.get_settings();
+
+                    // Group aggregation, enforce `Hash` distribution
+                    required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
+                        "before_partial" => Ok(Distribution::Hash(
+                            self.group_items
+                                .iter()
+                                .map(|item| item.scalar.clone())
+                                .collect(),
+                        )),
+                        "before_merge" => {
+                            Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
+                        }
+                        value => Err(ErrorCode::Internal(format!(
+                            "Bad settings value group_by_shuffle_mode = {:?}",
+                            value
+                        ))),
+                    }?;
+                }
+            }
+
+            AggregateMode::Final => {
+                if self.group_items.is_empty() {
+                    // Scalar aggregation
+                    required.distribution = Distribution::Serial;
+                } else {
+                    // The distribution should have been derived by partial aggregation
+                    required.distribution = Distribution::Any;
+                }
+            }
+
+            AggregateMode::Initial => unreachable!(),
+        }
+
+        Ok(vec![vec![required]])
     }
 }

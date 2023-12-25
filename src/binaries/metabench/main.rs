@@ -23,32 +23,29 @@ use std::time::Instant;
 
 use chrono::Utc;
 use clap::Parser;
-use common_base::base::tokio;
-use common_meta_api::serialize_struct;
-use common_meta_api::txn_op_put;
-use common_meta_api::SchemaApi;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::TableCopiedFileNameIdent;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_client::ClientHandle;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::TxnRequest;
-use common_tracing::init_logging;
-use common_tracing::FileConfig;
-use common_tracing::OTLPConfig;
-use common_tracing::QueryLogConfig;
-use common_tracing::StderrConfig;
-use common_tracing::TracingConfig;
+use databend_common_base::base::tokio;
+use databend_common_meta_api::serialize_struct;
+use databend_common_meta_api::txn_op_put;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableCopiedFileNameIdent;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::TxnRequest;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::FileConfig;
+use databend_common_tracing::StderrConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -86,21 +83,20 @@ struct Config {
 async fn main() {
     let config = Config::parse();
 
-    let log_config = common_tracing::Config {
+    let log_config = databend_common_tracing::Config {
         file: FileConfig {
             on: true,
             level: config.log_level.clone(),
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
         },
         stderr: StderrConfig {
             on: true,
             level: "WARN".to_string(),
             format: "text".to_string(),
         },
-        otlp: OTLPConfig::default(),
-        query: QueryLogConfig::default(),
-        tracing: TracingConfig::default(),
+        ..Default::default()
     };
 
     let _guards = init_logging("databend-metabench", &log_config, BTreeMap::new());
@@ -208,6 +204,10 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .await;
 
     print_res(i, "create_db", &res);
+    let db_id = match res {
+        Ok(res) => res.db_id,
+        Err(_) => 0,
+    };
 
     let res = client
         .create_table(CreateTableReq {
@@ -241,6 +241,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
         .drop_table_by_id(DropTableByIdReq {
             if_exists: false,
             tenant: tenant(),
+            db_id,
+            table_name: table_name(),
             tb_id: t.ident.table_id,
         })
         .await;

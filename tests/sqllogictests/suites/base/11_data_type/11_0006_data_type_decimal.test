@@ -235,14 +235,14 @@ SELECT CAST(4.56 AS DECIMAL(46, 2)) / CAST(1.23 AS DECIMAL(46, 2)) AS result;
 3.70731707
 
 query I
-SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
+SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)), CAST(-987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)), CAST(-987654321.34 AS DECIMAL(20, 2)) / CAST(-123456789.12 AS DECIMAL(20, 2)), CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(-123456789.12 AS DECIMAL(20, 2));
 ----
-8.00000006
+8.00000007 -8.00000007 8.00000007 -8.00000007
 
 query I
 SELECT CAST(987654321.34 AS DECIMAL(52, 2)) / CAST(123456789.12 AS DECIMAL(52, 2)) AS result;
 ----
-8.00000006
+8.00000007
 
 query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
@@ -365,44 +365,49 @@ DECIMAL(41, 3) DECIMAL(41, 3) DECIMAL(76, 5) DECIMAL(48, 8)
 ## compare
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1::Decimal(8,2) b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1::Decimal(8,2) b);
 ----
-0 1 0 1 0
+0 1 0 1 1 0
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1::Decimal(76,2) b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1::Decimal(76,2) b);
 ----
-0 1 0 1 0
+0 1 0 1 1 0
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b);
 ----
-0 0 1 1 1
+0 0 1 0 1 1
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3 b);
 ----
-0 0 1 1 1
+0 0 1 0 1 1
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
 ----
-0 1 0 1 0
+0 1 0 1 1 0
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1 b);
 ----
-0 1 0 1 0
+0 1 0 1 1 0
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
 ----
-1 0 0 0 1
+1 0 0 1 0 1
 
 query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,3) a , 2.9 b);
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(76,3) a , 2.9 b);
 ----
-1 0 0 0 1
+1 0 0 1 0 1
+
+query II
+select a > b, a < b, a = b, a != b, a <= b, a >= b from (values( '5497.0000000000000000'::DECIMAL(20, 15) , '5497.0000000000000000'::DECIMAL(60, 30) )) t(a,b);
+----
+0 0 1 0 1 1
 
 query T
 select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);

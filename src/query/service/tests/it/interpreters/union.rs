@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataSchemaRef;
-use common_expression::SendableDataBlockStream;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::planner::plans::Plan;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::planner::plans::Plan;
+use databend_common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::InterpreterPtr;
 use databend_query::sessions::QueryContext;

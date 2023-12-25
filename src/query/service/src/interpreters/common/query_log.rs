@@ -16,12 +16,13 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storages_system::LogType;
-use common_storages_system::QueryLogElement;
-use common_storages_system::QueryLogQueue;
+use databend_common_config::GlobalConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_storages_system::LogType;
+use databend_common_storages_system::QueryLogElement;
+use databend_common_storages_system::QueryLogQueue;
 use log::error;
 use log::info;
 use serde_json;
@@ -59,7 +60,7 @@ impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
         // log the query log in JSON format
-        info!(target: "query", "{}", event_str);
+        info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         QueryLogQueue::instance()?.append_data(event)
@@ -182,13 +183,19 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles: false,
         })
     }
 
-    pub fn log_finish(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+    pub fn log_finish(
+        ctx: &QueryContext,
+        now: SystemTime,
+        err: Option<ErrorCode>,
+        has_profiles: bool,
+    ) -> Result<()> {
         ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
@@ -313,9 +320,10 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles,
         })
     }
 }

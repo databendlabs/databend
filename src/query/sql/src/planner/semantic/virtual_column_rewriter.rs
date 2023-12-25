@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_license::license::Feature::VirtualColumn;
-use common_license::license_manager::get_license_manager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_license::license::Feature::VirtualColumn;
+use databend_common_license::license_manager::get_license_manager;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 

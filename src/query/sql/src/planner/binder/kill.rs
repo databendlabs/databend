@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::KillTarget;
-use common_exception::Result;
+use databend_common_ast::ast::KillTarget;
+use databend_common_exception::Result;
 
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;

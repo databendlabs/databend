@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 pub use self::apply_rule::ApplyRuleTask;
 pub use self::explore_expr::ExploreExprTask;

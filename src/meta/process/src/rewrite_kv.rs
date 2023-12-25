@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableMeta;
-use common_meta_kvapi::kvapi::Key;
-use common_proto_conv::FromToProto;
-use common_protos::pb;
-use common_protos::prost::Message;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_proto_conv::FromToProto;
+use databend_common_protos::pb;
+use databend_common_protos::prost::Message;
 
 /// Convert old version TableMeta protobuf message to new version.
 ///

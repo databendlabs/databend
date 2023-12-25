@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::SerializedError;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::SerializedError;
 use tonic::Code;
 use tonic::Status;
 
 #[test]
 fn test_format_with_error_codes() {
-    use common_exception::exception::*;
+    use databend_common_exception::exception::*;
 
     assert_eq!(
         ErrorCode::Ok("test message 1").to_string(),
@@ -42,7 +42,7 @@ fn test_format_with_error_codes() {
 
 #[test]
 fn test_error_code() {
-    use common_exception::exception::*;
+    use databend_common_exception::exception::*;
 
     let err = ErrorCode::UnknownException("test message 1");
 
@@ -51,12 +51,12 @@ fn test_error_code() {
 
 #[test]
 fn test_derive_from_std_error() {
-    use common_exception::exception::ErrorCode;
-    use common_exception::exception::ToErrorCode;
+    use databend_common_exception::exception::ErrorCode;
+    use databend_common_exception::exception::ToErrorCode;
 
     let fmt_rst: std::result::Result<(), std::fmt::Error> = Err(std::fmt::Error {});
 
-    let rst1: common_exception::exception::Result<()> =
+    let rst1: databend_common_exception::exception::Result<()> =
         fmt_rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
@@ -64,7 +64,7 @@ fn test_derive_from_std_error() {
         rst1.as_ref().unwrap_err().to_string()
     );
 
-    let rst2: common_exception::exception::Result<()> =
+    let rst2: databend_common_exception::exception::Result<()> =
         rst1.map_err_to_code(ErrorCode::Ok, || "wrapper");
 
     assert_eq!(
@@ -75,12 +75,12 @@ fn test_derive_from_std_error() {
 
 #[test]
 fn test_derive_from_display() {
-    use common_exception::exception::ErrorCode;
-    use common_exception::exception::ToErrorCode;
+    use databend_common_exception::exception::ErrorCode;
+    use databend_common_exception::exception::ToErrorCode;
 
     let rst: std::result::Result<(), u64> = Err(3);
 
-    let rst1: common_exception::exception::Result<()> =
+    let rst1: databend_common_exception::exception::Result<()> =
         rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
@@ -103,7 +103,7 @@ fn test_from_and_to_serialized_error() {
 
 #[test]
 fn test_from_and_to_status() -> anyhow::Result<()> {
-    use common_exception::exception::*;
+    use databend_common_exception::exception::*;
     let e = ErrorCode::IllegalDataType("foo");
     let status: Status = e.into();
     assert_eq!(Code::Unknown, status.code());

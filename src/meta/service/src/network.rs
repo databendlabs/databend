@@ -20,33 +20,33 @@ use std::time::Duration;
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
-use common_base::base::tokio::time::sleep;
-use common_base::containers::ItemManager;
-use common_base::containers::Pool;
-use common_base::future::TimingFutureExt;
-use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::error::PayloadTooLarge;
-use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_sled_store::openraft::RaftNetworkFactory;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::SnapshotChunkRequest;
-use common_meta_types::AppendEntriesRequest;
-use common_meta_types::AppendEntriesResponse;
-use common_meta_types::GrpcConfig;
-use common_meta_types::InstallSnapshotError;
-use common_meta_types::InstallSnapshotRequest;
-use common_meta_types::InstallSnapshotResponse;
-use common_meta_types::MembershipNode;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::NetworkError;
-use common_meta_types::NodeId;
-use common_meta_types::RPCError;
-use common_meta_types::RaftError;
-use common_meta_types::RemoteError;
-use common_meta_types::TypeConfig;
-use common_meta_types::VoteRequest;
-use common_meta_types::VoteResponse;
-use common_metrics::count::Count;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::containers::ItemManager;
+use databend_common_base::containers::Pool;
+use databend_common_base::future::TimingFutureExt;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
+use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::AppendEntriesRequest;
+use databend_common_meta_types::AppendEntriesResponse;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::InstallSnapshotError;
+use databend_common_meta_types::InstallSnapshotRequest;
+use databend_common_meta_types::InstallSnapshotResponse;
+use databend_common_meta_types::MembershipNode;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::NetworkError;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::RPCError;
+use databend_common_meta_types::RaftError;
+use databend_common_meta_types::RemoteError;
+use databend_common_meta_types::TypeConfig;
+use databend_common_meta_types::VoteRequest;
+use databend_common_meta_types::VoteResponse;
+use databend_common_metrics::count::Count;
 use log::debug;
 use log::info;
 use log::warn;
@@ -377,7 +377,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                 // Send via v1 API
 
                 let v1_req = SnapshotChunkRequest::new_v1(rpc.clone());
-                let req = common_tracing::inject_span_to_tonic_request(v1_req);
+                let req = databend_common_tracing::inject_span_to_tonic_request(v1_req);
                 let res = client
                     .install_snapshot_v1(req)
                     .timed(observe_snapshot_send_spent(self.target))
@@ -401,7 +401,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
                 self.install_snapshot_via_v0 -= 1;
 
-                let req = common_tracing::inject_span_to_tonic_request(rpc.clone());
+                let req = databend_common_tracing::inject_span_to_tonic_request(rpc.clone());
                 client
                     .install_snapshot(req)
                     .timed(observe_snapshot_send_spent(self.target))

@@ -19,7 +19,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    common_building::setup();
+    databend_common_building::setup();
     build_proto();
 }
 
@@ -36,6 +36,8 @@ fn build_proto() {
     for proto in protos.iter() {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
     }
+
+    println!("cargo:rerun-if-changed=build.rs");
 
     let mut config = prost_build::Config::new();
     config.protoc_arg("--experimental_allow_proto3_optional");
@@ -130,6 +132,10 @@ fn build_proto() {
         .type_attribute(
             "KVMeta",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .field_attribute(
+            "TxnPutRequest.ttl_ms",
+            r#"#[serde(skip_serializing_if = "Option::is_none")]"#,
         )
         .compile_with_config(config, &protos, &[&proto_dir])
         .unwrap();

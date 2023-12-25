@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_sql::plans::DropStreamPlan;
-use stream_handler::get_stream_handler;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::DropStreamPlan;
+use databend_enterprise_stream_handler::get_stream_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

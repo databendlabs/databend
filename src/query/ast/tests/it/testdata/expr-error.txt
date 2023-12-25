@@ -69,7 +69,7 @@ error:
   | -^
   | ||
   | |chain function only works in experimental dialect, try `set sql_dialect = experimental`
-  | |while parsing x.func(...)
+  | |while parsing x.function(...)
   | while parsing expression
 
 

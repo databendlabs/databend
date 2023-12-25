@@ -1,5 +1,5 @@
 [package]
-name = "common-cache"
+name = "databend-common-cache"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }

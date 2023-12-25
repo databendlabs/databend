@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio::time::Duration;
-use common_base::base::Profiling;
+use databend_common_base::base::tokio::time::Duration;
+use databend_common_base::base::Profiling;
 use log::debug;
 use poem::error::InternalServerError;
 use poem::web::Query;

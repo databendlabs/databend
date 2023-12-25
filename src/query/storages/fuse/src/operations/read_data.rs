@@ -14,22 +14,22 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::Runtime;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::TopK;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -276,6 +276,7 @@ impl FuseTable {
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
+                table_schema,
                 pipeline,
                 block_reader,
                 max_threads,

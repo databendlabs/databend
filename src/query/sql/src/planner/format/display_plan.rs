@@ -14,14 +14,16 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ROW_ID_COL_NAME;
+use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::planner::format::display_rel_operator::FormatContext;
 use crate::plans::BoundColumnRef;
@@ -29,6 +31,7 @@ use crate::plans::CreateTablePlan;
 use crate::plans::DeletePlan;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -110,7 +113,7 @@ impl Plan {
             // Insert
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::MergeInto(_) => Ok("MergeInto".to_string()),
+            Plan::MergeInto(merge_into) => format_merge_into(merge_into),
             Plan::Delete(delete) => format_delete(delete),
             Plan::Update(_) => Ok("Update".to_string()),
 
@@ -173,6 +176,12 @@ impl Plan {
             Plan::DropNetworkPolicy(_) => Ok("DropNetworkPolicy".to_string()),
             Plan::DescNetworkPolicy(_) => Ok("DescNetworkPolicy".to_string()),
             Plan::ShowNetworkPolicies(_) => Ok("ShowNetworkPolicies".to_string()),
+
+            // password policy
+            Plan::CreatePasswordPolicy(_) => Ok("CreatePasswordPolicy".to_string()),
+            Plan::AlterPasswordPolicy(_) => Ok("AlterPasswordPolicy".to_string()),
+            Plan::DropPasswordPolicy(_) => Ok("DropPasswordPolicy".to_string()),
+            Plan::DescPasswordPolicy(_) => Ok("DescPasswordPolicy".to_string()),
 
             // task
             Plan::CreateTask(_) => Ok("CreateTask".to_string()),
@@ -263,4 +272,89 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
         },
         None => Ok("CreateTable".to_string()),
     }
+}
+
+fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
+    // add merge into target_table
+    let table_index = merge_into
+        .meta_data
+        .read()
+        .get_table_index(
+            Some(merge_into.database.as_str()),
+            merge_into.table.as_str(),
+        )
+        .unwrap();
+
+    let table_entry = merge_into.meta_data.read().table(table_index).clone();
+    let target_table_format = FormatContext::Text(format!(
+        "target_table: {}.{}.{}",
+        table_entry.catalog(),
+        table_entry.database(),
+        table_entry.name(),
+    ));
+
+    // add macthed clauses
+    let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
+    let taregt_schema = table_entry.table().schema();
+    for evaluator in &merge_into.matched_evaluators {
+        let condition_format = evaluator.condition.as_ref().map_or_else(
+            || "condition: None".to_string(),
+            |predicate| format!("condition: {}", format_scalar(predicate)),
+        );
+        if evaluator.update.is_none() {
+            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+                "matched delete: [{}]",
+                condition_format
+            ))));
+        } else {
+            let update_format = evaluator
+                .update
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|(field_idx, expr)| {
+                    format!(
+                        "{} = {}",
+                        taregt_schema.field(*field_idx).name(),
+                        format_scalar(expr)
+                    )
+                })
+                .join(",");
+            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+                "matched update: [{},update set {}]",
+                condition_format, update_format
+            ))));
+        }
+    }
+    // add unmacthed clauses
+    let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len());
+    for evaluator in &merge_into.unmatched_evaluators {
+        let condition_format = evaluator.condition.as_ref().map_or_else(
+            || "condition: None".to_string(),
+            |predicate| format!("condition: {}", format_scalar(predicate)),
+        );
+        let insert_schema_format = evaluator
+            .source_schema
+            .fields
+            .iter()
+            .map(|field| field.name())
+            .join(",");
+        let values_format = evaluator.values.iter().map(format_scalar).join(",");
+        let unmatched_format = format!(
+            "insert into ({}) values({})",
+            insert_schema_format, values_format
+        );
+        unmatched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+            "unmatched insert: [{},{}]",
+            condition_format, unmatched_format
+        ))));
+    }
+    let s_expr = merge_into.input.as_ref();
+    let input_format_child = s_expr.to_format_tree(&merge_into.meta_data);
+    let all_children = [matched_children, unmatched_children, vec![
+        input_format_child,
+    ]]
+    .concat();
+    let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
+    Ok(format!("MergeInto:\n{res}"))
 }

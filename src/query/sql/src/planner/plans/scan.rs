@@ -16,11 +16,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use itertools::Itertools;
 
 use super::ScalarItem;
@@ -169,6 +170,7 @@ impl Operator for Scan {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns: self.used_columns(),
+            orderings: vec![],
         }))
     }
 
@@ -178,7 +180,7 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
         let num_rows = self
@@ -268,6 +270,19 @@ impl Operator for Scan {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        unreachable!()
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for children of scan".to_string(),
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for children of scan".to_string(),
+        ))
     }
 }

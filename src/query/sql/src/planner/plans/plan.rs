@@ -16,19 +16,20 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_catalog::query_kind::QueryKind;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 use super::SetSecondaryRolesPlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
+use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
@@ -46,6 +47,7 @@ use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
+use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
@@ -61,6 +63,7 @@ use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
+use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -71,6 +74,7 @@ use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
+use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
@@ -301,6 +305,12 @@ pub enum Plan {
     DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
     ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
 
+    // Password policy
+    CreatePasswordPolicy(Box<CreatePasswordPolicyPlan>),
+    AlterPasswordPolicy(Box<AlterPasswordPolicyPlan>),
+    DropPasswordPolicy(Box<DropPasswordPolicyPlan>),
+    DescPasswordPolicy(Box<DescPasswordPolicyPlan>),
+
     // Task
     CreateTask(Box<CreateTaskPlan>),
     AlterTask(Box<AlterTaskPlan>),
@@ -318,11 +328,14 @@ pub enum RewriteKind {
     ShowEngines,
     ShowIndexes,
 
+    ShowLocks,
+
     ShowCatalogs,
     ShowDatabases,
-    ShowTables(String),
-    ShowColumns(String, String),
+    ShowTables(String, String),
+    ShowColumns(String, String, String),
     ShowTablesStatus,
+    ShowVirtualColumns,
 
     ShowStreams(String),
 
@@ -334,6 +347,7 @@ pub enum RewriteKind {
     DescribeStage,
     ListStage,
     ShowRoles,
+    ShowPasswordPolicies,
 
     Call,
 }
@@ -404,11 +418,9 @@ impl Plan {
             Plan::CreateDatamaskPolicy(plan) => plan.schema(),
             Plan::DropDatamaskPolicy(plan) => plan.schema(),
             Plan::DescDatamaskPolicy(plan) => plan.schema(),
-            Plan::CreateNetworkPolicy(plan) => plan.schema(),
-            Plan::AlterNetworkPolicy(plan) => plan.schema(),
-            Plan::DropNetworkPolicy(plan) => plan.schema(),
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
+            Plan::DescPasswordPolicy(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
@@ -452,6 +464,7 @@ impl Plan {
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
+                | Plan::DescPasswordPolicy(_)
                 | Plan::CopyIntoTable(_)
                 | Plan::ShowTasks(_)
                 | Plan::DescribeTask(_)

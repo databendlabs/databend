@@ -15,9 +15,9 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_exception::Result;
-use common_storages_system::ClusteringHistoryLogElement;
-use common_storages_system::ClusteringHistoryQueue;
+use databend_common_exception::Result;
+use databend_common_storages_system::ClusteringHistoryLogElement;
+use databend_common_storages_system::ClusteringHistoryQueue;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

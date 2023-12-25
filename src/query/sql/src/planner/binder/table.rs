@@ -22,69 +22,69 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::Connection;
-use common_ast::ast::Expr;
-use common_ast::ast::FileLocation;
-use common_ast::ast::Identifier;
-use common_ast::ast::Indirection;
-use common_ast::ast::Join;
-use common_ast::ast::Literal;
-use common_ast::ast::Query;
-use common_ast::ast::SelectStageOptions;
-use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::Statement;
-use common_ast::ast::TableAlias;
-use common_ast::ast::TableReference;
-use common_ast::ast::TimeTravelPoint;
-use common_ast::ast::UriLocation;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::StageTableInfo;
-use common_catalog::statistics::BasicColumnStatistics;
-use common_catalog::table::NavigationPoint;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_catalog::table_function::TableFunction;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::is_stream_column;
-use common_expression::types::DataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnId;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::FunctionKind;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::BASE_BLOCK_IDS_COL_NAME;
-use common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use common_expression::ORIGIN_VERSION_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_types::MetaId;
-use common_storage::DataOperator;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
-use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetRSTable;
-use common_storages_result_cache::ResultCacheMetaManager;
-use common_storages_result_cache::ResultCacheReader;
-use common_storages_result_cache::ResultScan;
-use common_storages_stage::StageTable;
-use common_storages_view::view_table::QUERY;
-use common_users::UserApiProvider;
 use dashmap::DashMap;
+use databend_common_ast::ast::Connection;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectStageOptions;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TimeTravelPoint;
+use databend_common_ast::ast::UriLocation;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::is_stream_column;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_types::MetaId;
+use databend_common_storage::DataOperator;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storages_parquet::Parquet2Table;
+use databend_common_storages_parquet::ParquetRSTable;
+use databend_common_storages_result_cache::ResultCacheMetaManager;
+use databend_common_storages_result_cache::ResultCacheReader;
+use databend_common_storages_result_cache::ResultScan;
+use databend_common_storages_stage::StageTable;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_users::UserApiProvider;
 use log::info;
 use parking_lot::RwLock;
 
@@ -133,7 +133,8 @@ impl Binder {
                 for indirect in names {
                     if let Indirection::Star(span) = indirect {
                         return Err(ErrorCode::SemanticError(
-                            "SELECT * with no tables specified is not valid".to_string(),
+                            "'SELECT *' is used without specifying any tables in the FROM clause."
+                                .to_string(),
                         )
                         .set_span(*span));
                     }
@@ -241,7 +242,7 @@ impl Binder {
             .await
         {
             Ok(table) => table,
-            Err(_) => {
+            Err(e) => {
                 let mut parent = bind_context.parent.as_mut();
                 loop {
                     if parent.is_none() {
@@ -260,10 +261,13 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                ))
-                .set_span(*span));
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
+                    return Err(ErrorCode::UnknownTable(format!(
+                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
+                    ))
+                    .set_span(*span));
+                }
+                return Err(e);
             }
         };
 
@@ -378,7 +382,7 @@ impl Binder {
                     let field_expr = ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
                         func_name: "get".to_string(),
-                        params: vec![i + 1],
+                        params: vec![Scalar::Number(NumberScalar::Int64((i + 1) as i64))],
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
@@ -410,7 +414,9 @@ impl Binder {
                 }
                 return Ok((new_expr, bind_context.clone()));
             } else {
-                return Err(ErrorCode::Internal("Invalid table function subquery"));
+                return Err(ErrorCode::Internal(
+                    "Invalid subquery in table function: Table functions do not support this type of subquery.",
+                ));
             }
         }
         // Set name for srf result column
@@ -512,12 +518,12 @@ impl Binder {
 
                         return Ok((new_expr, bind_context));
                     } else {
-                        return Err(ErrorCode::Internal("lateral join bind project_set failed")
+                        return Err(ErrorCode::Internal("Failed to bind project_set for lateral join. This may indicate an issue with the SRF (Set Returning Function) processing or an internal logic error.")
                             .set_span(*span));
                     }
                 } else {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "lateral join don't support `{}` function",
+                        "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
                     ))
                     .set_span(*span));
@@ -553,10 +559,10 @@ impl Binder {
                 hints: None,
                 distinct: false,
                 select_list: vec![SelectTarget::AliasedExpr {
-                    expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                    expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
                         distinct: false,
-                        name: common_ast::ast::Identifier {
+                        name: databend_common_ast::ast::Identifier {
                             span: *span,
                             name: func_name.name.clone(),
                             quote: None,
@@ -604,16 +610,15 @@ impl Binder {
         if func_name.name.eq_ignore_ascii_case("result_scan") {
             let query_id = parse_result_scan_args(&table_args)?;
             if query_id.is_empty() {
-                return Err(ErrorCode::InvalidArgument(
-                    "query_id must be specified when using `RESULT_SCAN`",
-                )
-                .set_span(*span));
+                return Err(ErrorCode::InvalidArgument("The `RESULT_SCAN` function requires a 'query_id' parameter. Please specify a valid query ID.")
+                    .set_span(*span));
             }
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let meta_key = self.ctx.get_result_cache_key(&query_id);
             if meta_key.is_none() {
                 return Err(ErrorCode::EmptyData(format!(
-                    "`RESULT_SCAN` could not find related cache key in current session for this query id: {query_id}"
+                    "`RESULT_SCAN` failed: No cache key found in current session for query ID '{}'.",
+                    query_id
                 )).set_span(*span));
             }
             let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
@@ -628,8 +633,8 @@ impl Binder {
                 }
                 None => {
                     return Err(ErrorCode::EmptyData(format!(
-                        "`RESULT_SCAN` could not fetch cache value, maybe the data has touched ttl and was cleaned up.\n\
-                    query id: {query_id}, cache key: {meta_key}"
+                        "`RESULT_SCAN` failed: Unable to fetch cached data for query ID '{}'. The data may have exceeded its TTL or been cleaned up. Cache key: '{}'",
+                        query_id, meta_key
                     )).set_span(*span));
                 }
             };
@@ -906,9 +911,16 @@ impl Binder {
             FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
                 let max_column_position = self.metadata.read().get_max_column_position();
                 if max_column_position == 0 {
-                    return Err(ErrorCode::SemanticError(
-                        "select columns from csv file must in the form of $<column_position>",
-                    ));
+                    let file_type = match stage_info.file_format_params {
+                        FileFormatParams::Csv(..) => "CSV",
+                        FileFormatParams::Tsv(..) => "TSV",
+                        _ => unreachable!(), // This branch should never be reached
+                    };
+
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        file_type
+                    )));
                 }
 
                 let mut fields = vec![];
@@ -931,9 +943,10 @@ impl Binder {
                 StageTable::try_create(info)?
             }
             _ => {
-                return Err(ErrorCode::Unimplemented(
-                    "query stage files only support parquet/NDJson/CSV/TSV format for now",
-                ));
+                return Err(ErrorCode::Unimplemented(format!(
+                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    stage_info.file_format_params
+                )));
             }
         };
 
@@ -1127,11 +1140,12 @@ impl Binder {
 
         if cols_alias.len() > res_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
-                "table has {} columns available but {} columns specified",
+                "The CTE '{}' has {} columns, but {} aliases were provided. Ensure the number of aliases matches the number of columns in the CTE.",
+                table_name,
                 res_bind_context.columns.len(),
                 cols_alias.len()
             ))
-            .set_span(span));
+                .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
             res_bind_context.columns[index].column_name = column_name.clone();
@@ -1203,7 +1217,7 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let table = table.table();
-        let statistics_provider = table.column_statistics_provider().await?;
+        let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
         let table_version = if table.engine() == "STREAM" {
             let options = table.options();
             let table_version = options
@@ -1298,8 +1312,12 @@ impl Binder {
                         }
                     }
                 }
-                _ => {
-                    return Err(ErrorCode::Internal("Invalid column entry"));
+                other => {
+                    return Err(ErrorCode::Internal(format!(
+                        "Invalid column entry '{:?}' encountered while binding the base table '{}'. Ensure that the table definition and column references are correct.",
+                        other.name(),
+                        table_name
+                    )));
                 }
             }
         }
@@ -1340,7 +1358,7 @@ impl Binder {
             predicates.push(predicate);
         }
 
-        let stat = table.table_statistics().await?;
+        let stat = table.table_statistics(self.ctx.clone()).await?;
         let scan = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,
@@ -1439,7 +1457,7 @@ impl Binder {
                 );
 
                 match new_expr {
-                    common_expression::Expr::Constant {
+                    databend_common_expression::Expr::Constant {
                         scalar,
                         data_type: DataType::Timestamp,
                         ..
@@ -1450,9 +1468,10 @@ impl Binder {
                         ))
                     }
 
-                    _ => Err(ErrorCode::InvalidArgument(
-                        "TimeTravelPoint must be constant timestamp value",
-                    )),
+                    other => Err(ErrorCode::InvalidArgument(format!(
+                        "TimeTravelPoint for 'Timestamp' must resolve to a constant timestamp value. Provided expression '{:?}' is not a constant timestamp. Ensure the expression is a constant and of type timestamp.",
+                        other
+                    ))),
                 }
             }
         }
@@ -1479,7 +1498,10 @@ fn string_value(value: &Scalar) -> Result<String> {
     match value {
         Scalar::String(val) => String::from_utf8(val.clone())
             .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
-        _ => Err(ErrorCode::BadArguments("invalid string.")),
+        other => Err(ErrorCode::BadArguments(format!(
+            "Expected a string value, but found a '{}'.",
+            other
+        ))),
     }
 }
 
@@ -1520,8 +1542,8 @@ fn parse_table_function_args(
         if !named_args.is_empty() {
             let invalid_names = named_args.into_keys().collect::<Vec<String>>().join(", ");
             return Err(ErrorCode::InvalidArgument(format!(
-                "Invalid named params: {}",
-                invalid_names
+                "Invalid named parameters for 'flatten': {}, valid parameters are: [input, path, outer, recursive, mode]",
+                invalid_names,
             ))
             .set_span(*span));
         }
@@ -1538,8 +1560,8 @@ fn parse_table_function_args(
                 .collect::<Vec<String>>()
                 .join(", ");
             return Err(ErrorCode::InvalidArgument(format!(
-                "Invalid named params: {}",
-                invalid_names
+                "Named parameters are not allowed for '{}'. Invalid parameters provided: {}.",
+                func_name.name, invalid_names
             ))
             .set_span(*span));
         }

@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::cast_scalar;
@@ -31,6 +31,7 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
+use crate::types::NumberScalar;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -177,7 +178,10 @@ pub fn check_cast<Index: ColumnIndex>(
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
             let params = if let DataType::Decimal(ty) = dest_type {
-                vec![ty.precision() as usize, ty.scale() as usize]
+                vec![
+                    Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
+                    Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+                ]
             } else {
                 vec![]
             };
@@ -257,7 +261,7 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
 pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,
-    params: &[usize],
+    params: &[Scalar],
     args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {

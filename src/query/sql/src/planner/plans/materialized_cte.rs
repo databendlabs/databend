@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -45,11 +45,13 @@ impl Operator for MaterializedCte {
         let output_columns = right_prop.output_columns.clone();
         let outer_columns = right_prop.outer_columns.clone();
         let used_columns = right_prop.used_columns.clone();
+        let orderings = right_prop.orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
@@ -59,7 +61,7 @@ impl Operator for MaterializedCte {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         Ok(Arc::new(StatInfo {
             cardinality: right_stat_info.cardinality,
@@ -78,5 +80,16 @@ impl Operator for MaterializedCte {
         Ok(RequiredProperty {
             distribution: Distribution::Serial,
         })
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
     }
 }

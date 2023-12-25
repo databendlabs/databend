@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::schema as mt;
+use databend_common_meta_app::schema as mt;
 use minitrace::func_name;
 
 use crate::common;
@@ -26,7 +26,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v38_empty_proto() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![160, 6, 7, 168, 6, 1];

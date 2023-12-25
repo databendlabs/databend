@@ -20,10 +20,10 @@ use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HivePartInfo {

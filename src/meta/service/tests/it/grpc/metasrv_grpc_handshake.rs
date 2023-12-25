@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@
 use std::ops::Deref;
 use std::time::Duration;
 
-use common_grpc::ConnectionFactory;
-use common_meta_client::from_digit_ver;
-use common_meta_client::to_digit_ver;
-use common_meta_client::MetaGrpcClient;
-use common_meta_client::METACLI_COMMIT_SEMVER;
-use common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_meta_client::from_digit_ver;
+use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::METACLI_COMMIT_SEMVER;
+use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;
 use log::info;

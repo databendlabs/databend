@@ -14,25 +14,25 @@
 
 use std::collections::HashSet;
 
-use common_base::base::tokio;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnMeta;
-use common_catalog::plan::Partitions;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
-use common_sql::Planner;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::FusePartInfo;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::Partitions;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
+use databend_common_sql::Planner;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 fn expected_data_block(
     parts: &Partitions,

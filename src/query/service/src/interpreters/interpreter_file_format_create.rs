@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::UserDefinedFileFormat;
-use common_sql::plans::CreateFileFormatPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserDefinedFileFormat;
+use databend_common_sql::plans::CreateFileFormatPlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_openai::OpenAI;
+use databend_common_openai::OpenAI;
 
 fn create_openai() -> Option<OpenAI> {
     let key = std::env::var("OPENAI_API_KEY").unwrap_or("".to_string());

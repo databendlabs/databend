@@ -14,19 +14,19 @@
 
 use std::fmt::Display;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FunctionContext;
-use common_expression::RawExpr;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RawExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
@@ -249,7 +249,7 @@ impl PhysicalPlanBuilder {
                 let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant {
+                if let databend_common_expression::Expr::Constant {
                     scalar: new_scalar, ..
                 } = expr
                 {

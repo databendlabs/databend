@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_storage::Datum;
-use storages_common_table_meta::meta::ColumnStatistics;
+use databend_common_storage::Datum;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 // #[derive(Debug, Clone)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]

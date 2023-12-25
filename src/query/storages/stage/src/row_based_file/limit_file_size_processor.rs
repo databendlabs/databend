@@ -16,14 +16,14 @@ use std::any::Any;
 use std::mem;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use crate::row_based_file::buffers::FileOutputBuffers;
 
@@ -64,7 +64,7 @@ impl Processor for LimitFileSizeProcessor {
         self
     }
 
-    fn event(&mut self) -> common_exception::Result<Event> {
+    fn event(&mut self) -> databend_common_exception::Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
             Ok(Event::Finished)
@@ -102,7 +102,7 @@ impl Processor for LimitFileSizeProcessor {
         }
     }
 
-    fn process(&mut self) -> common_exception::Result<()> {
+    fn process(&mut self) -> databend_common_exception::Result<()> {
         assert!(self.output_data.is_none());
         assert!(self.input_data.is_some());
 

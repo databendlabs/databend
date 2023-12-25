@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_expression::EXTENSION_KEY;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::EXTENSION_KEY;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;
@@ -204,10 +204,10 @@ pub fn traverse_parquet_schema_tree(
 
 #[cfg(test)]
 mod tests {
-    use common_expression::types::NumberDataType;
-    use common_expression::TableDataType;
-    use common_expression::TableField;
-    use common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
     use parquet::arrow::arrow_to_parquet_schema;
 
     use crate::parquet_rs::build_parquet_schema_tree;

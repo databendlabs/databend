@@ -15,8 +15,8 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use common_base::base::uuid::Uuid;
-use common_expression::ColumnId;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_expression::ColumnId;
 
 use crate::meta::ColumnStatistics;
 
@@ -93,9 +93,9 @@ impl<T: Ord + Clone> MinMax<T> {
 
 #[cfg(test)]
 mod tests {
-    use common_exception::Result;
-    use common_expression::types::NumberScalar;
-    use common_expression::Scalar;
+    use databend_common_exception::Result;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::Scalar;
 
     use crate::meta::MinMax;
 

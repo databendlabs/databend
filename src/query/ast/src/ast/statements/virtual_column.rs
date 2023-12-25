@@ -19,9 +19,11 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateVirtualColumnStmt {
+    pub if_not_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -31,7 +33,11 @@ pub struct CreateVirtualColumnStmt {
 
 impl Display for CreateVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE VIRTUAL COLUMN (")?;
+        write!(f, "CREATE VIRTUAL COLUMN ")?;
+        if self.if_not_exists {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write!(f, "(")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
         write_dot_separated_list(
@@ -47,6 +53,7 @@ impl Display for CreateVirtualColumnStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlterVirtualColumnStmt {
+    pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -56,7 +63,11 @@ pub struct AlterVirtualColumnStmt {
 
 impl Display for AlterVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ALTER VIRTUAL COLUMN (")?;
+        write!(f, "ALTER VIRTUAL COLUMN ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "(")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
         write_dot_separated_list(
@@ -72,6 +83,7 @@ impl Display for AlterVirtualColumnStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropVirtualColumnStmt {
+    pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -79,7 +91,11 @@ pub struct DropVirtualColumnStmt {
 
 impl Display for DropVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP VIRTUAL COLUMN FOR ")?;
+        write!(f, "DROP VIRTUAL COLUMN ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "FOR ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -108,6 +124,36 @@ impl Display for RefreshVirtualColumnStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowVirtualColumnsStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowVirtualColumnsStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW VIRTUAL COLUMNS")?;
+        if let Some(table) = &self.table {
+            write!(f, "FROM {}", table)?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
+        }
+
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
 
         Ok(())
     }

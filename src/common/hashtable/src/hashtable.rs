@@ -17,7 +17,7 @@ use std::intrinsics::unlikely;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;

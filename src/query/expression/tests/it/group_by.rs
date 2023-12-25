@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::*;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::*;
 
 use crate::common::new_block;
 

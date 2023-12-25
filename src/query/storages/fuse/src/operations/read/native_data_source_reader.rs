@@ -15,19 +15,22 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::StealablePartitions;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_sql::IndexType;
 
 use super::native_data_source::DataSource;
 use crate::io::AggIndexReader;
@@ -35,9 +38,11 @@ use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
+use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 use crate::FusePartInfo;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
+    func_ctx: FunctionContext,
     id: usize,
     finished: bool,
     batch_size: usize,
@@ -49,12 +54,17 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+
+    table_schema: Arc<TableSchema>,
+    table_index: IndexType,
 }
 
 impl ReadNativeDataSource<true> {
     pub fn create(
         id: usize,
+        table_index: IndexType,
         ctx: Arc<dyn TableContext>,
+        table_schema: Arc<TableSchema>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
@@ -62,7 +72,9 @@ impl ReadNativeDataSource<true> {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+        let func_ctx = ctx.get_function_context()?;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
+            func_ctx,
             id,
             output,
             batch_size,
@@ -72,6 +84,8 @@ impl ReadNativeDataSource<true> {
             partitions,
             index_reader,
             virtual_reader,
+            table_schema,
+            table_index,
         })
     }
 }
@@ -79,7 +93,9 @@ impl ReadNativeDataSource<true> {
 impl ReadNativeDataSource<false> {
     pub fn create(
         id: usize,
+        table_index: IndexType,
         ctx: Arc<dyn TableContext>,
+        table_schema: Arc<TableSchema>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
@@ -87,9 +103,11 @@ impl ReadNativeDataSource<false> {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+        let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
             false,
         > {
+            func_ctx,
             id,
             output,
             batch_size,
@@ -99,6 +117,8 @@ impl ReadNativeDataSource<false> {
             partitions,
             index_reader,
             virtual_reader,
+            table_schema,
+            table_index,
         })))
     }
 }
@@ -110,6 +130,17 @@ impl SyncSource for ReadNativeDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &self
+                        .partitions
+                        .ctx
+                        .get_runtime_filter_with_id(self.table_index),
+                    &self.func_ctx,
+                )? {
+                    return Ok(Some(DataBlock::empty()));
+                }
                 if let Some(index_reader) = self.index_reader.as_ref() {
                     let fuse_part = FusePartInfo::from_part(&part)?;
                     let loc =
@@ -198,7 +229,15 @@ impl Processor for ReadNativeDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
+            let filters = self
+                .partitions
+                .ctx
+                .get_runtime_filter_with_id(self.table_index);
             for part in &parts {
+                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
+                {
+                    continue;
+                }
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
                 let index_reader = self.index_reader.clone();

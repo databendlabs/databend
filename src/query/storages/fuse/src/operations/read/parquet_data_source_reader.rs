@@ -15,21 +15,22 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::StealablePartitions;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::TableSchema;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
-use common_sql::IndexType;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_sql::IndexType;
 
 use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
@@ -42,7 +43,7 @@ use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
-    ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     id: usize,
     table_index: IndexType,
     finished: bool,
@@ -73,10 +74,10 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-
+        let func_ctx = ctx.get_function_context()?;
         if BLOCKING_IO {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
-                ctx: ctx.clone(),
+                func_ctx,
                 id,
                 table_index,
                 output,
@@ -93,7 +94,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
                 false,
             > {
-                ctx: ctx.clone(),
+                func_ctx,
                 id,
                 table_index,
                 output,
@@ -120,8 +121,11 @@ impl SyncSource for ReadParquetDataSource<true> {
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
-                    &self.ctx.get_runtime_filter_with_id(self.table_index),
-                    &self.partitions.ctx.get_function_context()?,
+                    &self
+                        .partitions
+                        .ctx
+                        .get_runtime_filter_with_id(self.table_index),
+                    &self.func_ctx,
                 )? {
                     return Ok(Some(DataBlock::empty()));
                 }
@@ -220,13 +224,13 @@ impl Processor for ReadParquetDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
+            let filters = self
+                .partitions
+                .ctx
+                .get_runtime_filter_with_id(self.table_index);
             for part in &parts {
-                if runtime_filter_pruner(
-                    self.table_schema.clone(),
-                    part,
-                    &self.ctx.get_runtime_filter_with_id(self.table_index),
-                    &self.partitions.ctx.get_function_context()?,
-                )? {
+                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
+                {
                     continue;
                 }
                 let part = part.clone();

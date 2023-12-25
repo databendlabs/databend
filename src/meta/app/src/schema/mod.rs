@@ -54,6 +54,8 @@ pub use lock::CreateLockRevReq;
 pub use lock::DeleteLockRevReq;
 pub use lock::ExtendLockRevReq;
 pub use lock::ListLockRevReq;
+pub use lock::ListLocksReq;
+pub use lock::LockInfo;
 pub use lock::LockKey;
 pub use lock::LockMeta;
 pub use lock::LockType;

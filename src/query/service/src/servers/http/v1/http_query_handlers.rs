@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::mask_connection_info;
-use common_exception::ErrorCode;
-use common_expression::DataSchemaRef;
-use common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_base::base::mask_connection_info;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataSchemaRef;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
 use log::error;
 use log::info;
+use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use poem::error::Error as PoemError;
@@ -232,6 +233,7 @@ async fn query_final_handler(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("{}: final http query", query_id);
@@ -272,6 +274,7 @@ async fn query_cancel_handler(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("{}: http query is killed", query_id);
@@ -335,6 +338,7 @@ async fn query_page_handler(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
@@ -366,6 +370,7 @@ pub(crate) async fn query_handler(
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&ctx.query_id);
     let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
@@ -446,4 +451,40 @@ fn query_id_not_found_or_removed(
 fn query_id_to_trace_id(query_id: &str) -> TraceId {
     let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
     TraceId(((hash_high as u128) << 64) + (hash_low as u128))
+}
+
+/// The HTTP query endpoints are expected to be responses within 60 seconds.
+/// If it exceeds far of 60 seconds, there might be something wrong, we should
+/// log it.
+struct SlowRequestLogTracker {
+    started_at: std::time::Instant,
+    query_id: String,
+    method: String,
+    uri: String,
+}
+
+impl SlowRequestLogTracker {
+    fn new(ctx: &HttpQueryContext) -> Self {
+        Self {
+            started_at: std::time::Instant::now(),
+            query_id: ctx.query_id.clone(),
+            method: ctx.http_method.clone(),
+            uri: ctx.uri.clone(),
+        }
+    }
+}
+
+impl Drop for SlowRequestLogTracker {
+    fn drop(&mut self) {
+        let elapsed = self.started_at.elapsed();
+        if elapsed.as_secs_f64() > 60.0 {
+            warn!(
+                "{}: slow http query request on {} {}, elapsed: {:.2}s",
+                self.query_id,
+                self.method,
+                self.uri,
+                elapsed.as_secs_f64()
+            );
+        }
+    }
 }

@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Filters;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_kvapi::kvapi::KVApi;
-use common_users::UserApiProvider;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_users::UserApiProvider;
 
 use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::sql::ScalarExpr;
@@ -48,6 +48,7 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
     }
 }
 
+/// create push down filters
 pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
     let filter = cast_expr_to_non_null_boolean(
         scalar

@@ -16,7 +16,7 @@ use std::fmt;
 use std::fmt::Display;
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 
 use crate::principal::GrantObjectByID;
 

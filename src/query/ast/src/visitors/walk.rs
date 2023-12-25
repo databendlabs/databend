@@ -378,6 +378,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             visitor.visit_show_table_functions(show_options)
         }
         Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
+        Statement::ShowLocks(stmt) => visitor.visit_show_locks(stmt),
         Statement::KillStmt {
             kill_target,
             object_id,
@@ -435,6 +436,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
         Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),
         Statement::RefreshVirtualColumn(stmt) => visitor.visit_refresh_virtual_column(stmt),
+        Statement::ShowVirtualColumns(stmt) => visitor.visit_show_virtual_columns(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),
@@ -502,6 +504,13 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
         Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
+        Statement::CreatePasswordPolicy(stmt) => visitor.visit_create_password_policy(stmt),
+        Statement::AlterPasswordPolicy(stmt) => visitor.visit_alter_password_policy(stmt),
+        Statement::DropPasswordPolicy(stmt) => visitor.visit_drop_password_policy(stmt),
+        Statement::DescPasswordPolicy(stmt) => visitor.visit_desc_password_policy(stmt),
+        Statement::ShowPasswordPolicies { show_options } => {
+            visitor.visit_show_password_policies(show_options)
+        }
         Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
         Statement::ExecuteTask(stmt) => visitor.visit_execute_task(stmt),
         Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),

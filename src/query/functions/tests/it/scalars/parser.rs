@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::Expr as AExpr;
-use common_ast::ast::IntervalKind;
-use common_ast::ast::Literal as ASTLiteral;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::UnaryOperator;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_expression::shrink_scalar;
-use common_expression::types::decimal::DecimalDataType;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::RawExpr;
-use common_expression::Scalar;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::ast::IntervalKind;
+use databend_common_ast::ast::Literal as ASTLiteral;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
@@ -148,10 +152,15 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .collect(),
             params: params
                 .into_iter()
-                .map(|param| match param {
-                    ASTLiteral::UInt64(u) => u as usize,
-                    ASTLiteral::Decimal256 { .. } => 0_usize,
-                    _ => unimplemented!(),
+                .map(|param| {
+                    let raw_expr = transform_expr(param, &[]);
+                    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+                    let (expr, _) = ConstantFolder::fold(
+                        &expr,
+                        &FunctionContext::default(),
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    expr.into_constant().unwrap().1
                 })
                 .collect(),
         },
@@ -229,7 +238,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => {
             if let Some(inner) = trim_where {
                 match inner.0 {
-                    common_ast::ast::TrimWhere::Both => RawExpr::FunctionCall {
+                    databend_common_ast::ast::TrimWhere::Both => RawExpr::FunctionCall {
                         span,
                         name: "trim_both".to_string(),
                         params: vec![],
@@ -238,7 +247,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                             transform_expr(*inner.1, columns),
                         ],
                     },
-                    common_ast::ast::TrimWhere::Leading => RawExpr::FunctionCall {
+                    databend_common_ast::ast::TrimWhere::Leading => RawExpr::FunctionCall {
                         span,
                         name: "trim_leading".to_string(),
                         params: vec![],
@@ -247,7 +256,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                             transform_expr(*inner.1, columns),
                         ],
                     },
-                    common_ast::ast::TrimWhere::Trailing => RawExpr::FunctionCall {
+                    databend_common_ast::ast::TrimWhere::Trailing => RawExpr::FunctionCall {
                         span,
                         name: "trim_trailing".to_string(),
                         params: vec![],
@@ -349,9 +358,13 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
-                    (vec![key as usize], vec![transform_expr(*expr, columns)])
+                    (vec![key as i64], vec![transform_expr(*expr, columns)])
                 }
             };
+            let params = params
+                .into_iter()
+                .map(|x| Scalar::Number(x.into()))
+                .collect();
             RawExpr::FunctionCall {
                 span,
                 name: "get".to_string(),
@@ -503,41 +516,41 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     }
 }
 
-fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
+fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataType {
     match target_type {
-        common_ast::ast::TypeName::Boolean => DataType::Boolean,
-        common_ast::ast::TypeName::UInt8 => DataType::Number(NumberDataType::UInt8),
-        common_ast::ast::TypeName::UInt16 => DataType::Number(NumberDataType::UInt16),
-        common_ast::ast::TypeName::UInt32 => DataType::Number(NumberDataType::UInt32),
-        common_ast::ast::TypeName::UInt64 => DataType::Number(NumberDataType::UInt64),
-        common_ast::ast::TypeName::Int8 => DataType::Number(NumberDataType::Int8),
-        common_ast::ast::TypeName::Int16 => DataType::Number(NumberDataType::Int16),
-        common_ast::ast::TypeName::Int32 => DataType::Number(NumberDataType::Int32),
-        common_ast::ast::TypeName::Int64 => DataType::Number(NumberDataType::Int64),
-        common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
-        common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
-        common_ast::ast::TypeName::Decimal { precision, scale } => {
+        databend_common_ast::ast::TypeName::Boolean => DataType::Boolean,
+        databend_common_ast::ast::TypeName::UInt8 => DataType::Number(NumberDataType::UInt8),
+        databend_common_ast::ast::TypeName::UInt16 => DataType::Number(NumberDataType::UInt16),
+        databend_common_ast::ast::TypeName::UInt32 => DataType::Number(NumberDataType::UInt32),
+        databend_common_ast::ast::TypeName::UInt64 => DataType::Number(NumberDataType::UInt64),
+        databend_common_ast::ast::TypeName::Int8 => DataType::Number(NumberDataType::Int8),
+        databend_common_ast::ast::TypeName::Int16 => DataType::Number(NumberDataType::Int16),
+        databend_common_ast::ast::TypeName::Int32 => DataType::Number(NumberDataType::Int32),
+        databend_common_ast::ast::TypeName::Int64 => DataType::Number(NumberDataType::Int64),
+        databend_common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
+        databend_common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
+        databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
             DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
         }
-        common_ast::ast::TypeName::String => DataType::String,
-        common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
-        common_ast::ast::TypeName::Date => DataType::Date,
-        common_ast::ast::TypeName::Array(item_type) => {
+        databend_common_ast::ast::TypeName::String => DataType::String,
+        databend_common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
+        databend_common_ast::ast::TypeName::Date => DataType::Date,
+        databend_common_ast::ast::TypeName::Array(item_type) => {
             DataType::Array(Box::new(transform_data_type(*item_type)))
         }
-        common_ast::ast::TypeName::Map { key_type, val_type } => {
+        databend_common_ast::ast::TypeName::Map { key_type, val_type } => {
             let key_type = transform_data_type(*key_type);
             let val_type = transform_data_type(*val_type);
             DataType::Map(Box::new(DataType::Tuple(vec![key_type, val_type])))
         }
-        common_ast::ast::TypeName::Bitmap => DataType::Bitmap,
-        common_ast::ast::TypeName::Tuple { fields_type, .. } => {
+        databend_common_ast::ast::TypeName::Bitmap => DataType::Bitmap,
+        databend_common_ast::ast::TypeName::Tuple { fields_type, .. } => {
             DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
         }
-        common_ast::ast::TypeName::Nullable(inner_type) => {
+        databend_common_ast::ast::TypeName::Nullable(inner_type) => {
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
-        common_ast::ast::TypeName::Variant => DataType::Variant,
+        databend_common_ast::ast::TypeName::Variant => DataType::Variant,
     }
 }
 

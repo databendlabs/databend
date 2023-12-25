@@ -18,38 +18,38 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
-use common_arrow::arrow::datatypes::Field as Arrow2Field;
-use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
-use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::storage::StorageParams;
-use common_pipeline_core::Pipeline;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use common_storages_parquet::ParquetFilesPart;
-use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSPruner;
-use common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
+use databend_common_arrow::arrow::datatypes::Schema as Arrow2Schema;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
+use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetPart;
+use databend_common_storages_parquet::ParquetRSPruner;
+use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_storages_common_pruner::RangePrunerCreator;
 use icelake::catalog::Catalog;
 use opendal::Operator;
-use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
@@ -227,6 +227,7 @@ impl IcebergTable {
             leaf_fields,
             &plan.push_downs,
             read_options,
+            vec![],
         )?;
 
         let sp = self.get_storage_params()?;

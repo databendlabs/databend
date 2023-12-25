@@ -16,8 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use super::RelationalProperty;
@@ -504,7 +504,7 @@ pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
                 self.visit(expr)?;
             }
 
-            self.udfs.insert(&udf.func_name);
+            self.udfs.insert(&udf.name);
             Ok(())
         }
 

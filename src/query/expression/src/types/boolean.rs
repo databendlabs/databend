@@ -14,8 +14,8 @@
 
 use std::ops::Range;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -36,7 +36,7 @@ impl ValueType for BooleanType {
     type ScalarRef<'a> = bool;
     type Column = Bitmap;
     type Domain = BooleanDomain;
-    type ColumnIterator<'a> = common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
+    type ColumnIterator<'a> = databend_common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
 
     #[inline]

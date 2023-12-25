@@ -12,34 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::is_internal_column;
-use common_expression::is_stream_column;
-use common_expression::types::decimal::Decimal128Type;
-use common_expression::types::decimal::Decimal256Type;
-use common_expression::types::decimal::DecimalDataType;
-use common_expression::types::decimal::DecimalDomain;
-use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::SimpleDomain;
-use common_expression::types::string::StringDomain;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::ValueType;
-use common_expression::with_number_mapped_type;
-use common_expression::ColumnId;
-use common_expression::ConstantFolder;
-use common_expression::Domain;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
+use std::collections::HashMap;
+
+use databend_common_exception::Result;
+use databend_common_expression::is_internal_column;
+use databend_common_expression::is_stream_column;
+use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::types::decimal::Decimal256Type;
+use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalDomain;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::ColumnId;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::Index;
 
@@ -134,6 +136,22 @@ impl RangeIndex {
             scalar: Scalar::Boolean(false),
             ..
         }))
+    }
+
+    #[minitrace::trace]
+    pub fn apply_with_partition_columns(
+        &self,
+        stats: &StatisticsOfColumns,
+        partition_columns: &HashMap<String, Scalar>,
+    ) -> Result<bool> {
+        let expr = self.expr.fill_const_column(partition_columns);
+        RangeIndex {
+            expr,
+            func_ctx: self.func_ctx.clone(),
+            schema: self.schema.clone(),
+            default_stats: self.default_stats.clone(),
+        }
+        .apply(stats, |_| false)
     }
 }
 

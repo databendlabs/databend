@@ -15,29 +15,30 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::flight::deserialize_dictionary;
-use common_arrow::arrow::io::ipc::read::Dictionaries;
-use common_arrow::arrow::io::ipc::IpcSchema;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::ArrayType;
-use common_expression::types::NumberType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_io::prelude::BinaryRead;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::BlockMetaTransform;
-use common_pipeline_transforms::processors::BlockMetaTransformer;
-use common_pipeline_transforms::processors::UnknownMode;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::deserialize_batch;
+use databend_common_arrow::arrow::io::flight::deserialize_dictionary;
+use databend_common_arrow::arrow::io::ipc::read::Dictionaries;
+use databend_common_arrow::arrow::io::ipc::IpcSchema;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::BinaryRead;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
 
 use crate::api::DataPacket;
 use crate::api::ExchangeDeserializeMeta;
@@ -84,12 +85,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
     fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
-        let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
-            Ok(meta) => Ok(meta),
-            Err(_) => Err(ErrorCode::BadBytes(
-                "block meta deserialize error when exchange",
-            )),
-        }?;
+        let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
+            .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
 
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;
@@ -220,7 +217,7 @@ where
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::FetchProgress => unreachable!(),
+            DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
             DataPacket::MergeStatus { .. } => unreachable!(),

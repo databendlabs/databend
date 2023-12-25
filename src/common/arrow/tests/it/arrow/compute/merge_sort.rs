@@ -15,10 +15,10 @@
 
 use std::iter::once;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::compute::merge_sort::*;
-use common_arrow::arrow::compute::sort::sort;
-use common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::compute::merge_sort::*;
+use databend_common_arrow::arrow::compute::sort::sort;
+use databend_common_arrow::arrow::error::Result;
 
 #[test]
 fn merge_u32() -> Result<()> {

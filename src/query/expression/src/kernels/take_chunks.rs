@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute::merge_sort::MergeSlice;
-use common_hashtable::RowPtr;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
+use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;

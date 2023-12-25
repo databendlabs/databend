@@ -20,14 +20,14 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::sync::Arc;
 
-use common_catalog::plan::compute_row_id_prefix;
-use common_catalog::plan::split_prefix;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::compute_row_id_prefix;
+use databend_common_catalog::plan::split_prefix;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use goldenfile::Mint;
-use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 struct TestPartInfo {

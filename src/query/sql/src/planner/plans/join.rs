@@ -18,10 +18,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::F64;
-use common_storage::Datum;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::F64;
+use databend_common_storage::Datum;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -390,10 +390,14 @@ impl Operator for Join {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = vec![];
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
@@ -419,7 +423,7 @@ impl Operator for Join {
         }
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         let (mut left_cardinality, mut left_statistics) = (
@@ -516,6 +520,57 @@ impl Operator for Join {
         }
 
         Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut children_required = vec![];
+
+        if self.join_type != JoinType::Cross {
+            // (Hash, Hash)
+            children_required.extend(
+                self.left_conditions
+                    .iter()
+                    .zip(self.right_conditions.iter())
+                    .map(|(l, r)| {
+                        vec![
+                            RequiredProperty {
+                                distribution: Distribution::Hash(vec![l.clone()]),
+                            },
+                            RequiredProperty {
+                                distribution: Distribution::Hash(vec![r.clone()]),
+                            },
+                        ]
+                    }),
+            );
+        }
+
+        if !matches!(
+            self.join_type,
+            JoinType::Right
+                | JoinType::Full
+                | JoinType::RightAnti
+                | JoinType::RightSemi
+                | JoinType::RightMark
+        ) {
+            // (Any, Broadcast)
+            let left_distribution = Distribution::Any;
+            let right_distribution = Distribution::Broadcast;
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: left_distribution,
+                },
+                RequiredProperty {
+                    distribution: right_distribution,
+                },
+            ]);
+        }
+
+        Ok(children_required)
     }
 }
 

@@ -21,32 +21,33 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserDefinedConnection;
-use common_meta_app::principal::UserInfo;
-use common_pipeline_core::processors::profile::Profile;
-use common_pipeline_core::InputError;
-use common_settings::Settings;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::FileStatus;
-use common_storage::MergeStatus;
-use common_storage::StageFileInfo;
-use common_storage::StorageMetrics;
-use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::FileStatus;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StorageMetrics;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_table_meta::meta::Location;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -140,6 +141,8 @@ pub trait TableContext: Send + Sync {
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
+    fn set_need_compact_after_write(&self, enable: bool);
+    fn get_need_compact_after_write(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn get_query_str(&self) -> String;
@@ -217,6 +220,8 @@ pub trait TableContext: Send + Sync {
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
 
+    fn clear_segment_locations(&self) -> Result<()>;
+
     fn get_segment_locations(&self) -> Result<Vec<Location>>;
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
@@ -229,6 +234,10 @@ pub trait TableContext: Send + Sync {
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
+
+    fn add_query_profiles(&self, profiles: &[PlanProfile]);
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn set_runtime_filter(&self, filters: (usize, Vec<Expr<String>>));
 

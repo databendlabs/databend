@@ -85,7 +85,11 @@ impl Rule for RulePushDownLimitOuterJoin {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;

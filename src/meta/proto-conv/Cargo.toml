@@ -1,5 +1,5 @@
 [package]
-name = "common-proto-conv"
+name = "databend-common-proto-conv"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,9 +11,9 @@ doctest = false
 test = true
 
 [dependencies]
-common-expression = { path = "../../query/expression" }
-common-meta-app = { path = "../app" }
-common-protos = { path = "../protos" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-meta-app = { path = "../app" }
+databend-common-protos = { path = "../protos" }
 
 chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }

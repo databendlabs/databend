@@ -19,8 +19,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::future;
 use log::warn;
 use tokio::runtime::Builder;

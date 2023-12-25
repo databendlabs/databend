@@ -15,12 +15,12 @@
 use std::ops::Range;
 use std::time::Instant;
 
-use common_base::rangemap::RangeMerger;
-use common_base::runtime::UnlimitedFuture;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_metrics::storage::metrics_inc_copy_read_part_cost_milliseconds;
-use common_metrics::storage::metrics_inc_copy_read_size_bytes;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_base::runtime::UnlimitedFuture;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_inc_copy_read_part_cost_milliseconds;
+use databend_common_metrics::storage::metrics_inc_copy_read_size_bytes;
 use futures::future::try_join_all;
 use opendal::Operator;
 

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::DataBlock;
-use common_expression::ScalarRef;
-use common_expression::SortColumnDescription;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;

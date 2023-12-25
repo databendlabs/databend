@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_expression::FunctionContext;
-use common_hashtable::RowPtr;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_expression::FunctionContext;
+use databend_common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
 use crate::sql::plans::JoinType;

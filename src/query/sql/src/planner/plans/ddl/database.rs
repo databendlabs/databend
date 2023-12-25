@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::DataSchemaRef;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::UndropDatabaseReq;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::UndropDatabaseReq;
 
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]

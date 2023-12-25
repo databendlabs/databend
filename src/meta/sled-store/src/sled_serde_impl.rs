@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::LogId;
-use common_meta_types::Membership;
-use common_meta_types::Node;
-use common_meta_types::SeqNum;
-use common_meta_types::SeqV;
-use common_meta_types::SnapshotMeta;
-use common_meta_types::StoredMembership;
-use common_meta_types::Vote;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::Vote;
 
 use crate::SledBytesError;
 use crate::SledSerde;
@@ -117,7 +117,7 @@ impl SledSerde for Node {
 }
 
 pub(crate) mod impl_compat07 {
-    use common_meta_types::compat07;
+    use databend_common_meta_types::compat07;
 
     use crate::SledBytesError;
     use crate::SledSerde;

@@ -16,10 +16,10 @@ use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app as mt;
-use common_meta_app::background::ManualTriggerParams;
-use common_meta_app::schema::TableStatistics;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::background::ManualTriggerParams;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;

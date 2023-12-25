@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
 use super::row_converter::null_sentinel;

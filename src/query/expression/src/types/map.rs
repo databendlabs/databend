@@ -15,7 +15,7 @@
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::ArrayType;
 use crate::property::Domain;

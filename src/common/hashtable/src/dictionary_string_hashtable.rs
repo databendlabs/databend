@@ -20,7 +20,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use crate::container::Container;
 use crate::container::HeapContainer;

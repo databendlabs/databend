@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::ParquetPart;
 

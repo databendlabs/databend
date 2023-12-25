@@ -16,21 +16,20 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::decimal::*;
-use common_expression::types::*;
-use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::with_number_mapped_type;
-use common_expression::Scalar;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::aggregate_sum::DecimalSumState;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -38,13 +37,13 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 struct NumberAvgState<T, TSum>
 where TSum: ValueType
 {
     pub value: TSum::Scalar,
     pub count: u64,
-    #[serde(skip)]
+    #[borsh(skip)]
     _t: PhantomData<T>,
 }
 
@@ -53,7 +52,8 @@ where
     T: ValueType + Sync + Send,
     TSum: ValueType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
-    TSum::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
+    TSum::Scalar:
+        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn default() -> Self {
         Self {
@@ -69,7 +69,8 @@ where
     T: ValueType + Sync + Send,
     TSum: ValueType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
-    TSum::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
+    TSum::Scalar:
+        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.count += 1;
@@ -95,12 +96,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 
@@ -116,7 +117,7 @@ impl FunctionData for DecimalAvgData {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 struct DecimalAvgState<const OVERFLOW: bool, T>
 where
     T: ValueType,
@@ -129,7 +130,7 @@ where
 impl<const OVERFLOW: bool, T> Default for DecimalAvgState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
@@ -162,7 +163,7 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.add_internal(1, other)
@@ -188,7 +189,7 @@ where
         match self
             .value
             .checked_mul(T::Scalar::e(decimal_avg_data.scale_add as u32))
-            .and_then(|v| v.checked_div(T::Scalar::from_u64(self.count)))
+            .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
         {
             Some(value) => {
                 T::push_item(builder, T::to_scalar_ref(&value));
@@ -203,12 +204,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        deserialize_state(reader)
+        borsh_deserialize_state(reader)
     }
 }
 

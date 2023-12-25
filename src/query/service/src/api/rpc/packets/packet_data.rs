@@ -19,11 +19,12 @@ use std::vec;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storage::CopyStatus;
-use common_storage::MergeStatus;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::MergeStatus;
 use log::error;
 
 use crate::api::rpc::packets::ProgressInfo;
@@ -53,7 +54,7 @@ pub enum DataPacket {
     ErrorCode(ErrorCode),
     Dictionary(FlightData),
     FragmentData(FragmentData),
-    FetchProgress,
+    QueryProfiles(Vec<PlanProfile>),
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MergeStatus(MergeStatus),
@@ -67,12 +68,12 @@ impl DataPacket {
     pub fn bytes_size(&self) -> usize {
         match self {
             DataPacket::ErrorCode(_) => 0,
-            DataPacket::FetchProgress => 0,
             DataPacket::CopyStatus(_) => 0,
             DataPacket::MergeStatus(_) => 0,
             DataPacket::SerializeProgress(_) => 0,
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
+            DataPacket::QueryProfiles(_) => 0,
         }
     }
 }
@@ -87,9 +88,9 @@ impl TryFrom<DataPacket> for FlightData {
                 FlightData::from(error)
             }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
-            DataPacket::FetchProgress => FlightData {
+            DataPacket::QueryProfiles(profiles) => FlightData {
                 app_metadata: vec![0x03],
-                data_body: vec![],
+                data_body: serde_json::to_vec(&profiles)?,
                 data_header: vec![],
                 flight_descriptor: None,
             },
@@ -154,7 +155,10 @@ impl TryFrom<FlightData> for DataPacket {
                 flight_data,
             )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
-            0x03 => Ok(DataPacket::FetchProgress),
+            0x03 => {
+                let status = serde_json::from_slice::<Vec<PlanProfile>>(&flight_data.data_body)?;
+                Ok(DataPacket::QueryProfiles(status))
+            }
             0x04 => {
                 let mut bytes = flight_data.data_body.as_slice();
                 let progress_size = bytes.read_u64::<BigEndian>()?;

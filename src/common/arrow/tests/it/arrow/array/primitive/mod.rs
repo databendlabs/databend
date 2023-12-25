@@ -15,11 +15,11 @@
 
 use std::iter::FromIterator;
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::*;
-use common_arrow::arrow::types::months_days_ns;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::types::months_days_ns;
 
 mod fmt;
 mod mutable;

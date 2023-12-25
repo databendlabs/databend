@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::UndropDatabasePlan;
+use databend_common_exception::Result;
+use databend_common_sql::plans::UndropDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

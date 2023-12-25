@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::AccumulatingTransformer;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::executor::physical_plans::CommitSink as PhysicalCommitSink;
-use common_sql::executor::physical_plans::MutationKind;
-use common_storages_fuse::operations::CommitSink;
-use common_storages_fuse::operations::MutationGenerator;
-use common_storages_fuse::operations::TableMutationAggregator;
-use common_storages_fuse::operations::TransformMergeCommitMeta;
-use common_storages_fuse::FuseTable;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_sql::executor::physical_plans::CommitSink as PhysicalCommitSink;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::operations::CommitSink;
+use databend_common_storages_fuse::operations::MutationGenerator;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
+use databend_common_storages_fuse::FuseTable;
 
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -65,6 +66,11 @@ impl PipelineBuilder {
         }
 
         let snapshot_gen = MutationGenerator::new(plan.snapshot.clone());
+        let lock = if plan.need_lock {
+            Some(LockManager::create_table_lock(plan.table_info.clone())?)
+        } else {
+            None
+        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -74,7 +80,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                plan.need_lock,
+                lock.clone(),
                 None,
             )
         })

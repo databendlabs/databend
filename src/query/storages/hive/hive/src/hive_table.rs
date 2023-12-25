@@ -17,50 +17,50 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_recursion::async_recursion;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::catalog_kind::CATALOG_HIVE;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::NavigationPoint;
-use common_catalog::table::Table;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
-use common_storage::init_operator;
-use common_storage::DataOperator;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_catalog::catalog_kind::CATALOG_HIVE;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use futures::TryStreamExt;
 use log::info;
 use log::trace;
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;
@@ -619,7 +619,10 @@ impl Table for HiveTable {
         Ok(None)
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 

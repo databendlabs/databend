@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::type_check::check;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
-use common_expression::RawExpr;
-use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::evaluator::apply_cse;
-use common_sql::evaluator::BlockOperator;
-use common_sql::optimizer::ColumnSet;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::evaluator::apply_cse;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::optimizer::ColumnSet;
 use itertools::Itertools;
 
 #[test]

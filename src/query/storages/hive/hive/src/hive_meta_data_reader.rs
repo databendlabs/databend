@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::read::read_metadata_async;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_arrow::parquet::read::read_metadata_async;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_storages_common_cache::InMemoryItemCacheReader;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Loader;
+use databend_storages_common_cache_manager::CacheManager;
 use opendal::Operator;
-use storages_common_cache::InMemoryItemCacheReader;
-use storages_common_cache::LoadParams;
-use storages_common_cache::Loader;
-use storages_common_cache_manager::CacheManager;
 
 pub struct LoaderWrapper<T>(T);
 pub type FileMetaDataReader = InMemoryItemCacheReader<FileMetaData, LoaderWrapper<Operator>>;

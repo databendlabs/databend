@@ -14,7 +14,7 @@ version = "0.1.0"
 name = "databend-sqllogictests"
 
 [dependencies]
-common-exception = { path = "../../src/common/exception" }
+databend-common-exception = { path = "../../src/common/exception" }
 
 async-trait = { workspace = true }
 clap = { workspace = true }

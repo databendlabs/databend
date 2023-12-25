@@ -17,12 +17,12 @@ use std::slice::Iter;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_expression::types::number::Number;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringIterator;
-use common_hashtable::DictionaryKeys;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringIterator;
+use databend_common_hashtable::DictionaryKeys;
 
 use super::large_number::LargeNumber;
 

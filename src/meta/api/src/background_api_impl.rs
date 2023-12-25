@@ -15,40 +15,40 @@
 use std::fmt::Display;
 
 use chrono::Utc;
-use common_meta_app::app_error::AppError;
-use common_meta_app::app_error::BackgroundJobAlreadyExists;
-use common_meta_app::app_error::UnknownBackgroundJob;
-use common_meta_app::background::BackgroundJobId;
-use common_meta_app::background::BackgroundJobIdent;
-use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundTaskIdent;
-use common_meta_app::background::BackgroundTaskInfo;
-use common_meta_app::background::CreateBackgroundJobReply;
-use common_meta_app::background::CreateBackgroundJobReq;
-use common_meta_app::background::DeleteBackgroundJobReply;
-use common_meta_app::background::DeleteBackgroundJobReq;
-use common_meta_app::background::GetBackgroundJobReply;
-use common_meta_app::background::GetBackgroundJobReq;
-use common_meta_app::background::GetBackgroundTaskReply;
-use common_meta_app::background::GetBackgroundTaskReq;
-use common_meta_app::background::ListBackgroundJobsReq;
-use common_meta_app::background::ListBackgroundTasksReq;
-use common_meta_app::background::UpdateBackgroundJobParamsReq;
-use common_meta_app::background::UpdateBackgroundJobReply;
-use common_meta_app::background::UpdateBackgroundJobStatusReq;
-use common_meta_app::background::UpdateBackgroundTaskReply;
-use common_meta_app::background::UpdateBackgroundTaskReq;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::ConditionResult::Eq;
-use common_meta_types::InvalidReply;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeq::Any;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::TxnRequest;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::BackgroundJobAlreadyExists;
+use databend_common_meta_app::app_error::UnknownBackgroundJob;
+use databend_common_meta_app::background::BackgroundJobId;
+use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundTaskIdent;
+use databend_common_meta_app::background::BackgroundTaskInfo;
+use databend_common_meta_app::background::CreateBackgroundJobReply;
+use databend_common_meta_app::background::CreateBackgroundJobReq;
+use databend_common_meta_app::background::DeleteBackgroundJobReply;
+use databend_common_meta_app::background::DeleteBackgroundJobReq;
+use databend_common_meta_app::background::GetBackgroundJobReply;
+use databend_common_meta_app::background::GetBackgroundJobReq;
+use databend_common_meta_app::background::GetBackgroundTaskReply;
+use databend_common_meta_app::background::GetBackgroundTaskReq;
+use databend_common_meta_app::background::ListBackgroundJobsReq;
+use databend_common_meta_app::background::ListBackgroundTasksReq;
+use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
+use databend_common_meta_app::background::UpdateBackgroundJobReply;
+use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
+use databend_common_meta_app::background::UpdateBackgroundTaskReply;
+use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeq::Any;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::TxnRequest;
 use log::as_debug;
 use log::debug;
 use minitrace::func_name;
@@ -243,9 +243,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(KVMeta {
-                    expire_at: Some(req.expire_at),
-                }),
+                Some(MetaSpec::new_expire(req.expire_at)),
             ))
             .await?;
         // confirm a successful update

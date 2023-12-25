@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
-use common_base::base::tokio;
-use common_base::rangemap::RangeMerger;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::arrow_reader::RowSelection;

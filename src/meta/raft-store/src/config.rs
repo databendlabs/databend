@@ -15,11 +15,11 @@
 use std::net::Ipv4Addr;
 use std::sync::LazyLock;
 
-use common_exception::Result;
-use common_grpc::DNSResolver;
-use common_meta_types::Endpoint;
-use common_meta_types::MetaStartupError;
-use common_meta_types::NodeId;
+use databend_common_exception::Result;
+use databend_common_grpc::DNSResolver;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::NodeId;
 
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");

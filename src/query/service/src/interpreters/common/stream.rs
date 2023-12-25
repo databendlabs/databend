@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_types::MatchSeq;
-use common_sql::MetadataRef;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
-use common_storages_stream::stream_table::StreamTable;
-use common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
-use common_storages_stream::stream_table::STREAM_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::MetadataRef;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::sessions::QueryContext;
 

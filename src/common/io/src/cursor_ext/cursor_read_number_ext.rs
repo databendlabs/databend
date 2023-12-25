@@ -15,8 +15,8 @@
 use std::io::BufRead;
 use std::io::Cursor;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use lexical_core::FromLexical;
 
 pub trait ReadNumberExt {
@@ -104,7 +104,9 @@ where B: AsRef<[u8]>
         let buf = self.remaining_slice();
         let (n_in, n_out) = collect_number(buf);
         if n_in == 0 {
-            return Err(ErrorCode::BadBytes("invalid text for number"));
+            return Err(ErrorCode::BadBytes(
+                "Failed to parse number from text: input does not contain a valid numeric format.",
+            ));
         }
         let n = read_num_text_exact(&buf[..n_out])?;
         self.consume(n_in);
@@ -114,7 +116,9 @@ where B: AsRef<[u8]>
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T> {
         let (n_in, n_out) = collect_number(self.remaining_slice());
         if n_in == 0 {
-            return Err(ErrorCode::BadBytes("invalid text for number"));
+            return Err(ErrorCode::BadBytes(
+                "Unable to parse float: provided text is not in a recognizable floating-point format.",
+            ));
         }
         let n = read_num_text_exact(&self.remaining_slice()[..n_out])?;
         self.consume(n_in);

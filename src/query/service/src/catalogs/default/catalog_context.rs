@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStore;
 
 use crate::databases::DatabaseFactory;
 use crate::storages::StorageFactory;

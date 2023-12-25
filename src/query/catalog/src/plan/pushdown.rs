@@ -14,12 +14,12 @@
 
 use std::fmt::Debug;
 
-use common_expression::types::DataType;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 
 use super::AggIndexInfo;
 use crate::plan::Projection;

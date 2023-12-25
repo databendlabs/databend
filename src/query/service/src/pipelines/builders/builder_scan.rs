@@ -16,19 +16,18 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::OneBlockSource;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::ConstantTableScan;
-use common_sql::executor::physical_plans::CteScan;
-use common_sql::executor::physical_plans::TableScan;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline_transforms::processors::ProfileStub;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::ConstantTableScan;
+use databend_common_sql::executor::physical_plans::CteScan;
+use databend_common_sql::executor::physical_plans::TableScan;
 
 use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
@@ -72,16 +71,9 @@ impl PipelineBuilder {
 
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
-            if table.support_row_id_column() {
-                self.main_pipeline.add_transform(|input, output| {
-                    TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
-                })?;
-            } else {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "Table engine `{}` does not support virtual column _row_id",
-                    table.engine()
-                )));
-            }
+            self.main_pipeline.add_transform(|input, output| {
+                TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
+            })?;
         }
 
         let schema = scan.source.schema();

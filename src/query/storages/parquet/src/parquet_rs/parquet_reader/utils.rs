@@ -15,16 +15,16 @@
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
-use common_arrow::arrow::array::Arrow2Arrow;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::FieldIndex;
-use common_expression::TableSchema;
+use databend_common_arrow::arrow::array::Arrow2Arrow;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchema;
 use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ProjectionMask;
@@ -96,8 +96,8 @@ pub fn transform_record_batch_by_field_paths(
 
 pub fn bitmap_to_boolean_array(bitmap: Bitmap) -> BooleanArray {
     let res = Box::new(
-        common_arrow::arrow::array::BooleanArray::try_new(
-            common_arrow::arrow::datatypes::DataType::Boolean,
+        databend_common_arrow::arrow::array::BooleanArray::try_new(
+            databend_common_arrow::arrow::datatypes::DataType::Boolean,
             bitmap,
             None,
         )

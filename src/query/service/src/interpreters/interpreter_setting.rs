@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::SettingPlan;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::SettingPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

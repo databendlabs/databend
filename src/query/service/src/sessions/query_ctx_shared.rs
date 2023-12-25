@@ -20,28 +20,29 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
-use common_base::base::Progress;
-use common_base::runtime::Runtime;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::MaterializedCtesBlocks;
-use common_catalog::table_context::StageAttachment;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Expr;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserDefinedConnection;
-use common_meta_app::principal::UserInfo;
-use common_pipeline_core::InputError;
-use common_settings::Settings;
-use common_sql::IndexType;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::MergeStatus;
-use common_storage::StorageMetrics;
-use common_users::UserApiProvider;
 use dashmap::DashMap;
+use databend_common_base::base::Progress;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::MaterializedCtesBlocks;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StorageMetrics;
+use databend_common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -100,6 +101,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
+    pub(in crate::sessions) auto_compact_after_write: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -107,6 +109,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
+
+    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, Vec<Expr<String>>>>>,
 }
 
@@ -144,12 +149,14 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
+            auto_compact_after_write: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
         }))
     }

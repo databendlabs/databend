@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use bytes::Bytes;
-use common_base::base::tokio;
-use common_storages_parquet::InMemoryRowGroup;
+use databend_common_base::base::tokio;
+use databend_common_storages_parquet::InMemoryRowGroup;
 use opendal::services::Memory;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;

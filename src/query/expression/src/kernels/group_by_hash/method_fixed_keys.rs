@@ -16,11 +16,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Not;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_hashtable::FastHash;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;

@@ -17,48 +17,50 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::UInt32Type;
-use common_expression::ConstantFolder;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_expression::FromData;
-use common_expression::RemoteExpr;
-use common_expression::SendableDataBlockStream;
-use common_expression::ROW_NUMBER_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableInfo;
-use common_sql::binder::MergeIntoType;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MergeInto;
-use common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
-use common_sql::executor::physical_plans::MergeIntoSource;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans;
-use common_sql::plans::MergeInto as MergePlan;
-use common_sql::plans::RelOperator;
-use common_sql::plans::UpdatePlan;
-use common_sql::IndexType;
-use common_sql::ScalarExpr;
-use common_sql::TypeCheck;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FromData;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::ROW_NUMBER_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::binder::MergeIntoType;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MergeInto;
+use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
+use databend_common_sql::executor::physical_plans::MergeIntoSource;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans;
+use databend_common_sql::plans::MergeInto as MergePlan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::UpdatePlan;
+use databend_common_sql::IndexType;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::TypeCheck;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::hook::hook_compact;
+use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
+use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -100,7 +102,7 @@ impl Interpreter for MergeIntoInterpreter {
         // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
         // build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),
@@ -121,6 +123,18 @@ impl Interpreter for MergeIntoInterpreter {
                 true,
             )
             .await;
+        }
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
+        {
+            let refresh_desc = RefreshDesc {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
         }
 
         Ok(build_res)
@@ -463,7 +477,7 @@ impl MergeIntoInterpreter {
                 plans::INSERT_NAME => {
                     columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
                 }
-                plans::UPDTAE_NAME => {
+                plans::UPDATE_NAME => {
                     columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
                 }
                 plans::DELETE_NAME => {

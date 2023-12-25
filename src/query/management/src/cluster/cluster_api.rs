@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_meta_types::MatchSeq;
-use common_meta_types::NodeInfo;
+use databend_common_exception::Result;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
 pub trait ClusterApi: Sync + Send {

@@ -26,8 +26,8 @@ use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
 use chrono_tz::Tz;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::types::date::check_date;

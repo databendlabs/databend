@@ -228,6 +228,9 @@ select array_transform(col1, A -> a * 2), array_apply(col2, B -> upper(B)) from 
 statement error 1065
 select array_transform([1, 2], x -> y + 1)
 
+statement error 1065
+select array_transform([1, 2], x -> count(*))
+
 query T
 select array_filter([5, -6, NULL, 7], x -> x > 0)
 ----

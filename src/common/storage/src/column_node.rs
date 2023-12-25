@@ -15,15 +15,15 @@
 //! This module provides data structures for build column indexes.
 //! It's used by Fuse Engine and Parquet Engine.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::InitNested;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::FieldIndex;
-use common_expression::TableSchema;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read::InitNested;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchema;
 
 #[derive(Debug, Clone)]
 pub struct ColumnNodes {

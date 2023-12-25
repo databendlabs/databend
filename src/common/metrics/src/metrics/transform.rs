@@ -155,3 +155,43 @@ pub fn metrics_inc_exchange_read_count(v: usize) {
 pub fn metrics_inc_exchange_read_bytes(c: usize) {
     EXCHANGE_READ_BYTES.inc_by(c as u64);
 }
+
+// Sort spill metrics
+pub fn metrics_inc_sort_spill_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_write_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_write_bytes(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_BYTES.get_or_create(labels).inc_by(c);
+}
+
+pub fn metrics_inc_sort_spill_write_milliseconds(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64)
+}
+
+pub fn metrics_inc_sort_spill_read_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_read_bytes(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_BYTES.get_or_create(labels).inc_by(c);
+}
+
+pub fn metrics_inc_sort_spill_read_milliseconds(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64);
+}

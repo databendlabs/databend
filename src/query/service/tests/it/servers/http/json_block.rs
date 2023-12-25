@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int32Type;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::FromData;
-use common_io::prelude::FormatSettings;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
+use databend_common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::json_block::JsonBlock;
 use pretty_assertions::assert_eq;
 use serde::Serialize;

@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-cache"
+name = "databend-storages-common-cache"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,9 +13,9 @@ test = false
 
 [dependencies]
 bytes = { workspace = true }
-common-cache = { path = "../../../../common/cache" }
-common-exception = { path = "../../../../common/exception" }
-common-metrics = { path = "../../../../common/metrics" }
+databend-common-cache = { path = "../../../../common/cache" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-common-metrics = { path = "../../../../common/metrics" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

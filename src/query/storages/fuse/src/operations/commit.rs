@@ -18,39 +18,38 @@ use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use chrono::Utc;
-use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableStatistics;
-use common_meta_app::schema::UpdateStreamMetaReq;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::MatchSeq;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::executor::physical_plans::MutationKind;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::debug;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CachedObject;
-use storages_common_locks::set_backoff;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
@@ -61,6 +60,7 @@ use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
+use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -103,7 +103,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                false,
+                None,
                 prev_snapshot_id,
             )
         })?;
@@ -344,7 +344,7 @@ impl FuseTable {
                                 self.table_info.ident
                             );
 
-                            common_base::base::tokio::time::sleep(d).await;
+                            databend_common_base::base::tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             let latest_fuse_table =
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;

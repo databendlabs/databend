@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::Scalar;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::constant::is_true;

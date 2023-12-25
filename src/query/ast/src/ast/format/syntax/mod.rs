@@ -17,7 +17,7 @@ mod dml;
 mod expr;
 mod query;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use ddl::*;
 use dml::*;
 use pretty::RcDoc;
