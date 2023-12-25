@@ -17,6 +17,7 @@ use ethnum::i256;
 
 use crate::types::decimal::DecimalType;
 use crate::types::ArgType;
+use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -66,6 +67,10 @@ pub fn group_hash_column(c: &Column) -> Vec<u64> {
         },
         DataType::Boolean => group_hash_type_column::<BooleanType>(c),
 
+        DataType::Binary => {
+            let c = BinaryType::try_downcast_column(c).unwrap();
+            BinaryType::iter_column(&c).map(|x| x.fast_hash()).collect()
+        }
         DataType::String => {
             let c = StringType::try_downcast_column(c).unwrap();
             StringType::iter_column(&c).map(|x| x.fast_hash()).collect()

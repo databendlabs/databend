@@ -60,7 +60,8 @@ impl From<&TableDataType> for ArrowDataType {
             TableDataType::EmptyArray => ArrowDataType::Null,
             TableDataType::EmptyMap => ArrowDataType::Null,
             TableDataType::Boolean => ArrowDataType::Boolean,
-            TableDataType::String => ArrowDataType::LargeBinary,
+            TableDataType::Binary => ArrowDataType::LargeBinary,
+            TableDataType::String => ArrowDataType::LargeUtf8,
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
