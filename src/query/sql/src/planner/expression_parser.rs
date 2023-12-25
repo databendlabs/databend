@@ -357,8 +357,8 @@ pub fn parse_computed_expr_to_string(
 
 pub fn parse_lambda_expr(
     ctx: Arc<dyn TableContext>,
-    column_name: &str,
-    data_type: &DataType,
+    column_names: &[String],
+    data_types: &[DataType],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
     let settings = Settings::create("".to_string());
@@ -366,26 +366,29 @@ pub fn parse_lambda_expr(
     let mut metadata = Metadata::default();
 
     bind_context.set_expr_context(ExprContext::InLambdaFunction);
-    bind_context.add_column_binding(
-        ColumnBindingBuilder::new(
-            column_name.to_string(),
-            0,
-            Box::new(data_type.clone()),
-            Visibility::Visible,
-        )
-        .build(),
-    );
 
-    let table_type = infer_schema_type(data_type)?;
-    metadata.add_base_table_column(
-        column_name.to_string(),
-        table_type,
-        0,
-        None,
-        None,
-        None,
-        None,
-    );
+    for (idx, column_name) in column_names.iter().enumerate() {
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                column_name.to_string(),
+                idx,
+                Box::new(data_types[idx].clone()),
+                Visibility::Visible,
+            )
+            .build(),
+        );
+
+        let table_type = infer_schema_type(&data_types[idx])?;
+        metadata.add_base_table_column(
+            column_name.to_string(),
+            table_type,
+            0,
+            None,
+            None,
+            None,
+            None,
+        );
+    }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(

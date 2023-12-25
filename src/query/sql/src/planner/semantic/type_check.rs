@@ -43,6 +43,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
+use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -50,9 +51,14 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
+use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -1738,7 +1744,8 @@ impl<'a> TypeChecker<'a> {
             .collect::<Vec<_>>();
 
         // TODO: support multiple params
-        if params.len() != 1 {
+        // ARRAY_FOLD have two params
+        if params.len() != 1 && func_name != "array_fold" {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
             )));
@@ -1761,8 +1768,53 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         };
+
+        let inner_tys = if func_name == "array_fold" {
+            with_number_mapped_type!(|NUM| match &inner_ty {
+                DataType::Number(NumberDataType::NUM) => {
+                    type TSum = <NUM as ResultTypeOfUnary>::Sum;
+                    vec![NumberType::<TSum>::data_type(), inner_ty.clone()]
+                }
+                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                    let p = MAX_DECIMAL128_PRECISION;
+                    let decimal_size = DecimalSize {
+                        precision: p,
+                        scale: s.scale,
+                    };
+                    vec![
+                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                        inner_ty.clone(),
+                    ]
+                }
+                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                    let p = MAX_DECIMAL256_PRECISION;
+                    let decimal_size = DecimalSize {
+                        precision: p,
+                        scale: s.scale,
+                    };
+                    vec![
+                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                        inner_ty.clone(),
+                    ]
+                }
+                DataType::Nullable(box ty) => {
+                    vec![DataType::Nullable(Box::new(ty.clone())), DataType::Nullable(Box::new(ty.clone())),]
+                }
+                DataType::Null => {
+                    vec![DataType::Null, DataType::Null,]
+                }
+                _ =>
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "array_fold does not support type '{:?}'",
+                        inner_ty
+                    ))),
+            })
+        } else {
+            vec![inner_ty.clone()]
+        };
+
         let box (lambda_expr, lambda_type) =
-            parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
+            parse_lambda_expr(self.ctx.clone(), &params, &inner_tys, &lambda.expr)?;
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1773,9 +1825,9 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         } else if arg_type.is_nullable() {
-            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
-            DataType::Array(Box::new(lambda_type))
+            DataType::Array(Box::new(lambda_type.clone()))
         };
 
         let (lambda_func, data_type) = match arg_type.remove_nullable() {
@@ -1798,8 +1850,14 @@ impl<'a> TypeChecker<'a> {
             ),
             _ => {
                 // generate lambda expression
-                let lambda_field = DataField::new("0", inner_ty.clone());
-                let lambda_schema = DataSchema::new(vec![lambda_field]);
+                let lambda_schema = if inner_tys.len() == 1 {
+                    let lambda_field = DataField::new("0", inner_tys[0].clone());
+                    DataSchema::new(vec![lambda_field])
+                } else {
+                    let lambda_field0 = DataField::new("0", lambda_type.clone());
+                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
+                    DataSchema::new(vec![lambda_field0, lambda_field1])
+                };
 
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
@@ -1808,7 +1866,7 @@ impl<'a> TypeChecker<'a> {
                     });
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
-                let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+                let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
                 (
                     LambdaFunc {

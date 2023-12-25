@@ -56,11 +56,12 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 4] = [
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
     "array_transform",
     "array_apply",
     "array_map",
     "array_filter",
+    "array_fold",
 ];
 
 fn builtin_functions() -> FunctionRegistry {
