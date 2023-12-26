@@ -23,14 +23,38 @@ pub struct GetKVReq {
     pub key: String,
 }
 
+impl GetKVReq {
+    pub fn new(key: impl ToString) -> Self {
+        Self {
+            key: key.to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MGetKVReq {
     pub keys: Vec<String>,
 }
 
+impl MGetKVReq {
+    pub fn new<S: ToString>(keys: impl IntoIterator<Item = S>) -> Self {
+        Self {
+            keys: keys.into_iter().map(|x| x.to_string()).collect(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListKVReq {
     pub prefix: String,
+}
+
+impl ListKVReq {
+    pub fn new(prefix: impl ToString) -> Self {
+        Self {
+            prefix: prefix.to_string(),
+        }
+    }
 }
 
 pub type UpsertKVReply = Change<Vec<u8>>;

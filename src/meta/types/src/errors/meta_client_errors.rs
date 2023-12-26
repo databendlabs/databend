@@ -27,10 +27,10 @@ pub enum MetaClientError {
     ConfigError(AnyError),
 
     #[error(transparent)]
-    NetworkError(MetaNetworkError),
+    NetworkError(#[from] MetaNetworkError),
 
     #[error(transparent)]
-    HandshakeError(MetaHandshakeError),
+    HandshakeError(#[from] MetaHandshakeError),
 }
 
 impl MetaClientError {
