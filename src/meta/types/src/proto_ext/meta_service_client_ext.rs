@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Extend protobuf generated code with some useful methods.
+use crate::protobuf::meta_service_client::MetaServiceClient;
 
-mod meta_service_client_ext;
-mod seq_v_ext;
-mod snapshot_chunk_request_ext;
-mod stream_item_ext;
-mod txn_ext;
+impl<T> MetaServiceClient<T> {
+    pub fn inner_mut(&mut self) -> &mut tonic::client::Grpc<T> {
+        // assert the size of self is the same as tonic::client::Grpc<T>;
+        assert_eq!(
+            std::mem::size_of::<Self>(),
+            std::mem::size_of::<tonic::client::Grpc<T>>()
+        );
+        let p = self as *mut MetaServiceClient<T>;
+        unsafe { &mut *(p as *mut tonic::client::Grpc<T>) }
+    }
+}

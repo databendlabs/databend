@@ -21,6 +21,7 @@ use std::time::Duration;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::from_digit_ver;
 use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::METACLI_COMMIT_SEMVER;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
@@ -54,7 +55,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
 
     let c = ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None)
         .await?;
-    let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+    let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
     info!("--- client has smaller ver than S.min_cli_ver");
     {
