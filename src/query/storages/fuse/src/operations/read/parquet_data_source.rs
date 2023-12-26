@@ -38,6 +38,7 @@ pub struct DataSourceMeta {
 impl DataSourceMeta {
     pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
         {
+            // TODO should encode this invariant at type level
             let part_len = part.len();
             let data_len = data.len();
             assert_eq!(
