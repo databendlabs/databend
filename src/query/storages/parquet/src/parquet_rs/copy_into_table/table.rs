@@ -143,6 +143,7 @@ impl ParquetTableForCopy {
                         readers.insert(
                             part.schema_index,
                             RowGroupReaderForCopy::try_create(
+                                &part.location,
                                 ctx.clone(),
                                 operator.clone(),
                                 &file_meta_data,

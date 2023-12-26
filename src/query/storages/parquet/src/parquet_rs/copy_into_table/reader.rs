@@ -66,6 +66,7 @@ impl RowGroupReaderForCopy {
     }
 
     pub fn try_create(
+        location: &str,
         ctx: Arc<dyn TableContext>,
         op: Operator,
         file_metadata: &FileMetaData,
@@ -126,6 +127,11 @@ impl RowGroupReaderForCopy {
                 num_inputs += 1;
             }
             output_projection.push(expr);
+        }
+        if num_inputs == 0 {
+            return Err(ErrorCode::BadBytes(format!(
+                "not column name match in parquet file {location}",
+            )));
         }
 
         let mut reader_builder = ParquetRSReaderBuilder::create_with_parquet_schema(
