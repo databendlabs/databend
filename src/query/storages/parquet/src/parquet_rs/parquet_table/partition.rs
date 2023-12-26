@@ -33,11 +33,11 @@ use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use parquet::arrow::arrow_reader::RowSelector;
 
-use super::meta::read_parquet_metas_batch;
 use super::table::ParquetRSTable;
 use crate::parquet_part::collect_small_file_parts;
 use crate::parquet_rs::partition::SerdePageLocation;
 use crate::parquet_rs::partition::SerdeRowSelector;
+use crate::parquet_rs::read_parquet_metas_batch;
 use crate::parquet_rs::ParquetRSRowGroupPart;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
@@ -421,6 +421,7 @@ fn prune_and_generate_partitions(
                 uncompressed_size,
                 sort_min_max,
                 omit_filter: omit,
+                schema_index: 0,
             });
         }
 

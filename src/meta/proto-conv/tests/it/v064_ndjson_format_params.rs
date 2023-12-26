@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_meta_app as mt;
-use databend_common_meta_app::principal::JsonNullAs;
 use databend_common_meta_app::principal::NdJsonFileFormatParams;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use minitrace::func_name;
 
@@ -39,8 +39,8 @@ fn test_decode_v64_ndjson_file_format_params() -> anyhow::Result<()> {
     let want = || {
         mt::principal::FileFormatParams::NdJson(NdJsonFileFormatParams {
             compression: StageFileCompression::Gzip,
-            missing_field_as: JsonNullAs::FieldDefault,
-            null_field_as: JsonNullAs::Null,
+            missing_field_as: NullAs::FieldDefault,
+            null_field_as: NullAs::Null,
         })
     };
     common::test_pb_from_to(func_name!(), want())?;
