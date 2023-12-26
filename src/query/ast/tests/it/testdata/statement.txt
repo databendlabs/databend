@@ -13829,7 +13829,7 @@ AlterNetworkPolicy(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 MINUTE SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 900 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
 FROM
     MyTable1
 ---------- AST ------------
@@ -13842,13 +13842,81 @@ CreateTask(
                 "MyWarehouse",
             ),
         },
-        schedule_opts: IntervalMinutes(
-            15,
+        schedule_opts: Some(
+            IntervalSecs(
+                900,
+            ),
         ),
         suspend_task_after_num_failures: Some(
             3,
         ),
         comments: "This is test task 1",
+        after: [],
+        when_condition: None,
+        sql: "SELECT *\nFROM\n    MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
+FROM
+    MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                15,
+            ),
+        ),
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        after: [],
+        when_condition: None,
+        sql: "SELECT *\nFROM\n    MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 1215 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
+FROM
+    MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                1215,
+            ),
+        ),
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        after: [],
+        when_condition: None,
         sql: "SELECT *\nFROM\n    MyTable1",
     },
 )
@@ -13869,14 +13937,18 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 6 * * *",
-            Some(
-                "America/Los_Angeles",
+        schedule_opts: Some(
+            CronExpression(
+                "0 6 * * *",
+                Some(
+                    "America/Los_Angeles",
+                ),
             ),
         ),
         suspend_task_after_num_failures: None,
         comments: "serverless + cron",
+        after: [],
+        when_condition: None,
         sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
     },
 )
@@ -13894,12 +13966,43 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 12 * * *",
-            None,
+        schedule_opts: Some(
+            CronExpression(
+                "0 12 * * *",
+                None,
+            ),
         ),
         suspend_task_after_num_failures: None,
         comments: "",
+        after: [],
+        when_condition: None,
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1AFTER = '["task2", "task3"]'WHEN = 'Some("(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')")' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [
+            "task2",
+            "task3",
+        ],
+        when_condition: Some(
+            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
+        ),
         sql: "VACUUM TABLE t ",
     },
 )
@@ -13929,6 +14032,43 @@ AlterTask(
         if_exists: false,
         name: "MyTask1",
         options: Suspend,
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
+---------- Output ---------
+ALTER TASK MyTask1 ADD AFTER = '["task2", "task3"]'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: AddAfter(
+            [
+                "task2",
+                "task3",
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 REMOVE AFTER 'task2'
+---------- Output ---------
+ALTER TASK MyTask1 REMOVE AFTER = '["task2"]'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: RemoveAfter(
+            [
+                "task2",
+            ],
+        ),
     },
 )
 
@@ -13966,7 +14106,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 13 MINUTE SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 780 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -13977,8 +14117,37 @@ AlterTask(
                 "MyWarehouse",
             ),
             schedule: Some(
-                IntervalMinutes(
-                    13,
+                IntervalSecs(
+                    780,
+                ),
+            ),
+            suspend_task_after_num_failures: Some(
+                10,
+            ),
+            comments: Some(
+                "serverless + cron",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
+---------- Output ---------
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 5 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+            schedule: Some(
+                IntervalSecs(
+                    5,
                 ),
             ),
             suspend_task_after_num_failures: Some(
@@ -14003,6 +14172,22 @@ AlterTask(
         name: "MyTask2",
         options: ModifyAs(
             "SELECT CURRENT_VERSION()",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'
+---------- Output ---------
+ALTER TASK MyTask1 WHEN (SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: ModifyWhen(
+            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
         ),
     },
 )

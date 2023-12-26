@@ -108,7 +108,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #task_warehouse_option
-            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
+            ~ (AFTER ~ #comma_separated_list0(literal_string))?
+            ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ AS ~ #statement
@@ -119,9 +121,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_if_not_exists,
             task,
             warehouse_opts,
-            _,
-            _,
             schedule_opts,
+            after_tasks,
+            when_conditions,
             suspend_opt,
             comment_opt,
             _,
@@ -134,9 +136,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
                 warehouse_opts,
-                schedule_opts,
+                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                after: match after_tasks {
+                    Some((_, tasks)) => tasks,
+                    None => Vec::new(),
+                },
+                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
             })
         },
@@ -1897,12 +1904,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> }
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ AFTER <string>, <string>...]
+  [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
          | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
@@ -2857,6 +2866,28 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
             AlterTaskOptions::ModifyAs(sql)
         },
     );
+    let modify_when = map(
+        rule! {
+             MODIFY ~ WHEN ~ #expr
+        },
+        |(_, _, expr)| {
+            let when = expr.to_string();
+            AlterTaskOptions::ModifyWhen(when)
+        },
+    );
+    let add_after = map(
+        rule! {
+             ADD ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::AddAfter(after),
+    );
+    let remove_after = map(
+        rule! {
+             REMOVE ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::RemoveAfter(after),
+    );
+
     let set = map(
         rule! {
              SET
@@ -2884,6 +2915,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+        | #modify_when
+        | #add_after
+        | #remove_after
     )(i)
 }
 
@@ -2936,7 +2970,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
     );
     let cron_expr = map(
         rule! {
@@ -2944,10 +2978,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         },
         |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
     );
-
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+    );
     rule!(
         #interval
         | #cron_expr
+        | #interval_sec
     )(i)
 }
 

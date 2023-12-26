@@ -8,6 +8,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'Engine'                          | 'system'             | 'engines'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'acquired_on'                     | 'system'             | 'locks'               | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'active_result_scan'              | 'system'             | 'query_cache'         | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
+| 'after'                           | 'system'             | 'tasks'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'agg_spilled_bytes'               | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'agg_spilled_rows'                | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'attempt_number'                  | 'system'             | 'task_history'        | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
@@ -56,6 +57,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                         | 'system'             | 'tasks'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'compaction_stats'                | 'system'             | 'background_tasks'    | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'completed_time'                  | 'system'             | 'task_history'        | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
+| 'condition_text'                  | 'system'             | 'task_history'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'condition_text'                  | 'system'             | 'tasks'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'constraint_catalog'              | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_name'                 | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_schema'               | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -298,6 +301,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'result_rows'                     | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'result_size'                     | 'system'             | 'query_cache'         | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'revision'                        | 'system'             | 'locks'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'root_task_id'                    | 'system'             | 'task_history'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'row_count'                       | 'system'             | 'clustering_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'run_id'                          | 'system'             | 'task_history'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'scan_bytes'                      | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
