@@ -91,7 +91,10 @@ impl MetaServiceImpl {
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
             .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
+        dbg!("check_token:", &token);
+
         let claim = self.token.try_verify_token(token.clone()).map_err(|e| {
+            dbg!("check_token: failed", &token, &e);
             Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
         })?;
         Ok(claim)
@@ -237,6 +240,7 @@ impl MetaService for MetaServiceImpl {
                 .try_create_token(claim)
                 .map_err(|e| Status::internal(e.to_string()))?;
 
+            dbg!("MetaService::handshake: token", &token);
             let resp = HandshakeResponse {
                 protocol_version: to_digit_ver(&METASRV_SEMVER),
                 payload: token.into_bytes(),
