@@ -183,11 +183,16 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
 
-        if let Some(catalog) = catalog {
-            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("catalog = '{catalog}'"));
-        }
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
 
+        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
@@ -203,7 +208,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog_name, database),
         )
         .await
     }
@@ -356,10 +361,11 @@ impl Binder {
         };
 
         debug!("show drop tables rewrite to: {:?}", query);
+        let catalog = self.ctx.get_current_catalog();
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog, database),
         )
         .await
     }

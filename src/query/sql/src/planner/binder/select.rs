@@ -304,7 +304,7 @@ impl Binder {
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);

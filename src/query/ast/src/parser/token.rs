@@ -350,6 +350,10 @@ pub enum TokenKind {
     ASC,
     #[token("ANTI", ignore(ascii_case))]
     ANTI,
+    #[token("ASYNC", ignore(ascii_case))]
+    ASYNC,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
@@ -420,8 +424,6 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("ATTACH", ignore(ascii_case))]
-    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]

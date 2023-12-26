@@ -557,7 +557,7 @@ impl BindContext {
         let table = metadata.table(table_index);
         if !table.table().supported_internal_column(column_id) {
             return Err(ErrorCode::SemanticError(format!(
-                "Internal column `{}` is not allowed in table `{}`",
+                "Unsupported internal column '{}' in table '{}'.",
                 column_binding.internal_column.column_name(),
                 table.table().name()
             )));

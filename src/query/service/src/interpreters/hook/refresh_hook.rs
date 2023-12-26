@@ -31,6 +31,7 @@ use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_storages_common_table_meta::meta::Location;
+use log::error;
 use log::info;
 use parking_lot::RwLock;
 
@@ -58,31 +59,27 @@ pub async fn hook_refresh(
         return Ok(());
     }
 
-    let refresh_agg_index = ctx
-        .get_settings()
-        .get_enable_refresh_aggregating_index_after_write()?;
-
     let refresh_virtual_column = ctx
         .get_settings()
         .get_enable_refresh_virtual_column_after_write()?;
 
-    if refresh_agg_index || refresh_virtual_column {
-        pipeline.set_on_finished(move |err| {
-            if err.is_ok() {
-                info!("execute pipeline finished successfully, starting run refresh job.");
-                match GlobalIORuntime::instance().block_on(do_hook_refresh(
-                    ctx,
-                    desc,
-                    refresh_agg_index,
-                    refresh_virtual_column,
-                )) {
-                    Ok(_) => info!("execute refresh job successfully."),
-                    Err(e) => info!("execute refresh job failed: {:?}", e),
+    pipeline.set_on_finished(move |may_error| match may_error {
+        Ok(_) => {
+            info!("execute pipeline finished successfully, starting run refresh job.");
+            GlobalIORuntime::instance().block_on(async move {
+                let result = do_hook_refresh(ctx, desc, refresh_virtual_column).await;
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(e) if e.code() == ErrorCode::LICENSE_KEY_INVALID => {
+                        error!("license key invalid: {}", e.message());
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-            }
-            Ok(())
-        });
-    }
+            })
+        }
+        Err(e) => Err(e.clone()),
+    });
 
     Ok(())
 }
@@ -91,7 +88,6 @@ pub async fn hook_refresh(
 async fn do_hook_refresh(
     ctx: Arc<QueryContext>,
     desc: RefreshDesc,
-    refresh_agg_index: bool,
     refresh_virtual_column: bool,
 ) -> Result<()> {
     let table_id = ctx
@@ -100,11 +96,10 @@ async fn do_hook_refresh(
         .get_id();
 
     let mut plans = Vec::new();
-    if refresh_agg_index {
-        let agg_index_plans =
-            generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
-        plans.extend_from_slice(&agg_index_plans);
-    }
+
+    let agg_index_plans = generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
+    plans.extend_from_slice(&agg_index_plans);
+
     if refresh_virtual_column {
         let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
         plans.push(virtual_column_plan);
