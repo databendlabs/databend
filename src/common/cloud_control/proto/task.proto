@@ -8,11 +8,10 @@ message ScheduleOptions {
     interval_type = 0;
     cron_type = 1;
   }
-  optional int32 interval = 1; //  minute, INTERVAL= '5 MINUTE' means execute sql every 5 minutes
+  optional int32 interval = 1; //  secs, INTERVAL= '5 second' means execute sql every 5 secs
   optional string cron = 2; // CRON = '0 2 * * *' means Every night at 2 AM. UTC time zone.
   optional string time_zone = 3; // "UTC..."
   ScheduleType schedule_type = 4;
-  optional int32 interval_second = 5; // second, INTERVAL_SECOND = '5' means execute sql every 5 seconds
 }
 
 message WarehouseOptions {

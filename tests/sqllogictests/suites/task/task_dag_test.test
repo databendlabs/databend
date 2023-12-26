@@ -22,7 +22,7 @@ mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1 SYSTEM$STREAM_HAS_DATA('mystream'
 statement error
 CREATE TASK mytaskerr
   WAREHOUSE = 'mywh'
-  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  SCHEDULE = 5 SECOND
   AFTER 'mytaskroot'
   WHEN SYSTEM$STREAM_HAS_DATA('stream2')
   AS SELECT 11;
@@ -53,7 +53,7 @@ ALTER TASK mytaskchild REMOVE AFTER 'mytaskroot';
 query SSSS
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
 ----
-mytaskchild mywh INTERVAL 0 MINUTE 0 SECOND SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') (empty)
+mytaskchild mywh INTERVAL 0 SECOND SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') (empty)
 
 statement ok
 ALTER TASK mytaskchild ADD AFTER 'mytaskroot';

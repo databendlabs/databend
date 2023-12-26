@@ -80,15 +80,15 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleOptions {
-    Interval(u64, u64),
+    IntervalSecs(u64),
     CronExpression(String, Option<String>),
 }
 
 impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ScheduleOptions::Interval(mins, secs) => {
-                write!(f, " SCHEDULE {} MINUTE {} SECOND", mins, secs)
+            ScheduleOptions::IntervalSecs(secs) => {
+                write!(f, " SCHEDULE {} SECOND", secs)
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, " SCHEDULE CRON '{}'", expr)?;

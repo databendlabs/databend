@@ -2968,9 +2968,9 @@ pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
     let interval = map(
         rule! {
-             #literal_u64 ~ MINUTE ~ (#literal_u64 ~ SECOND)?
+             #literal_u64 ~ MINUTE
         },
-        |(minutes, _, sec)| ScheduleOptions::Interval(minutes, sec.map_or(0, |(s, _)| s)),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
     );
     let cron_expr = map(
         rule! {
@@ -2978,10 +2978,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         },
         |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
     );
-
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+    );
     rule!(
         #interval
         | #cron_expr
+        | #interval_sec
     )(i)
 }
 

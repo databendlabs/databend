@@ -91,9 +91,8 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
     };
     return match schedule_type {
         ScheduleType::IntervalType => Ok(format!(
-            "INTERVAL {} MINUTE {} SECOND",
+            "INTERVAL {} SECOND",
             s.interval.unwrap_or_default(),
-            s.interval_second.unwrap_or_default()
         )),
         ScheduleType::CronType => {
             if s.cron.is_none() {
