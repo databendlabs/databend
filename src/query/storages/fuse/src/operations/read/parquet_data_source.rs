@@ -37,6 +37,16 @@ pub struct DataSourceMeta {
 
 impl DataSourceMeta {
     pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
+        {
+            let part_len = part.len();
+            let data_len = data.len();
+            assert_eq!(
+                part_len, data_len,
+                "Number of PartInfoPtr {} should equal to number of DataSource {}",
+                part_len, data_len,
+            );
+        }
+
         Box::new(DataSourceMeta { parts: part, data })
     }
 }

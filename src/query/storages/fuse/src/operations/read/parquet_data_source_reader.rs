@@ -228,12 +228,18 @@ impl Processor for ReadParquetDataSource<false> {
                 .partitions
                 .ctx
                 .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
+            let mut part_info_ptrs = Vec::with_capacity(parts.len());
+            for part in parts.into_iter() {
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &filters,
+                    &self.func_ctx,
+                )? {
                     continue;
                 }
-                let part = part.clone();
+
+                part_info_ptrs.push(part.clone());
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
                 let index_reader = self.index_reader.clone();
@@ -293,7 +299,7 @@ impl Processor for ReadParquetDataSource<false> {
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((part_info_ptrs, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
 
