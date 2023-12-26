@@ -204,7 +204,10 @@ pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> Result<TableSche
     TableSchema::try_from(&schema)
 }
 
-pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+pub(super) fn create_parquet_table_info(
+    schema: ArrowSchema,
+    stage_info: &StageInfo,
+) -> Result<TableInfo> {
     Ok(TableInfo {
         ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),

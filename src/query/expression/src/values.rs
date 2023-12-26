@@ -1138,17 +1138,17 @@ impl Column {
             Column::String(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
-                    unsafe {
-                        Box::new(
-                            databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new_unchecked(
-                                arrow_type,
-                                 OffsetsBuffer::new_unchecked(offsets),
-                                col.data().clone(),
-                                None,
-                            )
-                            .unwrap(),
+                unsafe {
+                    Box::new(
+                        databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new_unchecked(
+                            arrow_type,
+                            OffsetsBuffer::new_unchecked(offsets),
+                            col.data().clone(),
+                            None,
                         )
-                    }
+                        .unwrap(),
+                    )
+                }
             }
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
