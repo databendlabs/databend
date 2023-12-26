@@ -73,22 +73,23 @@ impl<'a> Selector<'a> {
 
         match (left, right) {
             // Select indices by comparing two scalars.
-            (Value::Scalar(left), Value::Scalar(right)) => {
-                let result = op.expect()(left.cmp(&right));
-                Ok(self.select_boolean_scalar_adapt(
-                    result,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                ))
-            }
+            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars(
+                op,
+                left,
+                right,
+                left_data_type,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
 
             (left, right) => {
                 let mut op = op.clone();
                 let (left, right, validity, data_type) = match (left, right) {
+                    // Select indices by comparing two columns.
                     (Value::Column(left), Value::Column(right)) => {
                         debug_assert!(left_data_type == right_data_type);
                         if left_data_type.is_nullable() {
@@ -110,6 +111,7 @@ impl<'a> Selector<'a> {
                             )
                         }
                     }
+                    // Select indices by comparing column and scalar.
                     (Value::Column(column), scalar) => {
                         if left_data_type.is_nullable() {
                             let column = column.into_nullable().unwrap();
@@ -124,6 +126,7 @@ impl<'a> Selector<'a> {
                             (Value::Column(column), scalar, None, left_data_type)
                         }
                     }
+                    // Select indices by comparing scalar and column.
                     (scalar, Value::Column(column)) => {
                         op = op.reverse();
                         if right_data_type.is_nullable() {

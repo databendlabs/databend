@@ -12,10 +12,69 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::ValueType;
+use crate::Scalar;
+use crate::SelectOp;
 
 impl<'a> Selector<'a> {
+    #[allow(clippy::too_many_arguments)]
+    // Select indices by comparing two scalars.
+    pub(crate) fn select_scalars(
+        &self,
+        op: &SelectOp,
+        left: Scalar,
+        right: Scalar,
+        data_type: DataType,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let result = match data_type.remove_nullable() {
+            DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Date
+            | DataType::Timestamp
+            | DataType::String
+            | DataType::Variant
+            | DataType::EmptyArray
+            | DataType::Tuple(_)
+            | DataType::Array(_) => op.expect()(left.cmp(&right)),
+            DataType::Boolean => BooleanType::compare_operation(op)(
+                left.into_boolean().unwrap(),
+                right.into_boolean().unwrap(),
+            ),
+            _ => {
+                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
+                // Generic has been converted to a specific DataType.
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "{:?} is not supported for comparison",
+                    &data_type
+                )));
+            }
+        };
+
+        let count = self.select_boolean_scalar_adapt(
+            result,
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        );
+        Ok(count)
+    }
+
     pub(crate) fn select_boolean_scalar<const TRUE: bool, const FALSE: bool>(
         &self,
         scalar: bool,
