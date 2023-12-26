@@ -142,6 +142,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.memory_size()
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
         lhs.cmp(&rhs)
     }

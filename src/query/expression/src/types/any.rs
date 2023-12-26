@@ -132,15 +132,16 @@ impl ValueType for AnyType {
         builder.build_scalar()
     }
 
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
-    }
-
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
         scalar.memory_size()
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 }

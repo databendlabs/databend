@@ -62,6 +62,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -330,9 +331,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
-        unreachable!()
-    }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
@@ -347,6 +345,54 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
+    }
+
+    // Compare two scalars and return the Ordering between them.
+    #[inline(always)]
+    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
+        unreachable!()
+    }
+
+    // Return the comparison function for the given select operation, some data types not support comparison.
+    #[inline(always)]
+    fn compare_operation(_op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Equal comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Not equal comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn not_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Greater than comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn greater_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Less than comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn less_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Greater than or equal comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn greater_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
+    }
+
+    // Less than or equal comparison between two scalars, some data types not support it.
+    #[inline(always)]
+    fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        unreachable!()
     }
 }
 

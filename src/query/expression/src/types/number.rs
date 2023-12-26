@@ -39,6 +39,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
@@ -209,8 +210,50 @@ impl<Num: Number> ValueType for NumberType<Num> {
         builder[0]
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
         lhs.cmp(&rhs)
+    }
+
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        match op {
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Lte => Self::less_than_equal,
+        }
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left == right
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left != right
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left <= right
     }
 }
 

@@ -23,78 +23,274 @@ use crate::types::ValueType;
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<T: ValueType>(
+    pub(crate) fn select_column_scalar<
+        T: ValueType,
+        const TRUE: bool,
+        const FALSE: bool,
+        const IS_ANY_TYPE: bool,
+    >(
         &self,
         op: &SelectOp,
-        left: T::Column,
-        right: T::ScalarRef<'a>,
+        column: T::Column,
+        scalar: T::ScalarRef<'a>,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
+        false_selection: &mut [u32],
         mutable_true_idx: &mut usize,
         mutable_false_idx: &mut usize,
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let has_true = !true_selection.is_empty();
-        let has_false = false_selection.1;
-
-        let false_selection = false_selection.0;
-
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
-
-        let (start, end) = match select_strategy {
-            SelectStrategy::True => (*mutable_true_idx, *mutable_true_idx + count),
-            SelectStrategy::False => (*mutable_false_idx, *mutable_false_idx + count),
-            SelectStrategy::All => (0, count),
-        };
-
-        unsafe {
-            match validity {
-                Some(validity) => {
-                    for i in start..end {
-                        let idx = *true_selection.get_unchecked(i);
-                        let ret = validity.get_bit_unchecked(idx as usize)
-                            && op.expect_result(T::compare(
-                                T::index_column_unchecked(&left, idx as usize),
-                                right.clone(),
-                            ));
-                        if has_true {
-                            *true_selection.get_unchecked_mut(true_idx) = idx;
-                            true_idx += ret as usize;
+        match select_strategy {
+            SelectStrategy::True => unsafe {
+                let start = *mutable_true_idx;
+                let end = *mutable_true_idx + count;
+                match validity {
+                    Some(validity) => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for i in start..end {
+                                let idx = *true_selection.get_unchecked(i);
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && expect(T::compare(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    ));
+                                if TRUE {
+                                    true_selection[true_idx] = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    false_selection[false_idx] = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for i in start..end {
+                                let idx = *true_selection.get_unchecked(i);
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && cmp(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
                         }
-                        if has_false {
-                            *false_selection.get_unchecked_mut(false_idx) = idx;
-                            false_idx += !ret as usize;
+                    }
+                    None => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for i in start..end {
+                                let idx = *true_selection.get_unchecked(i);
+                                let ret = expect(T::compare(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                ));
+                                if TRUE {
+                                    true_selection[true_idx] = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    false_selection[false_idx] = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for i in start..end {
+                                let idx = *true_selection.get_unchecked(i);
+                                let ret = cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
                         }
                     }
                 }
-                None => {
-                    for i in start..end {
-                        let idx = *true_selection.get_unchecked(i);
-                        let ret = op.expect_result(T::compare(
-                            T::index_column_unchecked(&left, idx as usize),
-                            right.clone(),
-                        ));
-                        if has_true {
-                            *true_selection.get_unchecked_mut(true_idx) = idx;
-                            true_idx += ret as usize;
+            },
+            SelectStrategy::False => unsafe {
+                let start = *mutable_false_idx;
+                let end = *mutable_false_idx + count;
+                match validity {
+                    Some(validity) => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for i in start..end {
+                                let idx = *false_selection.get_unchecked(i);
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && expect(T::compare(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    ));
+                                if TRUE {
+                                    true_selection[true_idx] = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    false_selection[false_idx] = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for i in start..end {
+                                let idx = *false_selection.get_unchecked(i);
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && cmp(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
                         }
-                        if has_false {
-                            *false_selection.get_unchecked_mut(false_idx) = idx;
-                            false_idx += !ret as usize;
+                    }
+                    None => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for i in start..end {
+                                let idx = *false_selection.get_unchecked(i);
+                                let ret = expect(T::compare(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                ));
+                                if TRUE {
+                                    true_selection[true_idx] = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    false_selection[false_idx] = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for i in start..end {
+                                let idx = *false_selection.get_unchecked(i);
+                                let ret = cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
                         }
                     }
                 }
-            }
+            },
+            SelectStrategy::All => unsafe {
+                match validity {
+                    Some(validity) => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for idx in 0u32..count as u32 {
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && expect(T::compare(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    ));
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for idx in 0u32..count as u32 {
+                                let ret = validity.get_bit_unchecked(idx as usize)
+                                    && cmp(
+                                        T::index_column_unchecked(&column, idx as usize),
+                                        scalar.clone(),
+                                    );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        if IS_ANY_TYPE {
+                            let expect = op.expect();
+                            for idx in 0u32..count as u32 {
+                                let ret = expect(T::compare(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                ));
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        } else {
+                            let cmp = T::compare_operation(op);
+                            for idx in 0u32..count as u32 {
+                                let ret = cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                                if TRUE {
+                                    *true_selection.get_unchecked_mut(true_idx) = idx;
+                                    true_idx += ret as usize;
+                                }
+                                if FALSE {
+                                    *false_selection.get_unchecked_mut(false_idx) = idx;
+                                    false_idx += !ret as usize;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
         }
 
         let true_count = true_idx - *mutable_true_idx;
         let false_count = false_idx - *mutable_false_idx;
         *mutable_true_idx = true_idx;
         *mutable_false_idx = false_idx;
-        if has_true {
+        if TRUE {
             Ok(true_count)
         } else {
             Ok(count - false_count)

@@ -23,6 +23,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmptyArrayType;
@@ -153,8 +154,50 @@ impl ValueType for EmptyArrayType {
         std::mem::size_of::<usize>()
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
         lhs.cmp(&rhs)
+    }
+
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        match op {
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Lte => Self::less_than_equal,
+        }
+    }
+
+    #[inline(always)]
+    fn equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
+    }
+
+    #[inline(always)]
+    fn not_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn greater_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
+    }
+
+    #[inline(always)]
+    fn less_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
     }
 }
 

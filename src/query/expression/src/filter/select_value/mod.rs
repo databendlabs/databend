@@ -28,7 +28,7 @@ mod select_scalar;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<T: ValueType>(
+    pub(crate) fn select_type_values<T: ValueType, const IS_ANY_TYPE: bool>(
         &self,
         op: &SelectOp,
         left: Value<AnyType>,
@@ -41,43 +41,192 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        let has_true = !true_selection.is_empty();
+        let has_false = false_selection.1;
+
         match (left, right) {
-            (Value::Column(a), Value::Column(b)) => {
-                let a = T::try_downcast_column(&a).unwrap();
-                let b = T::try_downcast_column(&b).unwrap();
+            (Value::Column(left), Value::Column(right)) => {
+                let left = T::try_downcast_column(&left).unwrap();
+                let right = T::try_downcast_column(&right).unwrap();
 
-                self.select_columns::<T>(
-                    op,
-                    a,
-                    b,
-                    validity,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
+                if has_true && has_false {
+                    self.select_columns::<T, true, true, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                } else if has_true {
+                    self.select_columns::<T, true, false, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                } else {
+                    self.select_columns::<T, false, true, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                }
             }
-            (Value::Column(a), Value::Scalar(b)) => {
-                let a = T::try_downcast_column(&a).unwrap();
-                let b = b.as_ref();
-                let b = T::try_downcast_scalar(&b).unwrap();
+            (Value::Column(left), Value::Scalar(right)) => {
+                let left = T::try_downcast_column(&left).unwrap();
+                let right = right.as_ref();
+                let right = T::try_downcast_scalar(&right).unwrap();
 
-                self.select_column_scalar::<T>(
-                    op,
-                    a,
-                    b,
-                    validity,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
+                if has_true && has_false {
+                    self.select_column_scalar::<T, true, true, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                } else if has_true {
+                    self.select_column_scalar::<T, true, false, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                } else {
+                    self.select_column_scalar::<T, false, true, IS_ANY_TYPE>(
+                        op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection.0,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                }
             }
             _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn select_boolean_scalar_adapt(
+        &self,
+        scalar: bool,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> usize {
+        let has_true = !true_selection.is_empty();
+        let has_false = false_selection.1;
+        if has_true && has_false {
+            self.select_boolean_scalar::<true, true>(
+                scalar,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else if has_true {
+            self.select_boolean_scalar::<true, false>(
+                scalar,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else {
+            self.select_boolean_scalar::<false, true>(
+                scalar,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        }
+    }
+
+    pub(crate) fn select_boolean_column_adapt(
+        &self,
+        column: Bitmap,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> usize {
+        let has_true = !true_selection.is_empty();
+        let has_false = false_selection.1;
+        if has_true && has_false {
+            self.select_boolean_column::<true, true>(
+                column,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else if has_true {
+            self.select_boolean_column::<true, false>(
+                column,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else {
+            self.select_boolean_column::<false, true>(
+                column,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
         }
     }
 }

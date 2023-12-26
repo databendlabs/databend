@@ -35,6 +35,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::ColumnBuilder;
+use crate::SelectOp;
 
 /// JSONB bytes representation of `null`.
 pub const JSONB_NULL: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -168,8 +169,50 @@ impl ValueType for VariantType {
         col.data().len() + col.offsets().len() * 8
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
         jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+    }
+
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        match op {
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Lte => Self::less_than_equal,
+        }
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Equal
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Greater
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Less
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Less
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
     }
 }
 

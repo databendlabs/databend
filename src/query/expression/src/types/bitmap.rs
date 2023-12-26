@@ -155,6 +155,7 @@ impl ValueType for BitmapType {
         col.data().len() + col.offsets().len() * 8
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
         lhs.cmp(rhs)
     }

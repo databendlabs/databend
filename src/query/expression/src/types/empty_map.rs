@@ -153,6 +153,7 @@ impl ValueType for EmptyMapType {
         std::mem::size_of::<usize>()
     }
 
+    #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
         lhs.cmp(&rhs)
     }

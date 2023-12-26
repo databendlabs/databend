@@ -56,148 +56,44 @@ impl SelectOp {
     }
 
     #[inline]
-    pub fn expect_result(&self, res: Ordering) -> bool {
+    pub fn expect(&self) -> fn(Ordering) -> bool {
         match self {
-            SelectOp::Equal => res.is_eq(),
-            SelectOp::NotEqual => res.is_ne(),
-            SelectOp::Gt => res.is_gt(),
-            SelectOp::Lt => res.is_lt(),
-            SelectOp::Gte => res.is_ge(),
-            SelectOp::Lte => res.is_le(),
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lte => Self::less_than_equal,
         }
     }
-}
 
-pub fn select_op<T>(op: &SelectOp) -> fn(T, T) -> bool
-where T: std::cmp::PartialOrd {
-    match op {
-        SelectOp::Equal => equal::<T>,
-        SelectOp::NotEqual => not_equal::<T>,
-        SelectOp::Gt => greater_than::<T>,
-        SelectOp::Gte => greater_than_equal::<T>,
-        SelectOp::Lt => less_than::<T>,
-        SelectOp::Lte => less_than_equal::<T>,
+    #[inline(always)]
+    fn equal(res: Ordering) -> bool {
+        matches!(res, std::cmp::Ordering::Equal)
     }
-}
 
-pub fn select_op_tuple<T>(op: &SelectOp) -> fn(T, T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match op {
-        SelectOp::Equal => tuple_equal::<T>,
-        SelectOp::NotEqual => tuple_not_equal::<T>,
-        SelectOp::Gt => tuple_greater_than::<T>,
-        SelectOp::Gte => tuple_greater_than_equal::<T>,
-        SelectOp::Lt => tuple_less_than::<T>,
-        SelectOp::Lte => tuple_less_than_equal::<T>,
+    #[inline(always)]
+    fn not_equal(res: Ordering) -> bool {
+        !matches!(res, std::cmp::Ordering::Equal)
     }
-}
 
-pub fn tuple_compare_default_value(op: &SelectOp) -> bool {
-    match op {
-        SelectOp::Equal => true,
-        SelectOp::NotEqual => false,
-        SelectOp::Gt => false,
-        SelectOp::Gte => true,
-        SelectOp::Lt => false,
-        SelectOp::Lte => true,
+    #[inline(always)]
+    fn greater_than(res: Ordering) -> bool {
+        matches!(res, std::cmp::Ordering::Greater)
     }
-}
 
-pub fn empty_array_compare_value(op: &SelectOp) -> bool {
-    match op {
-        SelectOp::Equal => true,
-        SelectOp::NotEqual => false,
-        SelectOp::Gt => false,
-        SelectOp::Gte => true,
-        SelectOp::Lt => false,
-        SelectOp::Lte => true,
+    #[inline(always)]
+    fn less_than(res: Ordering) -> bool {
+        matches!(res, std::cmp::Ordering::Less)
     }
-}
 
-#[inline(always)]
-fn equal<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left == right
-}
-
-#[inline(always)]
-fn not_equal<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left != right
-}
-
-#[inline(always)]
-fn greater_than<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left > right
-}
-
-#[inline(always)]
-fn greater_than_equal<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left >= right
-}
-
-#[inline(always)]
-fn less_than<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left < right
-}
-
-#[inline(always)]
-fn less_than_equal<T>(left: T, right: T) -> bool
-where T: std::cmp::PartialOrd {
-    left <= right
-}
-
-#[inline(always)]
-fn tuple_equal<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    if left != right { Some(false) } else { None }
-}
-
-#[inline(always)]
-fn tuple_not_equal<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    if left != right { Some(true) } else { None }
-}
-
-#[inline(always)]
-fn tuple_greater_than<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match left.partial_cmp(&right) {
-        Some(Ordering::Greater) => Some(true),
-        Some(Ordering::Less) => Some(false),
-        _ => None,
+    #[inline(always)]
+    fn greater_than_equal(res: Ordering) -> bool {
+        !matches!(res, std::cmp::Ordering::Less)
     }
-}
 
-#[inline(always)]
-fn tuple_greater_than_equal<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match left.partial_cmp(&right) {
-        Some(Ordering::Greater) => Some(true),
-        Some(Ordering::Less) => Some(false),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn tuple_less_than<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match left.partial_cmp(&right) {
-        Some(Ordering::Less) => Some(true),
-        Some(Ordering::Greater) => Some(false),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn tuple_less_than_equal<T>(left: T, right: T) -> Option<bool>
-where T: std::cmp::PartialOrd {
-    match left.partial_cmp(&right) {
-        Some(Ordering::Less) => Some(true),
-        Some(Ordering::Greater) => Some(false),
-        _ => None,
+    #[inline(always)]
+    fn less_than_equal(res: Ordering) -> bool {
+        !matches!(res, std::cmp::Ordering::Greater)
     }
 }
