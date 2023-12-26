@@ -31,35 +31,63 @@ statement ok
 insert into t1 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 
 query T
-explain select a, v['b'] from t1
+explain select a, v['a'][0], v['b'] from t1
+----
+EvalScalar
+├── output columns: [t1.a (#0), v['a'][0] (#2), v['b'] (#3)]
+├── expressions: [get_by_keypath(t1.v (#1), '{"a",0}'), get_by_keypath(t1.v (#1), '{"b"}')]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 137
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
+explain select a, v['b'] from t1 where v['a'][0] = 1
+----
+EvalScalar
+├── output columns: [t1.a (#0), v['b'] (#2)]
+├── expressions: [get_by_keypath(t1.v (#1), '{"b"}')]
+├── estimated rows: 0.20
+└── TableScan
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 137
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [is_true(TRY_CAST(get_by_keypath(t1.v (#1), '{"a",0}') AS UInt8 NULL) = 1)], limit: NONE]
+    └── estimated rows: 0.20
+
+statement ok
+create virtual column (v['a'][0], v['b']) for t1
+
+statement ok
+refresh virtual column for t1
+
+query T
+explain select a, v['a'][0], v['b'] from t1
 ----
 TableScan
 ├── table: default.test_virtual_db.t1
-├── output columns: [a (#0), v['b'] (#2)]
+├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
 ├── read rows: 1
 ├── read bytes: 137
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['b']]]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
 └── estimated rows: 1.00
 
 query T
-explain select a, v['a'][0] from t1
-----
-TableScan
-├── table: default.test_virtual_db.t1
-├── output columns: [a (#0), v['a'][0] (#2)]
-├── read rows: 1
-├── read bytes: 137
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0]]]
-└── estimated rows: 1.00
-
-query T
-explain select a, v['b'] from t1 where v['a'][0] = 1;
+explain select a, v['b'] from t1 where v['a'][0] = 1
 ----
 TableScan
 ├── table: default.test_virtual_db.t1
@@ -84,18 +112,65 @@ create table t2 (a int null, v json null) storage_format = 'parquet'
 statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 
+
 query T
-explain select a, v['b'] from t2
+explain select a, v['a'][0], v['b'] from t2
+----
+EvalScalar
+├── output columns: [t2.a (#0), v['a'][0] (#2), v['b'] (#3)]
+├── expressions: [get_by_keypath(t2.v (#1), '{"a",0}'), get_by_keypath(t2.v (#1), '{"b"}')]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#0), v (#1)]
+    ├── read rows: 1
+    ├── read bytes: 130
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
+explain select a, v['b'] from t2 where v['a'][0] = 1
+----
+EvalScalar
+├── output columns: [t2.a (#0), v['b'] (#2)]
+├── expressions: [get_by_keypath(t2.v (#1), '{"b"}')]
+├── estimated rows: 0.20
+└── Filter
+    ├── output columns: [t2.a (#0), t2.v (#1)]
+    ├── filters: [is_true(TRY_CAST(get_by_keypath(t2.v (#1), '{"a",0}') AS UInt8 NULL) = 1)]
+    ├── estimated rows: 0.20
+    └── TableScan
+        ├── table: default.test_virtual_db.t2
+        ├── output columns: [a (#0), v (#1)]
+        ├── read rows: 1
+        ├── read bytes: 130
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(TRY_CAST(get_by_keypath(t2.v (#1), '{"a",0}') AS UInt8 NULL) = 1)], limit: NONE]
+        └── estimated rows: 1.00
+
+statement ok
+create virtual column (v['a'][0], v['b']) for t2
+
+statement ok
+refresh virtual column for t2
+
+query T
+explain select a, v['a'][0], v['b'] from t2
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v['b'] (#2)]
+├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
 ├── read rows: 1
 ├── read bytes: 130
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v['b']]]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
 └── estimated rows: 1.00
 
 query T
