@@ -87,11 +87,6 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 }
 
 #[inline]
-pub fn is_internal_stream_column_id(column_id: ColumnId) -> bool {
-    (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
-}
-
-#[inline]
 pub fn is_internal_column(column_name: &str) -> bool {
     matches!(
         column_name,

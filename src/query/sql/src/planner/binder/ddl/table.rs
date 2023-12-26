@@ -75,6 +75,7 @@ use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -182,11 +183,16 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
 
-        if let Some(catalog) = catalog {
-            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("catalog = '{catalog}'"));
-        }
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
 
+        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
@@ -202,7 +208,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog_name, database),
         )
         .await
     }
@@ -355,10 +361,11 @@ impl Binder {
         };
 
         debug!("show drop tables rewrite to: {:?}", query);
+        let catalog = self.ctx.get_current_catalog();
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog, database),
         )
         .await
     }
@@ -412,6 +419,7 @@ impl Binder {
         // Take FUSE engine AS default engine
         let engine = engine.unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
+        let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -519,11 +527,12 @@ impl Binder {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
                         let table = DeltaTable::load(&sp).await?;
-                        let table_schema = DeltaTable::get_schema(&table).await?;
+                        let (table_schema, meta) = DeltaTable::get_meta(&table).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
+                        engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
                         (Arc::new(table_schema), vec![])
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -620,6 +629,7 @@ impl Binder {
             table,
             schema: schema.clone(),
             engine,
+            engine_options,
             storage_params,
             read_only_attach: false,
             part_prefix,
@@ -699,6 +709,7 @@ impl Binder {
             table,
             schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             read_only_attach: stmt.read_only,
             part_prefix,
@@ -992,23 +1003,24 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, database, table) =
+        let (catalog, db_name, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let (new_catalog, new_database, new_table) =
             self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
-        if new_catalog != catalog {
+        if new_catalog != catalog || new_database != db_name {
             return Err(ErrorCode::BadArguments(
-                "alter catalog not allowed while rename table",
-            ));
+                "Rename table not allow modify catalog or database",
+            )
+            .set_span(database.as_ref().and_then(|ident| ident.span)));
         }
 
         Ok(Plan::RenameTable(Box::new(RenameTablePlan {
             tenant,
             if_exists: *if_exists,
             catalog,
-            database,
+            database: db_name,
             table,
             new_database,
             new_table,

@@ -256,12 +256,15 @@ pub trait VisitorMut: Sized {
         _distinct: bool,
         _name: &mut Identifier,
         args: &mut Vec<Expr>,
-        _params: &mut Vec<Literal>,
+        params: &mut Vec<Expr>,
         over: &mut Option<Window>,
         lambda: &mut Option<Lambda>,
     ) {
         for arg in args.iter_mut() {
             Self::visit_expr(self, arg);
+        }
+        for param in params.iter_mut() {
+            Self::visit_expr(self, param);
         }
 
         if let Some(over) = over {

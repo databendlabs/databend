@@ -18,7 +18,9 @@ use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_sql::plans::ShowGrantsPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -71,16 +73,63 @@ impl Interpreter for ShowGrantsInterpreter {
             },
         };
         // TODO: display roles list instead of the inherited roles
-        let grant_list = RoleCacheManager::instance()
+        let grant_entries = RoleCacheManager::instance()
             .find_related_roles(&tenant, &grant_set.roles())
             .await?
             .into_iter()
             .map(|role| role.grants)
             .fold(grant_set, |a, b| a | b)
-            .entries()
-            .iter()
-            .map(|e| format!("{} TO {}", e, identity).as_bytes().to_vec())
-            .collect::<Vec<_>>();
+            .entries();
+
+        let mut grant_list: Vec<Vec<u8>> = Vec::new();
+        for grant_entry in grant_entries {
+            let object = grant_entry.object();
+            match object {
+                GrantObject::TableById(catalog_name, db_id, table_id) => {
+                    let privileges_str = if grant_entry.has_all_available_privileges() {
+                        "ALL".to_string()
+                    } else {
+                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
+                        privileges.to_string()
+                    };
+                    let catalog = self.ctx.get_catalog(catalog_name).await?;
+                    let db_name = catalog.get_db_name_by_id(*db_id).await?;
+                    let table_name = catalog.get_table_name_by_id(*table_id).await?;
+                    grant_list.push(
+                        format!(
+                            "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                            &privileges_str, catalog_name, db_name, table_name, identity
+                        )
+                        .into(),
+                    );
+                }
+                GrantObject::DatabaseById(catalog_name, db_id) => {
+                    let privileges_str = if grant_entry.has_all_available_privileges() {
+                        "ALL".to_string()
+                    } else {
+                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
+                        privileges.to_string()
+                    };
+                    let catalog = self.ctx.get_catalog(catalog_name).await?;
+                    let db_name = catalog.get_db_name_by_id(*db_id).await?;
+                    grant_list.push(
+                        format!(
+                            "GRANT {} ON '{}'.'{}'.* TO {}",
+                            &privileges_str, catalog_name, db_name, identity
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                    );
+                }
+                _ => {
+                    grant_list.push(
+                        format!("{} TO {}", grant_entry, identity)
+                            .as_bytes()
+                            .to_vec(),
+                    );
+                }
+            }
+        }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(grant_list),

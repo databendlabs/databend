@@ -312,6 +312,7 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+    ShareStorageError(2719),
 
     // Index error codes.
     CreateIndexWithDropTime(2720),

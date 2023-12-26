@@ -120,6 +120,7 @@ pub struct HashJoinState {
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
     pub(crate) partition_id: AtomicI8,
+    pub(crate) enable_spill: bool,
 
     /// If the join node generate runtime filters, the scan node will use it to do prune.
     pub(crate) table_index: IndexType,
@@ -145,6 +146,12 @@ impl HashJoinState {
         }
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
+        let mut enable_spill = false;
+        if hash_join_desc.join_type == JoinType::Inner
+            && ctx.get_settings().get_join_spilling_threshold()? != 0
+        {
+            enable_spill = true;
+        }
         Ok(Arc::new(HashJoinState {
             ctx: ctx.clone(),
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
@@ -161,6 +168,7 @@ impl HashJoinState {
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
+            enable_spill,
             table_index,
         }))
     }

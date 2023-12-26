@@ -29,10 +29,10 @@ remain 0 files
 >>>> drop table if exists test_max_files_limit
 >>>> create table test_max_files_limit (a int, b int)
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV)
-Error: APIError: ResponseError with 1001: Limit for 'copy into table': 15,000 files per commit. To handle more files, adjust 'CopyOption' with 'max_files=<num>' and perform several operations until all files are processed.
+Error: APIError: ResponseError with 1001: Commit limit reached: 15,000 files for 'copy into table'. To handle more files, adjust 'CopyOption' with 'max_files=<num>'(e.g., 'max_files=10000') and perform several operations until all files are processed.
 <<<<
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV) force=true
-Error: APIError: ResponseError with 1001: Limit for 'copy into table': 15,000 files per commit. To handle more files, adjust 'CopyOption' with 'max_files=<num>' and perform several operations until all files are processed.
+Error: APIError: ResponseError with 1001: Commit limit reached: 15,000 files for 'copy into table'. To handle more files, adjust 'CopyOption' with 'max_files=<num>'(e.g., 'max_files=10000') and perform several operations until all files are processed.
 <<<<
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV) force=true purge=true return_failed_only=true
 <<<<

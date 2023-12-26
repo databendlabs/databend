@@ -92,7 +92,7 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
@@ -135,5 +135,40 @@ impl Operator for UnionAll {
             required.distribution = left_physical_prop.distribution;
         }
         Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut children_required = vec![];
+
+        let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+        if left_physical_prop.distribution == Distribution::Serial
+            || right_physical_prop.distribution == Distribution::Serial
+        {
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+            ]);
+        } else {
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Any,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Any,
+                },
+            ]);
+        }
+
+        Ok(children_required)
     }
 }

@@ -44,6 +44,7 @@ pub struct CreateTablePlan {
 
     pub schema: TableSchemaRef,
     pub engine: Engine,
+    pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
     pub read_only_attach: bool,
     pub part_prefix: String,

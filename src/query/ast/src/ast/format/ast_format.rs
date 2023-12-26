@@ -447,7 +447,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         distinct: bool,
         name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
@@ -455,6 +455,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         for arg in args.iter() {
             self.visit_expr(arg);
             children.push(self.children.pop().unwrap());
+        }
+        for param in params.iter() {
+            self.visit_expr(param);
         }
         let node_name = if distinct {
             format!("Function {name}Distinct")

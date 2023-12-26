@@ -106,7 +106,7 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),
@@ -129,7 +129,6 @@ impl Interpreter for ReplaceInterpreter {
             .await;
         }
 
-        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
         // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
         {
             let refresh_desc = RefreshDesc {
@@ -301,7 +300,11 @@ impl ReplaceInterpreter {
             .get_replace_into_bloom_pruning_max_column_number()?;
         let bloom_filter_column_indexes = if !table.cluster_keys(self.ctx.clone()).is_empty() {
             fuse_table
-                .choose_bloom_filter_columns(&on_conflicts, max_num_pruning_columns)
+                .choose_bloom_filter_columns(
+                    self.ctx.clone(),
+                    &on_conflicts,
+                    max_num_pruning_columns,
+                )
                 .await?
         } else {
             vec![]
