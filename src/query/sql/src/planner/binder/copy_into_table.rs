@@ -31,6 +31,7 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parser_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Visitor;
+use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -44,12 +45,15 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storages_parquet::Parquet2Table;
+use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
 use log::debug;
@@ -174,34 +178,69 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let  FileFormatParams::Parquet(fmt) =  &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
-            let select_list = plan
-                .required_source_schema
-                .fields()
-                .iter()
-                .map(|f| {
-                    let column = Expr::ColumnRef {
-                        span: None,
-                        database: None,
-                        table: None,
-                        column: AstColumnID::Name(Identifier::from_name(f.name().to_string())),
-                    };
-                    let expr = if f.data_type().remove_nullable() == DataType::Variant {
-                        Expr::Cast {
+        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
+            let table_ctx = self.ctx.clone();
+            let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
+            let stage_info = plan.stage_table_info.stage_info.clone();
+            let files_info = plan.stage_table_info.files_info.clone();
+            let read_options = ParquetReadOptions::default();
+            let table = if use_parquet2 {
+                Parquet2Table::create(table_ctx, stage_info, files_info, read_options, None).await?
+            } else {
+                ParquetRSTable::create(table_ctx, stage_info, files_info, read_options, None)
+                    .await?
+            };
+            let table_info = table.get_table_info();
+            let table_schema = table_info.schema();
+
+            let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
+            for dest_field in plan.required_source_schema.fields().iter() {
+                let column = match table_schema.field_with_name(dest_field.name()) {
+                    Ok(src_field) => {
+                        let column = Expr::ColumnRef {
                             span: None,
-                            expr: Box::new(column),
-                            target_type: TypeName::Variant,
-                            pg_style: false,
+                            database: None,
+                            table: None,
+                            column: AstColumnID::Name(Identifier::from_name(
+                                dest_field.name().to_string(),
+                            )),
+                        };
+                        // parse string to JSON value, avoid cast string to JSON string
+                        if dest_field.data_type().remove_nullable() == DataType::Variant {
+                            if src_field.data_type().remove_nullable() == TableDataType::String {
+                                Expr::FunctionCall {
+                                    span: None,
+                                    distinct: false,
+                                    name: Identifier::from_name("parse_json".to_string()),
+                                    args: vec![column],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
+                                }
+                            } else {
+                                Expr::Cast {
+                                    span: None,
+                                    expr: Box::new(column),
+                                    target_type: TypeName::Variant,
+                                    pg_style: false,
+                                }
+                            }
+                        } else {
+                            column
                         }
-                    } else {
-                        column
-                    };
-                    SelectTarget::AliasedExpr {
-                        expr: Box::new(expr),
-                        alias: None,
                     }
-                })
-                .collect::<Vec<_>>();
+                    Err(_) => {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "column {} doesn't exist",
+                            dest_field.name()
+                        )));
+                    }
+                };
+                select_list.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(column),
+                    alias: None,
+                });
+            }
 
             self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
                 .await
