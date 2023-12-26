@@ -543,6 +543,13 @@ fn test_statement() {
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
+        "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON STAGE s1 FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON UDF f1 FROM ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
     ];
 
     for case in cases {
@@ -632,6 +639,11 @@ fn test_statement_error() {
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
         r#"select $0 from t1"#,
+        "GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
+        "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
+        "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
     ];
 
     for case in cases {
