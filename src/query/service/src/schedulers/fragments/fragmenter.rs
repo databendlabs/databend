@@ -212,11 +212,11 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
-        let probe_input = self.replace(plan.probe.as_ref())?;
-
-        // Consume current fragments to prevent them being consumed by `build_input`.
-        fragments.append(&mut self.fragments);
         let build_input = self.replace(plan.build.as_ref())?;
+
+        // Consume current fragments to prevent them being consumed by `probe_input`.
+        fragments.append(&mut self.fragments);
+        let probe_input = self.replace(plan.probe.as_ref())?;
 
         fragments.append(&mut self.fragments);
         self.fragments = fragments;
