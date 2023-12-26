@@ -5,8 +5,8 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-stmt "DROP TABLE IF EXISTS ontime";
-stmt "DROP STAGE IF EXISTS data";
+stmt "DROP TABLE IF EXISTS ontime"
+stmt "DROP STAGE IF EXISTS data"
 
 comment "create table ontime ..."
 cat $TESTS_DATA_DIR/ddl/ontime.sql |  $BENDSQL_CLIENT_CONNECT
@@ -17,3 +17,6 @@ echo "create stage data url='fs://$TESTS_DATA_DIR/';" |  $BENDSQL_CLIENT_CONNECT
 
 query "copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = parquet  missing_field_as = 'field_default');"
 query " select tail_number, new_col from ontime where dayofmonth=1 order by new_col"
+
+stmt "DROP TABLE IF EXISTS ontime"
+stmt "DROP STAGE IF EXISTS data"
