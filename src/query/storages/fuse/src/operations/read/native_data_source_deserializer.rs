@@ -525,6 +525,7 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
+    // TODO(xudong): add selectivity prediction
     fn runtime_filter(
         &mut self,
         arrays: &mut Vec<(usize, Box<dyn Array>)>,
@@ -552,18 +553,31 @@ impl NativeDeserializeDataTransform {
         }
         let mut bitmaps = Vec::with_capacity(self.cached_runtime_filter.as_ref().unwrap().len());
         for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
-            if let Some(array_iter) = self.array_iters.get_mut(idx) {
-                let skip_pages = self.array_skip_pages.get(idx).unwrap();
-                match array_iter.nth(*skip_pages) {
-                    Some(array) => {
-                        let array = array.as_ref().unwrap();
-                        self.read_columns.push(*idx);
-                        arrays.push((*idx, array.clone()));
-                        local_arrays.push((*idx, array.clone()));
-                        self.array_skip_pages.insert(*idx, 0);
-                    }
-                    None => {
-                        return Ok(vec![]);
+            let mut find_array = false;
+            for (i, array) in arrays.iter() {
+                if i == idx {
+                    local_arrays.push((*idx, array.clone()));
+                    find_array = true;
+                    break;
+                }
+            }
+            if !find_array {
+                if let Some(array_iter) = self.array_iters.get_mut(idx) {
+                    let skip_pages = self.array_skip_pages.get(idx).unwrap();
+                    match array_iter.nth(*skip_pages) {
+                        Some(array) => {
+                            let array = array.as_ref().unwrap();
+                            if let Some(pos) = self.remain_columns.iter().position(|i| i == idx) {
+                                self.remain_columns.remove(pos);
+                            }
+                            self.read_columns.push(*idx);
+                            arrays.push((*idx, array.clone()));
+                            local_arrays.push((*idx, array.clone()));
+                            self.array_skip_pages.insert(*idx, 0);
+                        }
+                        None => {
+                            return Ok(vec![]);
+                        }
                     }
                 }
             }
@@ -673,7 +687,7 @@ impl NativeDeserializeDataTransform {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
                 return Ok(vec![]);
-            } else {
+            } else if bitmap.unset_bits() != 0 {
                 bitmaps.push(bitmap);
             }
         }
@@ -858,7 +872,6 @@ impl Processor for NativeDeserializeDataTransform {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
-                        // 0
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
@@ -948,7 +961,6 @@ impl Processor for NativeDeserializeDataTransform {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
-                        // 1
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
@@ -964,7 +976,6 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             let block = self.block_reader.build_block(arrays.clone(), None)?;
-
             // Step 6: fill missing field default value if need
             let mut block = if need_to_fill_data {
                 self.block_reader
