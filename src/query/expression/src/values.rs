@@ -1478,7 +1478,19 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
+                    // LargeBinary may be Extension data type variant and bitmap
+                    match data_type {
+                        DataType::Variant => {
+                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Bitmap => {
+                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Binary => {
+                            Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        _ => unreachable!(),
+                    }
                 }
                 ArrowDataType::Utf8 => {
                     let arrow_col = arrow_col
