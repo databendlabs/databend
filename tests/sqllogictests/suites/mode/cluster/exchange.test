@@ -220,24 +220,8 @@ explain fragments select * from (select sum(number) as number from numbers(1) gr
 Fragment 0:
   DataExchange: Shuffle
     ExchangeSink
-    ├── output columns: [t1.number (#3)]
-    ├── destination fragment: [3]
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── output columns: [number (#3)]
-        ├── read rows: 2
-        ├── read bytes: 16
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 2.00
-(empty)
-(empty)
-Fragment 1:
-  DataExchange: Shuffle
-    ExchangeSink
     ├── output columns: [sum(number) (#2), #_group_by_key]
-    ├── destination fragment: [2]
+    ├── destination fragment: [1]
     └── AggregatePartial
         ├── output columns: [sum(number) (#2), #_group_by_key]
         ├── group by: [number]
@@ -254,7 +238,7 @@ Fragment 1:
             └── estimated rows: 1.00
 (empty)
 (empty)
-Fragment 2:
+Fragment 1:
   DataExchange: Shuffle
     ExchangeSink
     ├── output columns: [sum(number) (#2), numbers.number (#0)]
@@ -266,7 +250,23 @@ Fragment 2:
         ├── estimated rows: 1.00
         └── ExchangeSource
             ├── output columns: [sum(number) (#2), #_group_by_key]
-            └── source fragment: [1]
+            └── source fragment: [0]
+(empty)
+(empty)
+Fragment 2:
+  DataExchange: Shuffle
+    ExchangeSink
+    ├── output columns: [t1.number (#3)]
+    ├── destination fragment: [3]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── output columns: [number (#3)]
+        ├── read rows: 2
+        ├── read bytes: 16
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
 (empty)
 (empty)
 Fragment 3:
@@ -283,10 +283,10 @@ Fragment 3:
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
         │   ├── output columns: [sum(number) (#2), numbers.number (#0)]
-        │   └── source fragment: [2]
+        │   └── source fragment: [1]
         └── ExchangeSource(Probe)
             ├── output columns: [t1.number (#3)]
-            └── source fragment: [0]
+            └── source fragment: [2]
 (empty)
 (empty)
 Fragment 4:
