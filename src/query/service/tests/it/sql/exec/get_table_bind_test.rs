@@ -709,11 +709,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_auto_compact_after_write(&self, _enable: bool) {
+    fn set_need_compact_after_write(&self, _enable: bool) {
         todo!()
     }
 
-    fn get_auto_compact_after_write(&self) -> bool {
+    fn get_need_compact_after_write(&self) -> bool {
         todo!()
     }
 

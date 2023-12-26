@@ -85,21 +85,24 @@ macro_rules! binary_decimal {
             let scale_a = $left.scale();
             let scale_b = $right.scale();
 
-            let (scale_mul, scale_div) = if scale_b + $size.scale > scale_a {
-                (scale_b + $size.scale - scale_a, 0)
-            } else {
-                (0, scale_b + $size.scale - scale_a)
-            };
 
+            // Note: the result scale is always larger than the left scale
+            let scale_mul = scale_b + $size.scale - scale_a;
             let multiplier = T::e(scale_mul as u32);
-            let div = T::e(scale_div as u32);
-
             let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+                // We are using round div here which follow snowflake's behavior: https://docs.snowflake.com/sql-reference/operators-arithmetic
+                // For example:
+                // round_div(5, 2) --> 3
+                // round_div(-5, 2) --> -3
+                // round_div(5, -2) --> -3
+                // round_div(-5, -2) --> 3
                 if std::intrinsics::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(one);
+                } else if a.is_negative() == b.is_negative() {
+                    result.push((a * multiplier + b / 2).div(b));
                 } else {
-                    result.push((a * multiplier).div(b) / div);
+                    result.push((a * multiplier - b / 2).div(b));
                 }
             };
 

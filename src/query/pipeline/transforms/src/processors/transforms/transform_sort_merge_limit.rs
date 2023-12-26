@@ -31,7 +31,6 @@ use super::sort::StringRows;
 use super::sort::TimestampConverter;
 use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
-use super::transform_sort_merge_base::Status;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 
 /// This is a specific version of [`super::transform_sort_merge::TransformSortMerge`] which sort blocks with limit.
@@ -39,18 +38,24 @@ pub struct TransformSortMergeLimit<R: Rows> {
     heap: FixedHeap<Reverse<Cursor<R>>>,
     buffer: HashMap<usize, DataBlock>,
 
+    /// Record current memory usage.
+    num_bytes: usize,
+    num_rows: usize,
+
     block_size: usize,
 }
 
 impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    fn add_block(&mut self, block: DataBlock, mut cursor: Cursor<R>) -> Result<Status> {
+    fn add_block(&mut self, block: DataBlock, mut cursor: Cursor<R>) -> Result<()> {
         if unlikely(self.heap.cap() == 0 || block.is_empty()) {
             // limit is 0 or block is empty.
-            return Ok(Status::Continue);
+            return Ok(());
         }
 
+        self.num_bytes += block.memory_size();
+        self.num_rows += block.num_rows();
         let cur_index = cursor.input_index;
         self.buffer.insert(cur_index, block);
 
@@ -59,7 +64,10 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
                 if evict.row_index == 0 {
                     // Evict the first row of the block,
                     // which means the block must not appear in the Top-N result.
-                    self.buffer.remove(&evict.input_index);
+                    if let Some(block) = self.buffer.remove(&evict.input_index) {
+                        self.num_bytes -= block.memory_size();
+                        self.num_rows -= block.num_rows();
+                    }
                 }
 
                 if evict.input_index == cur_index {
@@ -70,12 +78,55 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
             cursor.advance();
         }
 
-        Ok(Status::Continue)
+        Ok(())
     }
 
-    fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
+    fn on_finish(&mut self, all_in_one_block: bool) -> Result<Vec<DataBlock>> {
+        if all_in_one_block {
+            Ok(self.drain_heap(self.num_rows))
+        } else {
+            Ok(self.drain_heap(self.block_size))
+        }
+    }
+
+    #[inline(always)]
+    fn num_bytes(&self) -> usize {
+        self.num_bytes
+    }
+
+    #[inline(always)]
+    fn num_rows(&self) -> usize {
+        self.num_rows
+    }
+
+    fn prepare_spill(&mut self, spill_batch_size: usize) -> Result<Vec<DataBlock>> {
+        // TBD: if it's better to add the blocks back to the heap.
+        // Reason: the output `blocks` is a result of Top-N,
+        // so the memory usage will be less than the original buffered data.
+        // If the reduced memory usage does not reach the spilling threshold,
+        // we can avoid one spilling.
+        let blocks = self.drain_heap(spill_batch_size);
+
+        debug_assert!(self.buffer.is_empty());
+
+        Ok(blocks)
+    }
+}
+
+impl<R: Rows> TransformSortMergeLimit<R> {
+    pub fn create(block_size: usize, limit: usize) -> Self {
+        TransformSortMergeLimit {
+            heap: FixedHeap::new(limit),
+            buffer: HashMap::with_capacity(limit),
+            block_size,
+            num_bytes: 0,
+            num_rows: 0,
+        }
+    }
+
+    fn drain_heap(&mut self, batch_size: usize) -> Vec<DataBlock> {
         if self.heap.is_empty() {
-            return Ok(vec![]);
+            return vec![];
         }
 
         let output_size = self.heap.len();
@@ -91,12 +142,12 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
             output_indices.push((block_index, cursor.row_index));
         }
 
-        let output_block_num = output_size.div_ceil(self.block_size);
+        let output_block_num = output_size.div_ceil(batch_size);
         let mut output_blocks = Vec::with_capacity(output_block_num);
 
         for i in 0..output_block_num {
-            let start = i * self.block_size;
-            let end = (start + self.block_size).min(output_indices.len());
+            let start = i * batch_size;
+            let end = (start + batch_size).min(output_indices.len());
             // Convert indices to merge slice.
             let mut merge_slices = Vec::with_capacity(output_indices.len());
             let (block_idx, row_idx) = output_indices[start];
@@ -113,17 +164,11 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
             output_blocks.push(block);
         }
 
-        Ok(output_blocks)
-    }
-}
+        self.buffer.clear();
+        self.num_bytes = 0;
+        self.num_rows = 0;
 
-impl<R: Rows> TransformSortMergeLimit<R> {
-    pub fn create(block_size: usize, limit: usize) -> Self {
-        TransformSortMergeLimit {
-            heap: FixedHeap::new(limit),
-            buffer: HashMap::with_capacity(limit),
-            block_size,
-        }
+        output_blocks
     }
 }
 

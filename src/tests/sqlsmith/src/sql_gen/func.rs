@@ -759,6 +759,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         }
 
+        let params = params
+            .into_iter()
+            .map(|param| Expr::Literal {
+                span: None,
+                lit: param,
+            })
+            .collect();
+
         let name = Identifier::from_name(name);
         Expr::FunctionCall {
             span: None,

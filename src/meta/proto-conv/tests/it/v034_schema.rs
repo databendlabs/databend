@@ -31,7 +31,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v34_schema() -> anyhow::Result<()> {
     let schema_v34 = [

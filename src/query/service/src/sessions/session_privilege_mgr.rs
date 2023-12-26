@@ -262,18 +262,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             return Ok(());
         }
 
-        let roles_name = effective_roles
-            .iter()
-            .map(|r| r.name.clone())
-            .collect::<Vec<_>>()
-            .join(",");
-        Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
-            privilege.clone(),
-            object,
-            &current_user.identity(),
-            roles_name,
-        )))
+        Err(ErrorCode::PermissionDenied("Permission denied"))
     }
 
     #[async_backtrace::framed]

@@ -51,10 +51,21 @@ message GrantObject {
     string db = 2;
   }
 
+  message GrantDatabaseIdObject {
+    string catalog = 1;
+    uint64 db = 2;
+  }
+
   message GrantTableObject {
     string catalog = 1;
     string db = 2;
     string table = 3;
+  }
+
+  message GrantTableIdObject {
+    string catalog = 1;
+    uint64 db = 2;
+    uint64 table = 3;
   }
 
   message GrantUdfObject {
@@ -71,6 +82,8 @@ message GrantObject {
     GrantTableObject table = 3;
     GrantUdfObject udf = 4;
     GrantStageObject stage = 5;
+    GrantDatabaseIdObject databasebyid = 6;
+    GrantTableIdObject tablebyid = 7;
   }
 }
 

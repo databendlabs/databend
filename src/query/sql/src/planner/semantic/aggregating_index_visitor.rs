@@ -19,7 +19,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -207,7 +206,7 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
         _distinct: bool,
         name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
@@ -230,6 +229,9 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
 
         for arg in args {
             walk_expr(self, arg);
+        }
+        for param in params {
+            walk_expr(self, param);
         }
     }
 

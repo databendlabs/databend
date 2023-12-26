@@ -405,7 +405,7 @@ impl Binder {
                 && column_binding.table_name == Some("stage".to_string())
             {
                 return Err(ErrorCode::SemanticError(
-                    "select * from file only support parquet format",
+                    "select * from file only support Parquet format",
                 ));
             }
 

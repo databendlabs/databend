@@ -59,8 +59,8 @@ impl AsyncSystemTable for PasswordPoliciesTable {
         let mut names = Vec::with_capacity(password_policies.len());
         let mut comments = Vec::with_capacity(password_policies.len());
         let mut options = Vec::with_capacity(password_policies.len());
-        let mut created_ons = Vec::with_capacity(password_policies.len());
-        let mut updated_ons = Vec::with_capacity(password_policies.len());
+        let mut created_on_columns = Vec::with_capacity(password_policies.len());
+        let mut updated_on_columns = Vec::with_capacity(password_policies.len());
         for password_policy in password_policies {
             names.push(password_policy.name.as_bytes().to_vec());
             comments.push(password_policy.comment.as_bytes().to_vec());
@@ -87,16 +87,16 @@ impl AsyncSystemTable for PasswordPoliciesTable {
             let option = values.join(", ");
             options.push(option.as_bytes().to_vec());
 
-            created_ons.push(password_policy.create_on.timestamp_micros());
-            updated_ons.push(password_policy.update_on.map(|u| u.timestamp_micros()));
+            created_on_columns.push(password_policy.create_on.timestamp_micros());
+            updated_on_columns.push(password_policy.update_on.map(|u| u.timestamp_micros()));
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(comments),
             StringType::from_data(options),
-            TimestampType::from_data(created_ons),
-            TimestampType::from_opt_data(updated_ons),
+            TimestampType::from_data(created_on_columns),
+            TimestampType::from_opt_data(updated_on_columns),
         ]))
     }
 }

@@ -71,6 +71,7 @@ pub struct TransformSortSpill<R: Rows> {
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     output_order_col: bool,
+    limit: Option<usize>,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
@@ -240,6 +241,7 @@ where R: Rows + Sync + Send + 'static
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
+        limit: Option<usize>,
         spiller: Spiller,
         output_order_col: bool,
     ) -> Self {
@@ -247,6 +249,7 @@ where R: Rows + Sync + Send + 'static
             input,
             output,
             schema,
+            limit,
             output_order_col,
             input_data: None,
             output_data: None,
@@ -313,7 +316,7 @@ where R: Rows + Sync + Send + 'static
             streams,
             self.sort_desc.clone(),
             self.batch_size,
-            None,
+            self.limit,
         )
     }
 
@@ -428,6 +431,7 @@ pub fn create_transform_sort_spill(
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
+    limit: Option<usize>,
     spiller: Spiller,
     output_order_col: bool,
 ) -> Box<dyn Processor> {
@@ -442,6 +446,7 @@ pub fn create_transform_sort_spill(
                     output,
                     schema,
                     sort_desc,
+                    limit,
                     spiller,
                     output_order_col
                 )),
@@ -451,6 +456,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -459,6 +465,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -467,6 +474,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -475,6 +483,7 @@ pub fn create_transform_sort_spill(
                 output,
                 schema,
                 sort_desc,
+                limit,
                 spiller,
                 output_order_col,
             )),
@@ -485,6 +494,7 @@ pub fn create_transform_sort_spill(
             output,
             schema,
             sort_desc,
+            limit,
             spiller,
             output_order_col,
         ))
@@ -523,6 +533,7 @@ mod tests {
 
     async fn create_test_transform(
         ctx: Arc<QueryContext>,
+        limit: Option<usize>,
     ) -> Result<TransformSortSpill<SimpleRows<Int32Type>>> {
         let op = DataOperator::instance().operator();
         let spiller = Spiller::create(
@@ -547,6 +558,7 @@ mod tests {
                 DataType::Number(NumberDataType::Int32),
             )]),
             sort_desc,
+            limit,
             spiller,
             false,
         );
@@ -555,7 +567,7 @@ mod tests {
     }
 
     /// Returns (input, expected)
-    fn basic_test_data() -> (Vec<DataBlock>, DataBlock) {
+    fn basic_test_data(limit: Option<usize>) -> (Vec<DataBlock>, DataBlock) {
         let data = vec![
             vec![1, 3, 5, 7],
             vec![1, 2, 3, 4],
@@ -570,13 +582,21 @@ mod tests {
             .map(|v| DataBlock::new_from_columns(vec![Int32Type::from_data(v)]))
             .collect::<Vec<_>>();
         let result = data.into_iter().flatten().sorted().collect::<Vec<_>>();
+        let result = if let Some(limit) = limit {
+            result.into_iter().take(limit).collect::<Vec<_>>()
+        } else {
+            result
+        };
         let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
         (input, result)
     }
 
     /// Returns (input, expected, batch_size, num_merge)
-    fn random_test_data(rng: &mut ThreadRng) -> (Vec<DataBlock>, DataBlock, usize, usize) {
+    fn random_test_data(
+        rng: &mut ThreadRng,
+        limit: Option<usize>,
+    ) -> (Vec<DataBlock>, DataBlock, usize, usize) {
         let random_batch_size = rng.gen_range(1..=10);
         let random_num_streams = rng.gen_range(5..=10);
         let random_num_merge = rng.gen_range(2..=10);
@@ -601,6 +621,11 @@ mod tests {
             .flatten()
             .sorted()
             .collect::<Vec<_>>();
+        let result = if let Some(limit) = limit {
+            result.into_iter().take(limit).collect::<Vec<_>>()
+        } else {
+            result
+        };
         let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
         (input, result, random_batch_size, random_num_merge)
@@ -613,8 +638,9 @@ mod tests {
         batch_size: usize,
         num_merge: usize,
         has_memory_block: bool,
+        limit: Option<usize>,
     ) -> Result<()> {
-        let mut transform = create_test_transform(ctx).await?;
+        let mut transform = create_test_transform(ctx, limit).await?;
 
         transform.num_merge = num_merge;
         transform.batch_size = batch_size;
@@ -651,28 +677,48 @@ mod tests {
     async fn test_two_way_merge_sort() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
+        let (input, expected) = basic_test_data(None);
 
-        test(ctx, input, expected, 4, 2, false).await
+        test(ctx, input, expected, 4, 2, false, None).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_two_way_merge_sort_with_memory_block() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
+        let (input, expected) = basic_test_data(None);
 
-        test(ctx, input, expected, 4, 2, true).await
+        test(ctx, input, expected, 4, 2, true, None).await
+    }
+
+    async fn basic_test(
+        ctx: Arc<QueryContext>,
+        batch_size: usize,
+        num_merge: usize,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let (input, expected) = basic_test_data(limit);
+
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            false,
+            limit,
+        )
+        .await?;
+        test(ctx, input, expected, batch_size, num_merge, true, limit).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_three_way_merge_sort() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
 
-        test(ctx.clone(), input.clone(), expected.clone(), 4, 3, false).await?;
-        test(ctx, input, expected, 4, 3, true).await
+        basic_test(ctx.clone(), 4, 3, None).await?;
+        basic_test(ctx, 4, 3, Some(2)).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -680,10 +726,37 @@ mod tests {
         // Test if `num_merge` is bigger than the number of streams.
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data();
 
-        test(ctx.clone(), input.clone(), expected.clone(), 4, 10, false).await?;
-        test(ctx, input, expected, 4, 10, true).await
+        basic_test(ctx.clone(), 4, 10, None).await?;
+        basic_test(ctx, 4, 10, Some(2)).await
+    }
+
+    async fn random_test(
+        ctx: Arc<QueryContext>,
+        rng: &mut ThreadRng,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let (input, expected, batch_size, num_merge) = random_test_data(rng, limit);
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            false,
+            limit,
+        )
+        .await?;
+        test(
+            ctx.clone(),
+            input.clone(),
+            expected.clone(),
+            batch_size,
+            num_merge,
+            true,
+            limit,
+        )
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -693,25 +766,10 @@ mod tests {
 
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
-            let (input, expected, batch_size, num_merge) = random_test_data(&mut rng);
-            test(
-                ctx.clone(),
-                input.clone(),
-                expected.clone(),
-                batch_size,
-                num_merge,
-                false,
-            )
-            .await?;
-            test(
-                ctx.clone(),
-                input.clone(),
-                expected.clone(),
-                batch_size,
-                num_merge,
-                true,
-            )
-            .await?;
+            random_test(ctx.clone(), &mut rng, None).await?;
+
+            let limit = rng.gen_range(1..=5);
+            random_test(ctx.clone(), &mut rng, Some(limit)).await?;
         }
 
         Ok(())

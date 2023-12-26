@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
@@ -120,7 +121,7 @@ impl Operator for ConstantTableScan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
             let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows)?;
@@ -191,8 +192,21 @@ impl Operator for ConstantTableScan {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Ok(required.clone())
+        Err(ErrorCode::Internal(
+            "ConstantTableScan cannot compute required property for children".to_string(),
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "ConstantTableScan cannot compute required property for children".to_string(),
+        ))
     }
 }

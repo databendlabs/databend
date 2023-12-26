@@ -95,10 +95,7 @@ impl Operator for ProjectSet {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> databend_common_exception::Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
         // ProjectSet is set-returning functions, precise_cardinality set None
         input_stat.statistics.precise_cardinality = None;
@@ -113,5 +110,14 @@ impl Operator for ProjectSet {
         required: &RequiredProperty,
     ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![required.clone()]])
     }
 }

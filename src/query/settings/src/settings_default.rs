@@ -484,15 +484,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_recluster_after_write", DefaultSettingValue {
+                ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables re-clustering after write(copy/replace-into).",
+                    desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("auto_compaction_threshold", DefaultSettingValue {
+                ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
-                    desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write (copy/insert) operations.",
+                    desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -532,12 +532,6 @@ impl DefaultSettings {
                     desc: "Sets the seconds that recluster final will be timeout.",
                     mode: SettingMode::Both,
                     range: None,
-                }),
-                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh aggregating index after new data written",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

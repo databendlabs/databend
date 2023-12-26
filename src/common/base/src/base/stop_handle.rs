@@ -55,7 +55,9 @@ impl<E: Error + Send + 'static> StopHandle<E> {
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            return Err(ErrorCode::AlreadyStopped("StopHandle is shutting down"));
+            return Err(ErrorCode::AlreadyStopped(
+                "StopHandle is already shutting down",
+            ));
         }
 
         let mut handles = vec![];

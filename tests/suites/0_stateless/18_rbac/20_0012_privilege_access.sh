@@ -61,13 +61,10 @@ echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
 echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT Super ON *.* TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT SELECT ON system.fuse_snapshot TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 ## optimize table
 echo "set retention_period=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
-echo "select count(*)>=1  from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
-## revoke privilege
-echo "REVOKE SELECT ON system.fuse_snapshot FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
+echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 
 ## select data
 echo "select 'test -- select'" | $TEST_USER_CONNECT
@@ -105,19 +102,11 @@ echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
 ## clustering_information
 echo "select 'test -- clustering_information'" | $BENDSQL_CLIENT_CONNECT
 echo "select count(*)>=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
-echo "GRANT SELECT ON system.clustering_information TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "select count(*)>=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
 ## fuse_snapshot
-echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
-echo "GRANT SELECT ON system.fuse_snapshot TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
 ## fuse_segment
 echo "select count(*)=0 from fuse_segment('default', 't20_0012_a', '')" | $TEST_USER_CONNECT
-echo "GRANT SELECT ON system.fuse_segment TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "select count(*)=0 from fuse_segment('default', 't20_0012_a', '')" | $TEST_USER_CONNECT
 ## fuse_block
-echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
-echo "GRANT SELECT ON system.fuse_block TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
 
 ## Drop table.
@@ -159,7 +148,7 @@ echo "select 'test -- show tables from grant_db'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from grant_db" | $USER_A_CONNECT
 echo "use system" | $USER_A_CONNECT
 echo "use grant_db" | $USER_A_CONNECT
-echo "select 'test -- show columns'" | $BENDSQL_CLIENT_CONNECT
+echo "select 'test -- show columns from one from system'" | $BENDSQL_CLIENT_CONNECT
 echo "show columns from one from system" | $USER_A_CONNECT
 echo "show columns from t from grant_db" | $USER_A_CONNECT
 
@@ -221,11 +210,34 @@ echo "create table t2 as select * from @s3" | $USER_B_CONNECT
 echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
 echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
+## check after alter table/db name, table id and db id is normal.
+echo "=== check db/table_id ==="
+echo "drop database if exists c;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists d;" | $BENDSQL_CLIENT_CONNECT
+
+echo "create database c;" | $BENDSQL_CLIENT_CONNECT
+echo "create table c.t (id int);" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert, select on c.t to b" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "insert into c.t values(1)" | $USER_B_CONNECT
+echo "select * from c.t" | $USER_B_CONNECT
+
+echo "alter table c.t rename to t1" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "insert into c.t1 values(2)" | $USER_B_CONNECT
+echo "select * from c.t1 order by id" | $USER_B_CONNECT
+
+echo "alter database c rename to d" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "insert into d.t1 values(3)" | $USER_B_CONNECT
+echo "select * from d.t1 order by id" | $USER_B_CONNECT
+
 ## Drop user
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop user b" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
 echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
+echo "drop database d" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT

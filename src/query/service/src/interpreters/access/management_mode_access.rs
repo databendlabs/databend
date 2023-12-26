@@ -45,8 +45,8 @@ impl AccessChecker for ManagementModeAccess {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
-                            | RewriteKind::ShowTables(_)
-                            | RewriteKind::ShowColumns(_, _)
+                            | RewriteKind::ShowTables(_, _)
+                            | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
                             | RewriteKind::ShowFunctions
@@ -126,7 +126,7 @@ impl AccessChecker for ManagementModeAccess {
 
             if !ok {
                 return Err(ErrorCode::ManagementModePermissionDenied(format!(
-                    "Access denied for operation:{:?} in management-mode",
+                    "Management Mode Error: Access denied for operation:{:?} in management-mode",
                     plan.format_indent()
                 )));
             }
