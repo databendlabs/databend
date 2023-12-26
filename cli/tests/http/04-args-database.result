@@ -1,0 +1,9 @@
+---- tables ----
+books_04_d
+---- databases ----
+books_04
+default
+information_schema
+system
+---- tables in books_04 ----
+books_04_t

@@ -1,4 +1,4 @@
-CREATE TABLE test_ontime (
+CREATE TABLE http_ontime_03 (
     Year SMALLINT UNSIGNED,
     Quarter TINYINT UNSIGNED,
     Month TINYINT UNSIGNED,

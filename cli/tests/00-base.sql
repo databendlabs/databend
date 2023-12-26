@@ -39,3 +39,4 @@ select a[1], b['k1'], c:x, c:y from test_nested;
 select 'bye';
 drop table test;
 drop table test_decimal;
+drop table test_nested;

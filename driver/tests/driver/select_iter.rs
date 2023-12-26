@@ -179,6 +179,9 @@ async fn select_iter_struct() {
         assert_eq!(v.d, expected_row.d);
         assert_eq!(v.t, expected_row.t);
     }
+
+    let sql_drop = format!("DROP TABLE `{}`", table);
+    conn.exec(&sql_drop).await.unwrap();
 }
 
 #[tokio::test]

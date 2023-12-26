@@ -193,7 +193,7 @@ impl Settings {
 #[serde(default)]
 pub struct ConnectionConfig {
     pub host: String,
-    pub port: u16,
+    pub port: Option<u16>,
     pub user: String,
     pub database: Option<String>,
     pub args: BTreeMap<String, String>,
@@ -254,7 +254,7 @@ impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
             host: "localhost".to_string(),
-            port: 8000,
+            port: Some(8000),
             user: "root".to_string(),
             database: None,
             args: BTreeMap::new(),

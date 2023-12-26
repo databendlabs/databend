@@ -1,17 +1,17 @@
 #!/bin/bash
 
 cat <<SQL | ${BENDSQL}
-DROP TABLE IF EXISTS test_books;
+DROP TABLE IF EXISTS http_books_01;
 SQL
 
 cat <<SQL | ${BENDSQL}
-CREATE TABLE test_books (title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL);
+CREATE TABLE http_books_01 (title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL);
 SQL
 
-${BENDSQL} --query='INSERT INTO test_books VALUES;' --format=csv --data=@- <cli/tests/data/books.csv
+${BENDSQL} --query='INSERT INTO http_books_01 VALUES;' --format=csv --data=@- <cli/tests/data/books.csv
 
-${BENDSQL} --query='SELECT * FROM test_books LIMIT 10;' --output=tsv
+${BENDSQL} --query='SELECT * FROM http_books_01 LIMIT 10;' --output=tsv
 
 cat <<SQL | ${BENDSQL}
-DROP TABLE test_books;
+DROP TABLE http_books_01;
 SQL

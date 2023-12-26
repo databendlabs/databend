@@ -14,6 +14,7 @@
 
 #![allow(clippy::upper_case_acronyms)]
 
+mod args;
 mod ast;
 mod config;
 mod display;
@@ -26,6 +27,7 @@ use std::{
     io::{stdin, IsTerminal},
 };
 
+use crate::args::ConnectionArgs;
 use crate::config::OutputQuoteStyle;
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
@@ -198,50 +200,6 @@ where
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
-struct ConnectionArgs {
-    host: String,
-    port: u16,
-    user: String,
-    password: Option<String>,
-    database: Option<String>,
-    tls: bool,
-    flight: bool,
-    args: BTreeMap<String, String>,
-}
-
-impl ConnectionArgs {
-    fn get_dsn(self) -> Result<String> {
-        let mut dsn = url::Url::parse("databend://")?;
-        dsn.set_host(Some(&self.host))?;
-        _ = dsn.set_port(Some(self.port));
-        _ = dsn.set_username(&self.user);
-        if let Some(password) = self.password {
-            _ = dsn.set_password(Some(&password))
-        };
-        if let Some(database) = self.database {
-            dsn.set_path(&database);
-        }
-        if self.flight {
-            _ = dsn.set_scheme("databend+flight");
-        } else if self.tls {
-            _ = dsn.set_scheme("databend+https");
-        }
-        let mut query = url::form_urlencoded::Serializer::new(String::new());
-        if !self.args.is_empty() {
-            for (k, v) in self.args {
-                query.append_pair(&k, &v);
-            }
-        }
-        if self.tls {
-            query.append_pair("sslmode", "require");
-        } else {
-            query.append_pair("sslmode", "disable");
-        }
-        dsn.set_query(Some(&query.finish()));
-        Ok(dsn.to_string())
-    }
-}
-
 #[tokio::main]
 pub async fn main() -> Result<()> {
     let mut config = Config::load();
@@ -252,7 +210,8 @@ pub async fn main() -> Result<()> {
         cmd.print_help()?;
         return Ok(());
     }
-    let dsn = match args.dsn {
+
+    let mut conn_args = match args.dsn {
         Some(dsn) => {
             if args.host.is_some() {
                 eprintln!("warning: --host is ignored when --dsn is set");
@@ -266,9 +225,6 @@ pub async fn main() -> Result<()> {
             if args.password.is_some() {
                 eprintln!("warning: --password is ignored when --dsn is set");
             }
-            if args.database.is_some() {
-                eprintln!("warning: --database is ignored when --dsn is set");
-            }
             if args.role.is_some() {
                 eprintln!("warning: --role is ignored when --dsn is set");
             }
@@ -281,40 +237,47 @@ pub async fn main() -> Result<()> {
             if args.flight {
                 eprintln!("warning: --flight is ignored when --dsn is set");
             }
-            dsn
+            ConnectionArgs::from_dsn(&dsn)?
         }
         None => {
             if let Some(host) = args.host {
                 config.connection.host = host;
             }
             if let Some(port) = args.port {
-                config.connection.port = port;
+                config.connection.port = Some(port);
             }
             if let Some(user) = args.user {
                 config.connection.user = user;
             }
-            if args.database.is_some() {
-                config.connection.database = args.database;
-            }
             for (k, v) in args.set {
                 config.connection.args.insert(k, v);
+            }
+            if !args.tls {
+                config
+                    .connection
+                    .args
+                    .insert("sslmode".to_string(), "disable".to_string());
             }
             if let Some(role) = args.role {
                 config.connection.args.insert("role".to_string(), role);
             }
-            let conn_args = ConnectionArgs {
+            ConnectionArgs {
                 host: config.connection.host.clone(),
                 port: config.connection.port,
                 user: config.connection.user.clone(),
                 password: args.password,
                 database: config.connection.database.clone(),
-                tls: args.tls,
                 flight: args.flight,
                 args: config.connection.args.clone(),
-            };
-            conn_args.get_dsn()?
+            }
         }
     };
+    // override database if specified in command line
+    if args.database.is_some() {
+        conn_args.database = args.database;
+    }
+    let dsn = conn_args.get_dsn()?;
+
     let mut settings = Settings::default();
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && !args.non_interactive && args.query.is_none();
