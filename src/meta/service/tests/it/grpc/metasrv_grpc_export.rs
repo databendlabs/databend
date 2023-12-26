@@ -56,7 +56,7 @@ async fn test_export() -> anyhow::Result<()> {
     // Wait for snapshot to be ready
     sleep(Duration::from_secs(2)).await;
 
-    let (mut grpc_client, _server_version) = client.make_client().await?;
+    let mut grpc_client = client.make_established_client().await?;
 
     let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
 
