@@ -233,12 +233,18 @@ impl Processor for ReadNativeDataSource<false> {
                 .partitions
                 .ctx
                 .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
+            let mut native_part_infos = Vec::with_capacity(parts.len());
+            for part in parts.into_iter() {
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &filters,
+                    &self.func_ctx,
+                )? {
                     continue;
                 }
-                let part = part.clone();
+
+                native_part_infos.push(part.clone());
                 let block_reader = self.block_reader.clone();
                 let index_reader = self.index_reader.clone();
                 let virtual_reader = self.virtual_reader.clone();
@@ -291,7 +297,10 @@ impl Processor for ReadNativeDataSource<false> {
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((
+                native_part_infos,
+                futures::future::try_join_all(chunks).await?,
+            ));
             return Ok(());
         }
 

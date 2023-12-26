@@ -33,6 +33,8 @@ pub struct NativeDataSourceMeta {
     pub data: Vec<DataSource>,
 }
 
+// TODO duplicated code
+
 impl NativeDataSourceMeta {
     pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
         Box::new(NativeDataSourceMeta { part, data })
