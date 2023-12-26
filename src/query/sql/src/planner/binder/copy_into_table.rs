@@ -47,6 +47,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
@@ -173,10 +174,7 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if matches!(
-            plan.stage_table_info.stage_info.file_format_params,
-            FileFormatParams::Parquet(_)
-        ) {
+        if let  FileFormatParams::Parquet(fmt) =  &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
             let select_list = plan
                 .required_source_schema
                 .fields()
