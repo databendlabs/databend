@@ -484,13 +484,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                // Will deprecated in the future, use enable_compact_after_write instead.
-                ("enable_recluster_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables re-clustering after write(copy/insert/replace-into/merge-into).",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
