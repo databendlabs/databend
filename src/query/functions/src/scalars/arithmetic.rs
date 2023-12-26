@@ -216,6 +216,30 @@ macro_rules! register_div {
     };
 }
 
+macro_rules! register_div0 {
+    ($lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
+
+        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "div0",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
+                |a, b, output, _ctx| {
+                    let b: F64 = b.as_();
+                    if std::intrinsics::unlikely(b == 0.0) {
+                        output.push(T::default()); // Push the default value for type T
+                    } else {
+                        let result = AsPrimitive::<T>::as_((F64::from(AsPrimitive::<f64>::as_(a))) / b);
+                        output.push(result); // Perform the division and push the result
+                    }
+                }
+            ),
+        );
+    };
+}
+
 macro_rules! register_modulo {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -274,6 +298,9 @@ macro_rules! register_basic_arithmetic {
     }
     {
         register_div!($lt, $rt, $registry);
+    }
+    {
+        register_div0!($lt, $rt, $registry);
     }
     {
         register_modulo!($lt, $rt, $registry);
