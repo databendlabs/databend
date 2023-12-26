@@ -37,7 +37,6 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
-use log::info;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
@@ -110,11 +109,6 @@ impl CopyIntoTableInterpreter {
         let data_schema = DataSchemaRefExt::create(fields);
 
         Ok((select_interpreter, data_schema, update_stream_meta))
-    }
-
-    fn set_status(&self, status: &str) {
-        self.ctx.set_status_info(status);
-        info!("{}", status);
     }
 
     #[async_backtrace::framed]
