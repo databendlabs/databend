@@ -81,7 +81,6 @@ use prost::Message;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tonic::async_trait;
-use tonic::client::GrpcService;
 use tonic::codegen::BoxStream;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
@@ -107,14 +106,56 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
 
 #[derive(Debug)]
-struct MetaChannelManager {
+pub struct MetaChannelManager {
+    username: String,
+    password: String,
     timeout: Option<Duration>,
-    conf: Option<RpcClientTlsConfig>,
+    tls_config: Option<RpcClientTlsConfig>,
 }
 
 impl MetaChannelManager {
+    async fn build_real_client(&self, addr: &String) -> Result<(RealClient, u64), MetaClientError> {
+        let chan = self.build_channel(addr).await?;
+
+        let (mut real_client, once) = Self::new_real_client(chan);
+
+        let (token, server_version) = MetaGrpcClient::handshake(
+            &mut real_client,
+            &METACLI_COMMIT_SEMVER,
+            &MIN_METASRV_SEMVER,
+            &self.username,
+            &self.password,
+        )
+        .await?;
+
+        // Update the token for the client interceptor.
+        // Safe unwrap(): it is the first time setting it.
+        once.set(token).unwrap();
+
+        Ok((real_client, server_version))
+    }
+
+    /// Create a MetaServiceClient with authentication interceptor
+    ///
+    /// The returned `OnceCell` is used to fill in a token for the interceptor.
+    pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
+        let once = Arc::new(OnceCell::new());
+
+        let interceptor = AuthInterceptor {
+            token: once.clone(),
+        };
+
+        let client = MetaServiceClient::with_interceptor(chan, interceptor)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+
+        (client, once)
+    }
+
     async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
-        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+        info!("build channel to {}", addr);
+
+        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.tls_config.clone())
             .await
             .map_err(|e| match e {
                 GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
@@ -134,23 +175,21 @@ impl MetaChannelManager {
 #[async_trait]
 impl ItemManager for MetaChannelManager {
     type Key = String;
-    type Item = Channel;
-    type Error = MetaNetworkError;
+    /// A gPRC client and the protocol number of the service it connects to.
+    type Item = (RealClient, u64);
+    type Error = MetaClientError;
 
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
     async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
-        self.build_channel(addr).await
+        self.build_real_client(addr).await
     }
 
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    async fn check(&self, mut ch: Self::Item) -> Result<Self::Item, Self::Error> {
-        futures::future::poll_fn(|cx| ch.poll_ready(cx))
-            .await
-            .map_err(|e| {
-                MetaNetworkError::ConnectionError(ConnectionError::new(e, "while check item"))
-            })?;
+    async fn check(&self, ch: Self::Item) -> Result<Self::Item, Self::Error> {
+        // The underlying `tonic::transport::channel::Channel` reconnects when server is down.
+        // We do not need to manually assert the readiness.
         Ok(ch)
     }
 }
@@ -276,8 +315,6 @@ impl ClientHandle {
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: Mutex<Vec<String>>,
-    username: String,
-    password: String,
     current_endpoint: Arc<Mutex<Option<String>>>,
     unhealthy_endpoints: Mutex<TtlHashMap<String, ()>>,
     auto_sync_interval: Option<Duration>,
@@ -334,11 +371,16 @@ impl MetaGrpcClient {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         unhealthy_endpoint_evict_time: Duration,
-        conf: Option<RpcClientTlsConfig>,
+        tls_config: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, MetaClientError> {
         Self::endpoints_non_empty(&endpoints)?;
 
-        let mgr = MetaChannelManager { timeout, conf };
+        let mgr = MetaChannelManager {
+            username: username.to_string(),
+            password: password.to_string(),
+            timeout,
+            tls_config,
+        };
 
         let rt =
             Runtime::with_worker_threads(1, Some("meta-client-rt".to_string())).map_err(|e| {
@@ -364,8 +406,6 @@ impl MetaGrpcClient {
             current_endpoint: Arc::new(Mutex::new(None)),
             unhealthy_endpoints: Mutex::new(TtlHashMap::new(unhealthy_endpoint_evict_time)),
             auto_sync_interval,
-            username: username.to_string(),
-            password: password.to_string(),
             rt: rt.clone(),
         });
 
@@ -616,50 +656,28 @@ impl MetaGrpcClient {
             endpoints
         };
 
-        let mut last_err = None;
+        let mut last_err = None::<MetaClientError>;
 
         for addr in endpoints.iter() {
             self.set_current_endpoint(addr);
 
-            let chan_res = self.make_channel(addr).await;
-            let chan = match chan_res {
-                Ok(chan) => chan,
-                Err(net_err) => {
-                    warn!("{} when make_channel to {}", net_err, addr);
-                    self.mark_current_endpoint_unhealthy();
+            debug!("get or build ReadClient to {}", addr);
 
-                    let cli_err = MetaClientError::NetworkError(net_err);
-                    last_err = Some(cli_err);
-                    continue;
-                }
-            };
+            let res = self.conn_pool.get(addr).await;
 
-            let (mut client, once) = Self::new_real_client(chan);
-
-            let handshake_res = Self::handshake(
-                &mut client,
-                &METACLI_COMMIT_SEMVER,
-                &MIN_METASRV_SEMVER,
-                &self.username,
-                &self.password,
-            )
-            .await;
-
-            let (token, server_version) = match handshake_res {
+            let (client, server_version) = match res {
                 Ok(x) => x,
-                Err(handshake_err) => {
-                    warn!("handshake error when make client: {:?}", handshake_err);
+                Err(client_err) => {
+                    error!(
+                        "Failed to get or build RealClient to {}, err: {:?}",
+                        addr, client_err
+                    );
+                    grpc_metrics::incr_meta_grpc_make_client_fail(addr);
                     self.mark_current_endpoint_unhealthy();
-
-                    let cli_err = MetaClientError::HandshakeError(handshake_err);
-                    last_err = Some(cli_err);
+                    last_err = Some(client_err);
                     continue;
                 }
             };
-
-            // Update the token for the client interceptor.
-            // Safe unwrap(): it is the first time setting it.
-            once.set(token).unwrap();
 
             return Ok((client, server_version));
         }
@@ -679,23 +697,6 @@ impl MetaGrpcClient {
         Err(MetaClientError::NetworkError(
             MetaNetworkError::ConnectionError(conn_err),
         ))
-    }
-
-    #[minitrace::trace]
-    async fn make_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
-        debug!("make_channel to {}", addr);
-
-        let ch = self.conn_pool.get(addr).await;
-
-        if let Err(ref e) = ch {
-            warn!(
-                "grpc_client create channel with {} failed, err: {:?}",
-                addr, e
-            );
-            grpc_metrics::incr_meta_grpc_make_client_fail(addr);
-        }
-
-        ch
     }
 
     pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), MetaClientError> {
@@ -785,23 +786,6 @@ impl MetaGrpcClient {
                 }
             }
         }
-    }
-
-    /// Create a MetaServiceClient with authentication interceptor
-    ///
-    /// The returned `OnceCell` is used to fill in a token for the interceptor.
-    pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
-        let once = Arc::new(OnceCell::new());
-
-        let interceptor = AuthInterceptor {
-            token: once.clone(),
-        };
-
-        let client = MetaServiceClient::with_interceptor(chan, interceptor)
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
-
-        (client, once)
     }
 
     /// Handshake with metasrv.
