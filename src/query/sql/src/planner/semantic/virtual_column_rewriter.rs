@@ -232,7 +232,7 @@ impl VirtualColumnRewriter {
                             }
                         };
                         // If this field name does not have a virtual column created,
-                        // it cannot be rewrited as a virtual column
+                        // it cannot be rewritten as a virtual column
                         match self.virtual_column_names.get(&base_column.table_index) {
                             Some(names) => {
                                 if !names.contains(&name) {
