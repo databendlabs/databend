@@ -118,13 +118,18 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
-                let filters = &self
+                let rf_filters = self
                     .partitions
                     .ctx
                     .get_runtime_filter_with_id(self.table_index);
-                let filters = filters.get_inlist();
-                if runtime_filter_pruner(self.table_schema.clone(), &part, filters, &self.func_ctx)?
-                {
+                let mut filters = rf_filters.get_min_max().clone();
+                filters.extend(rf_filters.inlists());
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &filters,
+                    &self.func_ctx,
+                )? {
                     return Ok(Some(DataBlock::empty()));
                 }
 
@@ -225,7 +230,7 @@ impl Processor for ReadParquetDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
-            let filters = self
+            let rf_filters = self
                 .partitions
                 .ctx
                 .get_runtime_filter_with_id(self.table_index);
