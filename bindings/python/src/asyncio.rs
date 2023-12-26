@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3_asyncio::tokio::future_into_py;
 
-use crate::types::{ConnectionInfo, Row, RowIterator, ServerStats};
+use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats};
 
 #[pyclass(module = "databend_driver")]
 pub struct AsyncDatabendClient(databend_driver::Client);
@@ -33,7 +32,7 @@ impl AsyncDatabendClient {
     pub fn get_conn<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
-            let conn = this.get_conn().await.unwrap();
+            let conn = this.get_conn().await.map_err(DriverError::new)?;
             Ok(AsyncDatabendConnection(conn))
         })
     }
@@ -55,7 +54,7 @@ impl AsyncDatabendConnection {
     pub fn version<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
-            let version = this.version().await.unwrap();
+            let version = this.version().await.map_err(DriverError::new)?;
             Ok(version)
         })
     }
@@ -63,7 +62,7 @@ impl AsyncDatabendConnection {
     pub fn exec<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
-            let res = this.exec(&sql).await.unwrap();
+            let res = this.exec(&sql).await.map_err(DriverError::new)?;
             Ok(res)
         })
     }
@@ -71,15 +70,15 @@ impl AsyncDatabendConnection {
     pub fn query_row<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
-            let row = this.query_row(&sql).await.unwrap();
-            Ok(Row::new(row.unwrap()))
+            let row = this.query_row(&sql).await.map_err(DriverError::new)?;
+            Ok(row.map(Row::new))
         })
     }
 
     pub fn query_iter<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
-            let streamer = this.query_iter(&sql).await.unwrap();
+            let streamer = this.query_iter(&sql).await.map_err(DriverError::new)?;
             Ok(RowIterator::new(streamer))
         })
     }
@@ -99,7 +98,7 @@ impl AsyncDatabendConnection {
             let ss = this
                 .stream_load(&sql, data)
                 .await
-                .map_err(|e| PyException::new_err(format!("{}", e)))?;
+                .map_err(DriverError::new)?;
             Ok(ServerStats::new(ss))
         })
     }

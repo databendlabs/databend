@@ -14,7 +14,7 @@
 
 use pyo3::prelude::*;
 
-use crate::types::{ConnectionInfo, Row, RowIterator, ServerStats};
+use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats};
 
 #[pyclass(module = "databend_driver")]
 pub struct BlockingDatabendClient(databend_driver::Client);
@@ -31,10 +31,7 @@ impl BlockingDatabendClient {
     pub fn get_conn(&self) -> PyResult<BlockingDatabendConnection> {
         let this = self.0.clone();
         let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
-            let conn = this.get_conn().await.unwrap();
-            conn
-        });
+        let ret = rt.block_on(async move { this.get_conn().await.map_err(DriverError::new) })?;
         Ok(BlockingDatabendConnection(ret))
     }
 }
@@ -57,53 +54,31 @@ impl BlockingDatabendConnection {
     pub fn version(&self) -> PyResult<String> {
         let this = self.0.clone();
         let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
-            let version = this.version().await.unwrap();
-            version
-        });
+        let ret = rt.block_on(async move { this.version().await.map_err(DriverError::new) })?;
         Ok(ret)
     }
 
     pub fn exec(&self, sql: String) -> PyResult<i64> {
         let this = self.0.clone();
         let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
-            let res = this.exec(&sql).await.unwrap();
-            res
-        });
+        let ret = rt.block_on(async move { this.exec(&sql).await.map_err(DriverError::new) })?;
         Ok(ret)
     }
 
     pub fn query_row(&self, sql: String) -> PyResult<Option<Row>> {
         let this = self.0.clone();
         let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
-            let row = this.query_row(&sql).await.unwrap();
-            row
-        });
+        let ret =
+            rt.block_on(async move { this.query_row(&sql).await.map_err(DriverError::new) })?;
         Ok(ret.map(Row::new))
     }
 
     pub fn query_iter(&self, sql: String) -> PyResult<RowIterator> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyException, _>(format!(
-                "Error creating Tokio runtime: {:?}",
-                e
-            ))
-        })?;
+        let rt = tokio::runtime::Runtime::new()?;
         // Use the runtime to block on the synchronous operation
-        let result: Result<RowIterator, PyErr> = rt.block_on(async {
-            match this.query_iter(&sql).await {
-                Ok(result) => Ok(RowIterator::new(result)),
-                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyException, _>(format!(
-                    "Error querying: {:?}",
-                    e
-                ))),
-            }
-        });
-
-        result.map_err(|e| e.into())
+        let it = rt.block_on(async { this.query_iter(&sql).await.map_err(DriverError::new) })?;
+        Ok(RowIterator::new(it))
     }
 
     pub fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> PyResult<ServerStats> {
@@ -114,9 +89,8 @@ impl BlockingDatabendConnection {
                 .iter()
                 .map(|v| v.iter().map(|s| s.as_ref()).collect())
                 .collect();
-            let ss = this.stream_load(&sql, data).await.unwrap();
-            ss
-        });
+            this.stream_load(&sql, data).await.map_err(DriverError::new)
+        })?;
         Ok(ServerStats::new(ret))
     }
 }

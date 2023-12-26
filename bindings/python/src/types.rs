@@ -282,3 +282,17 @@ impl ServerStats {
         self.0.running_time_ms
     }
 }
+
+pub struct DriverError(databend_driver::Error);
+
+impl DriverError {
+    pub fn new(e: databend_driver::Error) -> Self {
+        DriverError(e)
+    }
+}
+
+impl From<DriverError> for PyErr {
+    fn from(e: DriverError) -> Self {
+        PyException::new_err(format!("{}", e.0))
+    }
+}

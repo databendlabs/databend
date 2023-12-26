@@ -16,20 +16,11 @@ mod asyncio;
 mod blocking;
 mod types;
 
-use pyo3::create_exception;
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
 use crate::asyncio::{AsyncDatabendClient, AsyncDatabendConnection};
 use crate::blocking::{BlockingDatabendClient, BlockingDatabendConnection};
 use crate::types::{ConnectionInfo, Field, Row, RowIterator, Schema, ServerStats};
-
-create_exception!(
-    databend_client,
-    Error,
-    PyException,
-    "databend_client errors"
-);
 
 #[pymodule]
 fn _databend_driver(_py: Python, m: &PyModule) -> PyResult<()> {
