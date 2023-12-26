@@ -24,6 +24,7 @@ use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;
 use parquet::file::footer::decode_metadata;
+use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
 
 const FOOTER_SIZE: u64 = 8;
@@ -37,11 +38,10 @@ pub async fn read_parquet_schema_async_rs(
     file_size: Option<u64>,
 ) -> Result<ArrowSchema> {
     let meta = read_metadata_async(path, operator, file_size).await?;
-    infer_schema_with_extension(&meta)
+    infer_schema_with_extension(meta.file_metadata())
 }
 
-pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema> {
-    let meta = meta.file_metadata();
+pub fn infer_schema_with_extension(meta: &FileMetaData) -> Result<ArrowSchema> {
     let mut arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
     // Convert data types to extension types using meta information.
     // Mainly used for types such as Variant and Bitmap,
