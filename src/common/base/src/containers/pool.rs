@@ -120,6 +120,8 @@ where
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
     pub async fn get(&self, key: &Mgr::Key) -> Result<Mgr::Item, Mgr::Error> {
+        dbg!("Pool::get", key);
+
         let pool_item = self.get_pool_item(key);
 
         let mut guard = pool_item.lock().await;

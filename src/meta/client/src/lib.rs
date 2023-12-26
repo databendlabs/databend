@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(lazy_cell)]
 
+pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
 mod grpc_metrics;
@@ -29,6 +30,7 @@ pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;
+pub use grpc_client::MetaChannelManager;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
 pub use message::Streamed;
