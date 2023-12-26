@@ -81,3 +81,31 @@ drop table cast_array
 
 statement ok
 drop table t1
+
+# for issue #14156 https://github.com/datafuselabs/databend/issues/14156
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+query T
+select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED)
+----
+1024954
+
+query T
+select to_uint64(1024954.98046875::double)
+----
+1024954
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+query T
+select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED)
+----
+1024955
+
+query T
+select to_uint64(1024954.98046875::double)
+----
+1024955
