@@ -14,18 +14,26 @@
 
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::DataField;
 use crate::DataSchema;
 use crate::TableField;
 
-impl From<&ArrowSchema> for DataSchema {
-    fn from(a_schema: &ArrowSchema) -> DataSchema {
+impl TryFrom<&ArrowSchema> for DataSchema {
+    type Error = ErrorCode;
+
+    fn try_from(a_schema: &ArrowSchema) -> Result<DataSchema> {
         let fields = a_schema
             .fields
             .iter()
-            .map(|arrow_f| DataField::from(&TableField::from(&Arrow2Field::from(arrow_f))))
-            .collect();
-        DataSchema::new(fields)
+            .map(|arrow_f| {
+                Ok(DataField::from(&TableField::try_from(&Arrow2Field::from(
+                    arrow_f,
+                ))?))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(DataSchema::new(fields))
     }
 }

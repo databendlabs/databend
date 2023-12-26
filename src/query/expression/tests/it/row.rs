@@ -472,9 +472,9 @@ fn fuzz_test() {
                     Column::Nullable(c) => match &c.column {
                         Column::String(sc) => {
                             let offsets =
-                                sc.offsets().iter().map(|offset| *offset as i32).collect();
+                                sc.offsets().iter().map(|offset| *offset as i64).collect();
                             let array = Box::new(
-                                databend_common_arrow::arrow::array::Utf8Array::<i32>::try_new(
+                                databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
                                     databend_common_arrow::arrow::datatypes::DataType::Utf8,
                                     unsafe { OffsetsBuffer::new_unchecked(offsets) },
                                     sc.data().clone(),

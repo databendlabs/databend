@@ -84,7 +84,7 @@ pub fn deserialize_column(bytes: &[u8]) -> Option<Column> {
 
     let metadata = read_file_metadata(&mut cursor).ok()?;
     let f = metadata.schema.fields[0].clone();
-    let table_type = TableDataType::from(&f);
+    let table_type = TableDataType::try_from(&f).unwrap();
     let data_type = (&table_type).into();
 
     let mut reader = FileReader::new(cursor, metadata, None, None);

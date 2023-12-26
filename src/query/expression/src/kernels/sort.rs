@@ -35,7 +35,6 @@ use crate::Column;
 use crate::DataBlock;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::ARROW_EXT_TYPE_STRING;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
@@ -250,27 +249,12 @@ fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCom
     Ok(Box::new(move |i, j| left.value(i).cmp(&right.value(j))))
 }
 
-fn compare_binary(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    let left = left
-        .as_any()
-        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
-        .unwrap()
-        .clone();
-    let right = right
-        .as_any()
-        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
-        .unwrap()
-        .clone();
-    Ok(Box::new(move |i, j| left.value(i).cmp(right.value(j))))
-}
-
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     debug_assert_eq!(left.data_type(), right.data_type());
     match left.data_type() {
         ArrowType::Extension(name, _, _) => match name.as_str() {
             ARROW_EXT_TYPE_VARIANT => compare_variant(left, right),
             ARROW_EXT_TYPE_EMPTY_ARRAY | ARROW_EXT_TYPE_EMPTY_MAP => compare_null(),
-            ARROW_EXT_TYPE_STRING => compare_binary(left, right),
             _ => Err(ArrowError::NotYetImplemented(format!(
                 "Sort not supported for data type {:?}",
                 left.data_type()

@@ -100,7 +100,7 @@ impl Parquet2Reader {
             columns_to_read,
         ) = project_parquet_schema(schema, schema_descr, &projection)?;
 
-        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
+        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone())?;
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(Parquet2Reader {
