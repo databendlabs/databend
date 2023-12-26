@@ -16,6 +16,8 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -27,6 +29,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
@@ -228,4 +231,60 @@ where
         }
     }
     Ok(())
+}
+
+// Generate min max runtime filter
+pub(crate) fn min_max_filter<T>(
+    min: T,
+    max: T,
+    probe_key: &Expr<String>,
+) -> Result<Option<Expr<String>>>
+where
+    T: Number,
+{
+    if let Expr::ColumnRef {
+        span,
+        id,
+        data_type,
+        display_name,
+    } = probe_key
+    {
+        let raw_probe_key = RawExpr::ColumnRef {
+            span: *span,
+            id: id.to_string(),
+            data_type: data_type.clone(),
+            display_name: display_name.clone(),
+        };
+        let min = RawExpr::Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::from(min)),
+        };
+        let max = RawExpr::Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::from(max)),
+        };
+        // Make gte and lte function
+        let gte_func = RawExpr::FunctionCall {
+            span: None,
+            name: "gte".to_string(),
+            params: vec![],
+            args: vec![raw_probe_key.clone(), min],
+        };
+        let lte_func = RawExpr::FunctionCall {
+            span: None,
+            name: "lte".to_string(),
+            params: vec![],
+            args: vec![raw_probe_key, max],
+        };
+        // Make and_filters function
+        let and_filters_func = RawExpr::FunctionCall {
+            span: None,
+            name: "and_filters".to_string(),
+            params: vec![],
+            args: vec![gte_func, lte_func],
+        };
+        let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
+        return Ok(Some(expr));
+    }
+    Ok(None)
 }

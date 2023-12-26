@@ -28,10 +28,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDomain;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -63,6 +65,7 @@ use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE
 use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
+use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
@@ -109,6 +112,7 @@ pub struct HashJoinBuildState {
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
     pub(crate) enable_inlist_runtime_filter: bool,
+    pub(crate) enable_min_max_runtime_filter: bool,
     /// Need to open runtime filter setting.
     pub(crate) enable_bloom_runtime_filter: bool,
 }
@@ -136,6 +140,7 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
+        let mut enable_min_max_runtime_filter = false;
         if hash_join_state.hash_join_desc.join_type == JoinType::Inner
             && ctx.get_settings().get_join_spilling_threshold()? == 0
         {
@@ -144,6 +149,7 @@ impl HashJoinBuildState {
             let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
             if !is_cluster || is_broadcast_join {
                 enable_inlist_runtime_filter = true;
+                enable_min_max_runtime_filter = true;
                 if ctx.get_settings().get_runtime_filter()? {
                     enable_bloom_runtime_filter = true;
                 }
@@ -168,6 +174,7 @@ impl HashJoinBuildState {
             send_val: AtomicU8::new(1),
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
+            enable_min_max_runtime_filter,
         }))
     }
 
@@ -272,6 +279,10 @@ impl HashJoinBuildState {
             // If enable bloom runtime filter, collect hashes for build keys
             if self.enable_bloom_runtime_filter {
                 self.bloom_runtime_filter(&self.func_ctx, &build_chunks, &mut runtime_filter)?;
+            }
+
+            if self.enable_min_max_runtime_filter {
+                self.min_max_runtime_filter(&self.func_ctx, &build_chunks, &mut runtime_filter)?;
             }
 
             if !runtime_filter.is_empty() {
@@ -846,6 +857,93 @@ impl HashJoinBuildState {
             {
                 if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                     runtime_filter.add_inlist(filter);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn min_max_runtime_filter(
+        &self,
+        func_ctx: &FunctionContext,
+        data_blocks: &[DataBlock],
+        runtime_filter: &mut RuntimeFilterInfo,
+    ) -> Result<()> {
+        for (build_key, probe_key) in self
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
+        {
+            if !build_key.data_type().remove_nullable().is_numeric() {
+                return Ok(());
+            }
+            if let Expr::ColumnRef { .. } = probe_key {
+                let mut columns = Vec::with_capacity(data_blocks.len());
+                for block in data_blocks.iter() {
+                    if block.num_columns() == 0 {
+                        continue;
+                    }
+                    let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
+                    let column = evaluator
+                        .run(build_key)?
+                        .convert_to_full_column(build_key.data_type(), block.num_rows());
+                    columns.push(column);
+                }
+                if columns.is_empty() {
+                    return Ok(());
+                }
+                let build_key_column = Column::concat_columns(columns.into_iter())?;
+                // Generate min max filter using build column
+                let min_max = build_key_column.remove_nullable().domain();
+                let min_max_filter = match min_max {
+                    Domain::Number(domain) => match domain {
+                        NumberDomain::UInt8(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::UInt16(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::UInt32(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::UInt64(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Int8(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Int16(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Int32(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Int64(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Float32(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                        NumberDomain::Float64(simple_domain) => {
+                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            min_max_filter(min, max, probe_key)?
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+                if let Some(min_max_filter) = min_max_filter {
+                    runtime_filter.add_min_max(min_max_filter);
                 }
             }
         }

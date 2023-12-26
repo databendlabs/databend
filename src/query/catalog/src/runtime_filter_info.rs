@@ -18,6 +18,7 @@ use xorf::BinaryFuse8;
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeFilterInfo {
     inlist: Vec<Expr<String>>,
+    min_max: Vec<Expr<String>>,
     bloom: Vec<(String, BinaryFuse8)>,
 }
 
@@ -30,6 +31,10 @@ impl RuntimeFilterInfo {
         self.bloom.push(bloom);
     }
 
+    pub fn add_min_max(&mut self, expr: Expr<String>) {
+        self.min_max.push(expr);
+    }
+
     pub fn get_inlist(&self) -> &Vec<Expr<String>> {
         &self.inlist
     }
@@ -38,11 +43,23 @@ impl RuntimeFilterInfo {
         &self.bloom
     }
 
+    pub fn get_min_max(&self) -> &Vec<Expr<String>> {
+        &self.min_max
+    }
+
     pub fn blooms(self) -> Vec<(String, BinaryFuse8)> {
         self.bloom
     }
 
+    pub fn inlists(self) -> Vec<Expr<String>> {
+        self.inlist
+    }
+
+    pub fn min_maxs(self) -> Vec<Expr<String>> {
+        self.min_max
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.inlist.is_empty() && self.bloom.is_empty()
+        self.inlist.is_empty() && self.bloom.is_empty() && self.min_max.is_empty()
     }
 }
