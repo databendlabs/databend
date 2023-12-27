@@ -1467,21 +1467,20 @@ impl Column {
                         .collect::<Vec<_>>();
                     // Binary may be Extension data type variant and bitmap
                     match data_type {
-                        DataType::Variant => {
-                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        DataType::Bitmap => {
-                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        DataType::Binary => {
-                            Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
+                        DataType::Variant => Column::Variant(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
+                        DataType::Bitmap => Column::Bitmap(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
+                        DataType::Binary => Column::Binary(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        )),
                         _ => unreachable!(),
                     }
-                    Column::Binary(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    ))
                 }
                 ArrowDataType::LargeBinary => {
                     let arrow_col = arrow_col
