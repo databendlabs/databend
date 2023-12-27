@@ -49,7 +49,7 @@ pub async fn do_vacuum_drop_table(
         Some(dry_run_limit) => {
             let mut ds = operator
                 .lister_with(&dir)
-                .delimiter("")
+                .recursive(true)
                 .metakey(Metakey::Mode)
                 .await?;
             let mut list_files = Vec::new();

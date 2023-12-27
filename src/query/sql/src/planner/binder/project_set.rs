@@ -17,12 +17,13 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Window;
 use databend_common_ast::Visitor;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
@@ -50,7 +51,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         distinct: bool,
         name: &'a Identifier,
         args: &'a [Expr],
-        params: &'a [Literal],
+        params: &'a [Expr],
         over: &'a Option<Window>,
         lambda: &'a Option<Lambda>,
     ) {
@@ -72,6 +73,9 @@ impl<'a> Visitor<'a> for SrfCollector {
         } else {
             for arg in args.iter() {
                 self.visit_expr(arg);
+            }
+            for param in params.iter() {
+                self.visit_expr(param);
             }
         }
     }
@@ -177,7 +181,7 @@ impl Binder {
                 ScalarExpr::FunctionCall(FunctionCall {
                     span: srf.span(),
                     func_name: "get".to_string(),
-                    params: vec![1],
+                    params: vec![Scalar::Number(NumberScalar::Int64(1))],
                     arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: srf.span(),
                         column,

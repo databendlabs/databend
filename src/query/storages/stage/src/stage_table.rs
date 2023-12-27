@@ -46,6 +46,7 @@ use databend_common_pipeline_sources::input_formats::SplitInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::STDIN_FD;
+use databend_common_storages_parquet::ParquetTableForCopy;
 use log::debug;
 use opendal::Operator;
 use opendal::Scheme;
@@ -125,6 +126,12 @@ impl Table for StageTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;
+        if matches!(
+            stage_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(_)
+        ) {
+            return ParquetTableForCopy::do_read_partitions(stage_info, ctx, _push_downs).await;
+        }
         // User set the files.
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
@@ -162,6 +169,20 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let stage_table_info =
+            if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
+                stage_table_info
+            } else {
+                return Err(ErrorCode::Internal(""));
+            };
+
+        if matches!(
+            stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(_)
+        ) {
+            return ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache);
+        }
+
         let projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),
             ..
@@ -171,12 +192,6 @@ impl Table for StageTable {
         } else {
             None
         };
-        let stage_table_info =
-            if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
-                stage_table_info
-            } else {
-                return Err(ErrorCode::Internal(""));
-            };
 
         let mut splits = vec![];
         for part in &plan.parts.partitions {

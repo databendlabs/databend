@@ -51,6 +51,7 @@ message DataType {
     Empty    null_t        = 31;
     Empty    empty_array_t = 32;
     Empty    bool_t        = 33;
+    Empty    binary_t      = 46;
     Empty    string_t      = 34;
     Number   number_t      = 35;
     Empty    timestamp_t   = 36;

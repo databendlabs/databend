@@ -25,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_hashtable::hash2bucket;
 use databend_common_pipeline_core::query_spill_prefix;
-use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 use log::info;
 
@@ -135,12 +134,7 @@ impl BuildSpillState {
     // Check if need to spill.
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self) -> Result<bool> {
-        let settings = self.build_state.ctx.get_settings();
-        let spill_threshold = settings.get_join_spilling_threshold()?;
-        // If `spill_threshold` is 0, we won't limit memory.
-        let enable_spill = spill_threshold != 0
-            && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
-        if !enable_spill || self.spiller.is_all_spilled() {
+        if self.spiller.is_all_spilled() {
             return Ok(false);
         }
 
@@ -159,6 +153,11 @@ impl BuildSpillState {
         let global_used = GLOBAL_MEM_STAT.get_memory_usage();
         let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
         let total_gb = byte.get_appropriate_unit(false).format(3);
+        let spill_threshold = self
+            .build_state
+            .ctx
+            .get_settings()
+            .get_join_spilling_threshold()?;
         if global_used as usize > spill_threshold {
             info!(
                 "need to spill due to global memory usage {:?} is greater than spill threshold",

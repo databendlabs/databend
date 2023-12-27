@@ -169,13 +169,13 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
-            join_state,
+            join_state.clone(),
             barrier,
             restore_barrier,
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
+            let spill_state = if join_state.enable_spill {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -217,7 +217,7 @@ impl PipelineBuilder {
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             self.func_ctx.clone(),
-            state,
+            state.clone(),
             &join.probe_projections,
             &join.probe_keys,
             join.probe.output_schema()?,
@@ -232,7 +232,7 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
+            let probe_spill_state = if state.enable_spill {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),

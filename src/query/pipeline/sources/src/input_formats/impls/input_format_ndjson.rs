@@ -23,7 +23,7 @@ use databend_common_formats::FieldDecoder;
 use databend_common_formats::FieldJsonAstDecoder;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::JsonNullAs;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::FileParseError;
 
@@ -47,8 +47,8 @@ impl InputFormatNDJson {
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         default_values: &Option<Vec<Scalar>>,
-        null_field_as: &JsonNullAs,
-        missing_field_as: &JsonNullAs,
+        null_field_as: &NullAs,
+        missing_field_as: &NullAs,
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
             serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
@@ -81,14 +81,14 @@ impl InputFormatNDJson {
                 let value = json.get(field_name);
                 match value {
                     None => match missing_field_as {
-                        JsonNullAs::Error => {
+                        NullAs::Error => {
                             return Err(FileParseError::ColumnMissingError {
                                 column_index,
                                 column_name: field.name().to_owned(),
                                 column_type: field.data_type.to_string(),
                             });
                         }
-                        JsonNullAs::Null => {
+                        NullAs::Null => {
                             if field.is_nullable_or_null() {
                                 column.push_default();
                             } else {
@@ -99,20 +99,20 @@ impl InputFormatNDJson {
                                 });
                             }
                         }
-                        JsonNullAs::FieldDefault => {
+                        NullAs::FieldDefault => {
                             if let Some(values) = default_values {
                                 column.push(values[column_index].as_ref());
                             } else {
                                 column.push_default();
                             }
                         }
-                        JsonNullAs::TypeDefault => {
+                        NullAs::TypeDefault => {
                             column.push_default();
                         }
                     },
                     Some(serde_json::Value::Null) => match null_field_as {
-                        JsonNullAs::Error => unreachable!("null_field_as should be error"),
-                        JsonNullAs::Null => {
+                        NullAs::Error => unreachable!("null_field_as should be error"),
+                        NullAs::Null => {
                             if field.is_nullable_or_null() {
                                 column.push_default();
                             } else {
@@ -125,14 +125,14 @@ impl InputFormatNDJson {
                                     });
                             }
                         }
-                        JsonNullAs::FieldDefault => {
+                        NullAs::FieldDefault => {
                             if let Some(values) = default_values {
                                 column.push(values[column_index].as_ref());
                             } else {
                                 column.push_default();
                             }
                         }
-                        JsonNullAs::TypeDefault => {
+                        NullAs::TypeDefault => {
                             column.push_default();
                         }
                     },

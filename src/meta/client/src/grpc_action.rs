@@ -38,12 +38,12 @@ use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 
-use crate::grpc_client::RealClient;
+use crate::established_client::EstablishedClient;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
 use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
-use crate::message::MakeClient;
+use crate::message::MakeEstablishedClient;
 use crate::message::Streamed;
 
 /// Bind a request type to its corresponding response type.
@@ -204,8 +204,8 @@ impl RequestFor for ExportReq {
     type Reply = tonic::codec::Streaming<WatchResponse>;
 }
 
-impl RequestFor for MakeClient {
-    type Reply = (RealClient, u64);
+impl RequestFor for MakeEstablishedClient {
+    type Reply = EstablishedClient;
 }
 
 impl RequestFor for GetEndpoints {

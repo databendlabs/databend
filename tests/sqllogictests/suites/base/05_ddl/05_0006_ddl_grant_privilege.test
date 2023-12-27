@@ -46,12 +46,13 @@ GRANT SELECT ON db01.tbnotexists TO 'test-grant'
 statement error 1003
 GRANT SELECT ON dbnotexists.* TO 'test-grant'
 
-onlyif mysql
+
 query T
 select current_user()
 ----
 'root'@'%'
 
+# set role only modify session role.
 onlyif mysql
 statement ok
 set role public;
@@ -72,15 +73,12 @@ public 0 1 0
 query T
 show grants for role public
 ----
-GRANT SELECT ON 'default'.'system'.'one' TO ROLE `public`
-GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `public`
+
 
 query T
 show grants for role account_admin
 ----
 GRANT ALL ON *.* TO ROLE `account_admin`
-GRANT SELECT ON 'default'.'system'.'one' TO ROLE `account_admin`
-GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `account_admin`
 
 query T
 SHOW GRANTS FOR 'test-grant'
@@ -88,8 +86,6 @@ SHOW GRANTS FOR 'test-grant'
 GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 REVOKE SELECT ON db01.* FROM 'test-grant'
@@ -99,8 +95,6 @@ SHOW GRANTS FOR 'test-grant'
 ----
 GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'
@@ -109,8 +103,6 @@ query T
 SHOW GRANTS FOR 'test-grant'
 ----
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 CREATE ROLE `test-grant-role`
@@ -125,8 +117,6 @@ query T
 SHOW GRANTS FOR ROLE `test-grant-role`
 ----
 GRANT SELECT ON 'default'.'default'.* TO ROLE `test-grant-role`
-GRANT SELECT ON 'default'.'system'.'one' TO ROLE `test-grant-role`
-GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `test-grant-role`
 
 statement ok
 DROP ROLE `test-grant-role`

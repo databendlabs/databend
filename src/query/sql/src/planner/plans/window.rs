@@ -142,7 +142,7 @@ impl Operator for Window {
         }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let input_stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = if self.partition_by.is_empty() {
             // Scalar aggregation
@@ -181,6 +181,17 @@ impl Operator for Window {
                 column_stats: input_stat_info.statistics.column_stats.clone(),
             },
         }))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+        Ok(vec![vec![required]])
     }
 }
 

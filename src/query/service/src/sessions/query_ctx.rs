@@ -201,8 +201,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };
@@ -464,11 +464,12 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    fn get_auto_compact_after_write(&self) -> bool {
+    // Need compact after write, over the threshold.
+    fn get_need_compact_after_write(&self) -> bool {
         self.shared.auto_compact_after_write.load(Ordering::Acquire)
     }
 
-    fn set_auto_compact_after_write(&self, enable: bool) {
+    fn set_need_compact_after_write(&self, enable: bool) {
         self.shared
             .auto_compact_after_write
             .store(enable, Ordering::Release);

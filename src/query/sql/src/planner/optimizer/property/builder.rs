@@ -78,11 +78,11 @@ impl<'a> RelExpr<'a> {
                 if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
                     return Ok(stat_info.clone());
                 }
-                let stat_info = expr.plan.derive_cardinality(self)?;
+                let stat_info = expr.plan.derive_stats(self)?;
                 *expr.stat_info.lock().unwrap() = Some(stat_info.clone());
                 Ok(stat_info)
             }
-            RelExpr::MExpr { expr, .. } => expr.plan.derive_cardinality(self),
+            RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self),
         }
     }
 
@@ -132,6 +132,20 @@ impl<'a> RelExpr<'a> {
         };
 
         let prop = plan.compute_required_prop_child(ctx, self, index, input)?;
+        Ok(prop)
+    }
+
+    pub fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        input: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let plan = match self {
+            RelExpr::SExpr { expr } => expr.plan(),
+            RelExpr::MExpr { expr, .. } => &expr.plan,
+        };
+
+        let prop = plan.compute_required_prop_children(ctx, self, input)?;
         Ok(prop)
     }
 }

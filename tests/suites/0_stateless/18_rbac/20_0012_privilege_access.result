@@ -1,5 +1,4 @@
 information_schema
-system
 test -- insert
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
 1
@@ -22,37 +21,31 @@ test -- select
 1
 1
 test -- clustering_information
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'system'.'clustering_information' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 true
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_snapshot' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 true
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_segment' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 true
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_block' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 true
 GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
 GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
-GRANT SELECT ON 'default'.'system'.'one' TO 'a'@'%'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'a'@'%'
 default
 grant_db
 information_schema
-system
 test -- show tables
 test_t
 test -- show tables from system
-one
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'.
 test -- show tables from grant_db
 t
-test -- show columns
-dummy	TINYINT UNSIGNED	NO		NULL	NULL
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'.
+test -- show columns from one from system
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.one'.
 c1	INT	NO		NULL	NULL
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for table system.tables
-Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't have privilege for database nogrant
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tables'.
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'.
 1
 0
-93
-8
+92
+7
 1
 0
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
@@ -61,3 +54,28 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] 
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+=== check db/table_id ===
+GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
+1
+GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
+1
+2
+GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
+1
+2
+3
