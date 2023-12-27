@@ -228,6 +228,8 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
+        // translate the db_id and table_id to db_name and table_name, used on
+        // skipping the privilege check on system tables, and on the error message.
         let (db_name, table_name) = match object {
             GrantObject::Database(_, db_name) => (db_name.to_lowercase(), "".to_string()),
             GrantObject::Table(_, db_name, table_name) => {
@@ -246,6 +248,8 @@ impl PrivilegeAccess {
             }
             _ => ("".to_string(), "".to_string()),
         };
+
+        // skip checking the privilege on system tables.
         if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
             || db_name == "information_schema")
             && &privileges == &[UserPrivilegeType::Select]
@@ -253,6 +257,7 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
+        // TODO: remove the verify_ownership parameter
         if verify_ownership {
             let object_by_id =
                 self.convert_grant_object_by_id(object)
@@ -270,7 +275,8 @@ impl PrivilegeAccess {
                 }
             }
         }
-        // wrap an user-facing error message on privilege validations on cases like TableByID / DatabaseByID
+
+        // wrap an user-facing error message with table/db names on cases like TableByID / DatabaseByID
         match session.validate_privilege(object, privileges.clone()).await {
             Ok(_) => Ok(()),
             Err(err) => {
