@@ -306,6 +306,11 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = cascades.optimize(s_expr)?;
     }
 
+    if !opt_ctx.enable_join_reorder {
+        return RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr);
+    }
+    s_expr = RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)?;
+
     // Run distributed query optimization.
     //
     // So far, we don't have ability to execute distributed query
@@ -316,10 +321,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
     }
 
-    if !opt_ctx.enable_join_reorder {
-        return RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr);
-    }
-    RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)
+    Ok(s_expr)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`

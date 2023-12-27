@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::QuerySource;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
 
 use crate::api::BroadcastExchange;
@@ -56,6 +57,7 @@ pub struct Fragmenter {
 /// DeleteLeaf: visiting a source fragment of delete statement.
 ///
 /// Replace: visiting a fragment that contains a replace into plan.
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum State {
     SelectLeaf,
     DeleteLeaf,
@@ -93,7 +95,6 @@ impl Fragmenter {
     pub fn get_exchange(
         ctx: Arc<QueryContext>,
         plan: &PhysicalPlan,
-        from_multiple_nodes: bool,
     ) -> Result<Option<DataExchange>> {
         match plan {
             PhysicalPlan::ExchangeSink(plan) => match plan.kind {
@@ -106,10 +107,9 @@ impl Fragmenter {
                     plan.ignore_exchange,
                     plan.allow_adjust_parallelism,
                 ))),
-                FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
-                    from_multiple_nodes,
-                    Self::get_executors(ctx),
-                ))),
+                FragmentKind::Expansive => {
+                    Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
+                }
                 _ => Ok(None),
             },
             _ => Ok(None),
@@ -233,6 +233,33 @@ impl PhysicalPlanReplacer for Fragmenter {
         }))
     }
 
+    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left_input = self.replace(plan.left.as_ref())?;
+        let left_state = self.state.clone();
+
+        // Consume current fragments to prevent them being consumed by `right_input`.
+        fragments.append(&mut self.fragments);
+        let right_input = self.replace(plan.right.as_ref())?;
+        let right_state = self.state.clone();
+
+        fragments.append(&mut self.fragments);
+        self.fragments = fragments;
+
+        // If any of the input is a source fragment, the union all is a source fragment.
+        if left_state == State::SelectLeaf || right_state == State::SelectLeaf {
+            self.state = State::SelectLeaf;
+        } else {
+            self.state = State::Other;
+        }
+
+        Ok(PhysicalPlan::UnionAll(UnionAll {
+            left: Box::new(left_input),
+            right: Box::new(right_input),
+            ..plan.clone()
+        }))
+    }
+
     fn replace_exchange(&mut self, plan: &Exchange) -> Result<PhysicalPlan> {
         // Recursively rewrite input
         let input = self.replace(plan.input.as_ref())?;
@@ -268,13 +295,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::Recluster => FragmentType::Recluster,
         };
         self.state = State::Other;
-        let exchange = Self::get_exchange(
-            self.ctx.clone(),
-            &plan,
-            self.fragments
-                .iter()
-                .all(|fragment| !matches!(&fragment.exchange, Some(DataExchange::Merge(_)))),
-        )?;
+        let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
 
         let table_index = plan.get_table_index();
 
