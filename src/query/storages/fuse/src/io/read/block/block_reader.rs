@@ -157,11 +157,11 @@ impl BlockReader {
     // Build non duplicate leaf_indices to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
         columns: &[ColumnNode],
-    ) -> Result<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>> {
+    ) -> BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
         let mut indices = BTreeMap::new();
         for column in columns {
             for (i, index) in column.leaf_indices.iter().enumerate() {
-                let f: TableField = (&column.field).try_into()?;
+                let f: TableField = (&column.field).into();
                 let data_type: DataType = f.data_type().into();
                 indices.insert(
                     *index,
@@ -169,7 +169,7 @@ impl BlockReader {
                 );
             }
         }
-        Ok(indices)
+        indices
     }
 
     pub fn query_internal_columns(&self) -> bool {

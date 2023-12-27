@@ -76,7 +76,7 @@ pub fn collect_basic_column_stats(
     // `column_nodes` is parallel to the schema, so we can iterate `column_nodes` directly.
     for column_node in column_nodes.column_nodes.iter() {
         let field = &column_node.field;
-        let table_type: TableDataType = field.try_into()?;
+        let table_type: TableDataType = field.into();
         let data_type = (&table_type).into();
         let column_stats = pread::statistics::deserialize(field, rgs)?;
         let batch_stats = BatchStatistics::from_statistics(&column_stats, &data_type)?;
