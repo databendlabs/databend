@@ -130,7 +130,6 @@ pub struct NativeDeserializeDataTransform {
     base_block_ids: Option<Scalar>,
 
     cached_bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
-    cached_min_max_runtime_filter: Option<Vec<Expr<IndexType>>>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -268,7 +267,6 @@ impl NativeDeserializeDataTransform {
 
                 base_block_ids: plan.base_block_ids.clone(),
                 cached_bloom_runtime_filter: None,
-                cached_min_max_runtime_filter: None,
             },
         )))
     }
@@ -698,87 +696,6 @@ impl NativeDeserializeDataTransform {
         }
         Ok(bitmaps)
     }
-
-    fn min_max_runtime_filter(
-        &mut self,
-        arrays: &mut Vec<(usize, Box<dyn Array>)>,
-    ) -> Result<Vec<MutableBitmap>> {
-        let mut local_arrays = vec![];
-        // Check if already cached runtime filters
-        if self.cached_bloom_runtime_filter.is_none() {
-            let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
-            let min_max_filters = runtime_filters.min_maxs();
-            let min_max_filters = min_max_filters
-                .into_iter()
-                .filter_map(|filter| {
-                    let col_refs = filter.column_refs();
-                    let name = col_refs.keys().next().unwrap();
-                    // Some probe keys are not in the schema, they are derived from expressions.
-                    self.src_schema
-                        .index_of(name)
-                        .ok()
-                        .map(|idx| filter.project_column_ref(|_| idx))
-                })
-                .collect::<Vec<Expr<IndexType>>>();
-            if min_max_filters.is_empty() {
-                return Ok(vec![]);
-            }
-            self.cached_min_max_runtime_filter = Some(min_max_filters);
-        }
-        let mut bitmaps =
-            Vec::with_capacity(self.cached_min_max_runtime_filter.as_ref().unwrap().len());
-        for filter in self.cached_min_max_runtime_filter.as_ref().unwrap().iter() {
-            let col_refs = filter.column_refs();
-            let idx = col_refs.keys().next().unwrap();
-            let mut find_array = false;
-            // It's possible that the column has multiple filters, so we need to avoid duplicate reads.
-            // Or the column in prewhere columns has been read.
-            for (i, array) in arrays.iter() {
-                if i == idx {
-                    local_arrays.push((*idx, array.clone()));
-                    find_array = true;
-                    break;
-                }
-            }
-            if !find_array {
-                if let Some(array_iter) = self.array_iters.get_mut(idx) {
-                    let skip_pages = self.array_skip_pages.get(idx).unwrap();
-                    match array_iter.nth(*skip_pages) {
-                        Some(array) => {
-                            let array = array.as_ref().unwrap();
-                            if let Some(pos) = self.remain_columns.iter().position(|i| i == idx) {
-                                self.remain_columns.remove(pos);
-                            }
-                            self.read_columns.push(*idx);
-                            arrays.push((*idx, array.clone()));
-                            local_arrays.push((*idx, array.clone()));
-                            self.array_skip_pages.insert(*idx, 0);
-                        }
-                        None => {
-                            return Ok(vec![]);
-                        }
-                    }
-                }
-            }
-            let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
-            let evaluator = Evaluator::new(&probe_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let filter = evaluator
-                .run(filter)
-                .map_err(|e| e.add_message("eval min max runtime filter failed:"))?
-                .try_downcast::<BooleanType>()
-                .unwrap();
-            let bitmap = FilterHelpers::filter_to_bitmap(filter, probe_block.num_rows());
-            local_arrays.clear();
-            if bitmap.unset_bits() == bitmap.len() {
-                self.offset_in_part += probe_block.num_rows();
-                self.finish_process_skip_page()?;
-                return Ok(vec![]);
-            } else if bitmap.unset_bits() != 0 {
-                bitmaps.push(bitmap);
-            }
-        }
-        Ok(bitmaps)
-    }
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -1039,9 +956,7 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
-            let mut rf_filters = self.min_max_runtime_filter(&mut arrays)?;
-
-            rf_filters.extend(self.bloom_runtime_filter(&mut arrays)?);
+            let rf_filters = self.bloom_runtime_filter(&mut arrays)?;
 
             // Step 5: read remain columns and filter block if needed.
             for index in self.remain_columns.iter() {

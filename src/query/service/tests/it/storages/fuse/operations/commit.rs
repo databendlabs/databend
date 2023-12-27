@@ -705,7 +705,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn has_runtime_filters(&self, _id: usize) -> bool {
+    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
         todo!()
     }
 }

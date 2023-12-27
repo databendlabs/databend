@@ -918,6 +918,9 @@ impl TableContext for QueryContext {
                 for filter in filters.1.get_inlist() {
                     v.get_mut().add_inlist(filter.clone());
                 }
+                for filter in filters.1.get_min_max() {
+                    v.get_mut().add_min_max(filter.clone());
+                }
                 for filter in filters.1.blooms() {
                     v.get_mut().add_bloom(filter);
                 }
@@ -933,7 +936,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn has_runtime_filters(&self, id: usize) -> bool {
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
             return !runtime_filter.get_bloom().is_empty();
         }
