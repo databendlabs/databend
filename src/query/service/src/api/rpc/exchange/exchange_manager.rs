@@ -660,14 +660,6 @@ impl QueryCoordinator {
             )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
-            let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
-
-            if !data_exchange.from_multiple_nodes() {
-                return Err(ErrorCode::Unimplemented(
-                    "Exchange source and no from multiple nodes is unimplemented.",
-                ));
-            }
-
             // Add exchange data transform.
 
             ExchangeTransform::via(
