@@ -1,15 +1,20 @@
-onlyif mysql
+statement ok
+UNSET sql_dialect
+
+statement ok
+UNSET timezone
+
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect PostgreSQL PostgreSQL SESSION
 timezone UTC UTC SESSION
 
-onlyif mysql
+
 statement ok
 SET GLOBAL sql_dialect='MySQL'
 
-onlyif mysql
+
 statement ok
 SET GLOBAL timezone='Asia/Shanghai'
 
@@ -20,19 +25,26 @@ SELECT name, value, default, level from system.settings where name in ('sql_dial
 sql_dialect  MySQL  PostgreSQL  GLOBAL
 timezone  Asia/Shanghai  UTC  GLOBAL
 
-onlyif mysql
+onlyif http
+query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
+----
+sql_dialect  MySQL  PostgreSQL  SESSION
+timezone  Asia/Shanghai  UTC  SESSION
+
+
 statement ok
 UNSET (timezone)
 
-onlyif mysql
+
 statement error 2801
 UNSET stl_dialect
 
-onlyif mysql
+
 statement ok
 UNSET sql_dialect
 
-onlyif mysql
+
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
