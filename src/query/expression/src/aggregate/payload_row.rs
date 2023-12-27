@@ -40,7 +40,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
         // use address instead
-        DataType::String | DataType::Bitmap | DataType::Variant => 4 + 8, // u32 len + address
+        DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => 4 + 8, /* u32 len + address */
         DataType::Number(n) => n.bit_width() as usize / 8,
         DataType::Decimal(n) => match n {
             crate::types::DecimalDataType::Decimal128(_) => 16,
@@ -92,7 +92,7 @@ pub unsafe fn serialize_column_to_rowformat(
                 store(&v.get_bit(index), address[index].add(offset) as *mut u8);
             }
         }
-        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
@@ -258,40 +258,19 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Bitmap(v) => row_match_string_column(
-            v,
-            validity,
-            address,
-            select_index,
-            count,
-            validity_offset,
-            col_offset,
-            no_match,
-            no_match_count,
-        ),
-
-        Column::String(v) => row_match_string_column(
-            v,
-            validity,
-            address,
-            select_index,
-            count,
-            validity_offset,
-            col_offset,
-            no_match,
-            no_match_count,
-        ),
-        Column::Variant(v) => row_match_string_column(
-            v,
-            validity,
-            address,
-            select_index,
-            count,
-            validity_offset,
-            col_offset,
-            no_match,
-            no_match_count,
-        ),
+        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+            row_match_string_column(
+                v,
+                validity,
+                address,
+                select_index,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
         Column::Nullable(_) => unreachable!(),
         Column::Array(_) => todo!(),
         Column::Map(_) => todo!(),

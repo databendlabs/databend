@@ -238,7 +238,7 @@ impl StageFilesInfo {
         let mut files = Vec::new();
         let mut lister = operator
             .lister_with(path)
-            .delimiter("")
+            .recursive(true)
             .metakey(StageFileInfo::meta_query())
             .await?;
         let mut limit: usize = 0;
@@ -260,6 +260,10 @@ impl StageFilesInfo {
 }
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
+    // TODO: remove after opendal 0.44 released
+    if path.is_empty() {
+        return false;
+    }
     if mode.is_file() {
         pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {
@@ -302,7 +306,7 @@ fn blocking_list_files_with_pattern(
     let mut files = Vec::new();
     let list = operator
         .lister_with(path)
-        .delimiter("")
+        .recursive(true)
         .metakey(StageFileInfo::meta_query())
         .call()?;
     let mut limit = 0;

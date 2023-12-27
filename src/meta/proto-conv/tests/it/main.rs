@@ -73,3 +73,4 @@ mod v066_stage_create_on;
 mod v067_password_policy;
 mod v068_index_meta;
 mod v069_user_grant_id;
+mod v070_binary_type;

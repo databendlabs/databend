@@ -16,6 +16,7 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -294,7 +295,9 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::principal::ParquetFileFormatParams {})
+        Ok(mt::principal::ParquetFileFormatParams {
+            missing_field_as: NullAs::Error,
+        })
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {

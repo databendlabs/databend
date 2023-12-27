@@ -427,11 +427,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
 
-    // Deprecated in the future, use enable_compact_after_write instead.
-    pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
-    }
-
     pub fn get_enable_compact_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
@@ -483,17 +478,6 @@ impl Settings {
 
     pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
-    }
-
-    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
-    }
-
-    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
-        self.try_set_u64(
-            "enable_refresh_aggregating_index_after_write",
-            u64::from(val),
-        )
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {

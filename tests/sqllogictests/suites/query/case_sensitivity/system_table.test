@@ -1,4 +1,12 @@
-onlyif mysql
+statement ok
+unset unquoted_ident_case_sensitive;
+
+statement ok
+unset quoted_ident_case_sensitive;
+
+statement ok
+unset sql_dialect;
+
 query I
 select "Engine" as engine from system.engines order by engine
 ----
