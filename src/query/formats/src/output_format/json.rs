@@ -42,6 +42,7 @@ impl JSONOutputFormat {
             rows: 0,
             format_settings: FormatSettings {
                 timezone: options.timezone,
+                timestamp_output_format: options.timestamp_output_format.clone(),
             },
         }
     }

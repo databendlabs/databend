@@ -448,7 +448,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             write!(
                 output.data,
                 "{}",
-                timestamp_to_string(val, ctx.func_ctx.tz.tz)
+                timestamp_to_string(val, ctx.func_ctx.tz.tz, &ctx.func_ctx.tsf)
             )
             .unwrap();
             output.commit_row();
@@ -494,7 +494,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                 write!(
                     output.builder.data,
                     "{}",
-                    timestamp_to_string(val, ctx.func_ctx.tz.tz)
+                    timestamp_to_string(val, ctx.func_ctx.tz.tz, &ctx.func_ctx.tsf)
                 )
                 .unwrap();
                 output.builder.commit_row();

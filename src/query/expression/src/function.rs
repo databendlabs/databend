@@ -94,6 +94,7 @@ pub enum FunctionEval {
 #[derive(Clone, Default)]
 pub struct FunctionContext {
     pub tz: TzLUT,
+    pub tsf: String,
     pub rounding_mode: bool,
 
     pub openai_api_chat_base_url: String,

@@ -42,6 +42,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
+                    timestamp_output_format: options.timestamp_output_format.clone(),
                 },
                 quote_char: 0,
             },

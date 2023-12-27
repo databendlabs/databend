@@ -36,7 +36,6 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// Minimum valid timestamp `1000-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.
 pub const TIMESTAMP_MIN: i64 = -30610224000000000;
 /// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
@@ -237,6 +236,6 @@ pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: Tz) -> impl Display {
-    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT)
+pub fn timestamp_to_string(ts: i64, tz: Tz, ts_format: &str) -> impl Display + '_ {
+    ts.to_timestamp(tz).format(ts_format)
 }

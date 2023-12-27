@@ -218,7 +218,11 @@ impl<'a> Display for ScalarRef<'a> {
                     Ok(())
                 }
             },
-            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::Timestamp(t) => write!(
+                f,
+                "'{}'",
+                timestamp_to_string(*t, Tz::UTC, "%Y-%m-%d %H:%M:%S%.6f")
+            ),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {

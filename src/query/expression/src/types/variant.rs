@@ -179,7 +179,7 @@ impl ArgType for VariantType {
     }
 }
 
-pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
+pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, tsf: &str, buf: &mut Vec<u8>) {
     let inner_tz = tz.tz;
     let value = match scalar {
         ScalarRef::Null => jsonb::Value::Null,
@@ -201,10 +201,10 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::String(s) => jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),
+        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz, tsf).to_string().into(),
         ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
-            let items = cast_scalars_to_variants(col.iter(), tz);
+            let items = cast_scalars_to_variants(col.iter(), tz, tsf);
             jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
             return;
         }
@@ -218,12 +218,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                         ScalarRef::Number(v) => v.to_string(),
                         ScalarRef::Decimal(v) => v.to_string(),
                         ScalarRef::Boolean(v) => v.to_string(),
-                        ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
+                        ScalarRef::Timestamp(v) => {
+                            timestamp_to_string(v, inner_tz, tsf).to_string()
+                        }
                         ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
                         _ => unreachable!(),
                     };
                     let mut val = vec![];
-                    cast_scalar_to_variant(v, tz, &mut val);
+                    cast_scalar_to_variant(v, tz, tsf, &mut val);
                     (key, val)
                 })
                 .collect::<Vec<_>>();
@@ -243,7 +245,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             return;
         }
         ScalarRef::Tuple(fields) => {
-            let values = cast_scalars_to_variants(fields, tz);
+            let values = cast_scalars_to_variants(fields, tz, tsf);
             jsonb::build_object(
                 values
                     .iter()
@@ -265,11 +267,12 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
     tz: TzLUT,
+    tsf: &str,
 ) -> StringColumn {
     let iter = scalars.into_iter();
     let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data);
+        cast_scalar_to_variant(scalar, tz, tsf, &mut builder.data);
         builder.commit_row();
     }
     builder.build()

@@ -760,11 +760,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &ctx.func_ctx.tsf, &mut buf);
                 Value::Scalar(buf)
             }
             ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                let new_col =
+                    cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz, &ctx.func_ctx.tsf);
                 Value::Column(new_col)
             }
         },
@@ -781,11 +782,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &ctx.func_ctx.tsf, &mut buf);
                 Value::Scalar(Some(buf))
             }
             ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                let new_col =
+                    cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz, &ctx.func_ctx.tsf);
                 Value::Column(NullableColumn {
                     validity: Bitmap::new_constant(true, new_col.len()),
                     column: new_col,
@@ -1294,7 +1296,7 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+            cast_scalar_to_variant(v, ctx.func_ctx.tz, &ctx.func_ctx.tsf, &mut val);
             items.push(val);
         }
         if let Err(err) = build_array(items.iter().map(|b| &b[..]), &mut builder.data) {
@@ -1360,7 +1362,7 @@ fn json_object_impl_fn(
                 }
                 set.insert(key.clone());
                 let mut val = vec![];
-                cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+                cast_scalar_to_variant(v, ctx.func_ctx.tz, &ctx.func_ctx.tsf, &mut val);
                 kvs.push((key, val));
             }
             if !has_err {

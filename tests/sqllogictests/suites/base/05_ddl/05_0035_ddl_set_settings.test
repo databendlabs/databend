@@ -1,0 +1,31 @@
+query T
+show settings like 'timestamp_output_format';
+----
+timestamp_output_format '%Y-%m-%d %H:%M:%S%.6f' '%Y-%m-%d %H:%M:%S%.6f' ["%Y-%m-%d %H:%M:%S%.3f", "%Y-%m-%d %H:%M:%S%.6f"] SESSION Specifies the display format for the TIMESTAMP data type alias. Available values include '%Y-%m-%d %H:%M:%S%.6f' and '%Y-%m-%d %H:%M:%S%.3f'. String
+
+statement ok
+SET GLOBAL timestamp_output_format='%Y-%m-%d %H:%M:%S%.3f';
+
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123
+
+statement ok
+SET GLOBAL timestamp_output_format='%Y-%m-%d %H:%M:%S%.6f';
+
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123456
+
+statement error Databend sqllogictests error: http query error: code: 2803, Text: Value %Y\-%m\-%d %H:%M:%S%\.9f is not within the allowed values \["%Y\-%m\-%d %H:%M:%S%\.3f", "%Y\-%m\-%d %H:%M:%S%\.6f"\]
+SET GLOBAL timestamp_output_format='%Y-%m-%d %H:%M:%S%.9f';
+
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123456
+
+statement ok
+UNSET timestamp_output_format;
