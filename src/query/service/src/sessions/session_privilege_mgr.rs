@@ -278,7 +278,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         };
 
         let available_roles = self.get_all_available_roles().await?;
-        if !available_roles.iter().any(|r| &r.name == &owner_role_name) {
+        if !available_roles.iter().any(|r| r.name == owner_role_name) {
             return Err(ErrorCode::PermissionDenied(
                 "Permission denied, current session do not have the ownership of this object"
                     .to_string(),

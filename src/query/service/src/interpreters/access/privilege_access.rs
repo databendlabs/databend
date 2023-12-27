@@ -47,7 +47,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&'static str; 12] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 12] = [
     "catalogs",
     "columns",
     "databases",
@@ -250,7 +250,7 @@ impl PrivilegeAccess {
         // skip checking the privilege on system tables.
         if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
             || db_name == "information_schema")
-            && &privileges == &[UserPrivilegeType::Select]
+            && privileges == [UserPrivilegeType::Select]
         {
             return Ok(());
         }
