@@ -49,7 +49,7 @@ enum ObjectId {
 // these tables.
 const SYSTEM_TABLES_ALLOW_LIST: [&'static str; 12] = [
     "catalogs",
-    "colmns",
+    "columns",
     "databases",
     "tables",
     "tables_with_history",
