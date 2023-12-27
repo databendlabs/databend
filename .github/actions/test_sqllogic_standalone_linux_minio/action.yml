@@ -1,0 +1,61 @@
+name: "Test sqllogic Standalone(minio)"
+description: "Running sqllogic tests in standalone mode"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  handlers:
+    description: "logic test handlers, mysql,http,clickhouse"
+    required: true
+    default: ""
+  storage-format:
+    description: "storage format for databend query to test"
+    required: true
+    default: all
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_bendsql
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+
+    - name: Minio Setup for (ubuntu-latest only)
+      shell: bash
+      run: |
+        docker run -d --network host --name minio \
+                -e "MINIO_ACCESS_KEY=minioadmin" \
+                -e "MINIO_SECRET_KEY=minioadmin" \
+                -e "MINIO_ADDRESS=:9900" \
+                -v /tmp/data:/data \
+                -v /tmp/config:/root/.minio \
+                minio/minio server /data
+
+        export AWS_ACCESS_KEY_ID=minioadmin
+        export AWS_SECRET_ACCESS_KEY=minioadmin
+        export AWS_EC2_METADATA_DISABLED=true
+
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
+
+    - name: Run sqllogic Tests with Standalone mode
+      if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh ${{ inputs.dirs }}
+
+    - name: Run native sqllogic Tests with Standalone mode
+      if: inputs.storage-format == 'all' || inputs.storage-format == 'native'
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-native-minio.sh ${{ inputs.dirs }}
