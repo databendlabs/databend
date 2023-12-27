@@ -243,5 +243,5 @@ pub trait TableContext: Send + Sync {
 
     fn get_runtime_filter_with_id(&self, id: usize) -> RuntimeFilterInfo;
 
-    fn has_runtime_filters(&self, id: usize) -> bool;
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool;
 }

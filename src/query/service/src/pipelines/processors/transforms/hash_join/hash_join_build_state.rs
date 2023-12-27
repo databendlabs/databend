@@ -281,7 +281,7 @@ impl HashJoinBuildState {
                 self.bloom_runtime_filter(&self.func_ctx, &build_chunks, &mut runtime_filter)?;
             }
 
-            if self.enable_min_max_runtime_filter {
+            if self.enable_min_max_runtime_filter && self.ctx.get_settings().get_min_max_rf()? {
                 self.min_max_runtime_filter(&self.func_ctx, &build_chunks, &mut runtime_filter)?;
             }
 
