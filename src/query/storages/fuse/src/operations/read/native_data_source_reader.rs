@@ -130,12 +130,15 @@ impl SyncSource for ReadNativeDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
-                let rf_filters = self
+                let mut filters = self
                     .partitions
                     .ctx
-                    .get_runtime_filter_with_id(self.table_index);
-                let mut filters = rf_filters.get_min_max().clone();
-                filters.extend(rf_filters.inlists());
+                    .get_inlist_runtime_filter_with_id(self.table_index);
+                filters.extend(
+                    self.partitions
+                        .ctx
+                        .get_min_max_runtime_filter_with_id(self.table_index),
+                );
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
@@ -232,12 +235,15 @@ impl Processor for ReadNativeDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
-            let rf_filters = self
+            let mut filters = self
                 .partitions
                 .ctx
-                .get_runtime_filter_with_id(self.table_index);
-            let mut filters = rf_filters.get_min_max().clone();
-            filters.extend(rf_filters.inlists());
+                .get_inlist_runtime_filter_with_id(self.table_index);
+            filters.extend(
+                self.partitions
+                    .ctx
+                    .get_min_max_runtime_filter_with_id(self.table_index),
+            );
             for part in &parts {
                 if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
                 {

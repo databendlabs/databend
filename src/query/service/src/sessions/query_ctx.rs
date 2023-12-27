@@ -52,6 +52,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzFactory;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -90,6 +91,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use xorf::BinaryFuse8;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -928,11 +930,27 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_runtime_filter_with_id(&self, id: IndexType) -> RuntimeFilterInfo {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse8)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (*v).clone(),
-            None => RuntimeFilterInfo::default(),
+            Some(v) => (v.get_bloom()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_inlist()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_min_max()).clone(),
+            None => vec![],
         }
     }
 

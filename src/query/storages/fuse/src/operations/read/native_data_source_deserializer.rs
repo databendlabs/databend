@@ -533,8 +533,7 @@ impl NativeDeserializeDataTransform {
         let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_bloom_runtime_filter.is_none() {
-            let runtime_filters = self.ctx.get_runtime_filter_with_id(self.table_index);
-            let bloom_filters = runtime_filters.blooms();
+            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
             let bloom_filters = bloom_filters
                 .into_iter()
                 .filter_map(|filter| {

@@ -27,6 +27,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -47,6 +48,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::RwLock;
+use xorf::BinaryFuse8;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -241,7 +243,11 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn get_runtime_filter_with_id(&self, id: usize) -> RuntimeFilterInfo;
+    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse8)>;
+
+    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
 }

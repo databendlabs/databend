@@ -262,10 +262,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }
 
-    pub fn get_min_max_rf(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_min_max_rf")? != 0)
-    }
-
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }
