@@ -244,10 +244,7 @@ impl BlockReader {
                 }
             }
         }
-        match nums_rows {
-            Some(nums_rows) => Ok(DataBlock::new(entries, nums_rows)),
-            None => Ok(DataBlock::empty()),
-        }
+        Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
     }
 
     pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
