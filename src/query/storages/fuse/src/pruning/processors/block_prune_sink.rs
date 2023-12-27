@@ -26,7 +26,6 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
-use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
@@ -38,10 +37,9 @@ use crate::operations::DeletedSegmentInfo;
 use crate::operations::SegmentIndex;
 
 struct BlockPruneSink {
-    block_meta_sender: Option<Sender<Arc<BlockMeta>>>,
+    block_meta_sender: Sender<Arc<BlockMeta>>,
     schema: TableSchemaRef,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
-    limit_pruner: Arc<dyn Limiter + Send + Sync>,
     internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     inverse_range_index_context: Option<InverseRangeIndexContext>,
 }
@@ -58,7 +56,7 @@ impl AsyncSink for BlockPruneSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        drop(self.block_meta_sender.take());
+        self.block_meta_sender.close();
         drop(self.inverse_range_index_context.take());
         Ok(())
     }
@@ -66,7 +64,7 @@ impl AsyncSink for BlockPruneSink {
     #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
-        let block_meta_sender = self.block_meta_sender.as_ref().unwrap();
+        let block_meta_sender = &self.block_meta_sender;
         let segment_bytes = SegmentBytes::downcast_from(data_block.take_meta().unwrap()).unwrap();
         let compact_segment = deserialize_segment_info(
             &SegmentInfoVersion::try_from(segment_bytes.segment_location.1)?,
@@ -99,9 +97,6 @@ impl AsyncSink for BlockPruneSink {
         }
         let segment_block_metas = compact_segment.block_metas()?;
         for (block_index, block_meta) in segment_block_metas.into_iter().enumerate() {
-            if self.limit_pruner.exceeded() {
-                break;
-            }
             if let Some(p) = self.internal_column_pruner.as_ref() {
                 if !p.should_keep(BLOCK_NAME_COL_NAME, &block_meta.location.0) {
                     continue;
@@ -130,7 +125,6 @@ impl AsyncSink for BlockPruneSink {
                     continue;
                 }
             }
-            self.limit_pruner.within_limit(block_meta.row_count);
             block_meta_sender
                 .send(block_meta)
                 .await

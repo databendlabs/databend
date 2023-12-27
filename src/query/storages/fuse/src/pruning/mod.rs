@@ -15,6 +15,7 @@
 mod block_pruner;
 mod bloom_pruner;
 mod fuse_pruner;
+pub mod pipeline;
 pub mod processors;
 mod pruner_location;
 mod pruning_statistics;

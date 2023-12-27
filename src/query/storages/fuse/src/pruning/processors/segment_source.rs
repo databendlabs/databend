@@ -20,7 +20,10 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
@@ -29,10 +32,25 @@ use serde::Serialize;
 
 use crate::FuseLazyPartInfo;
 
-struct SegmentSource {
+pub struct SegmentSource {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     internal_column_pruner: Option<Arc<InternalColumnPruner>>,
+}
+
+impl SegmentSource {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        dal: Operator,
+        internal_column_pruner: Option<Arc<InternalColumnPruner>>,
+        output: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx, output, Self {
+            ctx,
+            dal,
+            internal_column_pruner,
+        })
+    }
 }
 
 #[async_trait::async_trait]
