@@ -233,6 +233,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 
             // try to optimize distributed join
             if opt_ctx.enable_distributed_optimization
+                && !contains_local_table_scan(&join_sexpr, &opt_ctx.metadata)
                 && opt_ctx
                     .table_ctx
                     .get_settings()

@@ -25,7 +25,6 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::QuerySource;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -153,15 +152,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
@@ -172,7 +162,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         })))
     }
 
-    //  TODO(Sky): remove rebudant code
+    //  TODO(Sky): remove redundant code
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
