@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
 use log::info;
 use opendal::Operator;
+use sha2::Digest;
 
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
 use crate::io::read::ReadSettings;
@@ -196,6 +197,11 @@ impl BlockReader {
 
                 // and then, check column data cache
                 if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                    let digest = sha2::Sha256::digest(cached_column_raw_data.as_ref());
+                    info!(
+                        "read column data from data cache, location : {}, column_id {}, column meta {:?}, data digest {:x}",
+                        location, column_id, column_meta, digest,
+                    );
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     need_real_io_read = false;
                 }
