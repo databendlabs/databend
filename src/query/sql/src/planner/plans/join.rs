@@ -488,42 +488,37 @@ impl Operator for Join {
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        // if join/probe side is Serial, we use Serial distribution
+        // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
+            || (self.left_conditions.is_empty()
+                && self.right_conditions.is_empty()
+                && !self.non_equi_conditions.is_empty())
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
             return Ok(required);
         }
 
-        // If there is no equi-condition, this is essentially a cross join.
-        if (self.left_conditions.is_empty() && self.right_conditions.is_empty())
-            || self.join_type == JoinType::Cross
-        {
-            if child_index == 0 {
-                required.distribution = Distribution::Any;
-            } else {
-                required.distribution = Distribution::Broadcast;
-            }
-            return Ok(required);
-        }
-
-        if ctx.get_settings().get_prefer_broadcast_join()?
-            && !matches!(
-                self.join_type,
-                JoinType::Right
-                    | JoinType::Full
-                    | JoinType::RightAnti
-                    | JoinType::RightSemi
-                    | JoinType::RightMark
-            )
-        {
+        // Try to use broadcast join
+        if !matches!(
+            self.join_type,
+            JoinType::Right
+                | JoinType::Full
+                | JoinType::RightAnti
+                | JoinType::RightSemi
+                | JoinType::RightMark
+        ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
-            let broadcast_join_threshold = (ctx.get_cluster().nodes.len() - 1) as f64;
+            let broadcast_join_threshold = if ctx.get_settings().get_prefer_broadcast_join()? {
+                (ctx.get_cluster().nodes.len() - 1) as f64
+            } else {
+                // Use a very large value to prevent broadcast join.
+                1000.0
+            };
             if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
                 if child_index == 1 {
                     required.distribution = Distribution::Broadcast;
