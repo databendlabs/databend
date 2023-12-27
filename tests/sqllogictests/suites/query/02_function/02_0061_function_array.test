@@ -264,5 +264,28 @@ select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
 ----
 [1,2,3,3]
 
+query T
+select array_fold([],(x,y)->x+y)
+----
+[]
+
+query T
+select array_fold([null],(x,y)->x+y)
+----
+[null]
+
+query TT
+select array_fold([1,2,3],(x,y)->x+y-1), array_fold([3,4,5],(x,y)->x-y)
+----
+[4],[-6]
+
+statement error 1105
+select array_fold([1, 2,null], (x,y) -> x + y)
+
+query T
+select array_fold(col1,(x,y)->x+y+1) from t
+----
+[12]
+
 statement ok
 DROP DATABASE array_func_test

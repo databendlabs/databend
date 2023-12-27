@@ -1816,8 +1816,14 @@ impl<'a> TypeChecker<'a> {
             vec![inner_ty.clone()]
         };
 
+        let columns = params
+            .iter()
+            .zip(inner_tys.iter())
+            .map(|col| (col.0.clone(), col.1.clone()))
+            .collect::<Vec<_>>();
+
         let box (lambda_expr, lambda_type) =
-            parse_lambda_expr(self.ctx.clone(), &params, &inner_tys, &lambda.expr)?;
+            parse_lambda_expr(self.ctx.clone(), &columns, &lambda.expr)?;
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {

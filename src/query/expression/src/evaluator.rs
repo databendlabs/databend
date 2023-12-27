@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::ops::Not;
+use std::ops::Range;
 
 use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -952,6 +953,10 @@ impl<'a> Evaluator<'a> {
     }
 
     fn run_array_fold(&self, column: &Column, expr: &Expr) -> Result<Value<AnyType>> {
+        if column.data_type().is_null() {
+            return Ok(Value::Scalar(Scalar::Null));
+        }
+
         let first_element = column.index(0).unwrap();
         let cast_value = self.run_cast(
             None,
@@ -961,7 +966,7 @@ impl<'a> Evaluator<'a> {
             None,
         )?;
         let mut arg0 = cast_value.as_scalar().unwrap().as_ref();
-        let mut result;
+        let mut result = cast_value.to_owned();
 
         for i in 1..column.len() {
             let arg1 = column.index(i).unwrap();
@@ -996,9 +1001,7 @@ impl<'a> Evaluator<'a> {
             arg0 = result.as_scalar().unwrap().as_ref();
         }
 
-        let result_col = ColumnBuilder::repeat(&arg0, 1, expr.data_type()).build();
-
-        Ok(Value::Scalar(Scalar::Array(result_col)))
+        Ok(result)
     }
 
     fn run_lambda(
@@ -1013,7 +1016,9 @@ impl<'a> Evaluator<'a> {
             Value::Scalar(s) => match s {
                 Scalar::Array(c) => {
                     if func_name == "array_fold" {
-                        return self.run_array_fold(c, &expr);
+                        let result = self.run_array_fold(c, &expr)?;
+                        let result_col = result.convert_to_full_column(expr.data_type(), 1);
+                        return Ok(Value::Scalar(Scalar::Array(result_col)));
                     }
 
                     let entry = BlockEntry::new(c.data_type(), Value::Column(c.clone()));
@@ -1056,7 +1061,50 @@ impl<'a> Evaluator<'a> {
                 };
 
                 if func_name == "array_fold" {
-                    return self.run_array_fold(&inner_col, &expr);
+                    let builder_type = DataType::Array(Box::new(expr.data_type().clone()));
+                    let mut builder = ColumnBuilder::with_capacity(&builder_type, 0);
+                    // generate new offsets for fold.
+                    let mut filtered_offsets = vec![];
+                    filtered_offsets.push(0);
+                    for offset in offsets.windows(2) {
+                        let off = offset[0] as usize;
+                        let len = (offset[1] - offset[0]) as usize;
+                        // skip []
+                        if len == 0 {
+                            filtered_offsets.push(filtered_offsets[filtered_offsets.len() - 1]);
+                            continue;
+                        } else {
+                            filtered_offsets.push(filtered_offsets[filtered_offsets.len() - 1] + 1);
+                        }
+                        let each_row = inner_col.slice(Range {
+                            start: off,
+                            end: len,
+                        });
+                        let result = self.run_array_fold(&each_row, &expr)?;
+                        let result_col = result.convert_to_full_column(expr.data_type(), 1);
+                        let value: Value<AnyType> = Value::Scalar(Scalar::Array(result_col));
+                        builder.push(value.as_scalar().unwrap().as_ref());
+                    }
+                    let result_column = builder.build();
+
+                    let array_col = match result_column {
+                        Column::Array(box array_col) => Column::Array(Box::new(ArrayColumn {
+                            values: array_col.values,
+                            offsets: filtered_offsets.into(),
+                        })),
+                        _ => unreachable!(),
+                    };
+
+                    let col = match validity {
+                        Some(validity) => {
+                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                column: array_col,
+                                validity,
+                            })))
+                        }
+                        None => Value::Column(array_col),
+                    };
+                    return Ok(col);
                 }
 
                 let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));

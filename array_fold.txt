@@ -1,0 +1,38 @@
+select array_fold([],(x,y)->x+y-1);
+
+select array_fold([null],(x,y)->x+y-1);
+
+select array_fold([1],(x,y)->x+y-1);
+
+select array_fold([1,2],(x,y)->x+y-1);
+
+select array_fold([1,2,3],(x,y)->x+y-1);
+
+select array_fold([1,null],(x,y)->x+y-1);  ---> wrong
+
+create table t(col array(int));
+insert into t values([]);
+insert into t values(null);
+insert into t values([1]);
+insert into t values([1,2]);
+insert into t values([1,2,3]);
+
+select array_fold(col,(x,y)->x+y-1) from t;
+
+create table t1(col nullable(array(int)));
+insert into t1 values([]);
+insert into t1 values(null);
+insert into t1 values([1]);
+insert into t1 values([1,2]);
+insert into t1 values([1,2,3]);
+
+select array_fold(col,(x,y)->x+y-1) from t1;
+
+create table t2(col array(nullable(int)));
+insert into t2 values([]);
+insert into t2 values(null);
+insert into t2 values([1]);
+insert into t2 values([1,2]);
+insert into t2 values([1,2,3]);
+
+select array_fold(col,(x,y)->x+y-1) from t;
