@@ -124,17 +124,21 @@ impl Operator for UnionAll {
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
+        let required = required.clone();
         let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
         if left_physical_prop.distribution == Distribution::Serial
             || right_physical_prop.distribution == Distribution::Serial
+            || required.distribution == Distribution::Serial
         {
-            required.distribution = Distribution::Serial;
-        } else if left_physical_prop.distribution == right_physical_prop.distribution {
-            required.distribution = left_physical_prop.distribution;
+            Ok(RequiredProperty {
+                distribution: Distribution::Serial,
+            })
+        } else {
+            Ok(RequiredProperty {
+                distribution: Distribution::Random,
+            })
         }
-        Ok(required)
     }
 
     fn compute_required_prop_children(
