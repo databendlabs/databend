@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
-BUILD_PROFILE=${BUILD_PROFILE:-release}
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 # Caveat: has to kill query first.
 # `query` tries to remove its liveness record from meta before shutting down.

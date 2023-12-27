@@ -703,15 +703,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse8)> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse8)> {
         todo!()
     }
 
-    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>> {
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
         todo!()
     }
 
-    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>> {
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
         todo!()
     }
 
