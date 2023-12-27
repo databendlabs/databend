@@ -244,7 +244,7 @@ impl AsyncSource for InferSchemaSource {
                 if use_parquet2 {
                     let arrow_schema =
                         read_parquet_schema_async(&operator, &first_file.path).await?;
-                    TableSchema::try_from(&arrow_schema)?
+                    TableSchema::from(&arrow_schema)
                 } else {
                     let arrow_schema = read_parquet_schema_async_rs(
                         &operator,

@@ -205,7 +205,7 @@ impl VirtualColumnReader {
             let part = FusePartInfo::from_part(&virtual_data.part)?;
             let schema = virtual_data.schema;
 
-            let table_schema = TableSchema::try_from(&schema)?;
+            let table_schema = TableSchema::from(&schema);
             let parquet_schema_descriptor = to_parquet_schema(&schema)?;
             let column_nodes = ColumnNodes::new_from_schema(&schema, Some(&table_schema));
 

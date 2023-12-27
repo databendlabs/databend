@@ -130,7 +130,7 @@ impl IcebergTable {
             .collect();
         let arrow2_schema = Arrow2Schema::from(fields);
 
-        TableSchema::try_from(&arrow2_schema)
+        Ok(TableSchema::from(&arrow2_schema))
     }
 
     /// create a new table on the table directory

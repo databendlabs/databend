@@ -1336,6 +1336,28 @@ impl TableSchemaRefExt {
     }
 }
 
+impl From<&ArrowSchema> for TableSchema {
+    fn from(a_schema: &ArrowSchema) -> Self {
+        let fields = a_schema
+            .fields
+            .iter()
+            .map(|arrow_f| arrow_f.into())
+            .collect::<Vec<_>>();
+
+        TableSchema::new(fields)
+    }
+}
+
+impl From<&TableField> for DataField {
+    fn from(f: &TableField) -> Self {
+        let data_type = f.data_type.clone();
+        let name = f.name.clone();
+        DataField::new(&name, DataType::from(&data_type))
+            .with_default_expr(f.default_expr.clone())
+            .with_computed_expr(f.computed_expr.clone())
+    }
+}
+
 impl<T: AsRef<TableSchema>> From<T> for DataSchema {
     fn from(t_schema: T) -> Self {
         let fields = t_schema
@@ -1357,57 +1379,32 @@ impl AsRef<TableSchema> for &TableSchema {
 
 // conversions code
 // =========================
-impl TryFrom<&ArrowSchema> for TableSchema {
-    type Error = ErrorCode;
-
-    fn try_from(a_schema: &ArrowSchema) -> Result<Self> {
-        let fields = a_schema
-            .fields
-            .iter()
-            .map(|arrow_f| arrow_f.try_into())
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(TableSchema::new(fields))
-    }
-}
-
-impl TryFrom<&ArrowField> for TableField {
-    type Error = ErrorCode;
-
-    fn try_from(f: &ArrowField) -> Result<Self> {
-        Ok(Self {
+impl From<&ArrowField> for TableField {
+    fn from(f: &ArrowField) -> Self {
+        Self {
             name: f.name.clone(),
-            data_type: f.try_into()?,
+            data_type: f.into(),
             default_expr: None,
             column_id: 0,
             computed_expr: None,
-        })
+        }
     }
 }
 
-impl From<&TableField> for DataField {
-    fn from(f: &TableField) -> Self {
+impl From<&ArrowField> for DataField {
+    fn from(f: &ArrowField) -> Self {
         Self {
             name: f.name.clone(),
-            data_type: (&f.data_type).into(),
+            data_type: DataType::from(&TableDataType::from(f)),
             default_expr: None,
             computed_expr: None,
         }
     }
 }
 
-impl TryFrom<&ArrowField> for DataField {
-    type Error = ErrorCode;
-
-    fn try_from(f: &ArrowField) -> Result<Self> {
-        Ok(Self::from(&TableField::try_from(f)?))
-    }
-}
-
-impl TryFrom<&ArrowField> for TableDataType {
-    type Error = ErrorCode;
-
-    fn try_from(f: &ArrowField) -> Result<Self> {
+// ArrowType can't map to DataType, we don't know the nullable flag
+impl From<&ArrowField> for TableDataType {
+    fn from(f: &ArrowField) -> Self {
         let ty = with_number_type!(|TYPE| match f.data_type() {
             ArrowDataType::TYPE => TableDataType::Number(NumberDataType::TYPE),
 
@@ -1422,33 +1419,29 @@ impl TryFrom<&ArrowField> for TableDataType {
                     scale: *scale as u8,
                 })),
 
-            ArrowDataType::Null => return Ok(TableDataType::Null),
+            ArrowDataType::Null => return TableDataType::Null,
             ArrowDataType::Boolean => TableDataType::Boolean,
 
             ArrowDataType::List(f)
             | ArrowDataType::LargeList(f)
             | ArrowDataType::FixedSizeList(f, _) =>
-                TableDataType::Array(Box::new(f.as_ref().try_into()?)),
+                TableDataType::Array(Box::new(f.as_ref().into())),
 
             ArrowDataType::Binary
             | ArrowDataType::LargeBinary
-            | ArrowDataType::FixedSizeBinary(_) => TableDataType::Binary,
-
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => TableDataType::String,
+            | ArrowDataType::FixedSizeBinary(_)
+            | ArrowDataType::Utf8
+            | ArrowDataType::LargeUtf8 => TableDataType::String,
 
             ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
             ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
             ArrowDataType::Map(f, _) => {
-                let inner_ty = f.as_ref().try_into()?;
+                let inner_ty = f.as_ref().into();
                 TableDataType::Map(Box::new(inner_ty))
             }
             ArrowDataType::Struct(fields) => {
-                let mut fields_name = Vec::with_capacity(fields.len());
-                let mut fields_type = Vec::with_capacity(fields.len());
-                for f in fields {
-                    fields_name.push(f.name.clone());
-                    fields_type.push(f.try_into()?);
-                }
+                let (fields_name, fields_type) =
+                    fields.iter().map(|f| (f.name.clone(), f.into())).unzip();
                 TableDataType::Tuple {
                     fields_name,
                     fields_type,
@@ -1462,40 +1455,33 @@ impl TryFrom<&ArrowField> for TableDataType {
                 _ => {
                     let a =
                         ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
-                    (&a).try_into()?
+                    (&a).into()
                 }
             },
+            // this is safe, because we define the datatype firstly
             _ => {
-                return Err(ErrorCode::UnknownFormat(format!(
-                    "arrow type {:?} is not supported yet",
-                    f.data_type()
-                )));
+                unimplemented!("data_type: {:?}", f.data_type())
             }
         });
 
         if f.is_nullable {
-            Ok(TableDataType::Nullable(Box::new(ty)))
+            TableDataType::Nullable(Box::new(ty))
         } else {
-            Ok(ty)
-        }
-    }
-}
-
-impl From<&DataField> for TableField {
-    fn from(f: &DataField) -> Self {
-        Self {
-            name: f.name.clone(),
-            data_type: infer_schema_type(&f.data_type).unwrap(),
-            default_expr: None,
-            column_id: 0,
-            computed_expr: None,
+            ty
         }
     }
 }
 
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
-        Self::from(&TableField::from(f))
+        let ty = f.data_type().into();
+        match ty {
+            ArrowDataType::Struct(_) if f.is_nullable() => {
+                let ty = set_nullable(&ty);
+                ArrowField::new(f.name(), ty, f.is_nullable())
+            }
+            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+        }
     }
 }
 
@@ -1531,7 +1517,80 @@ fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
 
 impl From<&DataType> for ArrowDataType {
     fn from(ty: &DataType) -> Self {
-        Self::from(&infer_schema_type(ty).unwrap())
+        match ty {
+            DataType::Null => ArrowDataType::Null,
+            DataType::EmptyArray => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
+            DataType::EmptyMap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
+            DataType::Boolean => ArrowDataType::Boolean,
+            DataType::String => ArrowDataType::LargeBinary,
+            DataType::Number(ty) => with_number_type!(|TYPE| match ty {
+                NumberDataType::TYPE => ArrowDataType::TYPE,
+            }),
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                ArrowDataType::Decimal(s.precision.into(), s.scale.into())
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
+            }
+            DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            DataType::Date => ArrowDataType::Date32,
+            DataType::Nullable(ty) => ty.as_ref().into(),
+            DataType::Array(ty) => {
+                let arrow_ty = ty.as_ref().into();
+                ArrowDataType::LargeList(Box::new(ArrowField::new(
+                    "_array",
+                    arrow_ty,
+                    ty.is_nullable(),
+                )))
+            }
+            DataType::Map(ty) => {
+                let inner_ty = match ty.as_ref() {
+                    DataType::Tuple(tys) => {
+                        let key_ty = ArrowDataType::from(&tys[0]);
+                        let val_ty = ArrowDataType::from(&tys[1]);
+                        let key_field = ArrowField::new("key", key_ty, tys[0].is_nullable());
+                        let val_field = ArrowField::new("value", val_ty, tys[1].is_nullable());
+                        ArrowDataType::Struct(vec![key_field, val_field])
+                    }
+                    _ => unreachable!(),
+                };
+                ArrowDataType::Map(
+                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
+                    false,
+                )
+            }
+            DataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
+            DataType::Tuple(types) => {
+                let fields = types
+                    .iter()
+                    .enumerate()
+                    .map(|(index, ty)| {
+                        let index = index + 1;
+                        let name = format!("{index}");
+                        ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
+                    })
+                    .collect();
+                ArrowDataType::Struct(fields)
+            }
+            DataType::Variant => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_VARIANT.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -1551,7 +1610,7 @@ impl From<&TableDataType> for ArrowDataType {
             ),
             TableDataType::Boolean => ArrowDataType::Boolean,
             TableDataType::Binary => ArrowDataType::LargeBinary,
-            TableDataType::String => ArrowDataType::LargeUtf8,
+            TableDataType::String => ArrowDataType::LargeBinary,
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),

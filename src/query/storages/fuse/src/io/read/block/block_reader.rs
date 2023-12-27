@@ -133,7 +133,7 @@ impl BlockReader {
             .iter()
             .map(|c| (*c).clone())
             .collect();
-        let project_indices = Self::build_projection_indices(&project_column_nodes)?;
+        let project_indices = Self::build_projection_indices(&project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             ctx,

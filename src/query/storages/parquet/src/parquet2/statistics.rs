@@ -44,7 +44,7 @@ pub fn collect_row_group_stats(
     // `column_nodes` is parallel to the schema, so we can iterate `column_nodes` directly.
     for (index, column_node) in column_nodes.column_nodes.iter().enumerate() {
         let field = &column_node.field;
-        let table_type: TableDataType = field.try_into()?;
+        let table_type: TableDataType = field.into();
         let data_type = (&table_type).into();
         let column_stats = pread::statistics::deserialize(field, rgs)?;
         stats_of_row_groups.insert(

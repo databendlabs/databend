@@ -3710,7 +3710,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 scale: *scale,
             })?)
         }
-        TypeName::Binary => TableDataType::Binary,
+        TypeName::Binary => TableDataType::String,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,

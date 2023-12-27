@@ -85,8 +85,8 @@ impl UDFFlightClient {
         let flight_info = self.inner.get_flight_info(request).await?.into_inner();
         let schema = flight_info
             .try_decode_schema()
-            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))
-            .and_then(|schema| DataSchema::try_from(&schema))?;
+            .and_then(|schema| DataSchema::try_from(&schema))
+            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))?;
 
         let fields_num = schema.fields().len();
         if fields_num == 0 {

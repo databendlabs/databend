@@ -59,7 +59,7 @@ impl Parquet2Table {
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
         let need_stats_provider = !matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
-        let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info)?;
+        let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
         let column_statistics_provider = if need_stats_provider {
             let file_metas = get_parquet2_file_meta(
                 ctx,

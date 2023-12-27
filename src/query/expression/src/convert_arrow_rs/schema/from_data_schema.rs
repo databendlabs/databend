@@ -12,23 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
-use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 
+use crate::infer_schema_type;
+use crate::types::DataType;
+use crate::DataField;
 use crate::DataSchema;
+use crate::ARROW_EXT_TYPE_BITMAP;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::EXTENSION_KEY;
 
 impl From<&DataSchema> for ArrowSchema {
     fn from(value: &DataSchema) -> Self {
-        let fields = value
-            .fields
-            .iter()
-            .map(|f| ArrowField::from(Arrow2Field::from(f)))
-            .collect::<Vec<_>>();
+        let fields: Vec<ArrowField> = value.fields.iter().map(|f| f.into()).collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
             metadata: Default::default(),
         }
+    }
+}
+
+impl From<&DataField> for ArrowField {
+    fn from(f: &DataField) -> Self {
+        let ty = f.data_type().into();
+        let extend_type = match f.data_type().remove_nullable() {
+            DataType::EmptyArray => Some(ARROW_EXT_TYPE_EMPTY_ARRAY.to_string()),
+            DataType::EmptyMap => Some(ARROW_EXT_TYPE_EMPTY_MAP.to_string()),
+            DataType::Variant => Some(ARROW_EXT_TYPE_VARIANT.to_string()),
+            DataType::Bitmap => Some(ARROW_EXT_TYPE_BITMAP.to_string()),
+            _ => None,
+        };
+
+        if let Some(extend_type) = extend_type {
+            let mut metadata = HashMap::new();
+            metadata.insert(EXTENSION_KEY.to_string(), extend_type);
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
+        } else {
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null())
+        }
+    }
+}
+
+impl From<&DataType> for ArrowDataType {
+    fn from(ty: &DataType) -> Self {
+        (&infer_schema_type(ty).expect("Generic type can not convert to arrow")).into()
     }
 }

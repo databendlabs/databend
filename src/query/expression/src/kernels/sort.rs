@@ -250,7 +250,7 @@ fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCom
 }
 
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    debug_assert_eq!(left.data_type(), right.data_type());
+    assert_eq!(left.data_type(), right.data_type());
     match left.data_type() {
         ArrowType::Extension(name, _, _) => match name.as_str() {
             ARROW_EXT_TYPE_VARIANT => compare_variant(left, right),
