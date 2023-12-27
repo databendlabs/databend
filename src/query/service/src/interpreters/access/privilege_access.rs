@@ -135,7 +135,6 @@ impl PrivilegeAccess {
         catalog_name: &str,
         db_name: &str,
         privileges: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
 
@@ -143,7 +142,7 @@ impl PrivilegeAccess {
             .validate_access(
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
                 privileges.clone(),
-                verify_ownership,
+                true,
             )
             .await
         {
@@ -161,7 +160,7 @@ impl PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
                     privileges,
-                    verify_ownership,
+                    true,
                 )
                 .await?
             }
@@ -175,7 +174,6 @@ impl PrivilegeAccess {
         db_name: &str,
         table_name: &str,
         privileges: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
 
@@ -194,7 +192,7 @@ impl PrivilegeAccess {
                     table_name.to_string(),
                 ),
                 privileges.clone(),
-                verify_ownership,
+                true,
             )
             .await
         {
@@ -212,7 +210,7 @@ impl PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::TableById(catalog_name.to_string(), db_id, table_id.unwrap()),
                     privileges,
-                    verify_ownership,
+                    true,
                 )
                 .await?
             }
@@ -518,7 +516,7 @@ impl AccessChecker for PrivilegeAccess {
                     // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
                     // this is no means to check table `system.read_parquet(s3)` privilege
                     if !table.is_source_of_stage() {
-                        self.validate_table_access(catalog_name, table.database(), table.name(), vec![UserPrivilegeType::Select], true).await?
+                        self.validate_table_access(catalog_name, table.database(), table.name(), vec![UserPrivilegeType::Select]).await?
                     }
                 }
             }
@@ -528,8 +526,7 @@ impl AccessChecker for PrivilegeAccess {
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select],
-                                        true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select]).await?
             }
             Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
@@ -563,76 +560,64 @@ impl AccessChecker for PrivilegeAccess {
 
             // Virtual Column.
             Plan::CreateVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Create], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Create]).await?
             }
             Plan::AlterVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::DropVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Drop], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Drop]).await?
             }
             Plan::RefreshVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super]).await?
             }
 
             // Table.
             Plan::ShowCreateTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Select], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Select]).await?
             }
             Plan::DescribeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Select], false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Select]).await?
             }
             Plan::CreateTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create],
-                                        true).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?;
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
             }
             Plan::DropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop],
-                                        true).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
             }
             Plan::UndropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop],
-                                        true).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
 
             }
             Plan::RenameTable(plan) => {
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE for the new db.
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop],
-                                           true).await?;
-                self.validate_db_access(&plan.catalog, &plan.new_database, vec![UserPrivilegeType::Create],
-                                        true).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop]).await?;
+                self.validate_db_access(&plan.catalog, &plan.new_database, vec![UserPrivilegeType::Create]).await?;
             }
             Plan::SetOptions(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::AddTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::RenameTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::ModifyTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::DropTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::AlterTableClusterKey(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::DropTableClusterKey(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Drop],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Drop]).await?
             }
             Plan::ReclusterTable(plan) => {
                 if enable_experimental_rbac_check {
@@ -641,33 +626,26 @@ impl AccessChecker for PrivilegeAccess {
                         self.check_udf_priv(udf).await?;
                     }
                 }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::TruncateTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Delete],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Delete]).await?
             }
             Plan::OptimizeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super]).await?
             }
             Plan::VacuumTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super]).await?
             }
             Plan::VacuumDropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Super],
-                                           true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Super]).await?
             }
             Plan::AnalyzeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super],
-                                           true).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super]).await?
             }
             // Others.
             Plan::Insert(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert],
-                                           true).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert]).await?;
                 match &plan.source {
                     InsertInputSource::SelectPlan(plan) => {
                         self.check(ctx, plan).await?;
@@ -682,8 +660,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
-                                           true).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]).await?;
                 match &plan.source {
                     InsertInputSource::SelectPlan(plan) => {
                         self.check(ctx, plan).await?;
@@ -740,8 +717,7 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
-                                           true).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]).await?;
             }
             Plan::Delete(plan) => {
                 if enable_experimental_rbac_check {
@@ -768,8 +744,7 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, vec![UserPrivilegeType::Delete],
-                                           true).await?
+                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, vec![UserPrivilegeType::Delete]).await?
             }
             Plan::Update(plan) => {
                 if enable_experimental_rbac_check {
@@ -800,23 +775,22 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Update],
-                                           true).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Update]).await?;
             }
             Plan::CreateView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?
             }
             Plan::AlterView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter], true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter]).await?
             }
             Plan::DropView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?
             }
             Plan::CreateStream(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?
             }
             Plan::DropStream(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], true).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?
             }
             Plan::CreateUser(_) => {
                 self.validate_access(
@@ -877,8 +851,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CopyIntoTable(plan) => {
                 self.validate_access_stage(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, vec![UserPrivilegeType::Insert],
-                                           true).await?;
+                self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, vec![UserPrivilegeType::Insert]).await?;
                 if let Some(query) = &plan.query {
                     self.check(ctx, query).await?;
                 }
