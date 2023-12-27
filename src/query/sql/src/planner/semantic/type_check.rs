@@ -3735,18 +3735,13 @@ impl<'a> TypeChecker<'a> {
 
 pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {
     let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
-    let backtrace = databend_common_ast::Backtrace::new();
-    match databend_common_ast::parser::expr::type_name(databend_common_ast::Input(
+    let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
         databend_common_ast::Dialect::default(),
-        &backtrace,
-    )) {
-        Ok((_, typename)) => resolve_type_name(&typename, not_null),
-        Err(err) => Err(ErrorCode::SyntaxException(format!(
-            "Unsupported type name: {}, error: {}",
-            name, err
-        ))),
-    }
+        false,
+        databend_common_ast::parser::expr::type_name,
+    )?;
+    resolve_type_name(&ast, not_null)
 }
 
 pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
@@ -3784,6 +3779,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 scale: *scale,
             })?)
         }
+        TypeName::Binary => TableDataType::String,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,

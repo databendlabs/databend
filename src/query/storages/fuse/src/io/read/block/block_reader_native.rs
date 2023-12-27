@@ -218,7 +218,7 @@ impl BlockReader {
         chunks: Vec<(usize, Box<dyn Array>)>,
         default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
-        let mut nums_rows = 0;
+        let mut nums_rows: Option<usize> = None;
         let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
@@ -227,7 +227,12 @@ impl BlockReader {
                     data_type.clone(),
                     Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                 ));
-                nums_rows = array.len();
+                match nums_rows {
+                    Some(rows) => {
+                        debug_assert_eq!(rows, array.len(), "Column array lengths are not equal")
+                    }
+                    None => nums_rows = Some(array.len()),
+                }
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
                     let data_type: DataType = self.projected_schema.field(index).data_type().into();
@@ -239,7 +244,7 @@ impl BlockReader {
                 }
             }
         }
-        Ok(DataBlock::new(entries, nums_rows))
+        Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
     }
 
     pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {

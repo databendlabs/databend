@@ -1120,6 +1120,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let grant_ownership = map(
+        rule! {
+            GRANT ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ TO ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Grant(GrantStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
+            })
+        },
+    );
+    let revoke_ownership = map(
+        rule! {
+            REVOKE ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ FROM ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Revoke(RevokeStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
+            })
+        },
+    );
     let show_grants = map(
         rule! {
             SHOW ~ GRANTS ~ #show_grant_option?
@@ -1870,6 +1898,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
+            | #revoke_ownership : "REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
@@ -2248,7 +2278,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
-        | #udf_privs: "SELECT ON UDF <udf_name>"
+        | #udf_privs: "USAGE ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -2274,7 +2304,6 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
-        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -2283,10 +2312,6 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
-}
-
-pub fn udf_priv_type(i: Input) -> IResult<UserPrivilegeType> {
-    alt((value(UserPrivilegeType::Select, rule! { SELECT }),))(i)
 }
 
 pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
@@ -2387,6 +2412,52 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+    )(i)
+}
+
+pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    #[derive(Clone)]
+    enum Object {
+        Stage,
+        Udf,
+    }
+    let object = alt((
+        value(Object::Udf, rule! { UDF }),
+        value(Object::Stage, rule! { STAGE }),
+    ));
+
+    // Object object_name
+    let object = map(
+        rule! { #object ~ #ident},
+        |(object, object_name)| match object {
+            Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
+            Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+        },
+    );
+
+    rule!(
+        #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #object : "STAGE | UDF <object_name>"
     )(i)
 }
 

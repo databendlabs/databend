@@ -1565,9 +1565,13 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
     );
+    let ty_binary = value(
+        TypeName::Binary,
+        rule! { ( BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
     let ty_string = value(
         TypeName::String,
-        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
@@ -1595,6 +1599,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_binary
             | #ty_string
             | #ty_variant
             | #ty_nullable

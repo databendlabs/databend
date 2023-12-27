@@ -2900,9 +2900,9 @@ CreateTable(
 
 
 ---------- Input ----------
-CREATE TABLE t(c1 varbinary);
+CREATE TABLE t(c1 varbinary, c2 binary(10));
 ---------- Output ---------
-CREATE TABLE t (c1 STRING)
+CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2927,7 +2927,20 @@ CreateTable(
                                 15..17,
                             ),
                         },
-                        data_type: String,
+                        data_type: Binary,
+                        expr: None,
+                        comment: None,
+                        nullable_constraint: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c2",
+                            quote: None,
+                            span: Some(
+                                29..31,
+                            ),
+                        },
+                        data_type: Binary,
                         expr: None,
                         comment: None,
                         nullable_constraint: None,
@@ -14691,6 +14704,167 @@ Query(
         limit: [],
         offset: None,
         ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON d20_0014.* TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Database(
+                Some(
+                    "d20_0014",
+                ),
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON d20_0014.t TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Table(
+                Some(
+                    "d20_0014",
+                ),
+                "t",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON STAGE s1 TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON STAGE s1 FROM ROLE 'd20_0015_owner';
+---------- Output ---------
+REVOKE OWNERSHIP ON STAGE s1 FROM ROLE d20_0015_owner
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON d20_0014.* FROM ROLE 'd20_0015_owner';
+---------- Output ---------
+REVOKE OWNERSHIP ON d20_0014.* FROM ROLE d20_0015_owner
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Database(
+                Some(
+                    "d20_0014",
+                ),
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON UDF f1 FROM ROLE 'd20_0015_owner';
+---------- Output ---------
+REVOKE OWNERSHIP ON UDF f1 FROM ROLE d20_0015_owner
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: UDF(
+                "f1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON UDF f1 TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: UDF(
+                "f1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
     },
 )
 

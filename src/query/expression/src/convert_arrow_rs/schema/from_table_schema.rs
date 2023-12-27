@@ -114,6 +114,7 @@ impl From<&TableDataType> for ArrowDataType {
                 ArrowDataType::Struct(fields)
             }
 
+            TableDataType::Binary => ArrowDataType::LargeBinary,
             TableDataType::Bitmap => ArrowDataType::LargeBinary,
             TableDataType::Variant => ArrowDataType::LargeBinary,
         }

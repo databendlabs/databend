@@ -99,12 +99,9 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File](https://docs.databend.com/guides/load-data/load/local)
-- [How to Load Data from Bucket](https://docs.databend.com/guides/load-data/load/s3)
-- [How to Load Data from Stage](https://docs.databend.com/guides/load-data/load/stage)
-- [How to Load Data from Remote Files](https://docs.databend.com/guides/load-data/load/http)
-- [Querying Data in Staged Files](https://docs.databend.com/guides/load-data/transform/querying-stage)
+- [Loading Semi-structured Data](https://docs.databend.com/guides/load-data/load-semistructured/)
 - [Transforming Data During a Load](https://docs.databend.com/guides/load-data/transform/data-load-transform)
+- [Continuous Data Pipelines](https://docs.databend.com/guides/load-data/continuous-data-pipelines/)
 - [How to Unload Data from Databend](https://docs.databend.com/guides/unload-data/)
 
 </details>
@@ -126,13 +123,14 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Visualize Tools with Databend</summary>
 
-- [Metabase](https://docs.databend.com/guides/visualize/metabase)
-- [Tableau](https://docs.databend.com/guides/visualize/tableau)
+- [Deepnote](https://docs.databend.com/guides/visualize/deepnote)
 - [Grafana](https://docs.databend.com/guides/visualize/grafana)
 - [Jupyter Notebook](https://docs.databend.com/guides/visualize/jupyter)
-- [Deepnote](https://docs.databend.com/guides/visualize/deepnote)
+- [Metabase](https://docs.databend.com/guides/visualize/metabase)
 - [MindsDB](https://docs.databend.com/guides/visualize/mindsdb)
 - [Redash](https://docs.databend.com/guides/visualize/redash)
+- [Superset](https://docs.databend.com/guides/visualize/superset)
+- [Tableau](https://docs.databend.com/guides/visualize/tableau)
 
 </details>
 
@@ -169,11 +167,12 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Managing Data</summary>
 
-- [COPY](https://docs.databend.com/sql/sql-commands/dml/dml-copy-into-table)
+- [COPY-INTO](https://docs.databend.com/sql/sql-commands/dml/dml-copy-into-table)
 - [INSERT](https://docs.databend.com/sql/sql-commands/dml/dml-insert)
 - [DELETE](https://docs.databend.com/sql/sql-commands/dml/dml-delete-from)
 - [UPDATE](https://docs.databend.com/sql/sql-commands/dml/dml-update)
 - [REPLACE](https://docs.databend.com/sql/sql-commands/dml/dml-replace)
+- [MERGE-INTO](https://docs.databend.com/sql/sql-commands/dml/dml-merge)
 </details>
 
 <details>
@@ -243,6 +242,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
+- [Roadmap 2024](https://github.com/datafuselabs/databend/issues/14167)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 - [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
 - [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
