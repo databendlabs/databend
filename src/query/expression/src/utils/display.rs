@@ -50,6 +50,7 @@ use crate::types::number::SimpleDomain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::timestamp::TIMESTAMP_FORMAT;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberClass;
@@ -218,7 +219,11 @@ impl<'a> Display for ScalarRef<'a> {
                     Ok(())
                 }
             },
-            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::Timestamp(t) => write!(
+                f,
+                "'{}'",
+                timestamp_to_string(*t, Tz::UTC, TIMESTAMP_FORMAT)
+            ),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {

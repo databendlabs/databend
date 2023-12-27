@@ -282,6 +282,10 @@ impl Settings {
         }
     }
 
+    pub fn get_timestamp_output_format(&self) -> Result<String> {
+        self.try_get_string("timestamp_output_format")
+    }
+
     pub fn get_enable_hive_parquet_predict_pushdown(&self) -> Result<u64> {
         self.try_get_u64("enable_hive_parquet_predict_pushdown")
     }

@@ -1,3 +1,4 @@
+#need onlyif mysql tag, because http test can not keep a session
 onlyif mysql
 statement ok
 use default

@@ -237,6 +237,16 @@ pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: Tz) -> impl Display {
-    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT)
+pub fn timestamp_to_string(ts: i64, tz: Tz, ts_format: &str) -> impl Display + '_ {
+    // If write a wrong format, .format(ts_format) will display the ts_format directly.
+    // let date_time: DateTime<Utc> = Utc.with_ymd_and_hms(2017, 04, 02, 12, 50, 32).unwrap();
+    // let formatted = format!("{}", date_time.format("cc"));
+    // assert_eq!(formatted, "cc");
+    let ts_format = if ts_format != "%Y-%m-%d %H:%M:%S%.6f" && ts_format != "%Y-%m-%d %H:%M:%S%.3f"
+    {
+        TIMESTAMP_FORMAT
+    } else {
+        ts_format
+    };
+    ts.to_timestamp(tz).format(ts_format)
 }

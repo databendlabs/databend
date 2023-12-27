@@ -1,0 +1,35 @@
+#need onlyif mysql tag, because http test can not keep a session
+query T
+show settings like 'timestamp_output_format';
+----
+timestamp_output_format '%Y-%m-%d %H:%M:%S%.6f' '%Y-%m-%d %H:%M:%S%.6f' ["%Y-%m-%d %H:%M:%S%.3f", "%Y-%m-%d %H:%M:%S%.6f"] SESSION Specifies the display format for the TIMESTAMP data type alias. Available values include '%Y-%m-%d %H:%M:%S%.6f' and '%Y-%m-%d %H:%M:%S%.3f'. String
+
+onlyif mysql
+statement ok
+SET timestamp_output_format='%Y-%m-%d %H:%M:%S%.3f';
+
+onlyif mysql
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123
+
+onlyif mysql
+statement ok
+SET timestamp_output_format='%Y-%m-%d %H:%M:%S%.6f';
+
+onlyif mysql
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123456
+
+onlyif mysql
+statement error 2803
+SET timestamp_output_format='%Y-%m-%d %H:%M:%S%.9f';
+
+onlyif mysql
+query T
+select to_timestamp('2022-02-01 00:00:00.123456789');
+----
+2022-02-01 00:00:00.123456

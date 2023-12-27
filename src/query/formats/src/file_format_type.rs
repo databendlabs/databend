@@ -45,6 +45,7 @@ pub struct FileFormatOptionsExt {
     pub disable_variant_check: bool,
     pub timezone: Tz,
     pub is_select: bool,
+    pub timestamp_output_format: String,
 }
 
 impl FileFormatOptionsExt {
@@ -53,6 +54,7 @@ impl FileFormatOptionsExt {
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let timestamp_output_format = settings.get_timestamp_output_format()?;
         let options = FileFormatOptionsExt {
             ident_case_sensitive: false,
             headers: 0,
@@ -61,6 +63,7 @@ impl FileFormatOptionsExt {
             disable_variant_check: false,
             timezone,
             is_select,
+            timestamp_output_format,
         };
         Ok(options)
     }
@@ -70,6 +73,7 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let timestamp_output_format = settings.get_timestamp_output_format()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -78,6 +82,7 @@ impl FileFormatOptionsExt {
             disable_variant_check: false,
             timezone,
             is_select: false,
+            timestamp_output_format,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

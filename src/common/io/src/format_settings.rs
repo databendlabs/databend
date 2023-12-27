@@ -17,6 +17,7 @@ use chrono_tz::Tz;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
     pub timezone: Tz,
+    pub timestamp_output_format: String,
 }
 
 // only used for tests
@@ -24,6 +25,7 @@ impl Default for FormatSettings {
     fn default() -> Self {
         Self {
             timezone: "UTC".parse::<Tz>().unwrap(),
+            timestamp_output_format: "%Y-%m-%d %H:%M:%S%.6f".to_string(),
         }
     }
 }
