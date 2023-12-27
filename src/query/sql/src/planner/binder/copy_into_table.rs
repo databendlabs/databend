@@ -195,16 +195,16 @@ impl<'a> Binder {
 
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
             for dest_field in plan.required_source_schema.fields().iter() {
-                let column = match table_schema.field_with_name(dest_field.name()) {
+                let column = Expr::ColumnRef {
+                    span: None,
+                    database: None,
+                    table: None,
+                    column: AstColumnID::Name(Identifier::from_name(
+                        dest_field.name().to_string(),
+                    )),
+                };
+                let expr = match table_schema.field_with_name(dest_field.name()) {
                     Ok(src_field) => {
-                        let column = Expr::ColumnRef {
-                            span: None,
-                            database: None,
-                            table: None,
-                            column: AstColumnID::Name(Identifier::from_name(
-                                dest_field.name().to_string(),
-                            )),
-                        };
                         // parse string to JSON value, avoid cast string to JSON string
                         if dest_field.data_type().remove_nullable() == DataType::Variant {
                             if src_field.data_type().remove_nullable() == TableDataType::String {
@@ -230,14 +230,11 @@ impl<'a> Binder {
                         }
                     }
                     Err(_) => {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "column {} doesn't exist",
-                            dest_field.name()
-                        )));
+                        column
                     }
                 };
                 select_list.push(SelectTarget::AliasedExpr {
-                    expr: Box::new(column),
+                    expr: Box::new(expr),
                     alias: None,
                 });
             }
