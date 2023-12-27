@@ -264,12 +264,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_min_max_rf", DefaultSettingValue{
-                        value: UserSettingValue::UInt64(0),
-                        desc: "Enables min max runtime filter optimization for JOIN.",
-                        mode: SettingMode::Both,
-                        range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",

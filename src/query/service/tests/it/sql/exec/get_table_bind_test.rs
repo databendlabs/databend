@@ -38,6 +38,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -122,6 +123,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use xorf::BinaryFuse8;
 
 type MetaType = (String, String, String);
 
@@ -751,7 +753,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_runtime_filter_with_id(&self, _id: IndexType) -> RuntimeFilterInfo {
+    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse8)> {
+        todo!()
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>> {
         todo!()
     }
 

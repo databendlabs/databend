@@ -65,4 +65,4 @@ streaming-decompression = "0.1.2"
 sys-info = "0.9"
 typetag = { workspace = true }
 uuid = { workspace = true }
-xorf = { git = "https://github.com/ayazhafiz/xorf", branch = "master" }
+xorf = "0.11.0"
