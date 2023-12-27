@@ -116,4 +116,8 @@ drop table if exists "T"
 
 onlyif mysql
 statement ok
+<<<<<<< HEAD
 drop table if exists t
+=======
+drop table if exists t
+>>>>>>> 2b20211068 (feature(query): timestamp type can modify output format with new setting TIMESTAMP_OUTPUT_FORMAT)
