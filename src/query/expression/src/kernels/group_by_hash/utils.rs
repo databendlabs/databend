@@ -76,7 +76,7 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             })
         }
         Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
-        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
             store_advance::<u64>(&(len as u64), row_space);

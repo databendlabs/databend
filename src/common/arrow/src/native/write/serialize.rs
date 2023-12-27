@@ -113,7 +113,7 @@ pub fn write_simple<W: Write>(
             }
 
             let binary_array = BinaryArray::new(
-                DataType::Binary,
+                DataType::LargeBinary,
                 binary_array.offsets().clone(),
                 binary_array.values().clone(),
                 binary_array.validity().cloned(),

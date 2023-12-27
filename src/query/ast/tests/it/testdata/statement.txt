@@ -2900,9 +2900,9 @@ CreateTable(
 
 
 ---------- Input ----------
-CREATE TABLE t(c1 varbinary);
+CREATE TABLE t(c1 varbinary, c2 binary(10));
 ---------- Output ---------
-CREATE TABLE t (c1 STRING)
+CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2927,7 +2927,20 @@ CreateTable(
                                 15..17,
                             ),
                         },
-                        data_type: String,
+                        data_type: Binary,
+                        expr: None,
+                        comment: None,
+                        nullable_constraint: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c2",
+                            quote: None,
+                            span: Some(
+                                29..31,
+                            ),
+                        },
+                        data_type: Binary,
                         expr: None,
                         comment: None,
                         nullable_constraint: None,
