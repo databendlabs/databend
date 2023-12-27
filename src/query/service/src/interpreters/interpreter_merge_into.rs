@@ -193,12 +193,10 @@ impl MergeIntoInterpreter {
             (input, false)
         };
 
-        // let optimized_input =
-        //     Self::build_static_filter(&input, meta_data, self.ctx.clone(), check_table).await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-
         // build source for MergeInto
-        let join_input = builder.build(input.as_ref(), *columns_set.clone()).await?;
+        let join_input = builder.build(&input, *columns_set.clone()).await?;
+
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
