@@ -1138,15 +1138,17 @@ impl Column {
             Column::String(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
+                unsafe {
+                    Box::new(
+                        databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new_unchecked(
+                            arrow_type,
+                            OffsetsBuffer::new_unchecked(offsets),
+                            col.data().clone(),
+                            None,
+                        )
+                        .unwrap(),
                     )
-                    .unwrap(),
-                )
+                }
             }
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
@@ -1439,27 +1441,19 @@ impl Column {
                         .values()
                         .clone(),
                 ),
-                ArrowDataType::LargeBinary => {
+                ArrowDataType::FixedSizeBinary(size) => {
                     let arrow_col = arrow_col
                         .as_any()
-                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
-                        .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                    let offsets = arrow_col.offsets().clone().into_inner();
-
-                    let offsets =
-                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    // LargeBinary may be Extension data type variant and bitmap
-                    match data_type {
-                        DataType::Variant => {
-                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        DataType::Bitmap => {
-                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                        }
-                        _ => Column::String(StringColumn::new(arrow_col.values().clone(), offsets)),
-                    }
+                        .downcast_ref::<databend_common_arrow::arrow::array::FixedSizeBinaryArray>()
+                        .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
+                    let offsets = (0..arrow_col.len() as u64 + 1)
+                        .map(|x| x * (*size) as u64)
+                        .collect::<Vec<_>>();
+                    Column::Binary(StringColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
                 }
-                // TODO: deprecate it and use LargeBinary instead
                 ArrowDataType::Binary => {
                     let arrow_col = arrow_col
                         .as_any()
@@ -1473,38 +1467,44 @@ impl Column {
                         .collect::<Vec<_>>();
                     // Binary may be Extension data type variant and bitmap
                     match data_type {
-                        DataType::Variant => Column::Variant(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        )),
-                        DataType::Bitmap => Column::Bitmap(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        )),
-                        _ => Column::String(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        )),
+                        DataType::Variant => {
+                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Bitmap => {
+                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Binary => {
+                            Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        _ => unreachable!(),
                     }
-                }
-
-                ArrowDataType::FixedSizeBinary(size) => {
-                    let arrow_col = arrow_col
-                        .as_any()
-                        .downcast_ref::<databend_common_arrow::arrow::array::FixedSizeBinaryArray>()
-                        .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
-
-                    let offsets = (0..arrow_col.len() as u64 + 1)
-                        .map(|x| x * (*size) as u64)
-                        .collect::<Vec<_>>();
-
-                    Column::String(StringColumn::new(
+                    Column::Binary(StringColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
                 }
-
-                // TODO: deprecate it and use LargeBinary instead
+                ArrowDataType::LargeBinary => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                        .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    // LargeBinary may be Extension data type variant and bitmap
+                    match data_type {
+                        DataType::Variant => {
+                            Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Bitmap => {
+                            Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        DataType::Binary => {
+                            Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
+                        }
+                        _ => unreachable!(),
+                    }
+                }
                 ArrowDataType::Utf8 => {
                     let arrow_col = arrow_col
                         .as_any()
@@ -1516,30 +1516,21 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-
                     Column::String(StringColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
                 }
-                // TODO: deprecate it and use LargeBinary instead
                 ArrowDataType::LargeUtf8 => {
                     let arrow_col = arrow_col
                         .as_any()
                         .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i64>>()
                         .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
-                    let offsets = arrow_col
-                        .offsets()
-                        .buffer()
-                        .iter()
-                        .map(|x| *x as u64)
-                        .collect::<Vec<_>>();
-                    Column::String(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    ))
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
                 }
-
                 ArrowDataType::Timestamp(uint, _) => {
                     let values = arrow_col
                         .as_any()
@@ -1783,6 +1774,7 @@ impl Column {
         use rand::Rng;
         use rand::SeedableRng;
 
+        // Migrate from legacy code:
         match ty {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },

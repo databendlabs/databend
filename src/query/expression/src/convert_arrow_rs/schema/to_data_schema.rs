@@ -12,35 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_schema::ArrowError;
-use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
+use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
-use crate::types::DataType;
 use crate::DataField;
 use crate::DataSchema;
-use crate::TableDataType;
+use crate::TableField;
 
 impl TryFrom<&ArrowSchema> for DataSchema {
-    type Error = ArrowError;
+    type Error = ErrorCode;
 
-    fn try_from(schema: &ArrowSchema) -> Result<Self, ArrowError> {
-        let mut fields = vec![];
-        for field in &schema.fields {
-            fields.push(DataField::try_from(field.as_ref())?)
-        }
-        Ok(DataSchema {
-            fields,
-            metadata: Default::default(),
-        })
-    }
-}
-
-impl TryFrom<&ArrowField> for DataField {
-    type Error = ArrowError;
-
-    fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
-        let ty = DataType::from(&TableDataType::try_from(f)?);
-        Ok(DataField::new(f.name(), ty))
+    fn try_from(a_schema: &ArrowSchema) -> Result<DataSchema> {
+        let fields = a_schema
+            .fields
+            .iter()
+            .map(|arrow_f| {
+                Ok(DataField::from(&TableField::try_from(&Arrow2Field::from(
+                    arrow_f,
+                ))?))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(DataSchema::new(fields))
     }
 }

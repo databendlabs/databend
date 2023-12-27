@@ -133,7 +133,7 @@ impl BlockReader {
             .iter()
             .map(|c| (*c).clone())
             .collect();
-        let project_indices = Self::build_projection_indices(&project_column_nodes);
+        let project_indices = Self::build_projection_indices(&project_column_nodes)?;
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -157,11 +157,11 @@ impl BlockReader {
     // Build non duplicate leaf_indices to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
         columns: &[ColumnNode],
-    ) -> BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
+    ) -> Result<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>> {
         let mut indices = BTreeMap::new();
         for column in columns {
             for (i, index) in column.leaf_indices.iter().enumerate() {
-                let f: TableField = (&column.field).into();
+                let f: TableField = (&column.field).try_into()?;
                 let data_type: DataType = f.data_type().into();
                 indices.insert(
                     *index,
@@ -169,7 +169,7 @@ impl BlockReader {
                 );
             }
         }
-        indices
+        Ok(indices)
     }
 
     pub fn query_internal_columns(&self) -> bool {

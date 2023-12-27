@@ -77,7 +77,7 @@ impl Parquet2Table {
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
         let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
             project_parquet_schema(&self.arrow_schema, &self.schema_descr, &projection)?;
-        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
+        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema)?);
 
         let filter = push_down.as_ref().and_then(|extra| {
             extra

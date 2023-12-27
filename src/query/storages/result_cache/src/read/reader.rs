@@ -112,7 +112,7 @@ impl ResultCacheReader {
         let mut reader = Cursor::new(data);
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
-        let schema = DataSchema::from(&TableSchema::from(&arrow_schema));
+        let schema = DataSchema::from(&TableSchema::try_from(&arrow_schema)?);
 
         // Read the parquet file into one block.
         let chunks_iter =
@@ -136,7 +136,7 @@ impl ResultCacheReader {
         let mut reader = Cursor::new(data.clone());
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
-        let table_schema = TableSchema::from(&arrow_schema);
+        let table_schema = TableSchema::try_from(&arrow_schema)?;
 
         Ok((table_schema, data))
     }

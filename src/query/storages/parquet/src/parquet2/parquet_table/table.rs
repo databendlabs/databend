@@ -197,27 +197,30 @@ fn lower_field_name(field: &mut ArrowField) {
     }
 }
 
-pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
+pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> Result<TableSchema> {
     schema.fields.iter_mut().for_each(|f| {
         lower_field_name(f);
     });
-    TableSchema::from(&schema)
+    TableSchema::try_from(&schema)
 }
 
-pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageInfo) -> TableInfo {
-    TableInfo {
+pub(super) fn create_parquet_table_info(
+    schema: ArrowSchema,
+    stage_info: &StageInfo,
+) -> Result<TableInfo> {
+    Ok(TableInfo {
         ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),
         name: format!("read_parquet({})", stage_info.stage_name),
         meta: TableMeta {
-            schema: arrow_to_table_schema(schema).into(),
+            schema: arrow_to_table_schema(schema)?.into(),
             engine: "SystemReadParquet".to_string(),
             created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
             updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
             ..Default::default()
         },
         ..Default::default()
-    }
+    })
 }
 
 pub(super) fn create_parquet2_statistics_provider(
