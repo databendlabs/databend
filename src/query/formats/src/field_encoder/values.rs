@@ -56,12 +56,13 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                timestamp_output_format: options.timestamp_output_format.clone(),
             },
             quote_char: b'\'',
         }
     }
 
-    pub fn create_for_http_handler(timezone: Tz) -> Self {
+    pub fn create_for_http_handler(timezone: Tz, timestamp_output_format: String) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -70,6 +71,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
+                timestamp_output_format,
             },
             quote_char: b'\'',
         }
@@ -79,7 +81,7 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(timezone: Tz) -> Self {
+    pub fn create_for_mysql_handler(timezone: Tz, timestamp_output_format: String) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -88,6 +90,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                timestamp_output_format,
             },
             quote_char: b'\'',
         }
@@ -263,7 +266,12 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
+        let s = timestamp_to_string(
+            *v,
+            self.common_settings().timezone,
+            &self.common_settings().timestamp_output_format,
+        )
+        .to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

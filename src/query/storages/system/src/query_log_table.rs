@@ -15,6 +15,7 @@
 use chrono::NaiveDateTime;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
@@ -64,7 +65,7 @@ where S: Serializer {
         // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
     )
     .unwrap();
-    s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
+    s.serialize_str(t.format(TIMESTAMP_FORMAT).to_string().as_str())
 }
 
 #[derive(Clone, Serialize)]

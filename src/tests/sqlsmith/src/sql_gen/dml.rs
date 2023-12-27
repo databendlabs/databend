@@ -39,6 +39,7 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateExpr;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::Span;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
@@ -536,6 +537,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
+                        timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
                     },
                     quote_char: b'\'',
                 };

@@ -85,6 +85,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
+                    timestamp_output_format: options_ext.timestamp_output_format.clone(),
                 },
                 quote_char: 0, // not used
             },
@@ -105,6 +106,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
+                    timestamp_output_format: options_ext.timestamp_output_format.clone(),
                 },
                 quote_char: 0, // not used
             },

@@ -554,10 +554,14 @@ impl TableContext for QueryContext {
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.query_settings.get_timezone()?;
+        let timestamp_output_format = self.query_settings.get_timestamp_output_format()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings { timezone };
+        let format = FormatSettings {
+            timezone,
+            timestamp_output_format,
+        };
         Ok(format)
     }
 
@@ -578,6 +582,7 @@ impl TableContext for QueryContext {
             .get_external_server_request_timeout_secs()?;
 
         let tz = self.get_settings().get_timezone()?;
+        let ts_output_format = self.get_settings().get_timestamp_output_format()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
@@ -586,6 +591,7 @@ impl TableContext for QueryContext {
 
         Ok(FunctionContext {
             tz,
+            ts_output_format,
             rounding_mode,
 
             openai_api_key: query_config.openai_api_key.clone(),

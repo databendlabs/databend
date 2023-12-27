@@ -35,6 +35,7 @@ use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::timestamp::TIMESTAMP_FORMAT;
 use crate::types::*;
 use crate::values::Value;
 use crate::values::ValueRef;
@@ -91,9 +92,10 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct FunctionContext {
     pub tz: TzLUT,
+    pub ts_output_format: String,
     pub rounding_mode: bool,
 
     pub openai_api_chat_base_url: String,
@@ -105,6 +107,24 @@ pub struct FunctionContext {
 
     pub external_server_connect_timeout_secs: u64,
     pub external_server_request_timeout_secs: u64,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self {
+            tz: Default::default(),
+            ts_output_format: TIMESTAMP_FORMAT.to_string(),
+            rounding_mode: false,
+            openai_api_chat_base_url: "".to_string(),
+            openai_api_embedding_base_url: "".to_string(),
+            openai_api_key: "".to_string(),
+            openai_api_version: "".to_string(),
+            openai_api_embedding_model: "".to_string(),
+            openai_api_completion_model: "".to_string(),
+            external_server_connect_timeout_secs: 0,
+            external_server_request_timeout_secs: 0,
+        }
+    }
 }
 
 #[derive(Clone)]
