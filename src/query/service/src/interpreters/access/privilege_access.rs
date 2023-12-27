@@ -44,6 +44,24 @@ enum ObjectId {
     Table(u64, u64),
 }
 
+// some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
+// rewritten to the queries on the system tables, we need to skip the privilege check on
+// these tables.
+const SYSTEM_TABLES_ALLOW_LIST: [&'static str; 12] = [
+    "catalogs",
+    "colmns",
+    "databases",
+    "tables",
+    "tables_with_history",
+    "password_policies",
+    "streams",
+    "virtual_columns",
+    "users",
+    "roles",
+    "stages",
+    "one",
+];
+
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
@@ -209,57 +227,32 @@ impl PrivilegeAccess {
         verify_ownership: bool,
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
-        let len = privileges.len();
 
-        let mut db_name = String::new();
-        let mut table_name = String::new();
-
-        match object {
-            GrantObject::Database(_, db_name) => {
-                if db_name.to_lowercase() == "information_schema"
-                    && privileges.contains(&UserPrivilegeType::Select)
-                    && len == 1
-                {
-                    return Ok(());
-                }
-            }
+        let (db_name, table_name) = match object {
+            GrantObject::Database(_, db_name) => (db_name.to_lowercase(), "".to_string()),
             GrantObject::Table(_, db_name, table_name) => {
-                let db_name = db_name.to_lowercase();
-                let table_name = table_name.to_lowercase();
-                if (db_name.to_lowercase() == "information_schema"
-                    || (db_name == "system" && table_name == "one"))
-                    && privileges.contains(&UserPrivilegeType::Select)
-                    && len == 1
-                {
-                    return Ok(());
-                }
+                (db_name.to_lowercase(), table_name.to_lowercase())
             }
             GrantObject::DatabaseById(catalog_name, db_id) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                db_name = catalog.get_db_name_by_id(*db_id).await?.to_lowercase();
-                if db_name == "information_schema"
-                    && privileges.contains(&UserPrivilegeType::Select)
-                    && len == 1
-                {
-                    return Ok(());
-                }
+                let db_name = catalog.get_db_name_by_id(*db_id).await?;
+                (db_name.to_lowercase(), "".to_string())
             }
             GrantObject::TableById(catalog_name, db_id, table_id) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                db_name = catalog.get_db_name_by_id(*db_id).await?.to_lowercase();
-                table_name = catalog
-                    .get_table_name_by_id(*table_id)
-                    .await?
-                    .to_lowercase();
-                if (db_name == "information_schema" || (db_name == "system" && table_name == "one"))
-                    && privileges.contains(&UserPrivilegeType::Select)
-                    && len == 1
-                {
-                    return Ok(());
-                }
+                let db_name = catalog.get_db_name_by_id(*db_id).await?;
+                let table_name = catalog.get_table_name_by_id(*table_id).await?;
+                (db_name.to_lowercase(), table_name.to_lowercase())
             }
-            GrantObject::Global | GrantObject::Stage(_) | GrantObject::UDF(_) => {}
+            _ => ("".to_string(), "".to_string()),
+        };
+        if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
+            || db_name == "information_schema")
+            && &privileges == &[UserPrivilegeType::Select]
+        {
+            return Ok(());
         }
+
         if verify_ownership {
             let object_by_id =
                 self.convert_grant_object_by_id(object)
