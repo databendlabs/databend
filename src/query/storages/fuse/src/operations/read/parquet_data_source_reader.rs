@@ -32,14 +32,14 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 
-use super::parquet_data_source::DataSource;
+use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
@@ -51,7 +51,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<ParquetDataSource>)>,
     partitions: StealablePartitions,
 
     index_reader: Arc<Option<AggIndexReader>>,
@@ -142,10 +142,11 @@ impl SyncSource for ReadParquetDataSource<true> {
                         &loc,
                     ) {
                         // Read from aggregating index.
-                        return Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                            vec![part.clone()],
-                            vec![DataSource::AggIndex(data)],
-                        ))));
+                        return Ok(Some(DataBlock::empty_with_meta(
+                            DataSourceWithMeta::create(vec![part.clone()], vec![
+                                ParquetDataSource::AggIndex(data),
+                            ]),
+                        )));
                     }
                 }
 
@@ -175,10 +176,12 @@ impl SyncSource for ReadParquetDataSource<true> {
                     ignore_column_ids,
                 )?;
 
-                Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                    vec![part],
-                    vec![DataSource::Normal((source, virtual_source))],
-                ))))
+                Ok(Some(DataBlock::empty_with_meta(
+                    DataSourceWithMeta::create(vec![part], vec![ParquetDataSource::Normal((
+                        source,
+                        virtual_source,
+                    ))]),
+                )))
             }
         }
     }
@@ -209,7 +212,7 @@ impl Processor for ReadParquetDataSource<false> {
         }
 
         if let Some((part, data)) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
+            let output = DataBlock::empty_with_meta(DataSourceWithMeta::create(part, data));
 
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
@@ -261,7 +264,7 @@ impl Processor for ReadParquetDataSource<false> {
                                 .await
                             {
                                 // Read from aggregating index.
-                                return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
+                                return Ok::<_, ErrorCode>(ParquetDataSource::AggIndex(data));
                             }
                         }
 
@@ -293,7 +296,7 @@ impl Processor for ReadParquetDataSource<false> {
                             )
                             .await?;
 
-                        Ok(DataSource::Normal((source, virtual_source)))
+                        Ok(ParquetDataSource::Normal((source, virtual_source)))
                     }))
                     .await
                     .unwrap()
