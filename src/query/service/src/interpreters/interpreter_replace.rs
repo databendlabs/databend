@@ -129,7 +129,6 @@ impl Interpreter for ReplaceInterpreter {
             .await;
         }
 
-        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
         // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
         {
             let refresh_desc = RefreshDesc {

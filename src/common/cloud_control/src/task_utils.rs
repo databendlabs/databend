@@ -65,6 +65,8 @@ pub struct Task {
     pub task_id: u64,
     pub task_name: String,
     pub query_text: String,
+    pub condition_text: String,
+    pub after: Vec<String>,
     pub comment: Option<String>,
     pub owner: String,
     pub schedule_options: Option<String>,
@@ -88,14 +90,10 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
         }
     };
     return match schedule_type {
-        ScheduleType::IntervalType => {
-            if s.interval.is_none() {
-                return Err(ErrorCode::IllegalCloudControlMessageFormat(
-                    "interval schedule has null value",
-                ));
-            }
-            Ok(format!("INTERVAL {} MINUTE", s.interval.unwrap()))
-        }
+        ScheduleType::IntervalType => Ok(format!(
+            "INTERVAL {} SECOND",
+            s.interval.unwrap_or_default(),
+        )),
         ScheduleType::CronType => {
             if s.cron.is_none() {
                 return Err(ErrorCode::IllegalCloudControlMessageFormat(
@@ -173,23 +171,28 @@ impl TryFrom<crate::pb::Task> for Task {
                     .map(|d| d.with_timezone(&Utc))
             })
             .transpose()?;
-
         let schedule = match value.schedule_options {
             None => None,
             Some(ref s) => {
-                let r = format_schedule_options(s).map_err(|e| {
-                    ErrorCode::IllegalCloudControlMessageFormat(format!(
-                        "illegal schedule options {:?}, {e}",
-                        value.schedule_options
-                    ))
-                })?;
-                Some(r)
+                if !value.after.is_empty() {
+                    None
+                } else {
+                    let r = format_schedule_options(s).map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal schedule options {:?}, {e}",
+                            value.schedule_options
+                        ))
+                    })?;
+                    Some(r)
+                }
             }
         };
         let t = Task {
             task_id: value.task_id,
             task_name: value.task_name,
             query_text: value.query_text,
+            condition_text: value.when_condition.unwrap_or_default(),
+            after: value.after,
             comment: value.comment,
             owner: value.owner,
             schedule_options: schedule,
@@ -210,6 +213,7 @@ pub struct TaskRun {
     pub task_id: u64,
     pub task_name: String,
     pub query_text: String,
+    pub condition_text: String,
     pub comment: Option<String>,
     pub owner: String,
     pub run_id: String,
@@ -222,6 +226,7 @@ pub struct TaskRun {
     pub completed_at: Option<DateTime<Utc>>,
     pub error_code: i64,
     pub error_message: Option<String>,
+    pub root_task_id: String,
 }
 
 // convert from crate::pb::taskRun to struct taskRun
@@ -269,19 +274,24 @@ impl TryFrom<crate::pb::TaskRun> for TaskRun {
         let schedule = match value.schedule_options {
             None => None,
             Some(ref s) => {
-                let r = format_schedule_options(s).map_err(|e| {
-                    ErrorCode::IllegalCloudControlMessageFormat(format!(
-                        "illegal schedule options {:?}, {e}",
-                        value.schedule_options
-                    ))
-                })?;
-                Some(r)
+                if value.task_id.to_string() != value.root_task_id {
+                    None
+                } else {
+                    let r = format_schedule_options(s).map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal schedule options {:?}, {e}",
+                            value.schedule_options
+                        ))
+                    })?;
+                    Some(r)
+                }
             }
         };
         let tr = TaskRun {
             task_id: value.task_id,
             task_name: value.task_name,
             query_text: value.query_text,
+            condition_text: value.condition_text,
             comment: value.comment,
             owner: value.owner,
             error_code: value.error_code,
@@ -294,6 +304,7 @@ impl TryFrom<crate::pb::TaskRun> for TaskRun {
             state,
             scheduled_at,
             completed_at,
+            root_task_id: value.root_task_id,
         };
         Ok(tr)
     }

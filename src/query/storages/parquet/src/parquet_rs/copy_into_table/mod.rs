@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod partition;
-mod read;
-mod stats;
+mod reader;
+mod source;
 mod table;
 
-pub use table::ParquetRSTable;
+pub use table::ParquetTableForCopy;

@@ -239,7 +239,6 @@ impl Interpreter for UpdateInterpreter {
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
 
-            // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
             // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
             {
                 let refresh_desc = RefreshDesc {

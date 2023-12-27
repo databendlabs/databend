@@ -3770,6 +3770,7 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-common-storages-parquet",
  "log",
  "opendal",
  "parking_lot 0.12.1",
