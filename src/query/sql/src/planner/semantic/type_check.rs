@@ -1833,6 +1833,8 @@ impl<'a> TypeChecker<'a> {
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
                 ));
             }
+        } else if func_name == "array_fold" {
+            lambda_type.clone().wrap_nullable()
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {

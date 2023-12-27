@@ -624,12 +624,7 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
                 }
             }
         }
-        Value::Scalar(s) => assert!(
-            (s.as_ref().infer_data_type() == data_type.remove_nullable())
-                || (s.as_ref().infer_data_type() == *data_type)
-        ),
-        Value::Column(s) => {
-            assert!((s.data_type() == data_type.remove_nullable()) || (s.data_type() == *data_type))
-        }
+        Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
+        Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
 }

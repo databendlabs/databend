@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::ops::Not;
-use std::ops::Range;
 
 use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -953,7 +952,7 @@ impl<'a> Evaluator<'a> {
     }
 
     fn run_array_fold(&self, column: &Column, expr: &Expr) -> Result<Value<AnyType>> {
-        if column.data_type().is_null() {
+        if column.data_type().is_null() || column.len() < 1 {
             return Ok(Value::Scalar(Scalar::Null));
         }
 
@@ -1011,16 +1010,41 @@ impl<'a> Evaluator<'a> {
         lambda_expr: &RemoteExpr,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
+
+        // array_fold differs
+        if func_name == "array_fold" {
+            match &args[0] {
+                Value::Scalar(s) => match s {
+                    Scalar::Array(c) => {
+                        return self.run_array_fold(c, &expr);
+                    }
+                    _ => unreachable!(),
+                },
+                Value::Column(c) => {
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&expr.data_type().wrap_nullable(), c.len());
+                    for val in c.iter() {
+                        match &val.to_owned() {
+                            Scalar::Array(c) => {
+                                let result = self.run_array_fold(c, &expr)?;
+                                let item = result.as_scalar().unwrap().as_ref();
+                                builder.push(item);
+                            }
+                            Scalar::Null => {
+                                builder.push_default();
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    return Ok(Value::Column(builder.build()));
+                }
+            }
+        }
+
         // TODO: Support multi args
         match &args[0] {
             Value::Scalar(s) => match s {
                 Scalar::Array(c) => {
-                    if func_name == "array_fold" {
-                        let result = self.run_array_fold(c, &expr)?;
-                        let result_col = result.convert_to_full_column(expr.data_type(), 1);
-                        return Ok(Value::Scalar(Scalar::Array(result_col)));
-                    }
-
                     let entry = BlockEntry::new(c.data_type(), Value::Column(c.clone()));
                     let block = DataBlock::new(vec![entry], c.len());
 
@@ -1059,54 +1083,6 @@ impl<'a> Evaluator<'a> {
                     },
                     _ => unreachable!(),
                 };
-
-                if func_name == "array_fold" {
-                    let builder_type = DataType::Array(Box::new(expr.data_type().clone()));
-                    let mut builder = ColumnBuilder::with_capacity(&builder_type, 0);
-                    // generate new offsets for fold.
-                    let mut filtered_offsets = vec![];
-                    filtered_offsets.push(0);
-                    for offset in offsets.windows(2) {
-                        let off = offset[0] as usize;
-                        let len = (offset[1] - offset[0]) as usize;
-                        // skip []
-                        if len == 0 {
-                            filtered_offsets.push(filtered_offsets[filtered_offsets.len() - 1]);
-                            continue;
-                        } else {
-                            filtered_offsets.push(filtered_offsets[filtered_offsets.len() - 1] + 1);
-                        }
-                        let each_row = inner_col.slice(Range {
-                            start: off,
-                            end: len,
-                        });
-                        let result = self.run_array_fold(&each_row, &expr)?;
-                        let result_col = result.convert_to_full_column(expr.data_type(), 1);
-                        let value: Value<AnyType> = Value::Scalar(Scalar::Array(result_col));
-                        builder.push(value.as_scalar().unwrap().as_ref());
-                    }
-                    let result_column = builder.build();
-
-                    let array_col = match result_column {
-                        Column::Array(box array_col) => Column::Array(Box::new(ArrayColumn {
-                            values: array_col.values,
-                            offsets: filtered_offsets.into(),
-                        })),
-                        _ => unreachable!(),
-                    };
-
-                    let col = match validity {
-                        Some(validity) => {
-                            Value::Column(Column::Nullable(Box::new(NullableColumn {
-                                column: array_col,
-                                validity,
-                            })))
-                        }
-                        None => Value::Column(array_col),
-                    };
-                    return Ok(col);
-                }
-
                 let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
                 let block = DataBlock::new(vec![entry], inner_col.len());
 
