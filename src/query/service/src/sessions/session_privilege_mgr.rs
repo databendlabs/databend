@@ -64,7 +64,7 @@ pub trait SessionPrivilegeManager {
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()>;
 
-    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()>;
+    async fn has_ownership(&self, object: &GrantObjectByID) -> Result<bool>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -266,7 +266,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()> {
+    async fn has_ownership(&self, object: &GrantObjectByID) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
 
@@ -278,14 +278,8 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         };
 
         let available_roles = self.get_all_available_roles().await?;
-        if !available_roles.iter().any(|r| r.name == owner_role_name) {
-            return Err(ErrorCode::PermissionDenied(
-                "Permission denied, current session do not have the ownership of this object"
-                    .to_string(),
-            ));
-        }
-
-        Ok(())
+        let exists = available_roles.iter().any(|r| r.name == owner_role_name);
+        return Ok(exists);
     }
 
     #[async_backtrace::framed]
