@@ -71,7 +71,7 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn data_block(&self) -> &DataBlock {
-        self.input_columns
+        self.data_block
     }
 
     pub fn func_ctx(&self) -> &FunctionContext {
@@ -1095,7 +1095,7 @@ impl<'a> Evaluator<'a> {
         validity: Option<Bitmap>,
     ) -> Result<(Value<AnyType>, DataType)> {
         debug_assert!(
-            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+            validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
         );
 
         #[cfg(debug_assertions)]
@@ -1107,7 +1107,7 @@ impl<'a> Evaluator<'a> {
                 scalar.as_ref().infer_data_type(),
             )),
             Expr::ColumnRef { id, .. } => {
-                let entry = self.input_columns.get_by_offset(*id);
+                let entry = self.data_block.get_by_offset(*id);
                 Ok((entry.value.clone(), entry.data_type.clone()))
             }
             Expr::Cast {
@@ -1176,7 +1176,7 @@ impl<'a> Evaluator<'a> {
                     .collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
-                    num_rows: self.input_columns.num_rows(),
+                    num_rows: self.data_block.num_rows(),
                     validity,
                     errors: None,
                     func_ctx: self.func_ctx,
@@ -1229,7 +1229,7 @@ impl<'a> Evaluator<'a> {
                     ConstantFolder::fold_with_domain(
                         expr,
                         &self
-                            .input_columns
+                            .data_block
                             .domains()
                             .into_iter()
                             .enumerate()
