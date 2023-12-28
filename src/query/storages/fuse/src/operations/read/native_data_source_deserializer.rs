@@ -584,7 +584,6 @@ impl NativeDeserializeDataTransform {
                 }
             }
             let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
-            dbg!(probe_block.num_rows());
             let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
             local_arrays.clear();
             let probe_column = probe_block.get_last_column().clone();
@@ -1015,12 +1014,6 @@ impl Processor for NativeDeserializeDataTransform {
             } else {
                 block
             };
-
-            let progress_values = ProgressValues {
-                rows: block.num_rows(),
-                bytes: block.memory_size(),
-            };
-            self.scan_progress.incr(&progress_values);
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
