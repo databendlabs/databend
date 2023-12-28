@@ -56,7 +56,7 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        // Chek if the left or right is `Scalar::Null`.
+        // Check if the left or right is `Scalar::Null`.
         if Value::Scalar(Scalar::Null) == left || Value::Scalar(Scalar::Null) == right {
             if false_selection.1 {
                 return Ok(self.select_boolean_scalar_adapt(
