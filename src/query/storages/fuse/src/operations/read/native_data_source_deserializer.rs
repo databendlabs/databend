@@ -65,7 +65,7 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::native_data_source::NativeDataSourceMeta;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 pub struct NativeDeserializeDataTransform {

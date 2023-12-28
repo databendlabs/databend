@@ -1228,12 +1228,7 @@ impl<'a> Evaluator<'a> {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
-                        &self
-                            .data_block
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
+                        &self.data_block.domains().into_iter().enumerate().collect(),
                         self.func_ctx,
                         self.fn_registry
                     )
