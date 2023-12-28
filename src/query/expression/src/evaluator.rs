@@ -951,53 +951,27 @@ impl<'a> Evaluator<'a> {
         unreachable!("expr is not a set returning function: {expr}")
     }
 
-    fn run_array_fold(&self, column: &Column, expr: &Expr) -> Result<Value<AnyType>> {
-        if column.data_type().is_null() || column.len() < 1 {
-            return Ok(Value::Scalar(Scalar::Null));
+    fn run_array_fold(&self, column: &Column, expr: &Expr) -> Result<Scalar> {
+        let col_type = column.data_type();
+        if col_type.is_null() || column.len() < 1 {
+            return Ok(Scalar::Null);
         }
 
-        let first_element = column.index(0).unwrap();
-        let cast_value = self.run_cast(
-            None,
-            &first_element.infer_data_type(),
-            expr.data_type(),
-            Value::Scalar(first_element.to_owned()),
-            None,
-        )?;
-        let mut arg0 = cast_value.as_scalar().unwrap().as_ref();
-        let mut result = cast_value.to_owned();
+        let mut arg0 = column.index(0).unwrap();
+        let mut result = arg0.to_owned();
 
         for i in 1..column.len() {
             let arg1 = column.index(i).unwrap();
-            let entries = if expr.data_type().is_nullable() {
+            let entries = {
                 vec![
-                    BlockEntry::new(
-                        if arg0.is_null() {
-                            DataType::Null
-                        } else {
-                            DataType::Nullable(Box::new(arg0.infer_data_type()))
-                        },
-                        Value::Scalar(arg0.to_owned()),
-                    ),
-                    BlockEntry::new(
-                        if arg1.is_null() {
-                            DataType::Null
-                        } else {
-                            DataType::Nullable(Box::new(arg1.infer_data_type()))
-                        },
-                        Value::Scalar(arg1.to_owned()),
-                    ),
-                ]
-            } else {
-                vec![
-                    BlockEntry::new(arg0.infer_data_type(), Value::Scalar(arg0.to_owned())),
-                    BlockEntry::new(arg1.infer_data_type(), Value::Scalar(arg1.to_owned())),
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg0.to_owned())),
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg1.to_owned())),
                 ]
             };
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-            result = evaluator.run(expr)?;
-            arg0 = result.as_scalar().unwrap().as_ref();
+            result = evaluator.run(expr)?.as_scalar().unwrap().to_owned();
+            arg0 = result.as_ref();
         }
 
         Ok(result)
@@ -1016,7 +990,8 @@ impl<'a> Evaluator<'a> {
             match &args[0] {
                 Value::Scalar(s) => match s {
                     Scalar::Array(c) => {
-                        return self.run_array_fold(c, &expr);
+                        let result = self.run_array_fold(c, &expr)?;
+                        return Ok(Value::Scalar(result));
                     }
                     _ => unreachable!(),
                 },
@@ -1027,7 +1002,7 @@ impl<'a> Evaluator<'a> {
                         match &val.to_owned() {
                             Scalar::Array(c) => {
                                 let result = self.run_array_fold(c, &expr)?;
-                                let item = result.as_scalar().unwrap().as_ref();
+                                let item = result.as_ref();
                                 builder.push(item);
                             }
                             Scalar::Null => {

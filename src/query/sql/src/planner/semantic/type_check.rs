@@ -43,7 +43,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -53,12 +52,9 @@ use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
-use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -1756,7 +1752,7 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for lambda function, {func_name} expects 1 argument"
             )));
         }
-        let box (arg, arg_type) = self.resolve(args[0]).await?;
+        let box (mut arg, arg_type) = self.resolve(args[0]).await?;
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
@@ -1770,10 +1766,15 @@ impl<'a> TypeChecker<'a> {
         };
 
         let inner_tys = if func_name == "array_fold" {
-            with_number_mapped_type!(|NUM| match &inner_ty {
-                DataType::Number(NumberDataType::NUM) => {
-                    type TSum = <NUM as ResultTypeOfUnary>::Sum;
-                    vec![NumberType::<TSum>::data_type(), inner_ty.clone()]
+            match &inner_ty {
+                DataType::Number(s) => {
+                    if s.is_float() {
+                        let t = DataType::Number(NumberDataType::Float64);
+                        vec![t.clone(), t.clone()]
+                    } else {
+                        let t = DataType::Number(NumberDataType::Int64);
+                        vec![t.clone(), t.clone()]
+                    }
                 }
                 DataType::Decimal(DecimalDataType::Decimal128(s)) => {
                     let p = MAX_DECIMAL128_PRECISION;
@@ -1781,10 +1782,8 @@ impl<'a> TypeChecker<'a> {
                         precision: p,
                         scale: s.scale,
                     };
-                    vec![
-                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                        inner_ty.clone(),
-                    ]
+                    let t = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                    vec![t.clone(), t.clone()]
                 }
                 DataType::Decimal(DecimalDataType::Decimal256(s)) => {
                     let p = MAX_DECIMAL256_PRECISION;
@@ -1792,10 +1791,8 @@ impl<'a> TypeChecker<'a> {
                         precision: p,
                         scale: s.scale,
                     };
-                    vec![
-                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                        inner_ty.clone(),
-                    ]
+                    let t = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                    vec![t.clone(), t.clone()]
                 }
                 DataType::Nullable(box ty) => {
                     vec![
@@ -1809,12 +1806,13 @@ impl<'a> TypeChecker<'a> {
                 DataType::String => {
                     vec![DataType::String, DataType::String]
                 }
-                _ =>
+                _ => {
                     return Err(ErrorCode::BadDataValueType(format!(
                         "array_fold does not support type '{:?}'",
                         inner_ty
-                    ))),
-            })
+                    )));
+                }
+            }
         } else {
             vec![inner_ty.clone()]
         };
@@ -1837,14 +1835,13 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         } else if func_name == "array_fold" {
+            // transform to max_type correspondly
             let max_type = match lambda_type.remove_nullable() {
                 DataType::Number(ty) => {
                     if ty.is_float() {
                         DataType::Number(NumberDataType::Float64)
-                    } else if ty.is_signed() {
-                        DataType::Number(NumberDataType::Int64)
                     } else {
-                        DataType::Number(NumberDataType::UInt64)
+                        DataType::Number(NumberDataType::Int64)
                     }
                 }
                 DataType::Decimal(DecimalDataType::Decimal128(s)) => {
@@ -1867,6 +1864,15 @@ impl<'a> TypeChecker<'a> {
                 DataType::Null => DataType::Null,
                 _ => unreachable!(),
             };
+            // tranform arg type
+            if inner_ty != max_type || inner_ty == DataType::String {
+                arg = ScalarExpr::CastExpr(CastExpr {
+                    span: arg.span(),
+                    is_try: false,
+                    argument: Box::new(arg),
+                    target_type: Box::new(DataType::Array(Box::new(max_type.wrap_nullable()))),
+                });
+            }
             max_type.wrap_nullable()
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
@@ -1899,7 +1905,7 @@ impl<'a> TypeChecker<'a> {
                     DataSchema::new(vec![lambda_field])
                 } else {
                     let lambda_field0 = DataField::new("0", return_type.clone());
-                    let lambda_field1 = DataField::new("1", inner_tys[1].clone().wrap_nullable());
+                    let lambda_field1 = DataField::new("1", return_type.clone());
                     DataSchema::new(vec![lambda_field0, lambda_field1])
                 };
 
