@@ -14,7 +14,6 @@
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
 use log::debug;
 use poem::web::Json;
