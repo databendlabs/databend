@@ -102,7 +102,8 @@ impl Rule for RulePushDownFilterWindow {
         for predicate in filter.predicates.into_iter() {
             let predicate_used_columns = predicate.used_columns();
             if predicate_used_columns.is_subset(&window_child_prop.output_columns)
-                && predicate_used_columns.is_subset(&window_group_columns)
+                && (window_group_columns.is_empty()
+                    || predicate_used_columns.is_subset(&window_group_columns))
             {
                 pushed_down_predicates.push(predicate);
             } else {
@@ -114,7 +115,7 @@ impl Rule for RulePushDownFilterWindow {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
             };
-            let mut result = if remaining_predicates.is_empty() {
+            let result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
                     Arc::new(window.into()),
                     Arc::new(SExpr::create_unary(
@@ -126,7 +127,7 @@ impl Rule for RulePushDownFilterWindow {
                 let remaining_filter = Filter {
                     predicates: remaining_predicates,
                 };
-                SExpr::create_unary(
+                let mut s_expr = SExpr::create_unary(
                     Arc::new(remaining_filter.into()),
                     Arc::new(SExpr::create_unary(
                         Arc::new(window.into()),
@@ -135,9 +136,10 @@ impl Rule for RulePushDownFilterWindow {
                             Arc::new(window_expr.child(0)?.clone()),
                         )),
                     )),
-                )
+                );
+                s_expr.set_applied_rule(&self.id);
+                s_expr
             };
-            result.set_applied_rule(&self.id);
             state.add_result(result);
         }
 
