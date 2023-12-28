@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::BooleanType;
-use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Scalar;
 use crate::SelectOp;
@@ -26,12 +23,11 @@ use crate::SelectOp;
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
-    pub(crate) fn select_scalars(
+    pub(crate) fn select_scalars<T: ValueType>(
         &self,
         op: &SelectOp,
         left: Scalar,
         right: Scalar,
-        data_type: DataType,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -39,30 +35,11 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let result = match data_type.remove_nullable() {
-            DataType::Number(_)
-            | DataType::Decimal(_)
-            | DataType::Date
-            | DataType::Timestamp
-            | DataType::String
-            | DataType::Variant
-            | DataType::EmptyArray
-            | DataType::Tuple(_)
-            | DataType::Array(_) => op.expect()(left.cmp(&right)),
-            DataType::Boolean => BooleanType::compare_operation(op)(
-                left.into_boolean().unwrap(),
-                right.into_boolean().unwrap(),
-            ),
-            _ => {
-                // EmptyMap, Map, Bitmap do not support comparison, Nullable has been removed,
-                // Generic has been converted to a specific DataType.
-                return Err(ErrorCode::UnsupportedDataType(format!(
-                    "{:?} is not supported for comparison",
-                    &data_type
-                )));
-            }
-        };
-
+        let left = left.as_ref();
+        let left = T::try_downcast_scalar(&left).unwrap();
+        let right = right.as_ref();
+        let right = T::try_downcast_scalar(&right).unwrap();
+        let result = unsafe { T::compare_operation(op)(left, right) };
         let count = self.select_boolean_scalar_adapt(
             result,
             true_selection,
@@ -75,7 +52,7 @@ impl<'a> Selector<'a> {
         Ok(count)
     }
 
-    pub(crate) fn select_boolean_scalar<const TRUE: bool, const FALSE: bool>(
+    pub(crate) fn select_boolean_scalar<const FALSE: bool>(
         &self,
         scalar: bool,
         true_selection: &mut [u32],
@@ -92,12 +69,10 @@ impl<'a> Selector<'a> {
                 let start = *mutable_true_idx;
                 let end = *mutable_true_idx + count;
                 if scalar {
-                    if TRUE {
-                        for i in start..end {
-                            let idx = *true_selection.get_unchecked(i);
-                            true_selection[true_idx] = idx;
-                            true_idx += 1;
-                        }
+                    for i in start..end {
+                        let idx = *true_selection.get_unchecked(i);
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
                     }
                 } else if FALSE {
                     for i in start..end {
@@ -111,12 +86,10 @@ impl<'a> Selector<'a> {
                 let start = *mutable_false_idx;
                 let end = *mutable_false_idx + count;
                 if scalar {
-                    if TRUE {
-                        for i in start..end {
-                            let idx = *false_selection.get_unchecked(i);
-                            true_selection[true_idx] = idx;
-                            true_idx += 1;
-                        }
+                    for i in start..end {
+                        let idx = *false_selection.get_unchecked(i);
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
                     }
                 } else if FALSE {
                     for i in start..end {
@@ -128,11 +101,9 @@ impl<'a> Selector<'a> {
             },
             SelectStrategy::All => {
                 if scalar {
-                    if TRUE {
-                        for idx in 0u32..count as u32 {
-                            true_selection[true_idx] = idx;
-                            true_idx += 1;
-                        }
+                    for idx in 0u32..count as u32 {
+                        true_selection[true_idx] = idx;
+                        true_idx += 1;
                     }
                 } else if FALSE {
                     for idx in 0u32..count as u32 {
@@ -143,13 +114,8 @@ impl<'a> Selector<'a> {
             }
         }
         let true_count = true_idx - *mutable_true_idx;
-        let false_count = false_idx - *mutable_false_idx;
         *mutable_true_idx = true_idx;
         *mutable_false_idx = false_idx;
-        if TRUE {
-            true_count
-        } else {
-            count - false_count
-        }
+        true_count
     }
 }

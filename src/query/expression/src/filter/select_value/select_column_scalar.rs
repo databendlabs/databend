@@ -23,12 +23,7 @@ use crate::types::ValueType;
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<
-        T: ValueType,
-        const TRUE: bool,
-        const FALSE: bool,
-        const IS_ANY_TYPE: bool,
-    >(
+    pub(crate) fn select_column_scalar<T: ValueType, const FALSE: bool>(
         &self,
         op: &SelectOp,
         column: T::Column,
@@ -43,84 +38,41 @@ impl<'a> Selector<'a> {
     ) -> Result<usize> {
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
+
+        let cmp = unsafe { T::compare_operation(op) };
         match select_strategy {
             SelectStrategy::True => unsafe {
                 let start = *mutable_true_idx;
                 let end = *mutable_true_idx + count;
                 match validity {
                     Some(validity) => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for i in start..end {
-                                let idx = *true_selection.get_unchecked(i);
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && expect(T::compare(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    ));
-                                if TRUE {
-                                    true_selection[true_idx] = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    false_selection[false_idx] = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for i in start..end {
-                                let idx = *true_selection.get_unchecked(i);
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && cmp(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for i in start..end {
+                            let idx = *true_selection.get_unchecked(i);
+                            let ret = validity.get_bit_unchecked(idx as usize)
+                                && cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
                     None => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for i in start..end {
-                                let idx = *true_selection.get_unchecked(i);
-                                let ret = expect(T::compare(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                ));
-                                if TRUE {
-                                    true_selection[true_idx] = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    false_selection[false_idx] = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for i in start..end {
-                                let idx = *true_selection.get_unchecked(i);
-                                let ret = cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for i in start..end {
+                            let idx = *true_selection.get_unchecked(i);
+                            let ret = cmp(
+                                T::index_column_unchecked(&column, idx as usize),
+                                scalar.clone(),
+                            );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
@@ -131,78 +83,33 @@ impl<'a> Selector<'a> {
                 let end = *mutable_false_idx + count;
                 match validity {
                     Some(validity) => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for i in start..end {
-                                let idx = *false_selection.get_unchecked(i);
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && expect(T::compare(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    ));
-                                if TRUE {
-                                    true_selection[true_idx] = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    false_selection[false_idx] = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for i in start..end {
-                                let idx = *false_selection.get_unchecked(i);
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && cmp(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for i in start..end {
+                            let idx = *false_selection.get_unchecked(i);
+                            let ret = validity.get_bit_unchecked(idx as usize)
+                                && cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
                     None => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for i in start..end {
-                                let idx = *false_selection.get_unchecked(i);
-                                let ret = expect(T::compare(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                ));
-                                if TRUE {
-                                    true_selection[true_idx] = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    false_selection[false_idx] = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for i in start..end {
-                                let idx = *false_selection.get_unchecked(i);
-                                let ret = cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for i in start..end {
+                            let idx = *false_selection.get_unchecked(i);
+                            let ret = cmp(
+                                T::index_column_unchecked(&column, idx as usize),
+                                scalar.clone(),
+                            );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
@@ -211,74 +118,31 @@ impl<'a> Selector<'a> {
             SelectStrategy::All => unsafe {
                 match validity {
                     Some(validity) => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for idx in 0u32..count as u32 {
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && expect(T::compare(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    ));
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for idx in 0u32..count as u32 {
-                                let ret = validity.get_bit_unchecked(idx as usize)
-                                    && cmp(
-                                        T::index_column_unchecked(&column, idx as usize),
-                                        scalar.clone(),
-                                    );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for idx in 0u32..count as u32 {
+                            let ret = validity.get_bit_unchecked(idx as usize)
+                                && cmp(
+                                    T::index_column_unchecked(&column, idx as usize),
+                                    scalar.clone(),
+                                );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
                     None => {
-                        if IS_ANY_TYPE {
-                            let expect = op.expect();
-                            for idx in 0u32..count as u32 {
-                                let ret = expect(T::compare(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                ));
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
-                            }
-                        } else {
-                            let cmp = T::compare_operation(op);
-                            for idx in 0u32..count as u32 {
-                                let ret = cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
-                                if TRUE {
-                                    *true_selection.get_unchecked_mut(true_idx) = idx;
-                                    true_idx += ret as usize;
-                                }
-                                if FALSE {
-                                    *false_selection.get_unchecked_mut(false_idx) = idx;
-                                    false_idx += !ret as usize;
-                                }
+                        for idx in 0u32..count as u32 {
+                            let ret = cmp(
+                                T::index_column_unchecked(&column, idx as usize),
+                                scalar.clone(),
+                            );
+                            *true_selection.get_unchecked_mut(true_idx) = idx;
+                            true_idx += ret as usize;
+                            if FALSE {
+                                *false_selection.get_unchecked_mut(false_idx) = idx;
+                                false_idx += !ret as usize;
                             }
                         }
                     }
@@ -287,13 +151,8 @@ impl<'a> Selector<'a> {
         }
 
         let true_count = true_idx - *mutable_true_idx;
-        let false_count = false_idx - *mutable_false_idx;
         *mutable_true_idx = true_idx;
         *mutable_false_idx = false_idx;
-        if TRUE {
-            Ok(true_count)
-        } else {
-            Ok(count - false_count)
-        }
+        Ok(true_count)
     }
 }

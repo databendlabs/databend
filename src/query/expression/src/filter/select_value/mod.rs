@@ -28,7 +28,7 @@ mod select_scalar;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<T: ValueType, const IS_ANY_TYPE: bool>(
+    pub(crate) fn select_type_values<T: ValueType>(
         &self,
         op: &SelectOp,
         left: Value<AnyType>,
@@ -41,29 +41,25 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
-
         match (left, right) {
+            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T>(
+                op,
+                left,
+                right,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
             (Value::Column(left), Value::Column(right)) => {
                 let left = T::try_downcast_column(&left).unwrap();
                 let right = T::try_downcast_column(&right).unwrap();
 
-                if has_true && has_false {
-                    self.select_columns::<T, true, true, IS_ANY_TYPE>(
-                        op,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    )
-                } else if has_true {
-                    self.select_columns::<T, true, false, IS_ANY_TYPE>(
+                if has_false {
+                    self.select_columns::<T, true>(
                         op,
                         left,
                         right,
@@ -76,7 +72,7 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_columns::<T, false, true, IS_ANY_TYPE>(
+                    self.select_columns::<T, false>(
                         op,
                         left,
                         right,
@@ -90,29 +86,17 @@ impl<'a> Selector<'a> {
                     )
                 }
             }
-            (Value::Column(left), Value::Scalar(right)) => {
-                let left = T::try_downcast_column(&left).unwrap();
-                let right = right.as_ref();
-                let right = T::try_downcast_scalar(&right).unwrap();
+            (Value::Column(column), Value::Scalar(scalar))
+            | (Value::Scalar(scalar), Value::Column(column)) => {
+                let column = T::try_downcast_column(&column).unwrap();
+                let scalar = scalar.as_ref();
+                let scalar = T::try_downcast_scalar(&scalar).unwrap();
 
-                if has_true && has_false {
-                    self.select_column_scalar::<T, true, true, IS_ANY_TYPE>(
+                if has_false {
+                    self.select_column_scalar::<T, true>(
                         op,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    )
-                } else if has_true {
-                    self.select_column_scalar::<T, true, false, IS_ANY_TYPE>(
-                        op,
-                        left,
-                        right,
+                        column,
+                        scalar,
                         validity,
                         true_selection,
                         false_selection.0,
@@ -122,10 +106,10 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_column_scalar::<T, false, true, IS_ANY_TYPE>(
+                    self.select_column_scalar::<T, false>(
                         op,
-                        left,
-                        right,
+                        column,
+                        scalar,
                         validity,
                         true_selection,
                         false_selection.0,
@@ -136,7 +120,6 @@ impl<'a> Selector<'a> {
                     )
                 }
             }
-            _ => unreachable!(),
         }
     }
 
@@ -150,20 +133,9 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
-        if has_true && has_false {
-            self.select_boolean_scalar::<true, true>(
-                scalar,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
-        } else if has_true {
-            self.select_boolean_scalar::<true, false>(
+        if has_false {
+            self.select_boolean_scalar::<true>(
                 scalar,
                 true_selection,
                 false_selection.0,
@@ -173,7 +145,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else {
-            self.select_boolean_scalar::<false, true>(
+            self.select_boolean_scalar::<false>(
                 scalar,
                 true_selection,
                 false_selection.0,
@@ -195,20 +167,9 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> usize {
-        let has_true = !true_selection.is_empty();
         let has_false = false_selection.1;
-        if has_true && has_false {
-            self.select_boolean_column::<true, true>(
-                column,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
-        } else if has_true {
-            self.select_boolean_column::<true, false>(
+        if has_false {
+            self.select_boolean_column::<true>(
                 column,
                 true_selection,
                 false_selection.0,
@@ -218,7 +179,7 @@ impl<'a> Selector<'a> {
                 count,
             )
         } else {
-            self.select_boolean_column::<false, true>(
+            self.select_boolean_column::<false>(
                 column,
                 true_selection,
                 false_selection.0,
