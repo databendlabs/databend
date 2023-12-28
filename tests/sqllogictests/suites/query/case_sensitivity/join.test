@@ -2,6 +2,9 @@ statement ok
 use default
 
 statement ok
+set global quoted_ident_case_sensitive = 1;
+
+statement ok
 set sql_dialect = 'PostgreSQL'
 
 statement ok
@@ -39,3 +42,6 @@ select A from (select A from t) t1 join (select A from t) t2 using(A)
 
 statement ok
 drop table t
+
+statement ok
+set global quoted_ident_case_sensitive = 0;
