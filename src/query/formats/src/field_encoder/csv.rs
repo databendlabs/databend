@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
@@ -85,7 +86,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
-                    timestamp_output_format: options_ext.timestamp_output_format.clone(),
+                    timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
                 },
                 quote_char: 0, // not used
             },
@@ -106,7 +107,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
-                    timestamp_output_format: options_ext.timestamp_output_format.clone(),
+                    timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
                 },
                 quote_char: 0, // not used
             },
