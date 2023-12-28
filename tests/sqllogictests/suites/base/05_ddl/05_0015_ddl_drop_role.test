@@ -1,5 +1,5 @@
-statement ok
-DROP ROLE IF EXISTS `test-b`
+statement error 2204
+DROP ROLE `test-b`
 
 statement ok
 DROP ROLE IF EXISTS `test-b`
@@ -7,7 +7,6 @@ DROP ROLE IF EXISTS `test-b`
 statement ok
 CREATE ROLE `test-b`
 
-# Note: set role only affect current session
 onlyif mysql
 statement ok
 SET ROLE `test-b`;

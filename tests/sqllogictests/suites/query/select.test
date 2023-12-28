@@ -37,9 +37,6 @@ statement ok
 drop database if exists db
 
 statement ok
-drop table if exists t;
-
-statement ok
 create table t(a int);
 
 statement ok

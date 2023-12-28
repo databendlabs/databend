@@ -1,4 +1,3 @@
-#this file is test mysql federated query, so need add `onlyif mysql`
 statement ok
 /*!40101*/select number from numbers_mt(2) ORDER BY number
 
