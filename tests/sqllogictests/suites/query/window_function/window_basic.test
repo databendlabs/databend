@@ -728,4 +728,27 @@ statement error 1065
 select sum(salary) over(order by (sum(salary) over())) from empsalary
 
 statement ok
+DROP TABLE IF EXISTS Test
+
+statement ok
+CREATE TABLE Test (k int, v int)
+
+statement ok
+INSERT INTO Test SELECT generate_series AS k, generate_series AS v FROM generate_series(1, 2)
+
+# push down filter in window function
+query II
+SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 2
+----
+2 2
+2 2
+
+# cannot push down filter in window function
+query II
+SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 2
+----
+2 2
+2 2
+
+statement ok
 DROP DATABASE test_window_basic
