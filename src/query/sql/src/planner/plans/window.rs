@@ -91,21 +91,13 @@ impl Window {
         Ok(used_columns)
     }
 
-    // group all used columns in window function
+    // `Window.group_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
+    // like `Aggregate.group_columns` only consider `group_items` field.
     pub fn group_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
-        for argument_item in self.arguments.iter() {
-            col_set.insert(argument_item.index);
-            col_set.extend(argument_item.scalar.used_columns())
-        }
-        for partition_by_item in self.partition_by.iter() {
-            col_set.insert(partition_by_item.index);
-            col_set.extend(partition_by_item.scalar.used_columns())
-        }
-        for order_by in self.order_by.iter() {
-            let order_by_item = &order_by.order_by_item;
-            col_set.insert(order_by_item.index);
-            col_set.extend(order_by_item.scalar.used_columns())
+        for part in self.partition_by.iter() {
+            col_set.insert(part.index);
+            col_set.extend(part.scalar.used_columns())
         }
         Ok(col_set)
     }

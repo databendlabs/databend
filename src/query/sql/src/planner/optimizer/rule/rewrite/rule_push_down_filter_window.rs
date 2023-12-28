@@ -46,15 +46,17 @@ use crate::plans::Window;
 ///              Filter(pushed down)
 ///               \
 ///                *
-pub struct RulePushDownFilterWindows {
+///
+/// note that only push down filter used in `Window.partition_by` columns
+pub struct RulePushDownFilterWindow {
     id: RuleID,
     patterns: Vec<SExpr>,
 }
 
-impl RulePushDownFilterWindows {
+impl RulePushDownFilterWindow {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownFilterWindows,
+            id: RuleID::PushDownFilterWindow,
             patterns: vec![SExpr::create_unary(
                 Arc::new(
                     PatternPlan {
@@ -78,7 +80,7 @@ impl RulePushDownFilterWindows {
     }
 }
 
-impl Rule for RulePushDownFilterWindows {
+impl Rule for RulePushDownFilterWindow {
     fn id(&self) -> RuleID {
         self.id
     }
@@ -89,17 +91,17 @@ impl Rule for RulePushDownFilterWindows {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let window: Window = s_expr.child(0)?.plan().clone().try_into()?;
-        let window_rel_expr = RelExpr::with_s_expr(s_expr);
-        let window_prop = window_rel_expr.derive_relational_prop_child(0)?;
+        let window_expr = s_expr.child(0)?;
+        let window: Window = window_expr.plan().clone().try_into()?;
+        let window_child_prop =
+            RelExpr::with_s_expr(window_expr).derive_relational_prop_child(0)?;
         let window_group_columns = window.group_columns()?;
 
-        let mut remaining_predicates = vec![];
         let mut pushed_down_predicates = vec![];
-
+        let mut remaining_predicates = vec![];
         for predicate in filter.predicates.into_iter() {
             let predicate_used_columns = predicate.used_columns();
-            if predicate_used_columns.is_subset(&window_prop.output_columns)
+            if predicate_used_columns.is_subset(&window_child_prop.output_columns)
                 && predicate_used_columns.is_subset(&window_group_columns)
             {
                 pushed_down_predicates.push(predicate);
@@ -108,26 +110,36 @@ impl Rule for RulePushDownFilterWindows {
             }
         }
 
-        let mut result = s_expr.child(0)?.child(0)?.clone();
-
         if !pushed_down_predicates.is_empty() {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
             };
-            result = SExpr::create_unary(Arc::new(pushed_down_filter.into()), Arc::new(result));
-        }
-
-        result = SExpr::create_unary(Arc::new(window.into()), Arc::new(result));
-
-        if !remaining_predicates.is_empty() {
-            let remaining_filter = Filter {
-                predicates: remaining_predicates,
+            let mut result = if remaining_predicates.is_empty() {
+                SExpr::create_unary(
+                    Arc::new(window.into()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(pushed_down_filter.into()),
+                        Arc::new(window_expr.child(0)?.clone()),
+                    )),
+                )
+            } else {
+                let remaining_filter = Filter {
+                    predicates: remaining_predicates,
+                };
+                SExpr::create_unary(
+                    Arc::new(remaining_filter.into()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(window.into()),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(pushed_down_filter.into()),
+                            Arc::new(window_expr.child(0)?.clone()),
+                        )),
+                    )),
+                )
             };
-            result = SExpr::create_unary(Arc::new(remaining_filter.into()), Arc::new(result));
             result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
-
-        state.add_result(result);
 
         Ok(())
     }
