@@ -37,7 +37,6 @@ use databend_common_expression::eval_function;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -49,16 +48,10 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::HashMethod;
-use databend_common_expression::HashMethodKind;
-use databend_common_expression::KeysState;
-use databend_common_expression::KeysState::U128;
-use databend_common_expression::KeysState::U256;
 use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::FastHash;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -67,7 +60,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse8;
-use xorf::Filter;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
@@ -76,6 +68,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
 
 pub struct NativeDeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
@@ -587,104 +580,7 @@ impl NativeDeserializeDataTransform {
             let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
             local_arrays.clear();
             let probe_column = probe_block.get_last_column().clone();
-            let data_type = probe_column.data_type();
-            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
-            let mut idx = 0;
-            match method {
-                HashMethodKind::KeysU8(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
-                            c.iter().for_each(|key| {
-                                let hash = key.fast_hash();
-                                if filter.contains(&hash) {
-                                    bitmap.set(idx, true);
-                                }
-                                idx += 1;
-                            })
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                HashMethodKind::KeysU16(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
-                            c.iter().for_each(|key| {
-                                let hash = key.fast_hash();
-                                if filter.contains(&hash) {
-                                    bitmap.set(idx, true);
-                                }
-                                idx += 1;
-                            })
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                HashMethodKind::KeysU32(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
-                            c.iter().for_each(|key| {
-                                let hash = key.fast_hash();
-                                if filter.contains(&hash) {
-                                    bitmap.set(idx, true);
-                                }
-                                idx += 1;
-                            })
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                HashMethodKind::KeysU64(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
-                            c.iter().for_each(|key| {
-                                let hash = key.fast_hash();
-                                if filter.contains(&hash) {
-                                    bitmap.set(idx, true);
-                                }
-                                idx += 1;
-                            })
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                HashMethodKind::KeysU128(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        U128(c) => c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        }),
-                        _ => unreachable!(),
-                    }
-                }
-                HashMethodKind::KeysU256(hash_method) => {
-                    let key_state = hash_method
-                        .build_keys_state(&[(probe_column, data_type)], probe_block.num_rows())?;
-                    match key_state {
-                        U256(c) => c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        }),
-                        _ => unreachable!(),
-                    }
-                }
-                _ => unreachable!(),
-            }
+            update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
             if bitmap.unset_bits() == bitmap.len() {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
