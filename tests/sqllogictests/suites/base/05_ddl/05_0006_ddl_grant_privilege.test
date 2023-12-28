@@ -46,13 +46,12 @@ GRANT SELECT ON db01.tbnotexists TO 'test-grant'
 statement error 1003
 GRANT SELECT ON dbnotexists.* TO 'test-grant'
 
-
+onlyif mysql
 query T
 select current_user()
 ----
 'root'@'%'
 
-# set role only modify session role.
 onlyif mysql
 statement ok
 set role public;
