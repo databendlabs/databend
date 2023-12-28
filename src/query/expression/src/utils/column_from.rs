@@ -65,6 +65,7 @@ impl_from_data! { Float64Type }
 impl_from_data! { Decimal128Type }
 impl_from_data! { Decimal256Type }
 impl_from_data! { BooleanType }
+impl_from_data! { BinaryType }
 impl_from_data! { StringType }
 impl_from_data! { DateType }
 impl_from_data! { TimestampType }

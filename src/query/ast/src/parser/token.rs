@@ -1364,6 +1364,7 @@ impl TokenKind {
             | TokenKind::ANALYZE
             | TokenKind::AND
             | TokenKind::ANY
+            | TokenKind::FUNCTION
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC
@@ -1468,6 +1469,7 @@ impl TokenKind {
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
+            | TokenKind::UDF
             | TokenKind::SHARE
             | TokenKind::SHARES
             | TokenKind::TO

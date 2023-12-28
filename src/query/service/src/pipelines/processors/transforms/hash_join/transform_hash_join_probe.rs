@@ -145,6 +145,11 @@ impl TransformHashJoinProbe {
 
     fn run(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
+            if self.join_probe_state.hash_join_state.need_outer_scan()
+                || self.join_probe_state.hash_join_state.need_mark_scan()
+            {
+                return Ok(Event::Async);
+            }
             self.input_port.finish();
             return Ok(Event::Finished);
         }

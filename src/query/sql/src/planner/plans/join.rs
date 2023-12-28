@@ -406,16 +406,18 @@ impl Operator for Join {
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
 
         match (&probe_prop.distribution, &build_prop.distribution) {
+            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
+            // Then required proper is broadcast, and the join will be broadcast.
+            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
+            }),
+
             // If the distribution of probe side is Random, we will pass through
             // the distribution of build side.
             (Distribution::Random, _) => Ok(PhysicalProperty {
                 distribution: build_prop.distribution.clone(),
             }),
-            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
-            // Then required proper is broadcast, and the join will be broadcast.
-            (Distribution::Broadcast, Distribution::Broadcast) => Ok(PhysicalProperty {
-                distribution: Distribution::Random,
-            }),
+
             // Otherwise pass through probe side.
             _ => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
@@ -486,33 +488,48 @@ impl Operator for Join {
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        // if join/probe side is Serial or join key is empty, we use Serial distribution
+        // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
+            || (self.left_conditions.is_empty()
+                && self.right_conditions.is_empty()
+                && !self.non_equi_conditions.is_empty())
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
             return Ok(required);
-        } else if ctx.get_settings().get_prefer_broadcast_join()?
-            && !matches!(
-                self.join_type,
-                JoinType::Right
-                    | JoinType::Full
-                    | JoinType::RightAnti
-                    | JoinType::RightSemi
-                    | JoinType::RightMark
-            )
-        {
+        }
+
+        // Try to use broadcast join
+        if !matches!(
+            self.join_type,
+            JoinType::Right
+                | JoinType::Full
+                | JoinType::RightAnti
+                | JoinType::RightSemi
+                | JoinType::RightMark
+        ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
-            let broadcast_join_threshold = (ctx.get_cluster().nodes.len() - 1) as f64;
+            let broadcast_join_threshold = if ctx.get_settings().get_prefer_broadcast_join()? {
+                (ctx.get_cluster().nodes.len() - 1) as f64
+            } else {
+                // Use a very large value to prevent broadcast join.
+                1000.0
+            };
             if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
-                required.distribution = Distribution::Broadcast;
+                if child_index == 1 {
+                    required.distribution = Distribution::Broadcast;
+                } else {
+                    required.distribution = Distribution::Any;
+                }
                 return Ok(required);
             }
         }
+
+        // Otherwise, use hash shuffle
         if child_index == 0 {
             required.distribution = Distribution::Hash(self.left_conditions.clone());
         } else {

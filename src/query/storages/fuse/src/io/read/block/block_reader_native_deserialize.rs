@@ -112,7 +112,16 @@ impl BlockReader {
         };
 
         for column_node in &self.project_column_nodes {
-            match self.deserialize_native_field(&field_deserialization_ctx, column_node)? {
+            let deserialized_column = self
+                .deserialize_native_field(&field_deserialization_ctx, column_node)
+                .map_err(|e| {
+                    e.add_message(format!(
+                        "failed to deserialize column: {:?}, location {} ",
+                        column_node, block_path
+                    ))
+                })?;
+
+            match deserialized_column {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);

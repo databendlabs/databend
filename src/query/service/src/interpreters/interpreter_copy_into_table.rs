@@ -19,7 +19,6 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -38,7 +37,6 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
-use log::info;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
@@ -113,16 +111,12 @@ impl CopyIntoTableInterpreter {
         Ok((select_interpreter, data_schema, update_stream_meta))
     }
 
-    fn set_status(&self, status: &str) {
-        self.ctx.set_status_info(status);
-        info!("{}", status);
-    }
-
     #[async_backtrace::framed]
     pub async fn build_physical_plan(
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<StageFileInfo>, Vec<UpdateStreamMetaReq>)> {
+        let mut next_plan_id = 0;
         let to_table = self
             .ctx
             .get_table(
@@ -138,6 +132,7 @@ impl CopyIntoTableInterpreter {
                 self.build_query(query).await?;
             seq = update_stream_meta;
             let plan_query = select_interpreter.build_physical_plan().await?;
+            next_plan_id = plan_query.get_id() + 1;
             let result_columns = select_interpreter.get_result_columns();
             CopyIntoTableSource::Query(Box::new(QuerySource {
                 plan: plan_query,
@@ -166,6 +161,7 @@ impl CopyIntoTableInterpreter {
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            plan_id: next_plan_id,
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -179,9 +175,10 @@ impl CopyIntoTableInterpreter {
             files: files.clone(),
             source,
         }));
+        next_plan_id += 1;
         if plan.enable_distributed {
             root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+                plan_id: next_plan_id,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
@@ -190,38 +187,6 @@ impl CopyIntoTableInterpreter {
             });
         }
         Ok((root, files, seq))
-    }
-
-    #[async_backtrace::framed]
-    async fn build_read_stage_table_data_pipeline(
-        &self,
-        pipeline: &mut Pipeline,
-        plan: &CopyIntoTablePlan,
-        block_thresholds: BlockThresholds,
-        files: Vec<StageFileInfo>,
-    ) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-
-        let mut stage_table_info = plan.stage_table_info.clone();
-        stage_table_info.files_to_copy = Some(files.clone());
-        let stage_table = StageTable::try_create(stage_table_info.clone())?;
-        let read_source_plan = {
-            stage_table
-                .read_plan_with_catalog(
-                    ctx.clone(),
-                    plan.catalog_info.catalog_name().to_string(),
-                    None,
-                    None,
-                    false,
-                )
-                .await?
-        };
-
-        stage_table.set_block_thresholds(block_thresholds);
-        stage_table.read_data(table_ctx, &read_source_plan, pipeline, false)?;
-
-        Ok(())
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {

@@ -309,6 +309,7 @@ pub enum TypeName {
     },
     Date,
     Timestamp,
+    Binary,
     String,
     Array(Box<TypeName>),
     Map {
@@ -837,6 +838,9 @@ impl Display for TypeName {
             }
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
+            }
+            TypeName::Binary => {
+                write!(f, "BINARY")?;
             }
             TypeName::String => {
                 write!(f, "STRING")?;

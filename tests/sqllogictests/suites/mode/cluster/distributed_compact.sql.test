@@ -25,8 +25,8 @@ statement ok
 alter table t_compact_0 set options(row_per_block=10,block_per_segment=10)
 
 # lazy compact
-# The number of compact segments task is greater than the number of cluster nodes, 
-# so will build compact blocks task during pipeline init. 
+# The number of compact segments task is greater than the number of cluster nodes,
+# so will build compact blocks task during pipeline init.
 # The explain pipeline optimize contain bug (ISSUE-12597), so comment.
 # query T
 # explain pipeline optimize table t_compact_0 compact
@@ -57,7 +57,7 @@ select count(),sum(a) from t_compact_0
 statement ok
 alter table t_compact_0 cluster by(abs(a))
 
-# test compact and recluster 
+# test compact and recluster
 statement ok
 optimize table t_compact_0 compact
 
@@ -91,7 +91,7 @@ statement ok
 alter table t_compact_1 set options(row_per_block=10,block_per_segment=15)
 
 # nolazy compact
-# The number of compact segments task is less than the number of cluster nodes, 
+# The number of compact segments task is less than the number of cluster nodes,
 # so will build compact blocks task before execute pipeline
 # query T
 # explain pipeline optimize table t_compact_1 compact

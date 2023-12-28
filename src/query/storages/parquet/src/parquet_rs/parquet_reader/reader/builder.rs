@@ -162,7 +162,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(())
     }
 
-    fn build_output(&mut self) -> Result<()> {
+    pub(crate) fn build_output(&mut self) -> Result<()> {
         if self.built_output.is_some() {
             return Ok(());
         }
@@ -271,7 +271,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         })
     }
 
-    fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
+    pub fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
         let (projection, _, schema, output_field_paths) = self.built_output.as_ref().unwrap();
         let data_schema = DataSchema::from(schema);
         NoPretchPolicyBuilder::create(
