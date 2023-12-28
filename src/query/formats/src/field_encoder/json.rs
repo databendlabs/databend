@@ -14,6 +14,7 @@
 
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
@@ -42,7 +43,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
-                    timestamp_output_format: options.timestamp_output_format.clone(),
+                    timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
                 },
                 quote_char: 0,
             },
