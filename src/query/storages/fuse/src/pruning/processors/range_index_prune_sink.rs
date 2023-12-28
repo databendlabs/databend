@@ -42,15 +42,15 @@ use crate::operations::BlockIndex;
 use crate::operations::DeletedSegmentInfo;
 use crate::operations::SegmentIndex;
 
-pub struct BlockPruneSink {
+pub struct RangeIndexPruneSink {
     block_meta_sender: Sender<Arc<BlockMeta>>,
     schema: TableSchemaRef,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
     internal_column_pruner: Option<Arc<InternalColumnPruner>>,
-    inverse_range_index_context: Option<InverseRangeIndexContext>,
+    inverse_range_index_context: Option<Arc<InverseRangeIndexContext>>,
 }
 
-impl BlockPruneSink {
+impl RangeIndexPruneSink {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
@@ -58,7 +58,7 @@ impl BlockPruneSink {
         schema: TableSchemaRef,
         range_pruner: Arc<dyn RangePruner + Send + Sync>,
         internal_column_pruner: Option<Arc<InternalColumnPruner>>,
-        inverse_range_index_context: Option<InverseRangeIndexContext>,
+        inverse_range_index_context: Option<Arc<InverseRangeIndexContext>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -81,7 +81,7 @@ pub struct InverseRangeIndexContext {
 }
 
 #[async_trait]
-impl AsyncSink for BlockPruneSink {
+impl AsyncSink for RangeIndexPruneSink {
     const NAME: &'static str = "BlockPruneSink";
 
     #[async_backtrace::framed]

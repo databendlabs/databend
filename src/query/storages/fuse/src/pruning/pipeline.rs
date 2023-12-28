@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
 
-use super::processors::block_prune_sink::BlockPruneSink;
-use super::processors::block_prune_sink::InverseRangeIndexContext;
+use super::processors::range_index_prune_sink::InverseRangeIndexContext;
+use super::processors::range_index_prune_sink::RangeIndexPruneSink;
 use super::processors::segment_source::SegmentSource;
 use super::FusePruner;
 use super::PruningContext;
@@ -53,11 +55,11 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
                     async_channel::unbounded();
                 let (whole_segment_delete_sender, whole_segment_delete_recevier) =
                     async_channel::unbounded();
-                let inverse_range_index_context = Some(InverseRangeIndexContext {
+                let inverse_range_index_context = Some(Arc::new(InverseRangeIndexContext {
                     whole_block_delete_sender,
                     whole_segment_delete_sender,
                     inverse_range_index: inverse_range_index.clone(),
-                });
+                }));
                 (
                     inverse_range_index_context,
                     Some(whole_block_delete_receiver),
@@ -81,7 +83,9 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
         fuse_pruner.max_concurrency,
     );
     range_index_pruning_pipeline.add_sink(|input| {
-        BlockPruneSink::create(
+        let sender = sender.clone();
+        let inverse_range_index_context = inverse_range_index_context.clone();
+        RangeIndexPruneSink::create(
             ctx.clone(),
             input,
             sender,
@@ -92,6 +96,10 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
         )
     });
     pipelines.push(range_index_pruning_pipeline);
+
+    let mut bloom_index_pruning_pipeline = Pipeline::create();
+    bloom_index_pruning_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    pipelines.push(bloom_index_pruning_pipeline);
 
     Ok(pipelines)
 }
