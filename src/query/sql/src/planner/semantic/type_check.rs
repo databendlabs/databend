@@ -1806,6 +1806,9 @@ impl<'a> TypeChecker<'a> {
                 DataType::Null => {
                     vec![DataType::Null, DataType::Null]
                 }
+                DataType::String => {
+                    vec![DataType::String, DataType::String]
+                }
                 _ =>
                     return Err(ErrorCode::BadDataValueType(format!(
                         "array_fold does not support type '{:?}'",
@@ -1834,7 +1837,37 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         } else if func_name == "array_fold" {
-            lambda_type.clone().wrap_nullable()
+            let max_type = match lambda_type.remove_nullable() {
+                DataType::Number(ty) => {
+                    if ty.is_float() {
+                        DataType::Number(NumberDataType::Float64)
+                    } else if ty.is_signed() {
+                        DataType::Number(NumberDataType::Int64)
+                    } else {
+                        DataType::Number(NumberDataType::UInt64)
+                    }
+                }
+                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                    let p = MAX_DECIMAL128_PRECISION;
+                    let decimal_size = DecimalSize {
+                        precision: p,
+                        scale: s.scale,
+                    };
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+                }
+                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                    let p = MAX_DECIMAL256_PRECISION;
+                    let decimal_size = DecimalSize {
+                        precision: p,
+                        scale: s.scale,
+                    };
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+                }
+                DataType::String => DataType::String,
+                DataType::Null => DataType::Null,
+                _ => unreachable!(),
+            };
+            max_type.wrap_nullable()
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
@@ -1865,8 +1898,8 @@ impl<'a> TypeChecker<'a> {
                     let lambda_field = DataField::new("0", inner_tys[0].clone());
                     DataSchema::new(vec![lambda_field])
                 } else {
-                    let lambda_field0 = DataField::new("0", lambda_type.clone());
-                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
+                    let lambda_field0 = DataField::new("0", return_type.clone());
+                    let lambda_field1 = DataField::new("1", inner_tys[1].clone().wrap_nullable());
                     DataSchema::new(vec![lambda_field0, lambda_field1])
                 };
 
