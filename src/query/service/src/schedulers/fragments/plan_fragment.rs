@@ -155,22 +155,30 @@ impl PlanFragment {
             ));
         }
 
-        let read_source = self.get_read_source()?;
+        let data_sources = self.collect_data_sources()?;
 
         let executors = Fragmenter::get_executors(ctx);
-        // Redistribute partitions of ReadDataSourcePlan.
-        let partitions = &read_source.parts;
-        let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
-            let mut new_read_source = read_source.clone();
-            new_read_source.parts = parts.clone();
+        let mut executor_partitions: HashMap<String, HashMap<u32, DataSourcePlan>> = HashMap::new();
+
+        for (plan_id, data_source) in data_sources.iter() {
+            // Redistribute partitions of ReadDataSourcePlan.
+            let partitions = &data_source.parts;
+            let partition_reshuffle = partitions.reshuffle(executors.clone())?;
+            for (executor, parts) in partition_reshuffle {
+                let mut source = data_source.clone();
+                source.parts = parts;
+                executor_partitions
+                    .entry(executor)
+                    .or_default()
+                    .insert(*plan_id, source);
+            }
+        }
+
+        for (executor, sources) in executor_partitions {
             let mut plan = self.plan.clone();
-
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
-            let mut replace_read_source = ReplaceReadSource {
-                source: new_read_source,
-            };
+            let mut replace_read_source = ReplaceReadSource { sources };
             plan = replace_read_source.replace(&plan)?;
 
             fragment_actions
@@ -374,20 +382,22 @@ impl PlanFragment {
         Ok(executor_part)
     }
 
-    fn get_read_source(&self) -> Result<DataSourcePlan> {
+    fn collect_data_sources(&self) -> Result<HashMap<u32, DataSourcePlan>> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot get read source from a non-source fragment".to_string(),
             ));
         }
 
-        let mut source = vec![];
+        let mut data_sources = HashMap::new();
 
-        let mut collect_read_source = |plan: &PhysicalPlan| match plan {
-            PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
+        let mut collect_data_source = |plan: &PhysicalPlan| match plan {
+            PhysicalPlan::TableScan(scan) => {
+                data_sources.insert(scan.plan_id, *scan.source.clone());
+            }
             PhysicalPlan::CopyIntoTable(copy) => {
                 if let Some(stage) = copy.source.as_stage().cloned() {
-                    source.push(*stage);
+                    data_sources.insert(copy.plan_id, *stage);
                 }
             }
             _ => {}
@@ -396,29 +406,30 @@ impl PlanFragment {
         PhysicalPlan::traverse(
             &self.plan,
             &mut |_| true,
-            &mut collect_read_source,
+            &mut collect_data_source,
             &mut |_| {},
         );
 
-        if source.len() != 1 {
-            Err(ErrorCode::Internal(
-                "Invalid source fragment with multiple table scan".to_string(),
-            ))
-        } else {
-            Ok(source.remove(0))
-        }
+        Ok(data_sources)
     }
 }
 
-pub struct ReplaceReadSource {
-    pub source: DataSourcePlan,
+struct ReplaceReadSource {
+    sources: HashMap<u32, DataSourcePlan>,
 }
 
 impl PhysicalPlanReplacer for ReplaceReadSource {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
+        let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Cannot find data source for table scan plan {}",
+                plan.plan_id
+            ))
+        })?;
+
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: plan.plan_id,
-            source: Box::new(self.source.clone()),
+            source: Box::new(source),
             name_mapping: plan.name_mapping.clone(),
             table_index: plan.table_index,
             stat_info: plan.stat_info.clone(),
@@ -439,8 +450,11 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
                 })))
             }
             CopyIntoTableSource::Stage(_) => {
+                let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
+                    ErrorCode::Internal("Cannot find data source for copy into plan")
+                })?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
+                    source: CopyIntoTableSource::Stage(Box::new(source)),
                     ..plan.clone()
                 })))
             }

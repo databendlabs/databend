@@ -152,7 +152,7 @@ SELECT k, v FROM t ORDER BY k LIMIT 3 OFFSET 3
 6 -36
 
 query I
-SELECT * FROM (select * from numbers(10) a LIMIT 5) OFFSET 3
+SELECT * FROM (select * from numbers(10) a ORDER BY number LIMIT 5) OFFSET 3
 ----
 3
 4
