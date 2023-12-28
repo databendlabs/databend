@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create table t(a int not null) ENGINE = MEMORY" | $BENDSQL_CLIENT_CONNECT
+echo "create table t(a int not null)" | $BENDSQL_CLIENT_CONNECT
 echo "insert into t values(1)" | $BENDSQL_CLIENT_CONNECT
 
 # get snapshot location
