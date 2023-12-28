@@ -72,6 +72,7 @@ impl Binder {
             select_builder.with_column("catalog AS Catalog");
         }
         select_builder.with_column(format!("name AS `databases_in_{ctl}`"));
+        select_builder.with_column("owner");
         select_builder.with_order_by("catalog");
         select_builder.with_order_by("name");
         match limit {

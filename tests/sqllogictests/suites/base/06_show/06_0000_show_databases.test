@@ -19,30 +19,30 @@ CREATE DATABASE ss2
 query T
 SHOW DATABASES like 'ss%'
 ----
-ss
-ss1
-ss2
+ss account_admin
+ss1 account_admin
+ss2 account_admin
 
 query TT
 SHOW FULL DATABASES like 'ss%';
 ----
-default ss
-default ss1
-default ss2
+default ss account_admin
+default ss1 account_admin
+default ss2 account_admin
 
 query TT
 SHOW FULL DATABASES FROM default like 'ss%';
 ----
-default ss
-default ss1
-default ss2
+default ss account_admin
+default ss1 account_admin
+default ss2 account_admin
 
 query T
 SHOW SCHEMAS like 'ss%'
 ----
-ss
-ss1
-ss2
+ss account_admin
+ss1 account_admin
+ss2 account_admin
 
 statement ok
 DROP DATABASE IF EXISTS ss
