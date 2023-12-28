@@ -347,9 +347,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    // Compare two scalars and return the Ordering between them.
+    /// # Safety
+    /// Some data types not support comparison.
+    /// Compare two scalars and return the Ordering between them.
     #[inline(always)]
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
+    unsafe fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
         unreachable!()
     }
 

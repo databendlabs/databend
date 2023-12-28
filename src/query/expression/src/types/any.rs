@@ -141,7 +141,7 @@ impl ValueType for AnyType {
     }
 
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+    unsafe fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
         lhs.cmp(&rhs)
     }
 }
