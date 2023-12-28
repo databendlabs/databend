@@ -26,7 +26,6 @@ use databend_common_profile::SharedProcessorProfiles;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
-use log::info;
 
 use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;
