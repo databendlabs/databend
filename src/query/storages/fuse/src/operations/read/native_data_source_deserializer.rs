@@ -529,7 +529,7 @@ impl NativeDeserializeDataTransform {
     fn bloom_runtime_filter(
         &mut self,
         arrays: &mut Vec<(usize, Box<dyn Array>)>,
-    ) -> Result<(Vec<MutableBitmap>, bool)> {
+    ) -> Result<(Option<MutableBitmap>, bool)> {
         let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_bloom_runtime_filter.is_none() {
@@ -546,7 +546,7 @@ impl NativeDeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok((vec![], false));
+                return Ok((None, false));
             }
             self.cached_bloom_runtime_filter = Some(bloom_filters);
         }
@@ -578,7 +578,7 @@ impl NativeDeserializeDataTransform {
                             self.array_skip_pages.insert(*idx, 0);
                         }
                         None => {
-                            return Ok((vec![], false));
+                            return Ok((None, false));
                         }
                     }
                 }
@@ -688,12 +688,20 @@ impl NativeDeserializeDataTransform {
             if bitmap.unset_bits() == bitmap.len() {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
-                return Ok((vec![], true));
+                return Ok((Some(bitmap), true));
             } else if bitmap.unset_bits() != 0 {
                 bitmaps.push(bitmap);
             }
         }
-        Ok((bitmaps, false))
+        if !bitmaps.is_empty() {
+            let rf_bitmap = bitmaps
+                .into_iter()
+                .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
+                .unwrap();
+            Ok((Some(rf_bitmap), false))
+        } else {
+            Ok((None, false))
+        }
     }
 }
 
@@ -955,7 +963,7 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
-            let (rf_filters, skipped) = self.bloom_runtime_filter(&mut arrays)?;
+            let (rf_filter, skipped) = self.bloom_runtime_filter(&mut arrays)?;
 
             if skipped {
                 return Ok(());
@@ -995,16 +1003,11 @@ impl Processor for NativeDeserializeDataTransform {
 
             let origin_num_rows = block.num_rows();
 
-            // Merge `rf_filters`
-            let filter = if !rf_filters.is_empty() {
-                let mut rf_bitmap = rf_filters
-                    .into_iter()
-                    .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
-                    .unwrap();
+            let filter = if let Some(mut rf_filter) = rf_filter {
                 if let Some(Value::Column(col)) = filter {
-                    rf_bitmap = rf_bitmap.bitand(&col);
+                    rf_filter = rf_filter.bitand(&col);
                 }
-                Some(Value::Column(rf_bitmap.into()))
+                Some(Value::Column(rf_filter.into()))
             } else {
                 filter
             };
