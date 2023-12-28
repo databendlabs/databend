@@ -529,7 +529,7 @@ impl NativeDeserializeDataTransform {
     fn bloom_runtime_filter(
         &mut self,
         arrays: &mut Vec<(usize, Box<dyn Array>)>,
-    ) -> Result<Vec<MutableBitmap>> {
+    ) -> Result<(Vec<MutableBitmap>, bool)> {
         let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_bloom_runtime_filter.is_none() {
@@ -546,7 +546,7 @@ impl NativeDeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok(vec![]);
+                return Ok((vec![], false));
             }
             self.cached_bloom_runtime_filter = Some(bloom_filters);
         }
@@ -578,12 +578,13 @@ impl NativeDeserializeDataTransform {
                             self.array_skip_pages.insert(*idx, 0);
                         }
                         None => {
-                            return Ok(vec![]);
+                            return Ok((vec![], false));
                         }
                     }
                 }
             }
             let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
+            dbg!(probe_block.num_rows());
             let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
             local_arrays.clear();
             let probe_column = probe_block.get_last_column().clone();
@@ -688,12 +689,12 @@ impl NativeDeserializeDataTransform {
             if bitmap.unset_bits() == bitmap.len() {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
-                return Ok(vec![]);
+                return Ok((vec![], true));
             } else if bitmap.unset_bits() != 0 {
                 bitmaps.push(bitmap);
             }
         }
-        Ok(bitmaps)
+        Ok((bitmaps, false))
     }
 }
 
@@ -955,7 +956,11 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
-            let rf_filters = self.bloom_runtime_filter(&mut arrays)?;
+            let (rf_filters, skipped) = self.bloom_runtime_filter(&mut arrays)?;
+
+            if skipped {
+                return Ok(());
+            }
 
             // Step 5: read remain columns and filter block if needed.
             for index in self.remain_columns.iter() {
@@ -993,12 +998,12 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Merge `rf_filters`
             let filter = if !rf_filters.is_empty() {
-                let mut rf_bitmap = rf_filters[0].clone();
-                for rf_filter in rf_filters.into_iter().skip(1) {
-                    rf_bitmap = rf_bitmap.bitand(&rf_filter.into());
-                }
-                if let Some(filter) = &filter {
-                    rf_bitmap = rf_bitmap.bitand(filter.as_column().unwrap());
+                let mut rf_bitmap = rf_filters
+                    .into_iter()
+                    .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
+                    .unwrap();
+                if let Some(Value::Column(col)) = filter {
+                    rf_bitmap = rf_bitmap.bitand(&col);
                 }
                 Some(Value::Column(rf_bitmap.into()))
             } else {
@@ -1045,7 +1050,7 @@ impl Processor for NativeDeserializeDataTransform {
                 block = block.add_meta(Some(Box::new(meta)))?;
             }
 
-            // Step 10: Add the block to output data
+            // Step 9: Add the block to output data
             self.offset_in_part += origin_num_rows;
             self.add_block(block)?;
         }
