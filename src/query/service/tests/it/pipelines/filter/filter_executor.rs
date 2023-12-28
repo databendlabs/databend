@@ -116,5 +116,18 @@ fn get_filter_data_types() -> Vec<DataType> {
         DataType::Null,
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
+        DataType::Tuple(vec![
+            DataType::Number(NumberDataType::UInt32),
+            DataType::Boolean,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+            DataType::Tuple(vec![
+                DataType::Nullable(Box::new(DataType::String)),
+                DataType::Number(NumberDataType::UInt32),
+                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: 10,
+                    scale: 2,
+                })),
+            ]),
+        ]),
     ]
 }
