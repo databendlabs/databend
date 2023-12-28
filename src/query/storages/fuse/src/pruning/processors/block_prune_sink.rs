@@ -17,13 +17,19 @@ use std::sync::Arc;
 use async_channel::Sender;
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline_sources::AsyncSourcer;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::RangePruner;
@@ -36,7 +42,7 @@ use crate::operations::BlockIndex;
 use crate::operations::DeletedSegmentInfo;
 use crate::operations::SegmentIndex;
 
-struct BlockPruneSink {
+pub struct BlockPruneSink {
     block_meta_sender: Sender<Arc<BlockMeta>>,
     schema: TableSchemaRef,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
@@ -44,10 +50,34 @@ struct BlockPruneSink {
     inverse_range_index_context: Option<InverseRangeIndexContext>,
 }
 
-struct InverseRangeIndexContext {
-    whole_block_delete_sender: Sender<(SegmentIndex, BlockIndex)>,
-    whole_segment_delete_sender: Sender<DeletedSegmentInfo>,
-    inverse_range_index: RangeIndex,
+impl BlockPruneSink {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        block_meta_sender: Sender<Arc<BlockMeta>>,
+        schema: TableSchemaRef,
+        range_pruner: Arc<dyn RangePruner + Send + Sync>,
+        internal_column_pruner: Option<Arc<InternalColumnPruner>>,
+        inverse_range_index_context: Option<InverseRangeIndexContext>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncSinker::create(
+            input,
+            ctx,
+            Self {
+                block_meta_sender,
+                schema,
+                range_pruner,
+                internal_column_pruner,
+                inverse_range_index_context,
+            },
+        )))
+    }
+}
+
+pub struct InverseRangeIndexContext {
+    pub whole_block_delete_sender: Sender<(SegmentIndex, BlockIndex)>,
+    pub whole_segment_delete_sender: Sender<DeletedSegmentInfo>,
+    pub inverse_range_index: RangeIndex,
 }
 
 #[async_trait]

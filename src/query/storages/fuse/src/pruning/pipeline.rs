@@ -12,54 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
-use databend_storages_common_pruner::InternalColumnPruner;
-use opendal::Operator;
 
+use super::processors::block_prune_sink::BlockPruneSink;
+use super::processors::block_prune_sink::InverseRangeIndexContext;
 use super::processors::segment_source::SegmentSource;
+use super::FusePruner;
+use super::PruningContext;
 
-pub fn build_pruning_pipelines(
-    ctx: Arc<dyn TableContext>,
-    push_down: &PushDownInfo,
-    dal: Operator,
-) -> Result<Vec<Pipeline>> {
+pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>> {
     let mut pipelines = vec![];
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()?;
-    let func_ctx = ctx.get_function_context()?;
-    let filter_expr = push_down
-        .filters
-        .as_ref()
-        .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS));
-    let internal_column_pruner = InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
-    pipelines.push(build_range_index_pruning_pipeline(
+    let FusePruner {
+        max_concurrency,
+        table_schema,
+        pruning_ctx,
+        push_down,
+        inverse_range_index,
+        deleted_segments,
+    } = fuse_pruner;
+    let PruningContext {
         ctx,
-        max_io_requests as usize,
         dal,
+        pruning_runtime,
+        pruning_semaphore,
+        limit_pruner,
+        range_pruner,
+        bloom_pruner,
+        page_pruner,
         internal_column_pruner,
-    )?);
+        pruning_stats,
+    } = pruning_ctx.as_ref();
 
-    Ok(pipelines)
-}
+    let (sender, receiver) = async_channel::unbounded();
+    let (inverse_range_index_context, whole_block_delete_receiver, whole_segment_delete_recevier) =
+        match inverse_range_index {
+            Some(inverse_range_index) => {
+                let (whole_block_delete_sender, whole_block_delete_receiver) =
+                    async_channel::unbounded();
+                let (whole_segment_delete_sender, whole_segment_delete_recevier) =
+                    async_channel::unbounded();
+                let inverse_range_index_context = Some(InverseRangeIndexContext {
+                    whole_block_delete_sender,
+                    whole_segment_delete_sender,
+                    inverse_range_index: inverse_range_index.clone(),
+                });
+                (
+                    inverse_range_index_context,
+                    Some(whole_block_delete_receiver),
+                    Some(whole_segment_delete_recevier),
+                )
+            }
+            None => (None, None, None),
+        };
 
-fn build_range_index_pruning_pipeline(
-    ctx: Arc<dyn TableContext>,
-    read_segment_concurrency: usize,
-    dal: Operator,
-    internal_column_pruner: Option<Arc<InternalColumnPruner>>,
-) -> Result<Pipeline> {
     let mut range_index_pruning_pipeline = Pipeline::create();
     range_index_pruning_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-
     range_index_pruning_pipeline.add_source(
-        |output| SegmentSource::create(ctx, dal, internal_column_pruner, output),
-        read_segment_concurrency,
+        |output| {
+            SegmentSource::create(
+                ctx.clone(),
+                dal.clone(),
+                internal_column_pruner.clone(),
+                output,
+            )
+        },
+        fuse_pruner.max_concurrency,
     );
-    Ok(range_index_pruning_pipeline)
+    range_index_pruning_pipeline.add_sink(|input| {
+        BlockPruneSink::create(
+            ctx.clone(),
+            input,
+            sender,
+            table_schema.clone(),
+            range_pruner.clone(),
+            internal_column_pruner.clone(),
+            inverse_range_index_context,
+        )
+    });
+    pipelines.push(range_index_pruning_pipeline);
+
+    Ok(pipelines)
 }
