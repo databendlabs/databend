@@ -154,11 +154,6 @@ impl ValueType for BitmapType {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.data().len() + col.offsets().len() * 8
     }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
-        lhs.cmp(rhs)
-    }
 }
 
 impl ArgType for BitmapType {

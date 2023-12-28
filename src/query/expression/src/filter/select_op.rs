@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::cmp::Ordering;
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum SelectOp {
     // Equal "="
@@ -53,47 +51,5 @@ impl SelectOp {
             SelectOp::Gte => SelectOp::Lte,
             SelectOp::Lte => SelectOp::Gte,
         }
-    }
-
-    #[inline]
-    pub fn expect(&self) -> fn(Ordering) -> bool {
-        match self {
-            SelectOp::Equal => Self::equal,
-            SelectOp::NotEqual => Self::not_equal,
-            SelectOp::Gt => Self::greater_than,
-            SelectOp::Lt => Self::less_than,
-            SelectOp::Gte => Self::greater_than_equal,
-            SelectOp::Lte => Self::less_than_equal,
-        }
-    }
-
-    #[inline(always)]
-    fn equal(res: Ordering) -> bool {
-        matches!(res, std::cmp::Ordering::Equal)
-    }
-
-    #[inline(always)]
-    fn not_equal(res: Ordering) -> bool {
-        !matches!(res, std::cmp::Ordering::Equal)
-    }
-
-    #[inline(always)]
-    fn greater_than(res: Ordering) -> bool {
-        matches!(res, std::cmp::Ordering::Greater)
-    }
-
-    #[inline(always)]
-    fn less_than(res: Ordering) -> bool {
-        matches!(res, std::cmp::Ordering::Less)
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(res: Ordering) -> bool {
-        !matches!(res, std::cmp::Ordering::Less)
-    }
-
-    #[inline(always)]
-    fn less_than_equal(res: Ordering) -> bool {
-        !matches!(res, std::cmp::Ordering::Greater)
     }
 }
