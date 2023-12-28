@@ -26,6 +26,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
@@ -107,12 +108,12 @@ impl Interpreter for UpdateInterpreter {
         tbl.check_mutable()?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
-            let support_row_id = tbl.support_row_id_column();
+            let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
-                return Err(ErrorCode::from_string(
-                    "table doesn't support row_id, so it can't use delete with subquery"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::from_string(format!(
+                    "Update with subquery is not supported for the table '{}', which lacks row_id support.",
+                    tbl.name(),
+                )));
             }
             let table_index = self
                 .plan
@@ -238,7 +239,6 @@ impl Interpreter for UpdateInterpreter {
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
 
-            // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
             // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
             {
                 let refresh_desc = RefreshDesc {

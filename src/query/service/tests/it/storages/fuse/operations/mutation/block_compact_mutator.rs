@@ -219,7 +219,7 @@ async fn test_safety() -> Result<()> {
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
             block_per_seg: 10,
-            limit: Some(limit),
+            num_segment_limit: Some(limit),
         };
 
         eprintln!("running target select");

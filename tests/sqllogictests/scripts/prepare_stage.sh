@@ -17,6 +17,7 @@ else
 	exit 1
 fi
 
+
 echo "drop table if exists ontime" | $BENDSQL_CLIENT_CONNECT
 cat tests/data/ddl/ontime.sql | $BENDSQL_CLIENT_CONNECT
 

@@ -183,11 +183,16 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
 
-        if let Some(catalog) = catalog {
-            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("catalog = '{catalog}'"));
-        }
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
 
+        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
@@ -203,7 +208,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog_name, database),
         )
         .await
     }
@@ -356,10 +361,11 @@ impl Binder {
         };
 
         debug!("show drop tables rewrite to: {:?}", query);
+        let catalog = self.ctx.get_current_catalog();
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowTables(database),
+            RewriteKind::ShowTables(catalog, database),
         )
         .await
     }
@@ -997,23 +1003,24 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, database, table) =
+        let (catalog, db_name, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let (new_catalog, new_database, new_table) =
             self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
-        if new_catalog != catalog || new_database != database {
+        if new_catalog != catalog || new_database != db_name {
             return Err(ErrorCode::BadArguments(
                 "Rename table not allow modify catalog or database",
-            ));
+            )
+            .set_span(database.as_ref().and_then(|ident| ident.span)));
         }
 
         Ok(Plan::RenameTable(Box::new(RenameTablePlan {
             tenant,
             if_exists: *if_exists,
             catalog,
-            database,
+            database: db_name,
             table,
             new_database,
             new_table,

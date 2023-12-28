@@ -42,7 +42,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `NULLABLE`, <Ident>, or <QuotedString>
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `NULLABLE`, <Ident>, or <QuotedString>
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -70,7 +70,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a (b tuple(c int, uint64));
-  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, or `NULLABLE`
+  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, or `NULLABLE`
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
@@ -257,7 +257,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
+  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -279,12 +279,10 @@ error:
 GRANT select ON UDF a TO 'test-grant';
 ---------- Output ---------
 error: 
-  --> SQL:1:21
+  --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  | -----               ^ unexpected `a`, expecting `TO` or `.`
-  | |                    
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                 ^^^ unexpected `UDF`, expecting <QuotedString>, <Ident>, `DATABASE`, `*`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `TABLE`
 
 
 ---------- Input ----------
@@ -294,7 +292,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, `SET`, or `OWNERSHIP`
+  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
@@ -756,5 +754,65 @@ error:
   | |      while parsing expression
   | |      while parsing <column>
   | while parsing `SELECT ...`
+
+
+---------- Input ----------
+GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';
+  | -----          ^ unexpected `,`, expecting `ON`
+  | |               
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.* TO USER A;
+---------- Output ---------
+error: 
+  --> SQL:1:34
+  |
+1 | GRANT OWNERSHIP ON d20_0014.* TO USER A;
+  | -----                            ^^^^ unexpected `USER`, expecting `ROLE`
+  | |                                 
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
+  | ------          ^ unexpected `,`, expecting `ON`
+  | |                
+  | while parsing REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
+---------- Output ---------
+error: 
+  --> SQL:1:37
+  |
+1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
+  | ------                              ^^^^ unexpected `USER`, expecting `ROLE`
+  | |                                    
+  | while parsing REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';
+  | -----               ^ unexpected `.`, expecting `TO`
+  | |                    
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
 
 

@@ -167,3 +167,22 @@ select * from t1 order by id
 1 {"a":1,"b":"a"}
 2 {"a":3,"b":"b"}
 3 {"a":3,"b":"c"}
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t2(a string null, b variant null)
+
+query 
+copy into t2 from @data/parquet/json_string.parquet
+----
+parquet/json_string.parquet 4 0 NULL NULL
+
+query 
+select * from t2 order by a
+----
+1 {"k1":"v1","k2":"v2"}
+2 {"k":{"k1":123,"k2":456}}
+3 [1,2,3]
+4 ["a","b"]

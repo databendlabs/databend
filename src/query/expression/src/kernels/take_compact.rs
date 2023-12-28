@@ -29,6 +29,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::MapType;
 use crate::types::NumberType;
@@ -103,6 +104,9 @@ impl Column {
             Column::Boolean(bm) => {
                 Self::take_compacted_arg_types::<BooleanType>(bm, indices, num_rows)
             }
+            Column::Binary(column) => BinaryType::upcast_column(Self::take_compact_string_types(
+                column, indices, num_rows,
+            )),
             Column::String(column) => StringType::upcast_column(Self::take_compact_string_types(
                 column, indices, num_rows,
             )),

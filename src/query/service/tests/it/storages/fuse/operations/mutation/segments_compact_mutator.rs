@@ -158,7 +158,10 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
-    let table_statistics = latest_fuse_table.table_statistics().await?.unwrap();
+    let table_statistics = latest_fuse_table
+        .table_statistics(ctx.clone())
+        .await?
+        .unwrap();
 
     assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
 
@@ -261,7 +264,7 @@ async fn build_mutator(
     let compact_params = CompactOptions {
         base_snapshot,
         block_per_seg,
-        limit,
+        num_segment_limit: limit,
     };
 
     let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;

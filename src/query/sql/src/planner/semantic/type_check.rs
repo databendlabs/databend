@@ -827,12 +827,29 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
+                    let mut new_params = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for aggregate function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(
-                            *span, func_name, expr, *distinct, params, &args,
+                            *span, func_name, expr, *distinct, new_params, &args,
                         )
                         .await?;
                     self.in_window_function = in_window;
@@ -858,25 +875,31 @@ impl<'a> TypeChecker<'a> {
                         .await?
                 } else {
                     // Scalar function
-                    let params = params
-                        .iter()
-                        .map(|literal| match literal {
-                            Literal::UInt64(n) => Ok(*n as i64),
-                            lit => Err(ErrorCode::SemanticError(format!(
-                                "invalid parameter {lit} for scalar function"
-                            ))
-                            .set_span(*span)),
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    self.resolve_function(*span, func_name, params, &args)
+                    let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
+                    for param in params {
+                        let box (scalar, _data_type) = self.resolve(param).await?;
+                        let expr = scalar.as_expr()?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let constant = expr
+                            .into_constant()
+                            .map_err(|_| {
+                                ErrorCode::SemanticError(format!(
+                                    "invalid parameter {param} for scalar function, expected constant",
+                                ))
+                                .set_span(*span)
+                            })?
+                            .1;
+                        new_params.push(constant);
+                    }
+                    self.resolve_function(*span, func_name, new_params, &args)
                         .await?
                 }
             }
 
             Expr::CountAll { span, window } => {
                 let (new_agg_func, data_type) = self
-                    .resolve_aggregate_function(*span, "count", expr, false, &[], &[])
+                    .resolve_aggregate_function(*span, "count", expr, false, vec![], &[])
                     .await?;
 
                 if let Some(window) = window {
@@ -1596,7 +1619,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         expr: &Expr,
         distinct: bool,
-        params: &[Literal],
+        params: Vec<Scalar>,
         args: &[&Expr],
     ) -> Result<(AggregateFunction, DataType)> {
         if matches!(
@@ -1626,14 +1649,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Check aggregate function
-        let params = params
-            .iter()
-            .map(|literal| {
-                self.resolve_literal_scalar(literal)
-                    .map(|box (value, _)| value)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         self.in_aggregate_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1819,7 +1834,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        params: Vec<i64>,
+        params: Vec<Scalar>,
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
@@ -1885,7 +1900,7 @@ impl<'a> TypeChecker<'a> {
         &self,
         span: Span,
         func_name: &str,
-        mut params: Vec<i64>,
+        mut params: Vec<Scalar>,
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
@@ -1911,13 +1926,13 @@ impl<'a> TypeChecker<'a> {
             } else {
                 0
             };
-            params.push(scale);
+            params.push(Scalar::Number(NumberScalar::Int64(scale)));
         }
 
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
-            params: params.iter().map(|x| Scalar::Number((*x).into())).collect(),
+            params: params.clone(),
             args: arguments,
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
@@ -2796,7 +2811,8 @@ impl<'a> TypeChecker<'a> {
                     .await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, arguments, udf_def).await?,
+                self.resolve_udf_server(span, name, arguments, udf_def)
+                    .await?,
             )),
         }
     }
@@ -2806,6 +2822,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf_server(
         &mut self,
         span: Span,
+        name: String,
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2852,6 +2869,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             UDFServerCall {
                 span,
+                name,
                 func_name: udf_definition.handler,
                 display_name,
                 server_addr: udf_definition.address,
@@ -2971,7 +2989,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value = FunctionCall {
                         span,
-                        params: vec![(idx + 1) as _],
+                        params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3097,7 +3115,7 @@ impl<'a> TypeChecker<'a> {
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![idx as _],
+                    params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3213,7 +3231,7 @@ impl<'a> TypeChecker<'a> {
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
                         span,
-                        params: vec![idx as _],
+                        params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
@@ -3648,18 +3666,13 @@ impl<'a> TypeChecker<'a> {
 
 pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {
     let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
-    let backtrace = databend_common_ast::Backtrace::new();
-    match databend_common_ast::parser::expr::type_name(databend_common_ast::Input(
+    let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
         databend_common_ast::Dialect::default(),
-        &backtrace,
-    )) {
-        Ok((_, typename)) => resolve_type_name(&typename, not_null),
-        Err(err) => Err(ErrorCode::SyntaxException(format!(
-            "Unsupported type name: {}, error: {}",
-            name, err
-        ))),
-    }
+        false,
+        databend_common_ast::parser::expr::type_name,
+    )?;
+    resolve_type_name(&ast, not_null)
 }
 
 pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
@@ -3697,6 +3710,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 scale: *scale,
             })?)
         }
+        TypeName::Binary => TableDataType::String,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,

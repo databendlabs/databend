@@ -252,7 +252,7 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
-                // Compact if 'enable_recluster_after_write' on.
+                // Compact if 'enable_compact_after_write' on.
                 {
                     let compact_target = CompactTargetTableDescription {
                         catalog: self.plan.catalog.clone(),
@@ -304,7 +304,7 @@ impl Interpreter for InsertInterpreter {
             append_mode,
         )?;
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),

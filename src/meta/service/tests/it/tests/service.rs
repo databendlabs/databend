@@ -94,9 +94,8 @@ pub fn next_port() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
 }
 
+/// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
 pub struct MetaSrvTestContext {
-    // /// To hold a per-case logging guard
-    // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
     pub meta_node: Option<Arc<MetaNode>>,

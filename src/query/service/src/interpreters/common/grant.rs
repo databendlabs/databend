@@ -56,6 +56,29 @@ pub async fn validate_grant_object_exists(
                 ));
             }
         }
+        GrantObject::DatabaseById(catalog_name, db_id) => {
+            let catalog = ctx.get_catalog(catalog_name).await?;
+            if catalog.get_db_name_by_id(*db_id).await.is_err() {
+                return Err(databend_common_exception::ErrorCode::UnknownDatabaseId(
+                    format!(
+                        "database id {} not exists in catalog {}",
+                        db_id, catalog_name
+                    ),
+                ));
+            }
+        }
+        GrantObject::TableById(catalog_name, db_id, table_id) => {
+            let catalog = ctx.get_catalog(catalog_name).await?;
+
+            if catalog.get_table_name_by_id(*table_id).await.is_err() {
+                return Err(databend_common_exception::ErrorCode::UnknownTableId(
+                    format!(
+                        "table id `{}`.`{}` not exists in catalog '{}'",
+                        db_id, table_id, catalog_name,
+                    ),
+                ));
+            }
+        }
         GrantObject::UDF(udf) => {
             if !UserApiProvider::instance()
                 .exists_udf(tenant.as_str(), udf)

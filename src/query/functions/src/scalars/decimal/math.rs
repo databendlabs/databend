@@ -261,13 +261,13 @@ fn decimal_math(
         return arg.clone().to_owned();
     }
 
-    let none_negative = target_scale >= 0;
+    let zero_or_positive = target_scale >= 0;
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
             let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
 
-            let result = match (none_negative, mode) {
+            let result = match (zero_or_positive, mode) {
                 (true, RoundMode::Round) => {
                     decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
                 }
