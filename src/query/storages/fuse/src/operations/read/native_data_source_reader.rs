@@ -238,7 +238,12 @@ impl Processor for ReadNativeDataSource<false> {
             let mut filters = self
                 .partitions
                 .ctx
-                .get_runtime_filter_with_id(self.table_index);
+                .get_inlist_runtime_filter_with_id(self.table_index);
+            filters.extend(
+                self.partitions
+                    .ctx
+                    .get_min_max_runtime_filter_with_id(self.table_index),
+            );
             let mut native_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(

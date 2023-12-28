@@ -55,7 +55,6 @@ use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use databend_common_hashtable::traits::FastHash;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
