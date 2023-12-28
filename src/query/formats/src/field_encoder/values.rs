@@ -21,6 +21,7 @@ use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -56,7 +57,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
-                timestamp_output_format: options.timestamp_output_format.clone(),
+                timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
             },
             quote_char: b'\'',
         }

@@ -235,7 +235,7 @@ impl DefaultSettings {
                 }),
                 ("timestamp_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("%Y-%m-%d %H:%M:%S%.6f".to_owned()),
-                    desc: "Specifies the display format for the TIMESTAMP data type alias. Available values include \'%Y-%m-%d %H:%M:%S%.6f\' and \'%Y-%m-%d %H:%M:%S%.3f\'.",
+                    desc: "Specifies the display format for the TIMESTAMP data type. Available values include \'%Y-%m-%d %H:%M:%S%.6f\' and \'%Y-%m-%d %H:%M:%S%.3f\'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec!["%Y-%m-%d %H:%M:%S%.3f", "%Y-%m-%d %H:%M:%S%.6f"])),
                 }),

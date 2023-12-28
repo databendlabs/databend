@@ -1,7 +1,7 @@
 query T
 show settings like 'timestamp_output_format';
 ----
-timestamp_output_format '%Y-%m-%d %H:%M:%S%.6f' '%Y-%m-%d %H:%M:%S%.6f' ["%Y-%m-%d %H:%M:%S%.3f", "%Y-%m-%d %H:%M:%S%.6f"] SESSION Specifies the display format for the TIMESTAMP data type alias. Available values include '%Y-%m-%d %H:%M:%S%.6f' and '%Y-%m-%d %H:%M:%S%.3f'. String
+timestamp_output_format '%Y-%m-%d %H:%M:%S%.6f' '%Y-%m-%d %H:%M:%S%.6f' ["%Y-%m-%d %H:%M:%S%.3f", "%Y-%m-%d %H:%M:%S%.6f"] SESSION Specifies the display format for the TIMESTAMP data type. Available values include '%Y-%m-%d %H:%M:%S%.6f' and '%Y-%m-%d %H:%M:%S%.3f'. String
 
 
 statement ok
@@ -24,7 +24,7 @@ select to_timestamp('2022-02-01 00:00:00.123456789');
 2022-02-01 00:00:00.123456
 
 
-statement error 2803
+statement error (?s)2803.*is not within the allowed values.*
 SET timestamp_output_format='%Y-%m-%d %H:%M:%S%.9f';
 
 

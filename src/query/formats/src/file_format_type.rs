@@ -15,6 +15,7 @@
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::timestamp::TIMESTAMP_FORMAT;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -73,7 +74,6 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
-        let timestamp_output_format = settings.get_timestamp_output_format()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -82,7 +82,7 @@ impl FileFormatOptionsExt {
             disable_variant_check: false,
             timezone,
             is_select: false,
-            timestamp_output_format,
+            timestamp_output_format: TIMESTAMP_FORMAT.to_string(),
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;
