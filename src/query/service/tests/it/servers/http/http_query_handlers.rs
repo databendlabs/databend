@@ -324,7 +324,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has only one column
-    assert_eq!(result.schema.len(), 1, "{:?}", result);
+    assert_eq!(result.schema.len(), 2, "{:?}", result);
 
     Ok(())
 }
@@ -338,14 +338,14 @@ async fn test_show_databases() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has only one field: name
-    assert_eq!(result.schema.len(), 1, "{:?}", result);
+    assert_eq!(result.schema.len(), 2, "{:?}", result);
 
     let sql = "show full databases";
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has two fields: catalog, name
-    assert_eq!(result.schema.len(), 2, "{:?}", result);
+    assert_eq!(result.schema.len(), 3, "{:?}", result);
 
     Ok(())
 }

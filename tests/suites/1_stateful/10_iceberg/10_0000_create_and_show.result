@@ -1,4 +1,4 @@
-iceberg_db
+iceberg_db NULL
 iceberg_tbl
 iceberg_ctl	iceberg	STORAGE PARAMS
 s3 | bucket=testbucket,root=/iceberg_ctl/,endpoint=http://127.0.0.1:9900
