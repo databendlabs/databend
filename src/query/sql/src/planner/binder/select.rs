@@ -41,6 +41,7 @@ use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
@@ -303,7 +304,7 @@ impl Binder {
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
@@ -842,7 +843,11 @@ impl Binder {
             return Ok(());
         }
 
-        if !metadata.table(0).table().support_row_id_column() {
+        if !metadata
+            .table(0)
+            .table()
+            .supported_internal_column(ROW_ID_COLUMN_ID)
+        {
             return Ok(());
         }
 

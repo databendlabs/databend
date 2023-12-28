@@ -26,7 +26,6 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_expression::is_internal_stream_column_id;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -556,9 +555,9 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
-        if table.table().engine() != "STREAM" && is_internal_stream_column_id(column_id) {
+        if !table.table().supported_internal_column(column_id) {
             return Err(ErrorCode::SemanticError(format!(
-                "Internal column `{}` is not allowed in table `{}`",
+                "Unsupported internal column '{}' in table '{}'.",
                 column_binding.internal_column.column_name(),
                 table.table().name()
             )));

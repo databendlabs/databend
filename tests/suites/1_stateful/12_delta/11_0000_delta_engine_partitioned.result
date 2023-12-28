@@ -1,0 +1,39 @@
+>>>> drop table if exists test_delta;
+>>>> create table test_delta engine = delta location = 'fs://${ROOT}/';
+>>>> select * from test_delta order by c5;
+10	11	12	13	14	15
+10	21	12	23	24	25
+10	31	32	33	34	35
+20	41	42	43	44	45
+<<<<
+>>>> select c1 from test_delta where c1 > 20 order by c1;
+21
+31
+41
+<<<<
+>>>> select c1 from test_delta where c3 = 33 order by c1;
+31
+<<<<
+>>>> select p4 from test_delta where p4 > 20 order by p4;
+24
+34
+44
+<<<<
+>>>> select p4 from test_delta where p2 = 12 order by p4;
+14
+24
+<<<<
+>>>> select c1 from test_delta where p4 > 20 order by c1;
+21
+31
+41
+<<<<
+>>>> select p4 from test_delta where c1 > 20 order by p4;
+24
+34
+44
+<<<<
+>>>> select c5, p4 from test_delta where c1 - p0 = 11 order by c5;
+25	24
+<<<<
+>>>> drop table test_delta;

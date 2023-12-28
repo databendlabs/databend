@@ -17,14 +17,16 @@ use std::fmt::Formatter;
 
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
     pub name: String,
     pub warehouse_opts: WarehouseOptions,
-    pub schedule_opts: ScheduleOptions,
+    pub schedule_opts: Option<ScheduleOptions>,
     pub suspend_task_after_num_failures: Option<u64>,
     pub comments: String,
+    pub after: Vec<String>,
+    pub when_condition: Option<String>,
     pub sql: String,
 }
 
@@ -37,8 +39,9 @@ impl Display for CreateTaskStmt {
         write!(f, " {}", self.name)?;
 
         write!(f, "{}", self.warehouse_opts)?;
-
-        write!(f, "{}", self.schedule_opts)?;
+        if let Some(schedule_opt) = self.schedule_opts.as_ref() {
+            write!(f, "{}", schedule_opt)?;
+        }
 
         if let Some(num) = self.suspend_task_after_num_failures {
             write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;
@@ -46,6 +49,14 @@ impl Display for CreateTaskStmt {
 
         if !self.comments.is_empty() {
             write!(f, " COMMENTS = '{}'", self.comments)?;
+        }
+
+        if !self.after.is_empty() {
+            write!(f, "AFTER = '{:?}'", self.after)?;
+        }
+
+        if self.when_condition.is_some() {
+            write!(f, "WHEN = '{:?}'", self.when_condition)?;
         }
 
         write!(f, " AS {}", self.sql)?;
@@ -69,15 +80,15 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleOptions {
-    IntervalMinutes(u64),
+    IntervalSecs(u64),
     CronExpression(String, Option<String>),
 }
 
 impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ScheduleOptions::IntervalMinutes(mins) => {
-                write!(f, " SCHEDULE {} MINUTE", mins)
+            ScheduleOptions::IntervalSecs(secs) => {
+                write!(f, " SCHEDULE {} SECOND", secs)
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, " SCHEDULE CRON '{}'", expr)?;
@@ -112,6 +123,9 @@ pub enum AlterTaskOptions {
     },
     // Change SQL
     ModifyAs(String),
+    ModifyWhen(String),
+    AddAfter(Vec<String>),
+    RemoveAfter(Vec<String>),
 }
 
 impl Display for AlterTaskOptions {
@@ -146,6 +160,9 @@ impl Display for AlterTaskOptions {
                 Ok(())
             }
             AlterTaskOptions::ModifyAs(sql) => write!(f, " AS {}", sql),
+            AlterTaskOptions::ModifyWhen(when) => write!(f, " WHEN {}", when),
+            AlterTaskOptions::AddAfter(after) => write!(f, " ADD AFTER = '{:?}'", after),
+            AlterTaskOptions::RemoveAfter(after) => write!(f, " REMOVE AFTER = '{:?}'", after),
         }
     }
 }

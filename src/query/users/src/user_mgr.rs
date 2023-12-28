@@ -144,6 +144,14 @@ impl UserApiProvider {
                 )));
             }
         }
+        if let Some(name) = user_info.option.password_policy() {
+            if self.get_password_policy(tenant, name).await.is_err() {
+                return Err(ErrorCode::UnknownPasswordPolicy(format!(
+                    "password policy `{}` is not exist",
+                    name
+                )));
+            }
+        }
         if self.get_configured_user(&user_info.name).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Same name with configured user `{}`",
@@ -291,6 +299,14 @@ impl UserApiProvider {
                 if self.get_network_policy(tenant, name).await.is_err() {
                     return Err(ErrorCode::UnknownNetworkPolicy(format!(
                         "network policy `{}` is not exist",
+                        name
+                    )));
+                }
+            }
+            if let Some(name) = user_option.password_policy() {
+                if self.get_password_policy(tenant, name).await.is_err() {
+                    return Err(ErrorCode::UnknownPasswordPolicy(format!(
+                        "password policy `{}` is not exist",
                         name
                     )));
                 }

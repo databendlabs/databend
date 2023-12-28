@@ -108,7 +108,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowColumns(database, table),
+            RewriteKind::ShowColumns(catalog_name, database, table),
         )
         .await
     }

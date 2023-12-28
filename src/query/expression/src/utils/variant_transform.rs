@@ -32,6 +32,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::EmptyArray
         | DataType::EmptyMap
         | DataType::Boolean
+        | DataType::Binary
         | DataType::String
         | DataType::Number(_)
         | DataType::Decimal(_)
@@ -75,6 +76,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Timestamp(_)
         | ScalarRef::Date(_)
         | ScalarRef::Boolean(_)
+        | ScalarRef::Binary(_)
         | ScalarRef::String(_)
         | ScalarRef::Bitmap(_) => scalar.to_owned(),
         ScalarRef::Array(col) => Scalar::Array(transform_column(&col, decode)?),

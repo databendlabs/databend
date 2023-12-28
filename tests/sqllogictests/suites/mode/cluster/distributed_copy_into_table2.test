@@ -5,6 +5,9 @@ statement ok
 set global max_threads = 1;
 
 statement ok
+set auto_compaction_imperfect_blocks_threshold = 3;
+
+statement ok
 drop table if exists products;
 
 statement ok
@@ -50,3 +53,6 @@ select block_count from fuse_snapshot('default','products') limit 1;
 
 statement ok
 set enable_distributed_copy_into = 0;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 1000;

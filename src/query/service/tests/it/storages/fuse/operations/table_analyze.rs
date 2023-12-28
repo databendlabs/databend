@@ -60,7 +60,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     assert_eq!(num_inserts, query_count(stream).await? as usize);
 
     let expected = HashMap::from([(0, num_inserts as u64)]);
-    check_column_ndv_statistics(table.clone(), expected.clone()).await?;
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
@@ -73,7 +73,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
 
-    check_column_ndv_statistics(table.clone(), expected.clone()).await?;
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
     // delete
     ctx.evict_table_from_cache("default", "default", "t")?;
@@ -87,7 +87,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     fixture.execute_command(statistics_sql).await?;
 
     // check count: delete not affect counts
-    check_column_ndv_statistics(table.clone(), expected).await?;
+    check_column_ndv_statistics(ctx, table.clone(), expected).await?;
 
     Ok(())
 }
@@ -165,10 +165,11 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
 }
 
 async fn check_column_ndv_statistics(
+    ctx: Arc<dyn TableContext>,
     table: Arc<dyn Table>,
     expected: HashMap<u32, u64>,
 ) -> Result<()> {
-    let provider = table.column_statistics_provider().await?;
+    let provider = table.column_statistics_provider(ctx).await?;
 
     for (i, num) in expected.iter() {
         let stat = provider.column_statistics(*i);

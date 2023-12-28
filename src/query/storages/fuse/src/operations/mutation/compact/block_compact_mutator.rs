@@ -82,7 +82,10 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let limit = self.compact_params.limit.unwrap_or(number_segments);
+        let limit = self
+            .compact_params
+            .num_segment_limit
+            .unwrap_or(number_segments);
 
         // Status.
         self.ctx

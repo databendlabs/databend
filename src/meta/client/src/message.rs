@@ -37,7 +37,7 @@ use databend_common_meta_types::TxnRequest;
 use minitrace::Span;
 use tonic::codegen::BoxStream;
 
-use crate::grpc_client::RealClient;
+use crate::established_client::EstablishedClient;
 
 /// A request that is sent by a meta-client handle to its worker.
 pub struct ClientWorkerRequest {
@@ -106,7 +106,7 @@ pub enum Request {
     Export(ExportReq),
 
     /// Get a initialized grpc-client
-    MakeClient(MakeClient),
+    MakeEstablishedClient(MakeEstablishedClient),
 
     /// Get endpoints, for test
     GetEndpoints(GetEndpoints),
@@ -131,7 +131,7 @@ impl Request {
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",
             Request::Export(_) => "Export",
-            Request::MakeClient(_) => "MakeClient",
+            Request::MakeEstablishedClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
             Request::GetClusterStatus(_) => "GetClusterStatus",
             Request::GetClientInfo(_) => "GetClientInfo",
@@ -152,7 +152,7 @@ pub enum Response {
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
-    MakeClient(Result<(RealClient, u64), MetaClientError>),
+    MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
     GetClusterStatus(Result<ClusterStatus, MetaError>),
     GetClientInfo(Result<ClientInfo, MetaError>),
@@ -191,7 +191,7 @@ impl fmt::Debug for Response {
             Response::Export(x) => {
                 write!(f, "Export({:?})", x)
             }
-            Response::MakeClient(x) => {
+            Response::MakeEstablishedClient(x) => {
                 write!(f, "MakeClient({:?})", x)
             }
             Response::GetEndpoints(x) => {
@@ -250,7 +250,7 @@ impl Response {
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::MakeClient(res) => res
+            Response::MakeEstablishedClient(res) => res
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
@@ -279,7 +279,7 @@ pub struct ExportReq {}
 ///
 /// This request is only used internally or for testing purpose.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct MakeClient {}
+pub struct MakeEstablishedClient {}
 
 /// Get all meta server endpoints
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

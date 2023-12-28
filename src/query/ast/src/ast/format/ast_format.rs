@@ -447,7 +447,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         distinct: bool,
         name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
@@ -455,6 +455,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         for arg in args.iter() {
             self.visit_expr(arg);
             children.push(self.children.pop().unwrap());
+        }
+        for param in params.iter() {
+            self.visit_expr(param);
         }
         let node_name = if distinct {
             format!("Function {name}Distinct")
@@ -2602,6 +2605,50 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let ctx = AstFormatContext::new("ShowNetworkPolicies".to_string());
         let node = FormatTreeNode::new(ctx);
         self.children.push(node);
+    }
+
+    fn visit_create_password_policy(&mut self, stmt: &'ast CreatePasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreatePasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_alter_password_policy(&mut self, stmt: &'ast AlterPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "AlterPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_password_policy(&mut self, stmt: &'ast DropPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DropPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_desc_password_policy(&mut self, stmt: &'ast DescPasswordPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("PasswordPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DescPasswordPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_password_policies(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowPasswordPolicies".to_string());
     }
 
     fn visit_with(&mut self, with: &'ast With) {

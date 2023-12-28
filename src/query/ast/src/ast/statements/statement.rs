@@ -253,6 +253,15 @@ pub enum Statement {
     DescNetworkPolicy(DescNetworkPolicyStmt),
     ShowNetworkPolicies,
 
+    // password policy
+    CreatePasswordPolicy(CreatePasswordPolicyStmt),
+    AlterPasswordPolicy(AlterPasswordPolicyStmt),
+    DropPasswordPolicy(DropPasswordPolicyStmt),
+    DescPasswordPolicy(DescPasswordPolicyStmt),
+    ShowPasswordPolicies {
+        show_options: Option<ShowOptions>,
+    },
+
     // tasks
     CreateTask(CreateTaskStmt),
     AlterTask(AlterTaskStmt),
@@ -590,6 +599,16 @@ impl Display for Statement {
             Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
+            Statement::CreatePasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowPasswordPolicies { show_options } => {
+                write!(f, "SHOW PASSWORD POLICIES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateTask(stmt) => write!(f, "{stmt}")?,
             Statement::AlterTask(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,

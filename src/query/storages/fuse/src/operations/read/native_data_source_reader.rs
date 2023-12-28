@@ -32,12 +32,12 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 
-use super::native_data_source::DataSource;
+use super::native_data_source::NativeDataSource;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::native_data_source::NativeDataSourceMeta;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 use crate::FusePartInfo;
 
@@ -49,7 +49,7 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<NativeDataSource>)>,
     partitions: StealablePartitions,
 
     index_reader: Arc<Option<AggIndexReader>>,
@@ -151,8 +151,8 @@ impl SyncSource for ReadNativeDataSource<true> {
                     if let Some(data) = index_reader.sync_read_native_data(&loc) {
                         // Read from aggregating index.
                         return Ok(Some(DataBlock::empty_with_meta(
-                            NativeDataSourceMeta::create(vec![part.clone()], vec![
-                                DataSource::AggIndex(data),
+                            DataSourceWithMeta::create(vec![part.clone()], vec![
+                                NativeDataSource::AggIndex(data),
                             ]),
                         )));
                     }
@@ -172,15 +172,15 @@ impl SyncSource for ReadNativeDataSource<true> {
                             .sync_read_native_columns_data(&part, &ignore_column_ids)?;
                         source_data.append(&mut virtual_source_data);
                         return Ok(Some(DataBlock::empty_with_meta(
-                            NativeDataSourceMeta::create(vec![part.clone()], vec![
-                                DataSource::Normal(source_data),
+                            DataSourceWithMeta::create(vec![part.clone()], vec![
+                                NativeDataSource::Normal(source_data),
                             ]),
                         )));
                     }
                 }
 
                 Ok(Some(DataBlock::empty_with_meta(
-                    NativeDataSourceMeta::create(vec![part.clone()], vec![DataSource::Normal(
+                    DataSourceWithMeta::create(vec![part.clone()], vec![NativeDataSource::Normal(
                         self.block_reader
                             .sync_read_native_columns_data(&part, &None)?,
                     )]),
@@ -215,7 +215,7 @@ impl Processor for ReadNativeDataSource<false> {
         }
 
         if let Some((part, data)) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(NativeDataSourceMeta::create(part, data));
+            let output = DataBlock::empty_with_meta(DataSourceWithMeta::create(part, data));
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
         }
@@ -233,12 +233,18 @@ impl Processor for ReadNativeDataSource<false> {
                 .partitions
                 .ctx
                 .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
+            let mut native_part_infos = Vec::with_capacity(parts.len());
+            for part in parts.into_iter() {
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &filters,
+                    &self.func_ctx,
+                )? {
                     continue;
                 }
-                let part = part.clone();
+
+                native_part_infos.push(part.clone());
                 let block_reader = self.block_reader.clone();
                 let index_reader = self.index_reader.clone();
                 let virtual_reader = self.virtual_reader.clone();
@@ -256,7 +262,7 @@ impl Processor for ReadNativeDataSource<false> {
                         );
                                 if let Some(data) = index_reader.read_native_data(&loc).await {
                                     // Read from aggregating index.
-                                    return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
+                                    return Ok::<_, ErrorCode>(NativeDataSource::AggIndex(data));
                                 }
                             }
 
@@ -277,11 +283,11 @@ impl Processor for ReadNativeDataSource<false> {
                                         )
                                         .await?;
                                     source_data.append(&mut virtual_source_data);
-                                    return Ok(DataSource::Normal(source_data));
+                                    return Ok(NativeDataSource::Normal(source_data));
                                 }
                             }
 
-                            Ok(DataSource::Normal(
+                            Ok(NativeDataSource::Normal(
                                 block_reader
                                     .async_read_native_columns_data(&part, &ctx, &None)
                                     .await?,
@@ -291,7 +297,10 @@ impl Processor for ReadNativeDataSource<false> {
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((
+                native_part_infos,
+                futures::future::try_join_all(chunks).await?,
+            ));
             return Ok(());
         }
 

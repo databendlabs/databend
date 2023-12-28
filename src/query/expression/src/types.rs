@@ -14,6 +14,7 @@
 
 pub mod any;
 pub mod array;
+pub mod binary;
 pub mod bitmap;
 pub mod boolean;
 pub mod date;
@@ -40,6 +41,7 @@ use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
+pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
@@ -70,6 +72,7 @@ pub enum DataType {
     EmptyArray,
     EmptyMap,
     Boolean,
+    Binary,
     String,
     Number(NumberDataType),
     Decimal(DecimalDataType),

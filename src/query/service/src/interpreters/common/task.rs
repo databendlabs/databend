@@ -28,14 +28,13 @@ pub fn make_schedule_options(
     opt: ScheduleOptions,
 ) -> databend_common_cloud_control::pb::ScheduleOptions {
     match opt {
-        ScheduleOptions::IntervalMinutes(minute) => {
-            databend_common_cloud_control::pb::ScheduleOptions {
-                interval: Some(minute as i32),
-                cron: None,
-                time_zone: None,
-                schedule_type: i32::from(ScheduleType::IntervalType),
-            }
-        }
+        ScheduleOptions::IntervalSecs(secs) => databend_common_cloud_control::pb::ScheduleOptions {
+            interval: Some(secs as i32),
+            cron: None,
+            time_zone: None,
+            schedule_type: i32::from(ScheduleType::IntervalType),
+        },
+
         ScheduleOptions::CronExpression(expr, timezone) => {
             databend_common_cloud_control::pb::ScheduleOptions {
                 interval: None,
