@@ -29,6 +29,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
+use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
@@ -83,29 +84,31 @@ impl ProcessorAsyncTask {
                         inner = right;
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
-                        let running_graph_format = match elapsed >= Duration::from_secs(200)
+                        match elapsed >= Duration::from_secs(200)
                             && active_workers == 0
                             && !log_graph
                         {
-                            false => String::new(),
+                            false => {
+                                warn!(
+                                    "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
+                                    query_id, processor_id, processor_name, elapsed, active_workers
+                                );
+                            }
                             true => {
                                 log_graph = true;
-                                match weak_executor.upgrade() {
-                                    None => String::new(),
-                                    Some(executor) => executor.graph.format_graph_nodes(),
+                                if let Some(executor) = weak_executor.upgrade() {
+                                    error!(
+                                        "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
+                                        query_id,
+                                        processor_id,
+                                        processor_name,
+                                        elapsed,
+                                        active_workers,
+                                        executor.graph.format_graph_nodes()
+                                    );
                                 }
                             }
                         };
-
-                        warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
-                            query_id,
-                            processor_id,
-                            processor_name,
-                            elapsed,
-                            active_workers,
-                            running_graph_format
-                        );
                     }
                     Either::Right((res, _)) => {
                         return (start.elapsed(), res);

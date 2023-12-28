@@ -37,13 +37,13 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
-use super::parquet_data_source::DataSource;
+use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
@@ -55,7 +55,7 @@ pub struct DeserializeDataTransform {
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<DataSource>,
+    chunks: Vec<ParquetDataSource>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
 
     index_reader: Arc<Option<AggIndexReader>>,
@@ -152,8 +152,8 @@ impl Processor for DeserializeDataTransform {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = DataSourceMeta::downcast_from(source_meta) {
-                    self.parts = source_meta.parts;
+                if let Some(source_meta) = DataSourceWithMeta::downcast_from(source_meta) {
+                    self.parts = source_meta.meta;
                     self.chunks = source_meta.data;
                     return Ok(Event::Sync);
                 }
@@ -177,7 +177,7 @@ impl Processor for DeserializeDataTransform {
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
             match read_res {
-                DataSource::AggIndex((actual_part, data)) => {
+                ParquetDataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let block = agg_index_reader.deserialize_parquet_data(
                         actual_part,
@@ -193,7 +193,7 @@ impl Processor for DeserializeDataTransform {
 
                     self.output_data = Some(block);
                 }
-                DataSource::Normal((data, virtual_data)) => {
+                ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
                     let part = FusePartInfo::from_part(&part)?;

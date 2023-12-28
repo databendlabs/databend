@@ -52,19 +52,19 @@ use crate::FunctionRegistry;
 use crate::RemoteExpr;
 
 pub struct Evaluator<'a> {
-    input_columns: &'a DataBlock,
+    data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> Evaluator<'a> {
     pub fn new(
-        input_columns: &'a DataBlock,
+        data_block: &'a DataBlock,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         Evaluator {
-            input_columns,
+            data_block,
             func_ctx,
             fn_registry,
         }
@@ -82,7 +82,7 @@ impl<'a> Evaluator<'a> {
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
-            let column = self.input_columns.get_by_offset(*index);
+            let column = self.data_block.get_by_offset(*index);
             if (column.data_type == DataType::Null && data_type.is_nullable())
                 || (column.data_type.is_nullable() && data_type == &DataType::Null)
             {
@@ -105,7 +105,7 @@ impl<'a> Evaluator<'a> {
     /// will be evaluated, the rest will be default values and should not throw any error.
     pub fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
         debug_assert!(
-            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+            validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
         );
 
         #[cfg(debug_assertions)]
@@ -113,7 +113,7 @@ impl<'a> Evaluator<'a> {
 
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.data_block.get_by_offset(*id).value.clone()),
             Expr::Cast {
                 span,
                 is_try,
@@ -163,7 +163,7 @@ impl<'a> Evaluator<'a> {
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
-                    num_rows: self.input_columns.num_rows(),
+                    num_rows: self.data_block.num_rows(),
                     validity,
                     errors: None,
                     func_ctx: self.func_ctx,
@@ -209,12 +209,7 @@ impl<'a> Evaluator<'a> {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
-                        &self
-                            .input_columns
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
+                        &self.data_block.domains().into_iter().enumerate().collect(),
                         self.func_ctx,
                         self.fn_registry
                     )
@@ -370,9 +365,9 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
-
+                    let validity = validity.map(|validity| {
+                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                    });
                     let new_array = self
                         .run_cast(
                             span,
@@ -396,7 +391,6 @@ impl<'a> Evaluator<'a> {
                         }
                         inner_validity.into()
                     });
-
                     let new_col = self
                         .run_cast(
                             span,
@@ -430,9 +424,9 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
-
+                    let validity = validity.map(|validity| {
+                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                    });
                     let new_array = self
                         .run_cast(
                             span,
@@ -446,9 +440,16 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), col.len()));
-
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        for (index, offsets) in col.offsets.windows(2).enumerate() {
+                            inner_validity.extend_constant(
+                                (offsets[1] - offsets[0]) as usize,
+                                validity.get_bit(index),
+                            );
+                        }
+                        inner_validity.into()
+                    });
                     let new_col = self
                         .run_cast(
                             span,
@@ -802,9 +803,9 @@ impl<'a> Evaluator<'a> {
             unreachable!()
         }
 
-        let num_rows = self.input_columns.num_rows();
+        let num_rows = self.data_block.num_rows();
         let len = self
-            .input_columns
+            .data_block
             .columns()
             .iter()
             .find_map(|col| match &col.value {
@@ -944,14 +945,14 @@ impl<'a> Evaluator<'a> {
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
-                    num_rows: self.input_columns.num_rows(),
+                    num_rows: self.data_block.num_rows(),
                     validity: None,
                     errors: None,
                     func_ctx: self.func_ctx,
                 };
                 let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                assert_eq!(result.len(), self.input_columns.num_rows());
+                assert_eq!(result.len(), self.data_block.num_rows());
                 return Ok(result);
             }
         }

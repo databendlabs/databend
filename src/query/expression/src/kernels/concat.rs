@@ -34,6 +34,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::MapType;
@@ -239,6 +240,10 @@ impl Column {
             }),
             Column::Boolean(_) => Column::Boolean(Self::concat_boolean_types(
                 columns.map(|col| col.into_boolean().unwrap()),
+                capacity,
+            )),
+            Column::Binary(_) => BinaryType::upcast_column(Self::concat_string_types(
+                columns.map(|col| col.into_binary().unwrap()),
                 capacity,
             )),
             Column::String(_) => StringType::upcast_column(Self::concat_string_types(

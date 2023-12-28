@@ -60,7 +60,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use super::fuse_source::fill_internal_column_meta;
-use super::native_data_source::DataSource;
+use super::native_data_source::NativeDataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -78,7 +78,7 @@ pub struct NativeDeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: VecDeque<PartInfoPtr>,
-    chunks: VecDeque<DataSource>,
+    chunks: VecDeque<NativeDataSource>,
 
     prewhere_columns: Vec<usize>,
     prewhere_schema: DataSchema,
@@ -562,8 +562,8 @@ impl Processor for NativeDeserializeDataTransform {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(source_meta) = NativeDataSourceMeta::downcast_from(block_meta) {
-                    self.parts = VecDeque::from(source_meta.part);
+                if let Some(source_meta) = DataSourceWithMeta::downcast_from(block_meta) {
+                    self.parts = VecDeque::from(source_meta.meta);
                     self.chunks = VecDeque::from(source_meta.data);
                     return Ok(Event::Sync);
                 }
@@ -585,13 +585,13 @@ impl Processor for NativeDeserializeDataTransform {
     fn process(&mut self) -> Result<()> {
         if let Some(chunks) = self.chunks.front_mut() {
             let chunks = match chunks {
-                DataSource::AggIndex(data) => {
+                NativeDataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let block = agg_index_reader.deserialize_native_data(data)?;
                     self.output_data = Some(block);
                     return self.finish_process();
                 }
-                DataSource::Normal(data) => data,
+                NativeDataSource::Normal(data) => data,
             };
 
             // this means it's empty projection
