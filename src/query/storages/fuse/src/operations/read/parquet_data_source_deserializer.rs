@@ -17,6 +17,7 @@ use std::ops::BitAnd;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -125,7 +126,7 @@ impl DeserializeDataTransform {
         })))
     }
 
-    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
             let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
@@ -141,7 +142,7 @@ impl DeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok(data_block);
+                return Ok(None);
             }
             self.cached_runtime_filter = Some(bloom_filters);
         }
@@ -162,9 +163,9 @@ impl DeserializeDataTransform {
                 .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
                 .unwrap();
 
-            data_block.filter_with_bitmap(&rf_bitmap.into())
+            Ok(rf_bitmap.into())
         } else {
-            Ok(data_block)
+            Ok(None)
         }
     }
 }
@@ -262,14 +263,20 @@ impl Processor for DeserializeDataTransform {
                         Some(self.uncompressed_buffer.clone()),
                     )?;
 
+                    let origin_num_rows = data_block.num_rows();
+
+                    let mut filter = None;
                     if self.ctx.has_bloom_runtime_filters(self.table_index) {
-                        data_block = self.runtime_filter(data_block)?;
+                        if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
+                            data_block = data_block.filter_with_bitmap(&bitmap)?;
+                            filter = Some(bitmap);
+                        }
                     }
 
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                         data_block = virtual_reader.deserialize_virtual_columns(
-                            data_block,
+                            data_block.clone(),
                             virtual_data,
                             Some(self.uncompressed_buffer.clone()),
                         )?;
@@ -294,10 +301,15 @@ impl Processor for DeserializeDataTransform {
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     if self.block_reader.query_internal_columns() {
+                        let offsets = filter.as_ref().map(|bitmap| {
+                            (0..origin_num_rows)
+                                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                .collect()
+                        });
                         data_block = fill_internal_column_meta(
                             data_block,
                             part,
-                            None,
+                            offsets,
                             self.base_block_ids.clone(),
                         )?;
                     }
