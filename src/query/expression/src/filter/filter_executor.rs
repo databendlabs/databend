@@ -15,6 +15,7 @@
 use core::ops::Range;
 use std::collections::HashSet;
 
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
@@ -150,6 +151,32 @@ impl FilterExecutor {
         self.selection_range[range_count] = start..selection[count - 1] + 1;
         range_count += 1;
         range_count
+    }
+
+    // Update the `true_selection` by `MutableBitmap`, return the number of filtered indices.
+    pub fn select_bitmap(&mut self, count: usize, bitmap: MutableBitmap) -> usize {
+        let mut true_idx = 0;
+        let true_selection = self.true_selection.as_mut_slice();
+        unsafe {
+            for i in 0..count {
+                let idx = *true_selection.get_unchecked(i);
+                let ret = bitmap.get(idx as usize);
+                *true_selection.get_unchecked_mut(true_idx) = idx;
+                true_idx += ret as usize;
+            }
+        }
+        true_idx
+    }
+
+    // Initialize the `true_selection` by `MutableBitmap`, return the number of filtered indices.
+    pub fn from_bitmap(&mut self, bitmap: MutableBitmap) -> usize {
+        let mut true_idx = 0;
+        let true_selection = self.true_selection.as_mut_slice();
+        for (idx, ret) in bitmap.iter().enumerate() {
+            unsafe { *true_selection.get_unchecked_mut(true_idx) = idx as u32 };
+            true_idx += ret as usize;
+        }
+        true_idx
     }
 
     pub fn mut_true_selection(&mut self) -> &mut [u32] {

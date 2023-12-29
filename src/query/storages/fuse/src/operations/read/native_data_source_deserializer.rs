@@ -542,7 +542,8 @@ impl NativeDeserializeDataTransform {
     fn bloom_runtime_filter(
         &mut self,
         arrays: &mut Vec<(usize, Box<dyn Array>)>,
-    ) -> Result<(Option<MutableBitmap>, bool)> {
+        count: Option<usize>,
+    ) -> Result<(bool, Option<usize>)> {
         let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_bloom_runtime_filter.is_none() {
@@ -559,7 +560,7 @@ impl NativeDeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok((None, false));
+                return Ok((false, count));
             }
             self.cached_bloom_runtime_filter = Some(bloom_filters);
         }
@@ -591,7 +592,7 @@ impl NativeDeserializeDataTransform {
                             self.array_skip_pages.insert(*idx, 0);
                         }
                         None => {
-                            return Ok((None, false));
+                            return Ok((false, count));
                         }
                     }
                 }
@@ -601,11 +602,12 @@ impl NativeDeserializeDataTransform {
             local_arrays.clear();
             let probe_column = probe_block.get_last_column().clone();
             update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
-            if bitmap.unset_bits() == bitmap.len() {
+            let unset_bits = bitmap.unset_bits();
+            if unset_bits == bitmap.len() {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
-                return Ok((Some(bitmap), true));
-            } else if bitmap.unset_bits() != 0 {
+                return Ok((true, None));
+            } else if unset_bits != 0 {
                 bitmaps.push(bitmap);
             }
         }
@@ -614,9 +616,33 @@ impl NativeDeserializeDataTransform {
                 .into_iter()
                 .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
                 .unwrap();
-            Ok((Some(rf_bitmap), false))
+            if self.filter_executor.is_none() {
+                // If prewhere filter is None, we need to build a dummy filter executor.
+                let dummy_expr = Expr::Constant {
+                    span: None,
+                    scalar: Scalar::Boolean(true),
+                    data_type: DataType::Boolean,
+                };
+                let (select_expr, has_or) = build_select_expr(&dummy_expr);
+                self.filter_executor = Some(FilterExecutor::new(
+                    select_expr,
+                    self.ctx.get_function_context()?,
+                    has_or,
+                    DEFAULT_ROW_PER_PAGE,
+                    None,
+                    &BUILTIN_FUNCTIONS,
+                    false,
+                ));
+            }
+            let filter_executor = self.filter_executor.as_mut().unwrap();
+            let filter_count = if let Some(count) = count {
+                filter_executor.select_bitmap(count, rf_bitmap)
+            } else {
+                filter_executor.from_bitmap(rf_bitmap)
+            };
+            Ok((false, Some(filter_count)))
         } else {
-            Ok((None, false))
+            Ok((false, count))
         }
     }
 }
@@ -872,7 +898,8 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
-            let (rf_filter, skipped) = self.bloom_runtime_filter(&mut arrays)?;
+            let (skipped, filtered_count) =
+                self.bloom_runtime_filter(&mut arrays, filtered_count)?;
 
             if skipped {
                 return Ok(());
@@ -911,14 +938,6 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-            let filter = if let Some(mut rf_filter) = rf_filter {
-                if let Some(Value::Column(col)) = filter {
-                    rf_filter = rf_filter.bitand(&col);
-                }
-                Some(Value::Column(rf_filter.into()))
-            } else {
-                filter
-            };
             let block = if let Some(count) = &filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
                 filter_executor.take(block, origin_num_rows, *count)?
