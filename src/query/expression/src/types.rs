@@ -350,21 +350,15 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Compare two scalars and return the Ordering between them.
+    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
     #[inline(always)]
-    unsafe fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
-        unreachable!()
+    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
+        None
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Return the comparison function for the given select operation.
+    /// Return the comparison function for the given select operation, some data types not support comparison.
     #[inline(always)]
-    unsafe fn compare_operation(
-        op: &SelectOp,
-    ) -> unsafe fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
         match op {
             SelectOp::Equal => Self::equal,
             SelectOp::NotEqual => Self::not_equal,
@@ -375,52 +369,40 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         }
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Equal comparison between two scalars.
+    /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_eq()
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Equal))
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Not equal comparison between two scalars.
+    /// Not equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_ne()
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Equal))
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Greater than comparison between two scalars.
+    /// Greater than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_gt()
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Greater))
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Less than comparison between two scalars.
+    /// Less than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_lt()
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Less))
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    /// Greater than or equal comparison between two scalars.
+    /// Greater than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_ge()
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Less))
     }
 
-    /// # Safety
-    /// Some data types not support comparison.
-    // Less than or equal comparison between two scalars.
+    /// Less than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    unsafe fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        Self::compare(left, right).is_le()
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Greater))
     }
 }
 

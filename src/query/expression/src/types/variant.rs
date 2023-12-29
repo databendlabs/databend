@@ -169,33 +169,8 @@ impl ValueType for VariantType {
     }
 
     #[inline(always)]
-    unsafe fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
-    }
-
-    #[inline(always)]
-    unsafe fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Equal
-    }
-
-    #[inline(always)]
-    unsafe fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Greater
-    }
-
-    #[inline(always)]
-    unsafe fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Less
-    }
-
-    #[inline(always)]
-    unsafe fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Less
-    }
-
-    #[inline(always)]
-    unsafe fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
+        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
     }
 }
 

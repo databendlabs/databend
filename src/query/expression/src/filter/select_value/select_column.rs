@@ -39,7 +39,7 @@ impl<'a> Selector<'a> {
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
-        let cmp = unsafe { T::compare_operation(op) };
+        let cmp = T::compare_operation(op);
         match select_strategy {
             SelectStrategy::True => unsafe {
                 let start = *mutable_true_idx;

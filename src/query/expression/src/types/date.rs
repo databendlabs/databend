@@ -175,32 +175,32 @@ impl ValueType for DateType {
     }
 
     #[inline(always)]
-    unsafe fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
 
     #[inline(always)]
-    unsafe fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left != right
     }
 
     #[inline(always)]
-    unsafe fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left > right
     }
 
     #[inline(always)]
-    unsafe fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left >= right
     }
 
     #[inline(always)]
-    unsafe fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left < right
     }
 
     #[inline(always)]
-    unsafe fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left <= right
     }
 }

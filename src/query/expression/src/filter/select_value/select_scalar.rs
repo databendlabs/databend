@@ -39,7 +39,7 @@ impl<'a> Selector<'a> {
         let left = T::try_downcast_scalar(&left).unwrap();
         let right = right.as_ref();
         let right = T::try_downcast_scalar(&right).unwrap();
-        let result = unsafe { T::compare_operation(op)(left, right) };
+        let result = T::compare_operation(op)(left, right);
         let count = self.select_boolean_scalar_adapt(
             result,
             true_selection,
