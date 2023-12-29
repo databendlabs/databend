@@ -27,9 +27,9 @@ true
 true
 GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
 GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
-default NULL
-grant_db account_admin
-information_schema NULL
+default        NULL
+grant_db       account_admin
+information_schema     NULL
 test -- show tables
 test_t
 test -- show tables from system
