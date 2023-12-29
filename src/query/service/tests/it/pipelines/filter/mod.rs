@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,5 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod executor;
-mod filter;
+mod filter_executor;
+mod random_filter_expr;
+
+pub use random_filter_expr::random_filter_expr;

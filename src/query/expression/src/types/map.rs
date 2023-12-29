@@ -385,6 +385,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         <MapInternal<K, V> as ValueType>::index_column(col, index)
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         <MapInternal<K, V> as ValueType>::index_column_unchecked(col, index)
     }
