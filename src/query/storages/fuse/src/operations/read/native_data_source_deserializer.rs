@@ -33,6 +33,7 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::build_select_expr;
 use databend_common_expression::eval_function;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::BooleanType;
@@ -47,6 +48,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
@@ -69,6 +71,7 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
+use crate::DEFAULT_ROW_PER_PAGE;
 
 pub struct NativeDeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
@@ -94,6 +97,7 @@ pub struct NativeDeserializeDataTransform {
 
     prewhere_filter: Arc<Option<Expr>>,
     prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    filter_executor: Option<FilterExecutor>,
 
     skipped_page: usize,
     // The row offset of current part.
@@ -209,6 +213,21 @@ impl NativeDeserializeDataTransform {
         let prewhere_schema = src_schema.project(&prewhere_columns);
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
+        let filter_executor = if let Some(expr) = prewhere_filter.as_ref() {
+            let (select_expr, has_or) = build_select_expr(expr);
+            Some(FilterExecutor::new(
+                select_expr,
+                func_ctx.clone(),
+                has_or,
+                DEFAULT_ROW_PER_PAGE,
+                None,
+                &BUILTIN_FUNCTIONS,
+                false,
+            ))
+        } else {
+            None
+        };
+
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
@@ -246,6 +265,7 @@ impl NativeDeserializeDataTransform {
 
                 prewhere_filter,
                 prewhere_virtual_columns,
+                filter_executor,
                 skipped_page: 0,
                 top_k,
                 read_columns: vec![],
@@ -522,7 +542,8 @@ impl NativeDeserializeDataTransform {
     fn bloom_runtime_filter(
         &mut self,
         arrays: &mut Vec<(usize, Box<dyn Array>)>,
-    ) -> Result<(Option<MutableBitmap>, bool)> {
+        count: Option<usize>,
+    ) -> Result<(bool, Option<usize>)> {
         let mut local_arrays = vec![];
         // Check if already cached runtime filters
         if self.cached_bloom_runtime_filter.is_none() {
@@ -539,7 +560,7 @@ impl NativeDeserializeDataTransform {
                 })
                 .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
             if bloom_filters.is_empty() {
-                return Ok((None, false));
+                return Ok((false, count));
             }
             self.cached_bloom_runtime_filter = Some(bloom_filters);
         }
@@ -571,7 +592,7 @@ impl NativeDeserializeDataTransform {
                             self.array_skip_pages.insert(*idx, 0);
                         }
                         None => {
-                            return Ok((None, false));
+                            return Ok((false, count));
                         }
                     }
                 }
@@ -581,11 +602,12 @@ impl NativeDeserializeDataTransform {
             local_arrays.clear();
             let probe_column = probe_block.get_last_column().clone();
             update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
-            if bitmap.unset_bits() == bitmap.len() {
+            let unset_bits = bitmap.unset_bits();
+            if unset_bits == bitmap.len() {
                 self.offset_in_part += probe_block.num_rows();
                 self.finish_process_skip_page()?;
-                return Ok((Some(bitmap), true));
-            } else if bitmap.unset_bits() != 0 {
+                return Ok((true, None));
+            } else if unset_bits != 0 {
                 bitmaps.push(bitmap);
             }
         }
@@ -594,9 +616,33 @@ impl NativeDeserializeDataTransform {
                 .into_iter()
                 .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
                 .unwrap();
-            Ok((Some(rf_bitmap), false))
+            if self.filter_executor.is_none() {
+                // If prewhere filter is None, we need to build a dummy filter executor.
+                let dummy_expr = Expr::Constant {
+                    span: None,
+                    scalar: Scalar::Boolean(true),
+                    data_type: DataType::Boolean,
+                };
+                let (select_expr, has_or) = build_select_expr(&dummy_expr);
+                self.filter_executor = Some(FilterExecutor::new(
+                    select_expr,
+                    self.ctx.get_function_context()?,
+                    has_or,
+                    DEFAULT_ROW_PER_PAGE,
+                    None,
+                    &BUILTIN_FUNCTIONS,
+                    false,
+                ));
+            }
+            let filter_executor = self.filter_executor.as_mut().unwrap();
+            let filter_count = if let Some(count) = count {
+                filter_executor.select_bitmap(count, rf_bitmap)
+            } else {
+                filter_executor.from_bitmap(rf_bitmap)
+            };
+            Ok((false, Some(filter_count)))
         } else {
-            Ok((None, false))
+            Ok((false, count))
         }
     }
 }
@@ -793,8 +839,8 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }
 
-            let filter = match self.prewhere_filter.as_ref() {
-                Some(filter) => {
+            let filtered_count = match self.prewhere_filter.as_ref() {
+                Some(_) => {
                     // Arrays are empty means all prewhere columns are default values,
                     // the filter have checked in the first process, don't need check again.
                     if arrays.is_empty() {
@@ -814,22 +860,17 @@ impl Processor for NativeDeserializeDataTransform {
                             &mut prewhere_block,
                         )?;
 
-                        let evaluator =
-                            Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let filter = evaluator
-                            .run(filter)
-                            .map_err(|e| e.add_message("eval prewhere filter failed:"))?
-                            .try_downcast::<BooleanType>()
-                            .unwrap();
+                        let filter_executor = self.filter_executor.as_mut().unwrap();
+                        let mut count = filter_executor.select(&prewhere_block)?;
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
-                        if FilterHelpers::is_all_unset(&filter) {
+                        if count == 0 {
                             self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
 
                         // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                        let filter = if let Some((_, sorter, index)) = &mut self.top_k {
+                        if let Some((_, sorter, index)) = &mut self.top_k {
                             let index_prewhere = self
                                 .prewhere_columns
                                 .iter()
@@ -840,26 +881,25 @@ impl Processor for NativeDeserializeDataTransform {
                                 .value
                                 .as_column()
                                 .unwrap();
-
-                            let mut bitmap =
-                                FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                            sorter.push_column(top_k_column, &mut bitmap);
-                            Value::Column(bitmap.into())
-                        } else {
-                            filter
+                            count = sorter.push_column_with_selection(
+                                top_k_column,
+                                filter_executor.mut_true_selection(),
+                                count,
+                            );
                         };
 
-                        if FilterHelpers::is_all_unset(&filter) {
+                        if count == 0 {
                             self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
-                        Some(filter)
+                        Some(count)
                     }
                 }
                 None => None,
             };
 
-            let (rf_filter, skipped) = self.bloom_runtime_filter(&mut arrays)?;
+            let (skipped, filtered_count) =
+                self.bloom_runtime_filter(&mut arrays, filtered_count)?;
 
             if skipped {
                 return Ok(());
@@ -898,18 +938,9 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
-
-            let filter = if let Some(mut rf_filter) = rf_filter {
-                if let Some(Value::Column(col)) = filter {
-                    rf_filter = rf_filter.bitand(&col);
-                }
-                Some(Value::Column(rf_filter.into()))
-            } else {
-                filter
-            };
-
-            let block = if let Some(filter) = &filter {
-                block.filter_boolean_value(filter)?
+            let block = if let Some(count) = &filtered_count {
+                let filter_executor = self.filter_executor.as_mut().unwrap();
+                filter_executor.take(block, origin_num_rows, *count)?
             } else {
                 block
             };
@@ -918,10 +949,12 @@ impl Processor for NativeDeserializeDataTransform {
             // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
             let mut block = block.resort(&self.src_schema, &self.output_schema)?;
             if self.block_reader.query_internal_columns() {
-                let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {
-                    (self.offset_in_part..self.offset_in_part + origin_num_rows)
-                        .filter(|i| unsafe { bitmap.get_bit_unchecked(i - self.offset_in_part) })
-                        .collect()
+                let offsets = if let Some(count) = filtered_count {
+                    let filter_executor = self.filter_executor.as_mut().unwrap();
+                    filter_executor.mut_true_selection()[0..count]
+                        .iter()
+                        .map(|idx| *idx as usize + self.offset_in_part)
+                        .collect::<Vec<_>>()
                 } else {
                     (self.offset_in_part..self.offset_in_part + origin_num_rows).collect()
                 };

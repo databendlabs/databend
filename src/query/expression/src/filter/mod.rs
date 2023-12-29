@@ -12,5 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod executor;
-mod filter;
+mod filter_executor;
+mod select;
+mod select_expr;
+mod select_op;
+mod select_value;
+mod selector;
+
+pub use filter_executor::FilterExecutor;
+pub use select_expr::build_select_expr;
+pub use select_expr::SelectExpr;
+pub use select_op::SelectOp;
+pub use selector::SelectStrategy;
+pub use selector::Selector;

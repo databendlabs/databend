@@ -105,6 +105,7 @@ impl ValueType for EmptyArrayType {
         if index < *len { Some(()) } else { None }
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(_len: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
 
     fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {
@@ -150,6 +151,36 @@ impl ValueType for EmptyArrayType {
 
     fn column_memory_size(_: &Self::Column) -> usize {
         std::mem::size_of::<usize>()
+    }
+
+    #[inline(always)]
+    fn equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
+    }
+
+    #[inline(always)]
+    fn not_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn greater_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
+    }
+
+    #[inline(always)]
+    fn less_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+        true
     }
 }
 
