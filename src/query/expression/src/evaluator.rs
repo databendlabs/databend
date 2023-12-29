@@ -951,30 +951,36 @@ impl<'a> Evaluator<'a> {
         unreachable!("expr is not a set returning function: {expr}")
     }
 
-    fn run_array_fold(&self, column: &Column, expr: &Expr) -> Result<Scalar> {
+    fn run_array_reduce(&self, column: &Column, expr: &Expr) -> Result<Scalar> {
         let col_type = column.data_type();
         if col_type.is_null() || column.len() < 1 {
             return Ok(Scalar::Null);
         }
-
-        let mut arg0 = column.index(0).unwrap();
-        let mut result = arg0.to_owned();
-
+        let mut arg0 = column.index(0).unwrap().to_owned();
         for i in 1..column.len() {
-            let arg1 = column.index(i).unwrap();
+            let arg1 = column.index(i).unwrap().to_owned();
             let entries = {
                 vec![
-                    BlockEntry::new(col_type.clone(), Value::Scalar(arg0.to_owned())),
-                    BlockEntry::new(col_type.clone(), Value::Scalar(arg1.to_owned())),
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg0.clone())),
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg1)),
                 ]
             };
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-            result = evaluator.run(expr)?.as_scalar().unwrap().to_owned();
-            arg0 = result.as_ref();
+            arg0 = evaluator.run(expr)?.as_scalar().unwrap().clone();
+            arg0 = self
+                .run_cast(
+                    None,
+                    &arg0.as_ref().infer_data_type(),
+                    &col_type,
+                    Value::Scalar(arg0.clone()),
+                    None,
+                )?
+                .as_scalar()
+                .unwrap()
+                .clone();
         }
-
-        Ok(result)
+        Ok(arg0)
     }
 
     fn run_lambda(
@@ -984,13 +990,12 @@ impl<'a> Evaluator<'a> {
         lambda_expr: &RemoteExpr,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
-
-        // array_fold differs
-        if func_name == "array_fold" {
+        // array_reduce differs
+        if func_name == "array_reduce" {
             match &args[0] {
                 Value::Scalar(s) => match s {
                     Scalar::Array(c) => {
-                        let result = self.run_array_fold(c, &expr)?;
+                        let result = self.run_array_reduce(c, &expr)?;
                         return Ok(Value::Scalar(result));
                     }
                     _ => unreachable!(),
@@ -1001,7 +1006,7 @@ impl<'a> Evaluator<'a> {
                     for val in c.iter() {
                         match &val.to_owned() {
                             Scalar::Array(c) => {
-                                let result = self.run_array_fold(c, &expr)?;
+                                let result = self.run_array_reduce(c, &expr)?;
                                 let item = result.as_ref();
                                 builder.push(item);
                             }
@@ -1015,7 +1020,6 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-
         // TODO: Support multi args
         match &args[0] {
             Value::Scalar(s) => match s {

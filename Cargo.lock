@@ -3377,7 +3377,6 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "log",
- "match-template",
  "minitrace",
  "num-derive",
  "num-traits",

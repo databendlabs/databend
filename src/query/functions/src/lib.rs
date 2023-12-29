@@ -61,7 +61,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
     "array_apply",
     "array_map",
     "array_filter",
-    "array_fold",
+    "array_reduce",
 ];
 
 fn builtin_functions() -> FunctionRegistry {

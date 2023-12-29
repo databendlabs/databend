@@ -828,7 +828,7 @@ fn test_expr() {
         r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
-        r#"ARRAY_FOLD([1,2,3], (acc,t) -> acc + t)"#,
+        r#"ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)"#,
     ];
 
     for case in cases {

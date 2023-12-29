@@ -4108,31 +4108,31 @@ Tuple {
 
 
 ---------- Input ----------
-ARRAY_FOLD([1,2,3], (acc,t) -> acc + t)
+ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
 ---------- Output ---------
-ARRAY_FOLD([1, 2, 3], (acc, t) -> (acc + t))
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
 ---------- AST ------------
 FunctionCall {
     span: Some(
-        0..39,
+        0..41,
     ),
     distinct: false,
     name: Identifier {
-        name: "ARRAY_FOLD",
+        name: "ARRAY_REDUCE",
         quote: None,
         span: Some(
-            0..10,
+            0..12,
         ),
     },
     args: [
         Array {
             span: Some(
-                11..18,
+                13..20,
             ),
             exprs: [
                 Literal {
                     span: Some(
-                        12..13,
+                        14..15,
                     ),
                     lit: UInt64(
                         1,
@@ -4140,7 +4140,7 @@ FunctionCall {
                 },
                 Literal {
                     span: Some(
-                        14..15,
+                        16..17,
                     ),
                     lit: UInt64(
                         2,
@@ -4148,7 +4148,7 @@ FunctionCall {
                 },
                 Literal {
                     span: Some(
-                        16..17,
+                        18..19,
                     ),
                     lit: UInt64(
                         3,
@@ -4166,25 +4166,25 @@ FunctionCall {
                     name: "acc",
                     quote: None,
                     span: Some(
-                        21..24,
+                        23..26,
                     ),
                 },
                 Identifier {
                     name: "t",
                     quote: None,
                     span: Some(
-                        25..26,
+                        27..28,
                     ),
                 },
             ],
             expr: BinaryOp {
                 span: Some(
-                    35..36,
+                    37..38,
                 ),
                 op: Plus,
                 left: ColumnRef {
                     span: Some(
-                        31..34,
+                        33..36,
                     ),
                     database: None,
                     table: None,
@@ -4193,14 +4193,14 @@ FunctionCall {
                             name: "acc",
                             quote: None,
                             span: Some(
-                                31..34,
+                                33..36,
                             ),
                         },
                     ),
                 },
                 right: ColumnRef {
                     span: Some(
-                        37..38,
+                        39..40,
                     ),
                     database: None,
                     table: None,
@@ -4209,7 +4209,7 @@ FunctionCall {
                             name: "t",
                             quote: None,
                             span: Some(
-                                37..38,
+                                39..40,
                             ),
                         },
                     ),

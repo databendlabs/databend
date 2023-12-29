@@ -185,7 +185,7 @@ select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggrega
 3 1 9
 
 query III
-select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 'sum') from t
+select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggregate(col1, 'sum') from t
 ----
 3 1 9
 
@@ -265,27 +265,27 @@ select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
 [1,2,3,3]
 
 query T
-select array_fold([],(x,y)->x+y), array_fold([null],(x,y)->x+y), array_fold(null,(x,y)->x+y);
+select array_reduce([],(x,y)->x+y), array_reduce([null],(x,y)->x+y), array_reduce(null,(x,y)->x+y);
 ----
 [] null null
 
 query TT
-select array_fold([1,2,3],(x,y)->x+y-1), array_fold([3,4,5],(x,y)->x-y)
+select array_reduce([1,2,3],(x,y)->x+y-1), array_reduce([3,4,5],(x,y)->x-y)
 ----
 4 -6
 
 query T
-select array_fold([1, 2,null], (x,y) -> x + y)
+select array_reduce([1, 2,null], (x,y) -> x + y)
 ----
 null
 
 query T
-select array_fold(['hello', 'world'], (x,y) -> x || y)
+select array_reduce(['hello', 'world'], (x,y) -> x || y)
 ----
 helloworld
 
 query T
-select array_fold(col1,(x,y)->x+y+1) from t
+select array_reduce(col1,(x,y)->x+y+1) from t
 ----
 12
 

@@ -1716,6 +1716,40 @@ impl<'a> TypeChecker<'a> {
         Ok((new_agg_func, data_type))
     }
 
+    fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
+        match ty.remove_nullable() {
+            DataType::Number(s) => {
+                if s.is_float() {
+                    Ok(DataType::Number(NumberDataType::Float64))
+                } else {
+                    Ok(DataType::Number(NumberDataType::Int64))
+                }
+            }
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                let p = MAX_DECIMAL128_PRECISION;
+                let decimal_size = DecimalSize {
+                    precision: p,
+                    scale: s.scale,
+                };
+                Ok(DataType::Decimal(DecimalDataType::from_size(decimal_size)?))
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                let p = MAX_DECIMAL256_PRECISION;
+                let decimal_size = DecimalSize {
+                    precision: p,
+                    scale: s.scale,
+                };
+                Ok(DataType::Decimal(DecimalDataType::from_size(decimal_size)?))
+            }
+            DataType::Null => Ok(DataType::Null),
+            DataType::String => Ok(DataType::String),
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "array_reduce does not support type '{:?}'",
+                ty
+            ))),
+        }
+    }
+
     #[async_backtrace::framed]
     async fn resolve_lambda_function(
         &mut self,
@@ -1740,8 +1774,8 @@ impl<'a> TypeChecker<'a> {
             .collect::<Vec<_>>();
 
         // TODO: support multiple params
-        // ARRAY_FOLD have two params
-        if params.len() != 1 && func_name != "array_fold" {
+        // ARRAY_REDUCE have two params
+        if params.len() != 1 && func_name != "array_reduce" {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
             )));
@@ -1765,54 +1799,8 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        let inner_tys = if func_name == "array_fold" {
-            match &inner_ty {
-                DataType::Number(s) => {
-                    if s.is_float() {
-                        let t = DataType::Number(NumberDataType::Float64);
-                        vec![t.clone(), t.clone()]
-                    } else {
-                        let t = DataType::Number(NumberDataType::Int64);
-                        vec![t.clone(), t.clone()]
-                    }
-                }
-                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let p = MAX_DECIMAL128_PRECISION;
-                    let decimal_size = DecimalSize {
-                        precision: p,
-                        scale: s.scale,
-                    };
-                    let t = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
-                    vec![t.clone(), t.clone()]
-                }
-                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let p = MAX_DECIMAL256_PRECISION;
-                    let decimal_size = DecimalSize {
-                        precision: p,
-                        scale: s.scale,
-                    };
-                    let t = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
-                    vec![t.clone(), t.clone()]
-                }
-                DataType::Nullable(box ty) => {
-                    vec![
-                        DataType::Nullable(Box::new(ty.clone())),
-                        DataType::Nullable(Box::new(ty.clone())),
-                    ]
-                }
-                DataType::Null => {
-                    vec![DataType::Null, DataType::Null]
-                }
-                DataType::String => {
-                    vec![DataType::String, DataType::String]
-                }
-                _ => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "array_fold does not support type '{:?}'",
-                        inner_ty
-                    )));
-                }
-            }
+        let inner_tys = if func_name == "array_reduce" {
+            vec![inner_ty.clone(), inner_ty.clone()]
         } else {
             vec![inner_ty.clone()]
         };
@@ -1834,46 +1822,18 @@ impl<'a> TypeChecker<'a> {
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
                 ));
             }
-        } else if func_name == "array_fold" {
-            // transform to max_type correspondly
-            let max_type = match lambda_type.remove_nullable() {
-                DataType::Number(ty) => {
-                    if ty.is_float() {
-                        DataType::Number(NumberDataType::Float64)
-                    } else {
-                        DataType::Number(NumberDataType::Int64)
-                    }
-                }
-                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let p = MAX_DECIMAL128_PRECISION;
-                    let decimal_size = DecimalSize {
-                        precision: p,
-                        scale: s.scale,
-                    };
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
-                }
-                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let p = MAX_DECIMAL256_PRECISION;
-                    let decimal_size = DecimalSize {
-                        precision: p,
-                        scale: s.scale,
-                    };
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
-                }
-                DataType::String => DataType::String,
-                DataType::Null => DataType::Null,
-                _ => unreachable!(),
-            };
-            // tranform arg type
-            if inner_ty != max_type || inner_ty == DataType::String {
+        } else if func_name == "array_reduce" {
+            let max_ty = self.transform_to_max_type(&lambda_type)?;
+            // transform arg type
+            if inner_ty.remove_nullable() != max_ty || !inner_ty.is_nullable_or_null() {
                 arg = ScalarExpr::CastExpr(CastExpr {
                     span: arg.span(),
-                    is_try: false,
+                    is_try: arg_type.is_nullable(),
                     argument: Box::new(arg),
-                    target_type: Box::new(DataType::Array(Box::new(max_type.wrap_nullable()))),
+                    target_type: Box::new(DataType::Array(Box::new(max_ty.wrap_nullable()))),
                 });
             }
-            max_type.wrap_nullable()
+            max_ty.wrap_nullable()
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
@@ -2397,7 +2357,6 @@ impl<'a> TypeChecker<'a> {
             "last_query_id",
             "array_sort",
             "array_aggregate",
-            "array_reduce",
             "to_variant",
             "try_to_variant",
             "greatest",
@@ -2678,7 +2637,7 @@ impl<'a> TypeChecker<'a> {
                         .await,
                 )
             }
-            ("array_aggregate" | "array_reduce", args) => {
+            ("array_aggregate", args) => {
                 if args.len() != 2 {
                     return None;
                 }
