@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::BitAnd;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::array::Array;
@@ -46,6 +47,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -58,6 +60,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::IndexType;
+use xorf::BinaryFuse8;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
@@ -66,9 +70,12 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 pub struct NativeDeserializeDataTransform {
+    ctx: Arc<dyn TableContext>,
+    table_index: IndexType,
     func_ctx: FunctionContext,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
@@ -118,6 +125,8 @@ pub struct NativeDeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
+
+    cached_bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -235,6 +244,8 @@ impl NativeDeserializeDataTransform {
 
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
+                ctx,
+                table_index: plan.table_index,
                 func_ctx,
                 scan_progress,
                 block_reader,
@@ -268,6 +279,7 @@ impl NativeDeserializeDataTransform {
                 virtual_reader,
 
                 base_block_ids: plan.base_block_ids.clone(),
+                cached_bloom_runtime_filter: None,
             },
         )))
     }
@@ -525,6 +537,88 @@ impl NativeDeserializeDataTransform {
         }
         Ok(())
     }
+
+    // TODO(xudong): add selectivity prediction
+    fn bloom_runtime_filter(
+        &mut self,
+        arrays: &mut Vec<(usize, Box<dyn Array>)>,
+    ) -> Result<(Option<MutableBitmap>, bool)> {
+        let mut local_arrays = vec![];
+        // Check if already cached runtime filters
+        if self.cached_bloom_runtime_filter.is_none() {
+            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
+            let bloom_filters = bloom_filters
+                .into_iter()
+                .filter_map(|filter| {
+                    let name = filter.0.as_str();
+                    // Some probe keys are not in the schema, they are derived from expressions.
+                    self.src_schema
+                        .index_of(name)
+                        .ok()
+                        .map(|idx| (idx, filter.1.clone()))
+                })
+                .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
+            if bloom_filters.is_empty() {
+                return Ok((None, false));
+            }
+            self.cached_bloom_runtime_filter = Some(bloom_filters);
+        }
+        let mut bitmaps =
+            Vec::with_capacity(self.cached_bloom_runtime_filter.as_ref().unwrap().len());
+        for (idx, filter) in self.cached_bloom_runtime_filter.as_ref().unwrap().iter() {
+            let mut find_array = false;
+            // It's possible that the column has multiple filters, so we need to avoid duplicate reads.
+            // Or the column in prewhere columns has been read.
+            for (i, array) in arrays.iter() {
+                if i == idx {
+                    local_arrays.push((*idx, array.clone()));
+                    find_array = true;
+                    break;
+                }
+            }
+            if !find_array {
+                if let Some(array_iter) = self.array_iters.get_mut(idx) {
+                    let skip_pages = self.array_skip_pages.get(idx).unwrap();
+                    match array_iter.nth(*skip_pages) {
+                        Some(array) => {
+                            let array = array.as_ref().unwrap();
+                            if let Some(pos) = self.remain_columns.iter().position(|i| i == idx) {
+                                self.remain_columns.remove(pos);
+                            }
+                            self.read_columns.push(*idx);
+                            arrays.push((*idx, array.clone()));
+                            local_arrays.push((*idx, array.clone()));
+                            self.array_skip_pages.insert(*idx, 0);
+                        }
+                        None => {
+                            return Ok((None, false));
+                        }
+                    }
+                }
+            }
+            let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
+            let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
+            local_arrays.clear();
+            let probe_column = probe_block.get_last_column().clone();
+            update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
+            if bitmap.unset_bits() == bitmap.len() {
+                self.offset_in_part += probe_block.num_rows();
+                self.finish_process_skip_page()?;
+                return Ok((Some(bitmap), true));
+            } else if bitmap.unset_bits() != 0 {
+                bitmaps.push(bitmap);
+            }
+        }
+        if !bitmaps.is_empty() {
+            let rf_bitmap = bitmaps
+                .into_iter()
+                .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
+                .unwrap();
+            Ok((Some(rf_bitmap), false))
+        } else {
+            Ok((None, false))
+        }
+    }
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -778,6 +872,12 @@ impl Processor for NativeDeserializeDataTransform {
                 None => None,
             };
 
+            let (rf_filter, skipped) = self.bloom_runtime_filter(&mut arrays)?;
+
+            if skipped {
+                return Ok(());
+            }
+
             // Step 5: read remain columns and filter block if needed.
             for index in self.remain_columns.iter() {
                 if let Some(array_iter) = self.array_iters.get_mut(index) {
@@ -799,7 +899,6 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             let block = self.block_reader.build_block(arrays.clone(), None)?;
-
             // Step 6: fill missing field default value if need
             let mut block = if need_to_fill_data {
                 self.block_reader
@@ -812,6 +911,14 @@ impl Processor for NativeDeserializeDataTransform {
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
 
             let origin_num_rows = block.num_rows();
+            let filter = if let Some(mut rf_filter) = rf_filter {
+                if let Some(Value::Column(col)) = filter {
+                    rf_filter = rf_filter.bitand(&col);
+                }
+                Some(Value::Column(rf_filter.into()))
+            } else {
+                filter
+            };
             let block = if let Some(count) = &filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
                 filter_executor.take(block, origin_num_rows, *count)?
