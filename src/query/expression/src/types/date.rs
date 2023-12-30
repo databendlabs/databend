@@ -34,6 +34,8 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::KeyAccessor;
+use crate::PrimitiveKeyAccessor;
 use crate::ScalarRef;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -62,6 +64,7 @@ impl ValueType for DateType {
     type Domain = SimpleDomain<i32>;
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i32>>;
     type ColumnBuilder = Vec<i32>;
+    type CompareKey = i32;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: i32) -> i32 {
@@ -174,34 +177,12 @@ impl ValueType for DateType {
         builder[0]
     }
 
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
     }
 
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::Scalar>> {
+        Box::new(PrimitiveKeyAccessor::<i32>::new(column))
     }
 }
 

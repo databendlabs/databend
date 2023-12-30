@@ -32,7 +32,9 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::KeyAccessor;
 use crate::ScalarRef;
+use crate::StringKeyAccessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringType;
@@ -44,6 +46,7 @@ impl ValueType for StringType {
     type Domain = StringDomain;
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
+    type CompareKey = [u8];
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
@@ -186,6 +189,15 @@ impl ValueType for StringType {
     #[inline(always)]
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left <= right
+    }
+
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
+    }
+
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::CompareKey>> {
+        let (data, offsets) = column.into_buffer();
+        Box::new(StringKeyAccessor::new(data, offsets))
     }
 }
 

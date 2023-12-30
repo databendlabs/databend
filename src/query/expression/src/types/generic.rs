@@ -35,6 +35,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type Domain = Domain;
     type ColumnIterator<'a> = ColumnIterator<'a>;
     type ColumnBuilder = ColumnBuilder;
+    type CompareKey = Scalar;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {

@@ -37,6 +37,7 @@ impl ValueType for BinaryType {
     type Domain = ();
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
+    type CompareKey = [u8];
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::PartialOrd;
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum SelectOp {
     // Equal "="
@@ -52,4 +54,47 @@ impl SelectOp {
             SelectOp::Lte => SelectOp::Gte,
         }
     }
+}
+
+/// Return the comparison function for the given select operation, some data types not support comparison.
+#[inline(always)]
+pub fn compare_operation<T: PartialOrd>(op: &SelectOp) -> fn(T, T) -> bool {
+    match op {
+        SelectOp::Equal => equal,
+        SelectOp::NotEqual => not_equal,
+        SelectOp::Gt => greater_than,
+        SelectOp::Gte => greater_than_equal,
+        SelectOp::Lt => less_than,
+        SelectOp::Lte => less_than_equal,
+    }
+}
+
+#[inline(always)]
+fn equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left == right
+}
+
+#[inline(always)]
+fn not_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left != right
+}
+
+#[inline(always)]
+fn greater_than<T: PartialOrd>(left: T, right: T) -> bool {
+    left > right
+}
+
+#[inline(always)]
+fn greater_than_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left >= right
+}
+
+#[inline(always)]
+fn less_than<T: PartialOrd>(left: T, right: T) -> bool {
+    left < right
+}
+
+#[inline(always)]
+fn less_than_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left <= right
 }

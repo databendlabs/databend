@@ -19,6 +19,7 @@ use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::ValueType;
+use crate::KeyAccessor;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
@@ -26,8 +27,8 @@ impl<'a> Selector<'a> {
     pub(crate) fn select_column_scalar<T: ValueType, const FALSE: bool>(
         &self,
         op: &SelectOp,
-        column: T::Column,
-        scalar: T::ScalarRef<'a>,
+        column: Box<(dyn KeyAccessor<Key = T::CompareKey>)>,
+        scalar: &T::CompareKey,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
@@ -49,10 +50,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
+                                && cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {
@@ -64,10 +62,7 @@ impl<'a> Selector<'a> {
                     None => {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
-                            let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
-                                scalar.clone(),
-                            );
+                            let ret = cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {
@@ -86,10 +81,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
+                                && cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {
@@ -101,10 +93,7 @@ impl<'a> Selector<'a> {
                     None => {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
-                            let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
-                                scalar.clone(),
-                            );
+                            let ret = cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {
@@ -120,10 +109,7 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         for idx in 0u32..count as u32 {
                             let ret = validity.get_bit_unchecked(idx as usize)
-                                && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
-                                    scalar.clone(),
-                                );
+                                && cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {
@@ -134,10 +120,7 @@ impl<'a> Selector<'a> {
                     }
                     None => {
                         for idx in 0u32..count as u32 {
-                            let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
-                                scalar.clone(),
-                            );
+                            let ret = cmp(column.key_unchecked(idx as usize), scalar);
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
                             if FALSE {

@@ -21,6 +21,7 @@ use databend_common_hashtable::FastHash;
 use super::utils::serialize_group_columns;
 use crate::types::DataType;
 use crate::Column;
+use crate::DicKeyAccessor;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
@@ -110,25 +111,5 @@ impl HashMethod for HashMethodDictionarySerializer {
             }
             _ => unreachable!(),
         }
-    }
-}
-
-pub struct DicKeyAccessor {
-    data: Vec<DictionaryKeys>,
-}
-
-impl DicKeyAccessor {
-    pub fn new(data: Vec<DictionaryKeys>) -> Self {
-        Self { data }
-    }
-}
-
-impl KeyAccessor for DicKeyAccessor {
-    type Key = DictionaryKeys;
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        self.data.get_unchecked(index)
     }
 }

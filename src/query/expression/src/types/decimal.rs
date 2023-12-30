@@ -40,6 +40,8 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
+use crate::KeyAccessor;
+use crate::PrimitiveKeyAccessor;
 use crate::Scalar;
 use crate::ScalarRef;
 
@@ -56,6 +58,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     type Domain = SimpleDomain<Num>;
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
     type ColumnBuilder = Vec<Num>;
+    type CompareKey = Num;
 
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
         long
@@ -160,34 +163,12 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         builder[0]
     }
 
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
     }
 
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::Scalar>> {
+        Box::new(PrimitiveKeyAccessor::<Num>::new(column))
     }
 }
 

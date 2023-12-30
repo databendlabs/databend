@@ -37,8 +37,14 @@ impl<'a> Selector<'a> {
     ) -> Result<usize> {
         let left = left.as_ref();
         let left = T::try_downcast_scalar(&left).unwrap();
+        let left = T::to_owned_scalar(left);
+        let left = T::scalar_to_compare_key(&left).unwrap();
+
         let right = right.as_ref();
         let right = T::try_downcast_scalar(&right).unwrap();
+        let right = T::to_owned_scalar(right);
+        let right = T::scalar_to_compare_key(&right).unwrap();
+
         let result = T::compare_operation(op)(left, right);
         let count = self.select_boolean_scalar_adapt(
             result,

@@ -38,6 +38,7 @@ use crate::HashMethodKeysU64;
 use crate::HashMethodKeysU8;
 use crate::HashMethodSerializer;
 use crate::HashMethodSingleString;
+use crate::KeyAccessor;
 
 #[derive(Debug)]
 pub enum KeysState {
@@ -54,14 +55,6 @@ pub enum KeysState {
 unsafe impl Send for KeysState {}
 
 unsafe impl Sync for KeysState {}
-
-pub trait KeyAccessor {
-    type Key: ?Sized;
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
-}
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;

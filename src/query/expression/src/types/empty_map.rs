@@ -34,6 +34,7 @@ impl ValueType for EmptyMapType {
     type Domain = ();
     type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
     type ColumnBuilder = usize;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {}

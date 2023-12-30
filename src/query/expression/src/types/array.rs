@@ -42,6 +42,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     type Domain = Option<T::Domain>;
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
     type ColumnBuilder = ArrayColumnBuilder<T>;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: T::Column) -> T::Column {

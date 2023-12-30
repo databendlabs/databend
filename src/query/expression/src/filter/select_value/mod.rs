@@ -57,6 +57,8 @@ impl<'a> Selector<'a> {
             (Value::Column(left), Value::Column(right)) => {
                 let left = T::try_downcast_column(&left).unwrap();
                 let right = T::try_downcast_column(&right).unwrap();
+                let left = T::build_keys_accessor(left);
+                let right = T::build_keys_accessor(right);
 
                 if has_false {
                     self.select_columns::<T, true>(
@@ -89,8 +91,11 @@ impl<'a> Selector<'a> {
             (Value::Column(column), Value::Scalar(scalar))
             | (Value::Scalar(scalar), Value::Column(column)) => {
                 let column = T::try_downcast_column(&column).unwrap();
+                let column = T::build_keys_accessor(column);
                 let scalar = scalar.as_ref();
                 let scalar = T::try_downcast_scalar(&scalar).unwrap();
+                let scalar = T::to_owned_scalar(scalar);
+                let scalar = T::scalar_to_compare_key(&scalar).unwrap();
 
                 if has_false {
                     self.select_column_scalar::<T, true>(

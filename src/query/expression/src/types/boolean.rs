@@ -26,6 +26,8 @@ use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::ColumnKeyAccessor;
+use crate::KeyAccessor;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +40,7 @@ impl ValueType for BooleanType {
     type Domain = BooleanDomain;
     type ColumnIterator<'a> = databend_common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
+    type CompareKey = bool;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
@@ -150,33 +153,43 @@ impl ValueType for BooleanType {
         builder.get(0)
     }
 
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
+    }
+
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::Scalar>> {
+        Box::new(ColumnKeyAccessor::<BooleanType>::new(Column::Boolean(
+            column,
+        )))
+    }
+
     #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         left == right
     }
 
     #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn not_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         left != right
     }
 
     #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         left & !right
     }
 
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         (left & !right) || (left & right)
     }
 
     #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         !left & right
     }
 
     #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         (!left & right) || (left & right)
     }
 }

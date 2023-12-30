@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
@@ -21,6 +20,8 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ColumnIterator;
+use crate::ColumnKeyAccessor;
+use crate::KeyAccessor;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +34,7 @@ impl ValueType for AnyType {
     type Domain = Domain;
     type ColumnIterator<'a> = ColumnIterator<'a>;
     type ColumnBuilder = ColumnBuilder;
+    type CompareKey = Scalar;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -140,8 +142,11 @@ impl ValueType for AnyType {
         col.memory_size()
     }
 
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(lhs.cmp(&rhs))
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
+    }
+
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::Scalar>> {
+        Box::new(ColumnKeyAccessor::<AnyType>::new(column))
     }
 }

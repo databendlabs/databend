@@ -22,6 +22,8 @@ use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::ColumnKeyAccessor;
+use crate::KeyAccessor;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +36,7 @@ impl ValueType for EmptyArrayType {
     type Domain = ();
     type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
     type ColumnBuilder = usize;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {}
@@ -154,33 +157,43 @@ impl ValueType for EmptyArrayType {
     }
 
     #[inline(always)]
-    fn equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn equal(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         true
     }
 
     #[inline(always)]
-    fn not_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn not_equal(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         false
     }
 
     #[inline(always)]
-    fn greater_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         false
     }
 
     #[inline(always)]
-    fn greater_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         true
     }
 
     #[inline(always)]
-    fn less_than(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         false
     }
 
     #[inline(always)]
-    fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
+    fn less_than_equal(_left: &Self::CompareKey, _right: &Self::CompareKey) -> bool {
         true
+    }
+
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
+    }
+
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::Scalar>> {
+        Box::new(ColumnKeyAccessor::<EmptyArrayType>::new(
+            Column::EmptyArray { len: column },
+        ))
     }
 }
 

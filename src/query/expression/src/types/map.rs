@@ -40,6 +40,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type Domain = ();
     type ColumnIterator<'a> = KvIterator<'a, K, V>;
     type ColumnBuilder = KvColumnBuilder<K, V>;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -312,6 +313,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type Domain = Option<(K::Domain, V::Domain)>;
     type ColumnIterator<'a> = <MapInternal<K, V> as ValueType>::ColumnIterator<'a>;
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {

@@ -35,6 +35,8 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::ColumnBuilder;
+use crate::KeyAccessor;
+use crate::StringKeyAccessor;
 
 /// JSONB bytes representation of `null`.
 pub const JSONB_NULL: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -49,6 +51,7 @@ impl ValueType for VariantType {
     type Domain = ();
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
+    type CompareKey = [u8];
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
@@ -168,9 +171,49 @@ impl ValueType for VariantType {
         col.data().len() + col.offsets().len() * 8
     }
 
+    /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
+    fn equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
+    }
+
+    /// Not equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn not_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Equal
+    }
+
+    /// Greater than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Greater
+    }
+
+    /// Less than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Less
+    }
+
+    /// Greater than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Less
+    }
+
+    /// Less than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
+    }
+
+    fn scalar_to_compare_key(scalar: &Self::Scalar) -> Option<&Self::CompareKey> {
+        Some(scalar)
+    }
+
+    fn build_keys_accessor(column: Self::Column) -> Box<dyn KeyAccessor<Key = Self::CompareKey>> {
+        let (data, offsets) = column.into_buffer();
+        Box::new(StringKeyAccessor::new(data, offsets))
     }
 }
 

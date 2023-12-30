@@ -63,6 +63,7 @@ use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::KeyAccessor;
 use crate::ScalarRef;
 use crate::SelectOp;
 
@@ -285,6 +286,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone;
+    type CompareKey: ?Sized + PartialOrd;
 
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
@@ -350,15 +352,9 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
-    #[inline(always)]
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
-        None
-    }
-
     /// Return the comparison function for the given select operation, some data types not support comparison.
     #[inline(always)]
-    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+    fn compare_operation(op: &SelectOp) -> fn(&Self::CompareKey, &Self::CompareKey) -> bool {
         match op {
             SelectOp::Equal => Self::equal,
             SelectOp::NotEqual => Self::not_equal,
@@ -371,38 +367,46 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Equal))
+    fn equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left == right
     }
 
     /// Not equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Equal))
+    fn not_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left != right
     }
 
     /// Greater than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Greater))
+    fn greater_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left > right
     }
 
     /// Less than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Less))
+    fn less_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left < right
     }
 
     /// Greater than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Less))
+    fn greater_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left >= right
     }
 
     /// Less than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Greater))
+    fn less_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
+        left <= right
+    }
+
+    fn scalar_to_compare_key(_: &Self::Scalar) -> Option<&Self::CompareKey> {
+        None
+    }
+
+    fn build_keys_accessor(_: Self::Column) -> Box<dyn KeyAccessor<Key = Self::CompareKey>> {
+        unimplemented!()
     }
 }
 

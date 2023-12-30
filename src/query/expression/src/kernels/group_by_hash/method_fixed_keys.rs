@@ -45,6 +45,7 @@ use crate::ColumnBuilder;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
+use crate::PrimitiveKeyAccessor;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -582,24 +583,4 @@ pub fn fixed_hash(
     }
 
     Ok(())
-}
-
-pub struct PrimitiveKeyAccessor<T> {
-    data: Buffer<T>,
-}
-
-impl<T> PrimitiveKeyAccessor<T> {
-    pub fn new(data: Buffer<T>) -> Self {
-        Self { data }
-    }
-}
-
-impl<T> KeyAccessor for PrimitiveKeyAccessor<T> {
-    type Key = T;
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        self.data.get_unchecked(index)
-    }
 }

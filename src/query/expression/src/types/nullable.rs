@@ -42,6 +42,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type Domain = NullableDomain<T>;
     type ColumnIterator<'a> = NullableIterator<'a, T>;
     type ColumnBuilder = NullableColumnBuilder<T>;
+    type CompareKey = ();
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(

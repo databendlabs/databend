@@ -37,6 +37,7 @@ impl ValueType for BitmapType {
     type Domain = ();
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
+    type CompareKey = [u8];
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
