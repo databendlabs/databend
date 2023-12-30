@@ -1,0 +1,21 @@
+name: "Test ee management mode"
+description: "Running stateless tests in management mode"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_bendsql
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+
+    - name: Run Stateful Tests with Standalone mode
+      shell: bash
+      run: |
+        ./scripts/ci/ci-run-ee-tests-management-mode.sh
