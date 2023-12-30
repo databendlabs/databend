@@ -171,37 +171,31 @@ impl ValueType for VariantType {
         col.data().len() + col.offsets().len() * 8
     }
 
-    /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Equal
     }
 
-    /// Not equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn not_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Equal
     }
 
-    /// Greater than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Greater
     }
 
-    /// Less than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") == Ordering::Less
     }
 
-    /// Greater than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Less
     }
 
-    /// Less than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than_equal(left: &Self::CompareKey, right: &Self::CompareKey) -> bool {
         jsonb::compare(left, right).expect("unable to parse jsonb value") != Ordering::Greater
