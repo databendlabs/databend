@@ -104,7 +104,6 @@ impl<T: ValueType> ColumnKeyAccessor<T> {
             temp_scalar: RefCell::new(T::to_owned_scalar(T::index_column(&data, 0).unwrap())),
             data,
             phantom: PhantomData,
-            // temp_ref: None,
         }
     }
 }
