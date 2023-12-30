@@ -18,11 +18,8 @@ use std::marker::PhantomData;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_hashtable::DictionaryKeys;
 
-use crate::types::decimal::Decimal;
-use crate::types::number::Number;
 use crate::types::ValueType;
 use crate::Column;
-use crate::Scalar;
 
 pub trait KeyAccessor {
     type Key: ?Sized;

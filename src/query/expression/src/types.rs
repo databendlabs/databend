@@ -31,7 +31,6 @@ pub mod string;
 pub mod timestamp;
 pub mod variant;
 
-use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
