@@ -1825,12 +1825,20 @@ impl<'a> TypeChecker<'a> {
         } else if func_name == "array_reduce" {
             let max_ty = self.transform_to_max_type(&lambda_type)?;
             // transform arg type
+            let is_try = arg_type.is_nullable();
+            let target_type = if is_try {
+                Box::new(DataType::Nullable(Box::new(DataType::Array(Box::new(
+                    max_ty.wrap_nullable(),
+                )))))
+            } else {
+                Box::new(DataType::Array(Box::new(max_ty.wrap_nullable())))
+            };
             if inner_ty.remove_nullable() != max_ty || !inner_ty.is_nullable_or_null() {
                 arg = ScalarExpr::CastExpr(CastExpr {
                     span: arg.span(),
-                    is_try: arg_type.is_nullable(),
+                    is_try,
                     argument: Box::new(arg),
-                    target_type: Box::new(DataType::Array(Box::new(max_ty.wrap_nullable()))),
+                    target_type,
                 });
             }
             max_ty.wrap_nullable()
