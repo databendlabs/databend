@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::Plan;
@@ -102,7 +103,9 @@ async fn do_hook_refresh(
 
     if refresh_virtual_column {
         let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
-        plans.push(virtual_column_plan);
+        if let Some(virtual_column_plan) = virtual_column_plan {
+            plans.push(virtual_column_plan);
+        }
     }
 
     let mut tasks = Vec::with_capacity(std::cmp::min(
@@ -231,15 +234,30 @@ async fn build_refresh_index_plan(
 async fn generate_refresh_virtual_column_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
-) -> Result<Plan> {
+) -> Result<Option<Plan>> {
     let segment_locs = ctx.get_segment_locations()?;
 
+    let table_info = ctx
+        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .await?;
+    let catalog = ctx.get_catalog(&desc.catalog).await?;
+    let res = catalog
+        .list_virtual_columns(ListVirtualColumnsReq {
+            tenant: ctx.get_tenant(),
+            table_id: Some(table_info.get_id()),
+        })
+        .await?;
+
+    if res.is_empty() {
+        return Ok(None);
+    }
     let plan = RefreshVirtualColumnPlan {
         catalog: desc.catalog.clone(),
         database: desc.database.clone(),
         table: desc.table.clone(),
+        virtual_columns: res[0].virtual_columns.clone(),
         segment_locs: Some(segment_locs),
     };
 
-    Ok(Plan::RefreshVirtualColumn(Box::new(plan)))
+    Ok(Some(Plan::RefreshVirtualColumn(Box::new(plan))))
 }

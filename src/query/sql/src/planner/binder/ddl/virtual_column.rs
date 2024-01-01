@@ -28,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use log::debug;
 
 use crate::binder::Binder;
@@ -163,17 +164,26 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
-        if table_info.engine() != "FUSE" {
-            return Err(ErrorCode::SemanticError(
-                "Virtual Column only support FUSE engine",
-            ));
+
+        let catalog_info = self.ctx.get_catalog(&catalog).await?;
+        let res = catalog_info
+            .list_virtual_columns(ListVirtualColumnsReq {
+                tenant: self.ctx.get_tenant(),
+                table_id: Some(table_info.get_id()),
+            })
+            .await?;
+
+        if res.is_empty() {
+            return Err(ErrorCode::SemanticError("No virtual columns are created"));
         }
+        let virtual_columns = res[0].virtual_columns.clone();
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
                 catalog,
                 database,
                 table,
+                virtual_columns,
                 segment_locs: None,
             },
         )))
