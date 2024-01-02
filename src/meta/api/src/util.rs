@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::ShareHasNoGrantedDatabase;
-use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownShare;
@@ -76,7 +75,6 @@ use crate::kv_app_error::KVAppError;
 use crate::reply::txn_reply_to_api_result;
 use crate::Id;
 
-pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 pub const DEFAULT_MGET_SIZE: usize = 256;
 
 /// Get value that its type is `u64`.
@@ -271,36 +269,6 @@ where
     })?;
 
     Ok(v)
-}
-
-/// Returns an [`Iterator`] that indicate to try to submit a txn or give up.
-///
-/// It return `n` `Ok` items followed by an `Err` which is a max-retries exceeded error.
-///
-/// For example:
-/// ```
-/// fn update_table() -> Result<(), AppError> {
-///     let mut trials = txn_trials(3, "update_table");
-///     loop {
-///         trials.next().unwrap()?;
-///         // do something
-///     }
-/// }
-/// ```
-pub fn txn_trials<'a>(
-    n: Option<u32>,
-    ctx: impl Display + 'a,
-) -> impl Iterator<Item = Result<u32, AppError>> + 'a {
-    let n = n.unwrap_or(TXN_MAX_RETRY_TIMES);
-
-    (1..=(n + 1)).map(move |i| {
-        if i <= n {
-            Ok(i)
-        } else {
-            let err = TxnRetryMaxTimes::new(&ctx.to_string(), n);
-            Err(AppError::from(err))
-        }
-    })
 }
 
 pub async fn send_txn(

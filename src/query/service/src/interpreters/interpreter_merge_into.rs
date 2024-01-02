@@ -133,7 +133,7 @@ impl Interpreter for MergeIntoInterpreter {
                 table: self.plan.table.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
         }
 
         Ok(build_res)

@@ -31,7 +31,9 @@ log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"
 minitrace = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tonic = { workspace = true }
