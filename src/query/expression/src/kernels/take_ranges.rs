@@ -94,6 +94,10 @@ impl Column {
                 let column = Self::take_ranges_boolean_types(bm, ranges, num_rows);
                 Column::Boolean(column)
             }
+            Column::Binary(column) => {
+                let column = Self::take_ranges_string_types(column, ranges, num_rows);
+                Column::Binary(column)
+            }
             Column::String(column) => {
                 let column = Self::take_ranges_string_types(column, ranges, num_rows);
                 Column::String(column)

@@ -80,10 +80,15 @@ impl HttpService {
                 get(super::http::v1::background_tasks::list_background_tasks),
             );
         if self.config.query.management_mode {
-            route = route.at(
-                "/v1/tenants/:tenant/tables",
-                get(super::http::v1::tenant_tables::list_tenant_tables_handler),
-            );
+            route = route
+                .at(
+                    "/v1/tenants/:tenant/tables",
+                    get(super::http::v1::tenant_tables::list_tenant_tables_handler),
+                )
+                .at(
+                    "v1/tenants/:tenant/stream_status",
+                    get(super::http::v1::stream_status::stream_status_handler),
+                );
         }
 
         #[cfg(feature = "memory-profiling")]

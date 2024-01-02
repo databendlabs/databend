@@ -170,8 +170,8 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
     type BlockingReader = StorageMetricsWrapper<A::BlockingReader>;
     type Writer = StorageMetricsWrapper<A::Writer>;
     type BlockingWriter = StorageMetricsWrapper<A::BlockingWriter>;
-    type Pager = A::Pager;
-    type BlockingPager = A::BlockingPager;
+    type Lister = A::Lister;
+    type BlockingLister = A::BlockingLister;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -194,7 +194,7 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
     }
 
     #[async_backtrace::framed]
-    async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Pager)> {
+    async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
         self.inner.list(path, args).await
     }
 
@@ -210,7 +210,7 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
             .map(|(rp, r)| (rp, StorageMetricsWrapper::new(r, self.metrics.clone())))
     }
 
-    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
+    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)> {
         self.inner.blocking_list(path, args)
     }
 }

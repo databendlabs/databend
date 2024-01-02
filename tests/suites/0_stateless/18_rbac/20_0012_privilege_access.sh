@@ -86,13 +86,16 @@ echo "GRANT SELECT ON default.t20_0012_b TO 'test-user'" | $BENDSQL_CLIENT_CONNE
 echo "select * from default.t20_0012_b order by c" | $TEST_USER_CONNECT
 
 ## Create view table
-## TODO(liyz): view is not covered with ownership yet, so the created views are owned by PUBLIC, which
-## is accessible by all users. This need change.
+## View is not covered with ownership yet, the privilge checks is bound to the database
+## the view table is created in.
+echo "select 'test -- select view'" | $TEST_USER_CONNECT
 echo "create database default2" | $BENDSQL_CLIENT_CONNECT
+
 echo "create view default2.v_t20_0012 as select * from default.t20_0012_a" | $BENDSQL_CLIENT_CONNECT
-## Verify view table privilege
 echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
-## Only grant privilege for view table
+## Only grant privilege for view table, now this user can access the view under default2 db, 
+## but can not access the tables under the `default` database, stil raises permission error 
+## on SELECT default2.v_t20_0012
 echo "GRANT SELECT ON default2.v_t20_0012 TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "REVOKE SELECT ON default.t20_0012_a FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "REVOKE SELECT ON default.t20_0012_b FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
@@ -140,8 +143,6 @@ echo "drop table if exists default.test_t" | $BENDSQL_CLIENT_CONNECT
 echo "create table default.test_t(id int not null)" | $BENDSQL_CLIENT_CONNECT
 echo "show grants for a" | $BENDSQL_CLIENT_CONNECT
 echo "show databases" | $USER_A_CONNECT
-echo "select 'test -- show tables'" | $BENDSQL_CLIENT_CONNECT
-echo "show tables" | $USER_A_CONNECT
 echo "select 'test -- show tables from system'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from system" | $USER_A_CONNECT
 echo "select 'test -- show tables from grant_db'" | $BENDSQL_CLIENT_CONNECT

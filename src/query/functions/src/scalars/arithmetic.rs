@@ -616,8 +616,20 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else if src_type.need_round_cast_to(*dest_type) {
                             registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
+                                |func_ctx, domain| {
+                                    let (domain, overflowing) = if func_ctx.rounding_mode {
+                                        // Perform round on domain to keep the result of domain
+                                        // matches the result of function
+                                        let min = AsPrimitive::<f64>::as_(domain.min);
+                                        let max = AsPrimitive::<f64>::as_(domain.max);
+                                        let round_domain = SimpleDomain::<F64>{
+                                            min: min.round().into(),
+                                            max: max.round().into(),
+                                        };
+                                        round_domain.overflow_cast()
+                                    } else {
+                                        domain.overflow_cast()
+                                    };
                                     if overflowing {
                                         FunctionDomain::MayThrow
                                     } else {
@@ -686,8 +698,20 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else if src_type.need_round_cast_to(*dest_type) {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
+                                |func_ctx, domain| {
+                                    let (domain, overflowing) = if func_ctx.rounding_mode {
+                                        // Perform round on domain to keep the result of domain
+                                        // matches the result of function
+                                        let min = AsPrimitive::<f64>::as_(domain.min);
+                                        let max = AsPrimitive::<f64>::as_(domain.max);
+                                        let round_domain = SimpleDomain::<F64>{
+                                            min: min.round().into(),
+                                            max: max.round().into(),
+                                        };
+                                        round_domain.overflow_cast()
+                                    } else {
+                                        domain.overflow_cast()
+                                    };
                                     FunctionDomain::Domain(NullableDomain {
                                         has_null: overflowing,
                                         value: Some(Box::new(
