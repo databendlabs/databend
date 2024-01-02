@@ -32,7 +32,6 @@ use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_storages_common_table_meta::meta::Location;
-use log::error;
 use log::info;
 use parking_lot::RwLock;
 
@@ -75,19 +74,20 @@ async fn do_hook_refresh(
     pipeline.set_on_finished(move |err| {
         if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
-            GlobalIORuntime::instance().block_on(async move {
-                let result = execute_refresh_job(ctx, desc, refresh_virtual_column).await;
-                match result {
-                    Ok(_) => {
-                        info!("execute refresh job successfully.");
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
+            match GlobalIORuntime::instance().block_on(execute_refresh_job(
+                ctx,
+                desc,
+                refresh_virtual_column,
+            )) {
+                Ok(_) => {
+                    info!("execute refresh job successfully.");
                 }
-            })
-        } else {
-            Ok(())
+                Err(e) => {
+                    info!("execute refresh job failed. {:?}", e);
+                }
+            }
         }
+        Ok(())
     });
 
     Ok(())
