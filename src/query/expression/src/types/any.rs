@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
@@ -90,6 +91,7 @@ impl ValueType for AnyType {
         col.index(index)
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index(index).unwrap()
     }
@@ -136,5 +138,10 @@ impl ValueType for AnyType {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
+        Some(lhs.cmp(&rhs))
     }
 }

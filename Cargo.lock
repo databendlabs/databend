@@ -2545,6 +2545,7 @@ dependencies = [
  "sha2",
  "thrift",
  "typetag",
+ "xorf",
 ]
 
 [[package]]
@@ -3495,6 +3496,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
+ "databend-common-hashtable",
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-meta-types",
@@ -3532,6 +3534,7 @@ dependencies = [
  "sys-info",
  "typetag",
  "uuid",
+ "xorf",
 ]
 
 [[package]]
@@ -4294,6 +4297,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+ "xorf",
 ]
 
 [[package]]
@@ -13775,6 +13779,16 @@ name = "xml-rs"
 version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52839dc911083a8ef63efa4d039d1f58b5e409f923e44c80828f206f66e5541c"
+
+[[package]]
+name = "xorf"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf24c008fe464f5d8f58b8d16a1ab7e930bd73b2a6933ff8704c414b2bed7f92"
+dependencies = [
+ "libm",
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "xorfilter-rs"

@@ -32,14 +32,14 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 
-use super::parquet_data_source::DataSource;
+use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
@@ -51,7 +51,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<ParquetDataSource>)>,
     partitions: StealablePartitions,
 
     index_reader: Arc<Option<AggIndexReader>>,
@@ -118,13 +118,19 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                let mut filters = self
+                    .partitions
+                    .ctx
+                    .get_inlist_runtime_filter_with_id(self.table_index);
+                filters.extend(
+                    self.partitions
+                        .ctx
+                        .get_min_max_runtime_filter_with_id(self.table_index),
+                );
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
-                    &self
-                        .partitions
-                        .ctx
-                        .get_runtime_filter_with_id(self.table_index),
+                    &filters,
                     &self.func_ctx,
                 )? {
                     return Ok(Some(DataBlock::empty()));
@@ -142,10 +148,11 @@ impl SyncSource for ReadParquetDataSource<true> {
                         &loc,
                     ) {
                         // Read from aggregating index.
-                        return Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                            vec![part.clone()],
-                            vec![DataSource::AggIndex(data)],
-                        ))));
+                        return Ok(Some(DataBlock::empty_with_meta(
+                            DataSourceWithMeta::create(vec![part.clone()], vec![
+                                ParquetDataSource::AggIndex(data),
+                            ]),
+                        )));
                     }
                 }
 
@@ -175,10 +182,12 @@ impl SyncSource for ReadParquetDataSource<true> {
                     ignore_column_ids,
                 )?;
 
-                Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                    vec![part],
-                    vec![DataSource::Normal((source, virtual_source))],
-                ))))
+                Ok(Some(DataBlock::empty_with_meta(
+                    DataSourceWithMeta::create(vec![part], vec![ParquetDataSource::Normal((
+                        source,
+                        virtual_source,
+                    ))]),
+                )))
             }
         }
     }
@@ -209,7 +218,7 @@ impl Processor for ReadParquetDataSource<false> {
         }
 
         if let Some((part, data)) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
+            let output = DataBlock::empty_with_meta(DataSourceWithMeta::create(part, data));
 
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
@@ -224,16 +233,28 @@ impl Processor for ReadParquetDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
-            let filters = self
+            let mut filters = self
                 .partitions
                 .ctx
-                .get_runtime_filter_with_id(self.table_index);
-            for part in &parts {
-                if runtime_filter_pruner(self.table_schema.clone(), part, &filters, &self.func_ctx)?
-                {
+                .get_inlist_runtime_filter_with_id(self.table_index);
+            filters.extend(
+                self.partitions
+                    .ctx
+                    .get_min_max_runtime_filter_with_id(self.table_index),
+            );
+
+            let mut fuse_part_infos = Vec::with_capacity(parts.len());
+            for part in parts.into_iter() {
+                if runtime_filter_pruner(
+                    self.table_schema.clone(),
+                    &part,
+                    &filters,
+                    &self.func_ctx,
+                )? {
                     continue;
                 }
-                let part = part.clone();
+
+                fuse_part_infos.push(part.clone());
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
                 let index_reader = self.index_reader.clone();
@@ -254,7 +275,7 @@ impl Processor for ReadParquetDataSource<false> {
                                 .await
                             {
                                 // Read from aggregating index.
-                                return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
+                                return Ok::<_, ErrorCode>(ParquetDataSource::AggIndex(data));
                             }
                         }
 
@@ -286,14 +307,17 @@ impl Processor for ReadParquetDataSource<false> {
                             )
                             .await?;
 
-                        Ok(DataSource::Normal((source, virtual_source)))
+                        Ok(ParquetDataSource::Normal((source, virtual_source)))
                     }))
                     .await
                     .unwrap()
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((
+                fuse_part_infos,
+                futures::future::try_join_all(chunks).await?,
+            ));
             return Ok(());
         }
 

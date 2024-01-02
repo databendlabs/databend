@@ -585,7 +585,8 @@ pub fn can_auto_cast_to(
             properties.scale <= d.scale()
                 && properties.precision - properties.scale <= d.leading_digits()
         }
-        (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
+        // Only available for decimal --> f64, otherwise `sqrt(1234.56789)` will have signature: `sqrt(1234.56789::Float32)`
+        (DataType::Decimal(_), DataType::Number(n)) if n.is_float64() => true,
         _ => false,
     }
 }

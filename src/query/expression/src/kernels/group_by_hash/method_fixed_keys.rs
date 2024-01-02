@@ -258,6 +258,7 @@ macro_rules! impl_hash_method_fixed_keys {
                 Ok(KeysState::Column(NumberType::<$ty>::upcast_column(col)))
             }
 
+            #[inline]
             fn build_keys_iter<'a>(
                 &self,
                 key_state: &'a KeysState,

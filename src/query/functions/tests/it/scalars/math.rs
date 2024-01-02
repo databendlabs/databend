@@ -40,6 +40,7 @@ fn test_math() {
 
 fn test_abs(file: &mut impl Write) {
     run_ast(file, "abs(1)", &[]);
+    run_ast(file, "abs(-2.3434)", &[]);
     run_ast(file, "abs(-1)", &[]);
     run_ast(file, "abs(null)", &[]);
     run_ast(file, "abs(a)", &[(

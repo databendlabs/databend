@@ -52,29 +52,37 @@ use crate::FunctionRegistry;
 use crate::RemoteExpr;
 
 pub struct Evaluator<'a> {
-    input_columns: &'a DataBlock,
+    data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> Evaluator<'a> {
     pub fn new(
-        input_columns: &'a DataBlock,
+        data_block: &'a DataBlock,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         Evaluator {
-            input_columns,
+            data_block,
             func_ctx,
             fn_registry,
         }
+    }
+
+    pub fn data_block(&self) -> &DataBlock {
+        self.data_block
+    }
+
+    pub fn func_ctx(&self) -> &FunctionContext {
+        self.func_ctx
     }
 
     #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
-            let column = self.input_columns.get_by_offset(*index);
+            let column = self.data_block.get_by_offset(*index);
             if (column.data_type == DataType::Null && data_type.is_nullable())
                 || (column.data_type.is_nullable() && data_type == &DataType::Null)
             {
@@ -95,9 +103,9 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
-    fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+    pub fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
         debug_assert!(
-            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+            validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
         );
 
         #[cfg(debug_assertions)]
@@ -105,7 +113,7 @@ impl<'a> Evaluator<'a> {
 
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.data_block.get_by_offset(*id).value.clone()),
             Expr::Cast {
                 span,
                 is_try,
@@ -155,7 +163,7 @@ impl<'a> Evaluator<'a> {
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
-                    num_rows: self.input_columns.num_rows(),
+                    num_rows: self.data_block.num_rows(),
                     validity,
                     errors: None,
                     func_ctx: self.func_ctx,
@@ -201,12 +209,7 @@ impl<'a> Evaluator<'a> {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
-                        &self
-                            .input_columns
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
+                        &self.data_block.domains().into_iter().enumerate().collect(),
                         self.func_ctx,
                         self.fn_registry
                     )
@@ -221,7 +224,7 @@ impl<'a> Evaluator<'a> {
         result
     }
 
-    fn run_cast(
+    pub fn run_cast(
         &self,
         span: Span,
         src_type: &DataType,
@@ -362,9 +365,9 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
-
+                    let validity = validity.map(|validity| {
+                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                    });
                     let new_array = self
                         .run_cast(
                             span,
@@ -388,7 +391,6 @@ impl<'a> Evaluator<'a> {
                         }
                         inner_validity.into()
                     });
-
                     let new_col = self
                         .run_cast(
                             span,
@@ -422,9 +424,9 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
-
+                    let validity = validity.map(|validity| {
+                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                    });
                     let new_array = self
                         .run_cast(
                             span,
@@ -438,9 +440,16 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
-                    let validity = validity
-                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), col.len()));
-
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        for (index, offsets) in col.offsets.windows(2).enumerate() {
+                            inner_validity.extend_constant(
+                                (offsets[1] - offsets[0]) as usize,
+                                validity.get_bit(index),
+                            );
+                        }
+                        inner_validity.into()
+                    });
                     let new_col = self
                         .run_cast(
                             span,
@@ -509,7 +518,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn run_try_cast(
+    pub fn run_try_cast(
         &self,
         span: Span,
         src_type: &DataType,
@@ -784,7 +793,7 @@ impl<'a> Evaluator<'a> {
     // depending on the truthiness of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
-    fn eval_if(
+    pub fn eval_if(
         &self,
         args: &[Expr],
         generics: &[DataType],
@@ -794,9 +803,9 @@ impl<'a> Evaluator<'a> {
             unreachable!()
         }
 
-        let num_rows = self.input_columns.num_rows();
+        let num_rows = self.data_block.num_rows();
         let len = self
-            .input_columns
+            .data_block
             .columns()
             .iter()
             .find_map(|col| match &col.value {
@@ -936,14 +945,14 @@ impl<'a> Evaluator<'a> {
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
-                    num_rows: self.input_columns.num_rows(),
+                    num_rows: self.data_block.num_rows(),
                     validity: None,
                     errors: None,
                     func_ctx: self.func_ctx,
                 };
                 let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                assert_eq!(result.len(), self.input_columns.num_rows());
+                assert_eq!(result.len(), self.data_block.num_rows());
                 return Ok(result);
             }
         }
@@ -983,7 +992,7 @@ impl<'a> Evaluator<'a> {
         Ok(arg0)
     }
 
-    fn run_lambda(
+    pub fn run_lambda(
         &self,
         func_name: &str,
         args: Vec<Value<AnyType>>,
@@ -1105,6 +1114,195 @@ impl<'a> Evaluator<'a> {
                 Ok(col)
             }
         }
+    }
+
+    pub fn get_children(
+        &self,
+        args: &[Expr],
+        validity: Option<Bitmap>,
+    ) -> Result<Vec<(Value<AnyType>, DataType)>> {
+        let children = args
+            .iter()
+            .map(|expr| self.get_select_child(expr, validity.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        assert!(
+            children
+                .iter()
+                .filter_map(|val| match &val.0 {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
+        Ok(children)
+    }
+
+    pub fn remove_generics_data_type(
+        &self,
+        generics: &[DataType],
+        data_type: &DataType,
+    ) -> DataType {
+        match data_type {
+            DataType::Generic(index) => generics[*index].clone(),
+            DataType::Nullable(box DataType::Generic(index)) => {
+                DataType::Nullable(Box::new(generics[*index].clone()))
+            }
+            _ => data_type.clone(),
+        }
+    }
+
+    pub fn get_select_child(
+        &self,
+        expr: &Expr,
+        validity: Option<Bitmap>,
+    ) -> Result<(Value<AnyType>, DataType)> {
+        debug_assert!(
+            validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
+        );
+
+        #[cfg(debug_assertions)]
+        self.check_expr(expr);
+
+        let result = match expr {
+            Expr::Constant { scalar, .. } => Ok((
+                Value::Scalar(scalar.clone()),
+                scalar.as_ref().infer_data_type(),
+            )),
+            Expr::ColumnRef { id, .. } => {
+                let entry = self.data_block.get_by_offset(*id);
+                Ok((entry.value.clone(), entry.data_type.clone()))
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let value = self.get_select_child(expr, validity.clone())?.0;
+                if *is_try {
+                    Ok((
+                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
+                        dest_type.clone(),
+                    ))
+                } else {
+                    Ok((
+                        self.run_cast(*span, expr.data_type(), dest_type, value, validity)?,
+                        dest_type.clone(),
+                    ))
+                }
+            }
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => {
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((self.eval_if(args, generics, validity)?, return_type))
+            }
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "and_filters" => {
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((self.eval_and_filters(args, validity)?, return_type))
+            }
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.get_select_child(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match &val.0 {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                let cols_ref = args
+                    .iter()
+                    .map(|(val, _)| Value::as_ref(val))
+                    .collect::<Vec<_>>();
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.data_block.num_rows(),
+                    validity,
+                    errors: None,
+                    func_ctx: self.func_ctx,
+                };
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((result, return_type))
+            }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                return_type,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                Ok((
+                    self.run_lambda(name, args, lambda_expr)?,
+                    return_type.clone(),
+                ))
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                assert_eq!(
+                    ConstantFolder::fold_with_domain(
+                        expr,
+                        &self.data_block.domains().into_iter().enumerate().collect(),
+                        self.func_ctx,
+                        self.fn_registry
+                    )
+                    .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                    result.unwrap_err()
+                );
+                RECURSING.store(false, Ordering::SeqCst);
+            }
+        }
+        result
     }
 }
 
