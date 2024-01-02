@@ -28,6 +28,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -128,6 +129,7 @@ use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use xorf::BinaryFuse16;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -697,11 +699,23 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
-    fn set_runtime_filter(&self, _filters: (IndexType, Vec<Expr<String>>)) {
+    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
 
-    fn get_runtime_filter_with_id(&self, _id: IndexType) -> Vec<Expr<String>> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
+        todo!()
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
         todo!()
     }
 }

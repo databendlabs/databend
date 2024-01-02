@@ -31,6 +31,7 @@ pub mod string;
 pub mod timestamp;
 pub mod variant;
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 
@@ -63,6 +64,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -346,6 +348,61 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
+    }
+
+    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
+    #[inline(always)]
+    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
+        None
+    }
+
+    /// Return the comparison function for the given select operation, some data types not support comparison.
+    #[inline(always)]
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        match op {
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Lte => Self::less_than_equal,
+        }
+    }
+
+    /// Equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Equal))
+    }
+
+    /// Not equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Equal))
+    }
+
+    /// Greater than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Greater))
+    }
+
+    /// Less than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Less))
+    }
+
+    /// Greater than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Less))
+    }
+
+    /// Less than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Greater))
     }
 }
 

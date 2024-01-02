@@ -70,6 +70,14 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    pub fn data_block(&self) -> &DataBlock {
+        self.data_block
+    }
+
+    pub fn func_ctx(&self) -> &FunctionContext {
+        self.func_ctx
+    }
+
     #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
@@ -95,7 +103,7 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
-    fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+    pub fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
         );
@@ -216,7 +224,7 @@ impl<'a> Evaluator<'a> {
         result
     }
 
-    fn run_cast(
+    pub fn run_cast(
         &self,
         span: Span,
         src_type: &DataType,
@@ -510,7 +518,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn run_try_cast(
+    pub fn run_try_cast(
         &self,
         span: Span,
         src_type: &DataType,
@@ -785,7 +793,7 @@ impl<'a> Evaluator<'a> {
     // depending on the truthiness of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
-    fn eval_if(
+    pub fn eval_if(
         &self,
         args: &[Expr],
         generics: &[DataType],
@@ -952,7 +960,7 @@ impl<'a> Evaluator<'a> {
         unreachable!("expr is not a set returning function: {expr}")
     }
 
-    fn run_lambda(
+    pub fn run_lambda(
         &self,
         func_name: &str,
         args: Vec<Value<AnyType>>,
@@ -1044,6 +1052,195 @@ impl<'a> Evaluator<'a> {
                 Ok(col)
             }
         }
+    }
+
+    pub fn get_children(
+        &self,
+        args: &[Expr],
+        validity: Option<Bitmap>,
+    ) -> Result<Vec<(Value<AnyType>, DataType)>> {
+        let children = args
+            .iter()
+            .map(|expr| self.get_select_child(expr, validity.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        assert!(
+            children
+                .iter()
+                .filter_map(|val| match &val.0 {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
+        Ok(children)
+    }
+
+    pub fn remove_generics_data_type(
+        &self,
+        generics: &[DataType],
+        data_type: &DataType,
+    ) -> DataType {
+        match data_type {
+            DataType::Generic(index) => generics[*index].clone(),
+            DataType::Nullable(box DataType::Generic(index)) => {
+                DataType::Nullable(Box::new(generics[*index].clone()))
+            }
+            _ => data_type.clone(),
+        }
+    }
+
+    pub fn get_select_child(
+        &self,
+        expr: &Expr,
+        validity: Option<Bitmap>,
+    ) -> Result<(Value<AnyType>, DataType)> {
+        debug_assert!(
+            validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
+        );
+
+        #[cfg(debug_assertions)]
+        self.check_expr(expr);
+
+        let result = match expr {
+            Expr::Constant { scalar, .. } => Ok((
+                Value::Scalar(scalar.clone()),
+                scalar.as_ref().infer_data_type(),
+            )),
+            Expr::ColumnRef { id, .. } => {
+                let entry = self.data_block.get_by_offset(*id);
+                Ok((entry.value.clone(), entry.data_type.clone()))
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let value = self.get_select_child(expr, validity.clone())?.0;
+                if *is_try {
+                    Ok((
+                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
+                        dest_type.clone(),
+                    ))
+                } else {
+                    Ok((
+                        self.run_cast(*span, expr.data_type(), dest_type, value, validity)?,
+                        dest_type.clone(),
+                    ))
+                }
+            }
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => {
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((self.eval_if(args, generics, validity)?, return_type))
+            }
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "and_filters" => {
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((self.eval_and_filters(args, validity)?, return_type))
+            }
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.get_select_child(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match &val.0 {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                let cols_ref = args
+                    .iter()
+                    .map(|(val, _)| Value::as_ref(val))
+                    .collect::<Vec<_>>();
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.data_block.num_rows(),
+                    validity,
+                    errors: None,
+                    func_ctx: self.func_ctx,
+                };
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                // ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((result, return_type))
+            }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                return_type,
+                ..
+            } => {
+                let args = args
+                    .iter()
+                    .map(|expr| self.partial_run(expr, validity.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+
+                Ok((
+                    self.run_lambda(name, args, lambda_expr)?,
+                    return_type.clone(),
+                ))
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                assert_eq!(
+                    ConstantFolder::fold_with_domain(
+                        expr,
+                        &self.data_block.domains().into_iter().enumerate().collect(),
+                        self.func_ctx,
+                        self.fn_registry
+                    )
+                    .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                    result.unwrap_err()
+                );
+                RECURSING.store(false, Ordering::SeqCst);
+            }
+        }
+        result
     }
 }
 

@@ -247,7 +247,7 @@ impl Interpreter for UpdateInterpreter {
                     table: tbl_name.to_string(),
                 };
 
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
             }
         }
 

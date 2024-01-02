@@ -14,7 +14,9 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::filter::build_select_expr;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
@@ -40,14 +42,19 @@ impl PipelineBuilder {
                     "Invalid empty predicate list".to_string(),
                 ))
             })?;
+        assert_eq!(predicate.data_type(), &DataType::Boolean);
 
+        let max_block_size = self.settings.get_max_block_size()? as usize;
+        let (select_expr, has_or) = build_select_expr(&predicate);
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformFilter::create(
                 input,
                 output,
-                predicate.clone(),
+                select_expr.clone(),
+                has_or,
                 filter.projections.clone(),
                 self.func_ctx.clone(),
+                max_block_size,
             );
 
             if self.enable_profiling {

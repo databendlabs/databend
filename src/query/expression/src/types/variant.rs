@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::cmp::Ordering;
 use std::ops::Range;
 
 use roaring::RoaringTreemap;
@@ -116,6 +117,7 @@ impl ValueType for VariantType {
         col.index(index)
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index_unchecked(index)
     }
@@ -164,6 +166,11 @@ impl ValueType for VariantType {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.data().len() + col.offsets().len() * 8
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
+        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
     }
 }
 
