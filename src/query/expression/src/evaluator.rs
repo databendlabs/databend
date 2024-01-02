@@ -980,7 +980,7 @@ impl<'a> Evaluator<'a> {
             arg0 = self
                 .run_cast(
                     None,
-                    &arg0.as_ref().infer_data_type(),
+                    &expr.data_type(),
                     &col_type,
                     result,
                     None,
