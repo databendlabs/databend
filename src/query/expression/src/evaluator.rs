@@ -1010,7 +1010,11 @@ impl<'a> Evaluator<'a> {
                     _ => unreachable!(),
                 },
                 Value::Column(c) => {
-                    let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+                    let inner_ty = match c.remove_nullable() {
+                        Column::Array(t) => t.values.data_type(),
+                        _ => unreachable!(),
+                    };
+                    let mut builder = ColumnBuilder::with_capacity(&inner_ty.wrap_nullable(), c.len());
                     for val in c.iter() {
                         match &val.to_owned() {
                             Scalar::Array(c) => {
