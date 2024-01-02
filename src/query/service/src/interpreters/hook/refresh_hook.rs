@@ -51,7 +51,14 @@ pub struct RefreshDesc {
 
 /// Hook refresh action with a on-finished callback.
 /// errors (if any) are ignored.
-pub async fn hook_refresh(
+pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
+    if let Err(e) = do_hook_refresh(ctx, pipeline, desc).await {
+        info!("execute refresh job with error (ignored): {}", e);
+    }
+}
+
+/// Hook refresh action with a on-finished callback.
+async fn do_hook_refresh(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
     desc: RefreshDesc,
@@ -62,31 +69,31 @@ pub async fn hook_refresh(
 
     let refresh_virtual_column = ctx
         .get_settings()
-        .get_enable_refresh_virtual_column_after_write()?;
+        .get_enable_refresh_virtual_column_after_write()
+        .unwrap_or(false);
 
-    pipeline.set_on_finished(move |may_error| match may_error {
-        Ok(_) => {
+    pipeline.set_on_finished(move |err| {
+        if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
             GlobalIORuntime::instance().block_on(async move {
-                let result = do_hook_refresh(ctx, desc, refresh_virtual_column).await;
+                let result = execute_refresh_job(ctx, desc, refresh_virtual_column).await;
                 match result {
-                    Ok(_) => Ok(()),
-                    Err(e) if e.code() == ErrorCode::LICENSE_KEY_INVALID => {
-                        error!("license key invalid: {}", e.message());
+                    Ok(_) => {
+                        info!("execute refresh job successfully.");
                         Ok(())
                     }
                     Err(e) => Err(e),
                 }
             })
+        } else {
+            Ok(())
         }
-        Err(e) => Err(e.clone()),
     });
 
     Ok(())
 }
 
-/// Hook refresh action with a on-finished callback.
-async fn do_hook_refresh(
+async fn execute_refresh_job(
     ctx: Arc<QueryContext>,
     desc: RefreshDesc,
     refresh_virtual_column: bool,
