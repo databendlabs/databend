@@ -51,19 +51,8 @@ pub struct RefreshDesc {
 /// Hook refresh action with a on-finished callback.
 /// errors (if any) are ignored.
 pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
-    if let Err(e) = do_hook_refresh(ctx, pipeline, desc).await {
-        info!("execute refresh job with error (ignored): {}", e);
-    }
-}
-
-/// Hook refresh action with a on-finished callback.
-async fn do_hook_refresh(
-    ctx: Arc<QueryContext>,
-    pipeline: &mut Pipeline,
-    desc: RefreshDesc,
-) -> Result<()> {
     if pipeline.is_empty() {
-        return Ok(());
+        return;
     }
 
     let refresh_virtual_column = ctx
@@ -89,8 +78,6 @@ async fn do_hook_refresh(
         }
         Ok(())
     });
-
-    Ok(())
 }
 
 async fn execute_refresh_job(
