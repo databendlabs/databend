@@ -204,6 +204,8 @@ impl<E> HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        ctx.set_id(query_id.clone());
+
         Ok(HttpQueryContext::new(
             session,
             query_id,

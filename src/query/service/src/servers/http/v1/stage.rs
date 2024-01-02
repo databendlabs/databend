@@ -90,6 +90,8 @@ pub async fn upload_to_stage(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+    let query_id = ctx.query_id.clone();
+    context.set_id(query_id.clone());
     let args = UploadToStageArgs::parse(req)?;
 
     let stage = if args.stage_name == "~" {
@@ -127,9 +129,8 @@ pub async fn upload_to_stage(
         files.push(name.clone());
     }
 
-    let mut id = uuid::Uuid::new_v4().to_string();
     Ok(Json(UploadToStageResponse {
-        id,
+        id: query_id,
         stage_name: args.stage_name,
         state: "SUCCESS".to_string(),
         files,

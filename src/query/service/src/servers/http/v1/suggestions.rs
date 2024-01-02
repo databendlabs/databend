@@ -41,6 +41,7 @@ pub async fn list_suggestions(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+    context.set_id(ctx.query_id.clone());
     let suggestions = SuggestedBackgroundTasksSource::all_suggestions(context)
         .await
         .map_err(|err| poem::Error::from_string(err.message(), StatusCode::BAD_REQUEST))?;
