@@ -40,7 +40,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::ParquetDataSource;
@@ -71,7 +71,7 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
+    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -140,7 +140,7 @@ impl DeserializeDataTransform {
                         .ok()
                         .map(|idx| (idx, filter.1.clone()))
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
+                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
             if bloom_filters.is_empty() {
                 return Ok(None);
             }

@@ -91,7 +91,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -930,7 +930,7 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse8)> {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_bloom()).clone(),
