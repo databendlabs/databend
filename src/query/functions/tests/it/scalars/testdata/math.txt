@@ -7,6 +7,15 @@ output domain  : {1..=1}
 output         : 1
 
 
+ast            : abs(-2.3434)
+raw expr       : abs(minus(2.3434))
+checked expr   : abs<Decimal(5, 4)>(minus<Decimal(5, 4)>(2.3434_d128(5,4)))
+optimized expr : 2.3434_d128(5,4)
+output type    : Decimal(5, 4)
+output domain  : {2.3434..=2.3434}
+output         : 2.3434
+
+
 ast            : abs(-1)
 raw expr       : abs(minus(1))
 checked expr   : abs<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
