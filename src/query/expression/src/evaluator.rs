@@ -978,13 +978,7 @@ impl<'a> Evaluator<'a> {
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
             let result = evaluator.run(expr)?;
             arg0 = self
-                .run_cast(
-                    None,
-                    &expr.data_type(),
-                    &col_type,
-                    result,
-                    None,
-                )?
+                .run_cast(None, expr.data_type(), &col_type, result, None)?
                 .as_scalar()
                 .unwrap()
                 .clone();
@@ -1014,7 +1008,8 @@ impl<'a> Evaluator<'a> {
                         Column::Array(t) => t.values.data_type(),
                         _ => unreachable!(),
                     };
-                    let mut builder = ColumnBuilder::with_capacity(&inner_ty.wrap_nullable(), c.len());
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&inner_ty.wrap_nullable(), c.len());
                     for val in c.iter() {
                         match &val.to_owned() {
                             Scalar::Array(c) => {
