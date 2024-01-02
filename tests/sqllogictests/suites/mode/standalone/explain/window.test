@@ -138,5 +138,41 @@ Filter
       ├── push downs: [filters: [], limit: NONE]
       └── estimated rows: 0.00
 
+# cannot push down filter in window function
+query
+explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
+----
+Filter
+├── output columns: [test.k (#0), test.v (#1)]
+├── filters: [rank() OVER (ORDER BY v DESC) (#4) = 1, is_true(t1.k (#0) = 12)]
+├── estimated rows: 0.20
+└── Window
+  ├── output columns: [test.k (#0), test.v (#1), rank() OVER (ORDER BY v DESC) (#4)]
+  ├── aggregate function: [rank]
+  ├── partition by: []
+  ├── order by: [v]
+  ├── frame: [Range: Preceding(None) ~ CurrentRow]
+  └── UnionAll
+    ├── output columns: [test.k (#0), test.v (#1)]
+    ├── estimated rows: 0.00
+    ├── TableScan
+    │   ├── table: default.test_explain_window.test
+    │   ├── output columns: [k (#0), v (#1)]
+    │   ├── read rows: 0
+    │   ├── read bytes: 0
+    │   ├── partitions total: 0
+    │   ├── partitions scanned: 0
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan
+      ├── table: default.test_explain_window.test
+      ├── output columns: [k (#2), v (#3)]
+      ├── read rows: 0
+      ├── read bytes: 0
+      ├── partitions total: 0
+      ├── partitions scanned: 0
+      ├── push downs: [filters: [], limit: NONE]
+      └── estimated rows: 0.00                                                                                        
+
 statement ok
 DROP DATABASE test_explain_window;

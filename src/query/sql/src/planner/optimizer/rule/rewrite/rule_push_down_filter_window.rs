@@ -24,7 +24,6 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOp::Pattern;
 use crate::plans::Window;
-
 /// Input:   Filter
 ///           \
 ///            Window
@@ -102,8 +101,7 @@ impl Rule for RulePushDownFilterWindow {
         for predicate in filter.predicates.into_iter() {
             let predicate_used_columns = predicate.used_columns();
             if predicate_used_columns.is_subset(&window_child_prop.output_columns)
-                && (window_group_columns.is_empty()
-                    || predicate_used_columns.is_subset(&window_group_columns))
+                && predicate_used_columns.is_subset(&window_group_columns)
             {
                 pushed_down_predicates.push(predicate);
             } else {
