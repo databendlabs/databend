@@ -173,10 +173,11 @@ impl Binder {
             })
             .await?;
 
-        if res.is_empty() {
-            return Err(ErrorCode::SemanticError("No virtual columns are created"));
-        }
-        let virtual_columns = res[0].virtual_columns.clone();
+        let virtual_columns = if res.is_empty() {
+            vec![]
+        } else {
+            res[0].virtual_columns.clone()
+        };
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {

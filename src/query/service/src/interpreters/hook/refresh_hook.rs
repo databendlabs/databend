@@ -248,7 +248,7 @@ async fn generate_refresh_virtual_column_plan(
         })
         .await?;
 
-    if res.is_empty() {
+    if res.is_empty() || res[0].virtual_columns.is_empty() {
         return Ok(None);
     }
     let plan = RefreshVirtualColumnPlan {
