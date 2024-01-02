@@ -559,8 +559,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
-	cargo install cargo-quickinstall
-	cargo quickinstall cargo-binstall
+	cargo install cargo-quickinstall && cargo quickinstall cargo-binstall || cargo install cargo-binstall
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
 	cargo binstall -y cargo-nextest
