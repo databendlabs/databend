@@ -44,6 +44,7 @@ dependencies = [
  "const-random",
  "getrandom 0.2.11",
  "once_cell",
+ "serde",
  "version_check",
 ]
 
@@ -1029,21 +1030,6 @@ name = "binstring"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e0d60973d9320722cb1206f412740e162a33b8547ea8d6be75d7cff237c7a85"
-
-[[package]]
-name = "bit-set"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
-dependencies = [
- "bit-vec",
-]
-
-[[package]]
-name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitflags"
@@ -7251,8 +7237,9 @@ checksum = "b4ba82c000837f4e74df01a5520f0dc48735d4aed955a99eae4428bab7cf3acd"
 
 [[package]]
 name = "hive_metastore"
-version = "0.0.1"
-source = "git+https://github.com/Xuanwo/hive_metastore_rs?rev=b8aaffb#b8aaffbc6de6265537e74d99baed66dbc84cab72"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72309e48b3b63b41cd48d23eff77d4854a7bb676196f99e004b67dc24cc6296d"
 dependencies = [
  "anyhow",
  "pilota",
@@ -9680,10 +9667,11 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "682b3db6679a97ec07efc81fe5b5d0ad090cf698c9728f6b0969ca66515b9c28"
+checksum = "5e9c5ca077f7e8a8a92c770871f3904fd6b6db3d1dac76fc7f40169b28571ec7"
 dependencies = [
+ "ahash 0.8.3",
  "anyhow",
  "async-recursion",
  "bytes",
@@ -9693,7 +9681,6 @@ dependencies = [
  "lazy_static",
  "linkedbytes",
  "paste",
- "proptest",
  "serde",
  "smallvec",
  "thiserror",
@@ -10218,8 +10205,6 @@ version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c003ac8c77cb07bb74f5f198bce836a689bcd5a42574612bf14d17bfd08c20e"
 dependencies = [
- "bit-set",
- "bit-vec",
  "bitflags 2.4.0",
  "lazy_static",
  "num-traits",
@@ -10227,8 +10212,6 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_xorshift",
  "regex-syntax 0.7.4",
- "rusty-fork",
- "tempfile",
  "unarray",
 ]
 
@@ -11262,18 +11245,6 @@ name = "rustversion"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
-
-[[package]]
-name = "rusty-fork"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
-dependencies = [
- "fnv",
- "quick-error",
- "tempfile",
- "wait-timeout",
-]
 
 [[package]]
 name = "rustyline"
@@ -13269,9 +13240,9 @@ checksum = "9dcc60c0624df774c82a0ef104151231d37da4962957d691c011c852b2473314"
 
 [[package]]
 name = "volo"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c85ce0a5fc19836709fc75a4f57129a02b9a94d25a4fce2a80b70eff9aa28fa"
+checksum = "26dfc090d2c58feaaffeb23b5efd52ce4413dcdd5f6afed3f79c4945de23779a"
 dependencies = [
  "async-broadcast",
  "dashmap",
@@ -13296,9 +13267,9 @@ dependencies = [
 
 [[package]]
 name = "volo-thrift"
-version = "0.8.4"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c6cef7a8acdd3a8e53e94759eb609345b3a38fbde9324d74ad93f2ca7dff2a0"
+checksum = "6d5edac4395077223385cd041b5a1643d4a2f03158183b634d4f7127f3a0faf4"
 dependencies = [
  "anyhow",
  "bytes",
@@ -13319,15 +13290,6 @@ dependencies = [
  "tokio",
  "tracing",
  "volo",
-]
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
-dependencies = [
- "libc",
 ]
 
 [[package]]
