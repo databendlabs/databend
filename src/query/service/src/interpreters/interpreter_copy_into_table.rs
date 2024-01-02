@@ -355,7 +355,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 table: self.plan.table_name.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
         }
 
         Ok(build_res)
