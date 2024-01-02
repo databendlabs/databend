@@ -1717,12 +1717,12 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
-        match ty.remove_nullable() {
+        let max_ty = match ty.remove_nullable() {
             DataType::Number(s) => {
                 if s.is_float() {
-                    Ok(DataType::Number(NumberDataType::Float64))
+                    DataType::Number(NumberDataType::Float64)
                 } else {
-                    Ok(DataType::Number(NumberDataType::Int64))
+                    DataType::Number(NumberDataType::Int64)
                 }
             }
             DataType::Decimal(DecimalDataType::Decimal128(s)) => {
@@ -1731,7 +1731,7 @@ impl<'a> TypeChecker<'a> {
                     precision: p,
                     scale: s.scale,
                 };
-                Ok(DataType::Decimal(DecimalDataType::from_size(decimal_size)?))
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Decimal(DecimalDataType::Decimal256(s)) => {
                 let p = MAX_DECIMAL256_PRECISION;
@@ -1739,14 +1739,22 @@ impl<'a> TypeChecker<'a> {
                     precision: p,
                     scale: s.scale,
                 };
-                Ok(DataType::Decimal(DecimalDataType::from_size(decimal_size)?))
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
-            DataType::Null => Ok(DataType::Null),
-            DataType::String => Ok(DataType::String),
-            _ => Err(ErrorCode::BadDataValueType(format!(
-                "array_reduce does not support type '{:?}'",
-                ty
-            ))),
+            DataType::Null => DataType::Null,
+            DataType::String => DataType::String,
+            _ => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "array_reduce does not support type '{:?}'",
+                    ty
+                )));
+            }
+        };
+
+        if ty.is_nullable() {
+            Ok(max_ty.wrap_nullable())
+        } else {
+            Ok(max_ty)
         }
     }
 
@@ -1830,18 +1838,20 @@ impl<'a> TypeChecker<'a> {
         } else if func_name == "array_reduce" {
             // transform arg type
             let max_ty = inner_tys[0].clone();
-            let is_try = arg_type.is_nullable();
-            let target_type = if is_try {
+            let target_type = if arg_type.is_nullable() {
                 Box::new(DataType::Nullable(Box::new(DataType::Array(Box::new(
-                    max_ty.wrap_nullable(),
+                    max_ty.clone(),
                 )))))
             } else {
-                Box::new(DataType::Array(Box::new(max_ty.wrap_nullable())))
+                Box::new(DataType::Array(Box::new(max_ty.clone())))
             };
-            if inner_ty.remove_nullable() != max_ty || !inner_ty.is_nullable_or_null() {
+            // we should convert arg to max_ty to avoid overflow in 'ADD'/'SUB',
+            // so if arg_type(origin_type) != target_type(max_type), cast arg
+            // for example, if arg = [1INT8, 2INT8, 3INT8], after cast it be [1INT64, 2INT64, 3INT64]
+            if arg_type != *target_type {
                 arg = ScalarExpr::CastExpr(CastExpr {
                     span: arg.span(),
-                    is_try,
+                    is_try: false,
                     argument: Box::new(arg),
                     target_type,
                 });
@@ -1877,8 +1887,8 @@ impl<'a> TypeChecker<'a> {
                     let lambda_field = DataField::new("0", inner_tys[0].clone());
                     DataSchema::new(vec![lambda_field])
                 } else {
-                    let lambda_field0 = DataField::new("0", return_type.clone());
-                    let lambda_field1 = DataField::new("1", return_type.clone());
+                    let lambda_field0 = DataField::new("0", inner_tys[0].clone());
+                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
                     DataSchema::new(vec![lambda_field0, lambda_field1])
                 };
 

@@ -177,6 +177,7 @@ impl<'a> Evaluator<'a> {
                 name,
                 args,
                 lambda_expr,
+                return_type,
                 ..
             } => {
                 let args = args
@@ -192,7 +193,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                self.run_lambda(name, args, lambda_expr)
+                self.run_lambda(name, args, lambda_expr, return_type)
             }
         };
 
@@ -991,6 +992,7 @@ impl<'a> Evaluator<'a> {
         func_name: &str,
         args: Vec<Value<AnyType>>,
         lambda_expr: &RemoteExpr,
+        return_type: &DataType,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
         // array_reduce differs
@@ -1004,12 +1006,7 @@ impl<'a> Evaluator<'a> {
                     _ => unreachable!(),
                 },
                 Value::Column(c) => {
-                    let inner_ty = match c.remove_nullable() {
-                        Column::Array(t) => t.values.data_type(),
-                        _ => unreachable!(),
-                    };
-                    let mut builder =
-                        ColumnBuilder::with_capacity(&inner_ty.wrap_nullable(), c.len());
+                    let mut builder = ColumnBuilder::with_capacity(return_type, c.len());
                     for val in c.iter() {
                         match &val.to_owned() {
                             Scalar::Array(c) => {
@@ -1269,7 +1266,7 @@ impl<'a> Evaluator<'a> {
                 );
 
                 Ok((
-                    self.run_lambda(name, args, lambda_expr)?,
+                    self.run_lambda(name, args, lambda_expr, return_type)?,
                     return_type.clone(),
                 ))
             }

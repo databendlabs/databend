@@ -295,4 +295,29 @@ select array_reduce(col1,(x,y)->x+y+1) from t
 12
 
 statement ok
+create table t1(col1 Array(Int Null) not null, col2 Array(Float null) not null, col3 Array(Decimal (10,5)null) not null, col4 Array(String) not null)
+
+statement ok
+insert into t1 values([], [], [], [])
+
+statement ok
+insert into t1 values([1, null], [3.1, null], [4.1231, null], ['hello', null])
+
+statement ok
+insert into t1 values([1,2,3], [3.1, 5.42, 6.25], [1.1231, 4.131, 6.56], ['hello', 'world', '2024'])
+
+query TTTT
+select array_reduce(col1,(x,y)->x+y), array_reduce(col2,(x,y)->x-y), array_reduce(col3,(x,y)->x+y), array_reduce(col4,(x,y)->x||y) from t1
+----
+null null null null
+null null null null
+6 -8.570000171661377 11.81410 helloworld2024
+
+
+query IIII
+select length(col1), length(col2), length(col3), length(col4) from t
+----
+4 4 1 1
+
+statement ok
 DROP DATABASE array_func_test
