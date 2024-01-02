@@ -750,5 +750,36 @@ SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC) AS rank
 2 2
 2 2
 
+## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
-DROP DATABASE test_window_basic
+DROP TABLE IF EXISTS tbpush
+
+statement ok
+create table tbpush(b int);
+
+statement ok
+insert into tbpush values (1),(2);
+
+statement ok
+DROP view IF EXISTS vwpush
+
+statement ok
+create view vwpush (b, rnum) as select b, row_number() over (order by b) from tbpush
+
+query II
+select b, row_number() over (order by b) from tbpush where b > 1;
+----
+2 1
+
+query II
+select b, row_number() over (order by b) from tbpush where b > 1;
+----
+2 1
+
+query II
+select * from (select b, row_number() over (order by b) from tbpush) where b > 1;
+----
+2 2 
+
+statement ok
+DROP DATABASE test_window_basic;

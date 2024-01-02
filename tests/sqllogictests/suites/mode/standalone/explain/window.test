@@ -174,5 +174,87 @@ Filter
       ├── push downs: [filters: [], limit: NONE]
       └── estimated rows: 0.00                                                                                        
 
+## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
+statement ok
+DROP TABLE IF EXISTS tbpush
+
+statement ok
+create table tbpush(b int);
+
+statement ok
+DROP view IF EXISTS vwpush
+
+statement ok
+create view vwpush (b, rnum) as select b, row_number() over (order by b) from tbpush
+
+query
+explain select b, row_number() over (order by b) from tbpush where b > 3;
+----
+Window
+├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+├── aggregate function: [row_number]
+├── partition by: []
+├── order by: [b]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Filter
+    ├── output columns: [tbpush.b (#0)]
+    ├── filters: [is_true(tbpush.b (#0) > 3)]
+    ├── estimated rows: 0.00
+    └── TableScan
+      ├── table: default.test_explain_window.tbpush
+      ├── output columns: [b (#0)]
+      ├── read rows: 0
+      ├── read bytes: 0
+      ├── partitions total: 0
+      ├── partitions scanned: 0
+      ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
+      └── estimated rows: 0.00
+
+query
+explain select * from vwpush where b > 3;
+----
+Filter
+├── output columns: [tbpush.b (#0), rnum (#1)]
+├── filters: [is_true(vwpush.b (#0) > 3)]
+├── estimated rows: 0.20
+└── Window
+  ├── output columns: [tbpush.b (#0), rnum (#1)]
+  ├── aggregate function: [row_number]
+  ├── partition by: []
+  ├── order by: [b]
+  ├── frame: [Range: Preceding(None) ~ CurrentRow]
+  └── TableScan
+    ├── table: default.test_explain_window.tbpush
+    ├── output columns: [b (#0)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
+query
+explain select * from (select b, row_number() over (order by b) from tbpush) where b > 3;
+----
+Filter
+├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+├── filters: [is_true(tbpush.b (#0) > 3)]
+├── estimated rows: 0.20
+└── Window
+  ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+  ├── aggregate function: [row_number]
+  ├── partition by: []
+  ├── order by: [b]
+  ├── frame: [Range: Preceding(None) ~ CurrentRow]
+  └── TableScan
+    ├── table: default.test_explain_window.tbpush
+    ├── output columns: [b (#0)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
 statement ok
 DROP DATABASE test_explain_window;
