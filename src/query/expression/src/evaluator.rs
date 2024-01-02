@@ -976,13 +976,13 @@ impl<'a> Evaluator<'a> {
             };
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-            arg0 = evaluator.run(expr)?.as_scalar().unwrap().clone();
+            let result = evaluator.run(expr)?;
             arg0 = self
                 .run_cast(
                     None,
                     &arg0.as_ref().infer_data_type(),
                     &col_type,
-                    Value::Scalar(arg0.clone()),
+                    result,
                     None,
                 )?
                 .as_scalar()
@@ -1010,8 +1010,7 @@ impl<'a> Evaluator<'a> {
                     _ => unreachable!(),
                 },
                 Value::Column(c) => {
-                    let mut builder =
-                        ColumnBuilder::with_capacity(&expr.data_type().wrap_nullable(), c.len());
+                    let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
                     for val in c.iter() {
                         match &val.to_owned() {
                             Scalar::Array(c) => {

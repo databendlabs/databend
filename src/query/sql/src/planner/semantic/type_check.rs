@@ -1779,6 +1779,10 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
             )));
+        } else if func_name == "array_reduce" && params.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {func_name} expects 2 parameter",
+            )));
         }
 
         if args.len() != 1 {
@@ -1800,7 +1804,8 @@ impl<'a> TypeChecker<'a> {
         };
 
         let inner_tys = if func_name == "array_reduce" {
-            vec![inner_ty.clone(), inner_ty.clone()]
+            let max_ty = self.transform_to_max_type(&inner_ty)?;
+            vec![max_ty.clone(), max_ty.clone()]
         } else {
             vec![inner_ty.clone()]
         };
@@ -1808,7 +1813,7 @@ impl<'a> TypeChecker<'a> {
         let columns = params
             .iter()
             .zip(inner_tys.iter())
-            .map(|col| (col.0.clone(), col.1.clone()))
+            .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
         let box (lambda_expr, lambda_type) =
@@ -1823,8 +1828,8 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         } else if func_name == "array_reduce" {
-            let max_ty = self.transform_to_max_type(&lambda_type)?;
             // transform arg type
+            let max_ty = inner_tys[0].clone();
             let is_try = arg_type.is_nullable();
             let target_type = if is_try {
                 Box::new(DataType::Nullable(Box::new(DataType::Array(Box::new(

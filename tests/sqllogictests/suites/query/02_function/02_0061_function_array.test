@@ -280,6 +280,11 @@ select array_reduce([1, 2,null], (x,y) -> x + y)
 null
 
 query T
+select array_reduce([1.21312,2.21332,3.2213],(x,y)->(x+y))
+----
+6.64774
+
+query T
 select array_reduce(['hello', 'world'], (x,y) -> x || y)
 ----
 helloworld
