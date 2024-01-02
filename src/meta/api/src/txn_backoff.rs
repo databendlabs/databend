@@ -17,8 +17,10 @@ use std::time::Duration;
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use futures::future::BoxFuture;
+use log::info;
+use log::warn;
 use rand::Rng;
-use tokio::time::Sleep;
 
 const TXN_MAX_RETRY_TIMES: u32 = 60;
 
@@ -46,19 +48,43 @@ const TXN_MAX_RETRY_TIMES: u32 = 60;
 ///     }
 /// }
 /// ```
-pub fn txn_backoff<'a>(
+pub fn txn_backoff(
     n: Option<u32>,
-    ctx: impl Display + 'a,
-) -> impl Iterator<Item = Result<Sleep, AppError>> + 'a {
+    ctx: impl Display,
+) -> impl Iterator<Item = Result<BoxFuture<'static, ()>, AppError>> {
     let n = n.unwrap_or(TXN_MAX_RETRY_TIMES);
 
     let mut rnd = rand::thread_rng();
     let scale = 1.0 + rnd.gen_range(-0.2..0.2);
 
+    let ctx = ctx.to_string();
+
     (1..=(n + 1)).map(move |i| {
         if i <= n {
             let backoff = ith_backoff(i as usize);
-            let fu = tokio::time::sleep(Duration::from_secs_f64(backoff * scale));
+            let sleep = Duration::from_secs_f64(backoff * scale);
+            let ctx2 = ctx.clone();
+
+            let msg = format!("{}: txn-retry for {}th time, sleep {:?}", &ctx2, i, sleep);
+
+            let fu = async move {
+                if i >= 5 {
+                    warn!("{}, start", msg);
+                } else if i >= 2 {
+                    info!("{}, start", msg);
+                }
+
+                tokio::time::sleep(sleep).await;
+
+                if i >= 5 {
+                    warn!("{}, end", msg);
+                } else if i >= 2 {
+                    info!("{}, end", msg);
+                }
+            };
+
+            let fu: BoxFuture<'static, ()> = Box::pin(fu);
+
             Ok(fu)
         } else {
             let err = TxnRetryMaxTimes::new(&ctx.to_string(), n);
@@ -126,12 +152,12 @@ mod tests {
 
         let elapsed = now.elapsed().as_secs_f64();
         assert!(
-            (0.034..0.060).contains(&elapsed)
+            (0.034..0.060).contains(&elapsed),
             "{} is expected to be 10 + 14 + 20 milliseconds",
             elapsed
         );
 
-        let _err = trials.next().unwrap().unwrap_err();
+        assert!(trials.next().unwrap().is_err());
     }
 
     #[tokio::test]
@@ -142,6 +168,6 @@ mod tests {
             let _ = trials.next().unwrap().unwrap();
         }
 
-        let _err = trials.next().unwrap().unwrap_err();
+        assert!(trials.next().unwrap().is_err());
     }
 }
