@@ -35,6 +35,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
@@ -265,6 +266,10 @@ impl Column {
                 let builder = BooleanType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<BooleanType>(columns, builder, indices)
             }
+            Column::Binary(_) => {
+                let builder = BinaryType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<BinaryType>(columns, builder, indices)
+            }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<StringType>(columns, builder, indices)
@@ -469,6 +474,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Boolean(columns)
             }
+            Column::Binary(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| BinaryType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Binary(columns)
+            }
             Column::String(_) => {
                 let columns = columns
                     .iter()
@@ -603,6 +615,9 @@ impl Column {
             ColumnVec::Boolean(columns) => {
                 Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
+            ColumnVec::Binary(columns) => BinaryType::upcast_column(
+                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+            ),
             ColumnVec::String(columns) => StringType::upcast_column(
                 Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
             ),

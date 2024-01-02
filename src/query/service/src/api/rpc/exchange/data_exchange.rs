@@ -29,14 +29,6 @@ impl DataExchange {
             DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
-
-    pub fn from_multiple_nodes(&self) -> bool {
-        match self {
-            DataExchange::Merge(_) => true,
-            DataExchange::ShuffleDataExchange(_) => true,
-            DataExchange::Broadcast(exchange) => exchange.from_multiple_nodes,
-        }
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -77,15 +69,11 @@ impl MergeExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastExchange {
-    pub from_multiple_nodes: bool,
     pub destination_ids: Vec<String>,
 }
 
 impl BroadcastExchange {
-    pub fn create(from_multiple_nodes: bool, destination_ids: Vec<String>) -> DataExchange {
-        DataExchange::Broadcast(BroadcastExchange {
-            from_multiple_nodes,
-            destination_ids,
-        })
+    pub fn create(destination_ids: Vec<String>) -> DataExchange {
+        DataExchange::Broadcast(BroadcastExchange { destination_ids })
     }
 }

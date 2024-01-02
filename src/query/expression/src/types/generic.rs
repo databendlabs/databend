@@ -93,6 +93,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.index(index)
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index(index).unwrap()
     }

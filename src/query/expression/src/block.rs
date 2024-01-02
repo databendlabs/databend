@@ -280,7 +280,7 @@ impl DataBlock {
     }
 
     pub fn split_by_rows(&self, max_rows_per_block: usize) -> (Vec<Self>, Option<Self>) {
-        let mut res = vec![];
+        let mut res = Vec::with_capacity(self.num_rows / max_rows_per_block);
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
         while remain_rows >= max_rows_per_block {
@@ -297,7 +297,24 @@ impl DataBlock {
         (res, remain)
     }
 
-    pub fn split_by_rows_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
+    pub fn split_by_rows_no_tail(&self, max_rows_per_block: usize) -> Vec<Self> {
+        let mut res =
+            Vec::with_capacity((self.num_rows + max_rows_per_block - 1) / max_rows_per_block);
+        let mut offset = 0;
+        let mut remain_rows = self.num_rows;
+        while remain_rows >= max_rows_per_block {
+            let cut = self.slice(offset..(offset + max_rows_per_block));
+            res.push(cut);
+            offset += max_rows_per_block;
+            remain_rows -= max_rows_per_block;
+        }
+        if remain_rows > 0 {
+            res.push(self.slice(offset..(offset + remain_rows)));
+        }
+        res
+    }
+
+    pub fn split_by_rows_if_needed_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
         let max_rows_per_block = min_rows_per_block * 2;
         let mut res = vec![];
         let mut offset = 0;

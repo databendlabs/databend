@@ -38,7 +38,7 @@ mod string_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
-mod traits;
+pub mod traits;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;

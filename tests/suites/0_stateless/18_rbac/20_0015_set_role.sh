@@ -10,6 +10,10 @@ echo '-- reset user, roles, and tables'
 echo "DROP USER IF EXISTS 'testuser1'" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS 'testrole1'" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS 'testrole2'" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS 'testrole3'" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS 'testrole4'" | $BENDSQL_CLIENT_CONNECT
+echo "DROP TABLE IF EXISTS t20_0015_table1" | $BENDSQL_CLIENT_CONNECT   
+echo "DROP TABLE IF EXISTS t20_0015_table2" | $BENDSQL_CLIENT_CONNECT
 
 echo '-- prepare user, roles, and tables for tests'
 echo "CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
@@ -21,8 +25,8 @@ echo 'GRANT ROLE testrole2 to ROLE testrole3' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE testrole1 to testuser1' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE testrole2 to testuser1' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE testrole3 to testuser1' | $BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE t20_0015_table1(c int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE t20_0015_table2(c int not null)" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE TABLE t20_0015_table1(c int not null) ENGINE = MEMORY" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE TABLE t20_0015_table2(c int not null) ENGINE = MEMORY" | $BENDSQL_CLIENT_CONNECT
 
 echo '-- grant privilege to roles'
 echo 'GRANT SELECT, INSERT ON default.t20_0015_table1 TO ROLE testrole1' | $BENDSQL_CLIENT_CONNECT

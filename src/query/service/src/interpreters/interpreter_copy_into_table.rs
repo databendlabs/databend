@@ -116,6 +116,7 @@ impl CopyIntoTableInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<StageFileInfo>, Vec<UpdateStreamMetaReq>)> {
+        let mut next_plan_id = 0;
         let to_table = self
             .ctx
             .get_table(
@@ -131,6 +132,7 @@ impl CopyIntoTableInterpreter {
                 self.build_query(query).await?;
             seq = update_stream_meta;
             let plan_query = select_interpreter.build_physical_plan().await?;
+            next_plan_id = plan_query.get_id() + 1;
             let result_columns = select_interpreter.get_result_columns();
             CopyIntoTableSource::Query(Box::new(QuerySource {
                 plan: plan_query,
@@ -159,6 +161,7 @@ impl CopyIntoTableInterpreter {
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            plan_id: next_plan_id,
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -172,9 +175,10 @@ impl CopyIntoTableInterpreter {
             files: files.clone(),
             source,
         }));
+        next_plan_id += 1;
         if plan.enable_distributed {
             root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+                plan_id: next_plan_id,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
@@ -351,7 +355,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 table: self.plan.table_name.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
         }
 
         Ok(build_res)

@@ -63,10 +63,10 @@ use crate::kv_app_error::KVAppError;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_put;
 use crate::util::deserialize_u64;
-use crate::util::txn_trials;
 
 /// BackgroundApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls BackgroundApi.
@@ -81,10 +81,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
         let name_key = &req.job_name;
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let mut trials = txn_backoff(None, func_name!());
         let id = loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
+
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
             debug!(seq = seq, id = id, name_key = as_debug!(name_key); "create_background_job");
