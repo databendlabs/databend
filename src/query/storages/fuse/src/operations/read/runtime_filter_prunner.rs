@@ -35,7 +35,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
 use databend_storages_common_index::statistics_to_domain;
 use log::info;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 use xorf::Filter;
 
 use crate::FusePartInfo;
@@ -97,7 +97,7 @@ pub fn runtime_filter_pruner(
 
 pub(crate) fn update_bitmap_with_bloom_filter(
     column: Column,
-    filter: &BinaryFuse8,
+    filter: &BinaryFuse16,
     bitmap: &mut MutableBitmap,
 ) -> Result<()> {
     let data_type = column.data_type();

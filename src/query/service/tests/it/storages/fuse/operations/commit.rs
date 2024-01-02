@@ -129,7 +129,7 @@ use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use walkdir::WalkDir;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -703,7 +703,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse8)> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
         todo!()
     }
 

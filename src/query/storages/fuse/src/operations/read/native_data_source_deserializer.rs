@@ -61,7 +61,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
@@ -126,7 +126,7 @@ pub struct NativeDeserializeDataTransform {
 
     base_block_ids: Option<Scalar>,
 
-    cached_bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
+    cached_bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -558,7 +558,7 @@ impl NativeDeserializeDataTransform {
                         .ok()
                         .map(|idx| (idx, filter.1.clone()))
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse8)>>();
+                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
             if bloom_filters.is_empty() {
                 return Ok((false, count));
             }
