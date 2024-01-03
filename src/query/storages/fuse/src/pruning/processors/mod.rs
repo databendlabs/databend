@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod range_index_prune_sink;
 pub mod bloom_source;
+pub mod range_index_prune_sink;
 pub mod segment_source;

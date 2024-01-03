@@ -119,7 +119,8 @@ impl BloomColumnFilterReader {
     pub async fn load_without_deserialize(&self) -> Result<Vec<u8>> {
         self.cached_reader
             .loader
-            .load_without_deserialize(&self.param).await
+            .load_without_deserialize(&self.param)
+            .await
     }
 }
 

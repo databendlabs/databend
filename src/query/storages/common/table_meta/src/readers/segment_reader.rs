@@ -44,25 +44,25 @@ pub async fn deserialize_segment_info(
     buffer: &[u8],
 ) -> Result<CompactSegmentInfo> {
     match version {
-        SegmentInfoVersion::V4(_) => CompactSegmentInfo::from_slice(&buffer),
+        SegmentInfoVersion::V4(_) => CompactSegmentInfo::from_slice(buffer),
         SegmentInfoVersion::V3(_) => {
-            let current: SegmentInfo = SegmentInfoV3::from_slice(&buffer)?.into();
+            let current: SegmentInfo = SegmentInfoV3::from_slice(buffer)?.into();
             current.try_into()
         }
         SegmentInfoVersion::V2(v) => {
-            let v2 = load_json(&buffer, v).await?;
+            let v2 = load_json(buffer, v).await?;
             let current: SegmentInfo = v2.into();
             current.try_into()
         }
         SegmentInfoVersion::V1(v) => {
-            let v1 = load_json(&buffer, v).await?;
+            let v1 = load_json(buffer, v).await?;
             // need leaf fields info to migrate from v1
             let fields = schema.leaf_fields();
             let current: SegmentInfo = (v1, &fields[..]).into();
             current.try_into()
         }
         SegmentInfoVersion::V0(v) => {
-            let v0 = load_json(&buffer, v).await?;
+            let v0 = load_json(buffer, v).await?;
             // need leaf fields info to migrate from v0
             let fields = schema.leaf_fields();
             let current: SegmentInfo = (v0, &fields[..]).into();

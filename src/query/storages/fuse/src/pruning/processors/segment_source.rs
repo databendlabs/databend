@@ -45,7 +45,7 @@ impl SegmentSource {
         internal_column_pruner: Option<Arc<InternalColumnPruner>>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output, Self {
+        AsyncSourcer::create(ctx.clone(), output, Self {
             ctx,
             dal,
             internal_column_pruner,

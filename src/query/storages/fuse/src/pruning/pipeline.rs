@@ -80,8 +80,8 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
                 output,
             )
         },
-        fuse_pruner.max_concurrency,
-    );
+        max_concurrency,
+    )?;
     range_index_pruning_pipeline.add_sink(|input| {
         let sender = sender.clone();
         let inverse_range_index_context = inverse_range_index_context.clone();
@@ -94,12 +94,12 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
             internal_column_pruner.clone(),
             inverse_range_index_context,
         )
-    });
+    })?;
     pipelines.push(range_index_pruning_pipeline);
 
-    let mut bloom_index_pruning_pipeline = Pipeline::create();
-    bloom_index_pruning_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    pipelines.push(bloom_index_pruning_pipeline);
+    // let mut bloom_index_pruning_pipeline = Pipeline::create();
+    // bloom_index_pruning_pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    // pipelines.push(bloom_index_pruning_pipeline);
 
     Ok(pipelines)
 }
