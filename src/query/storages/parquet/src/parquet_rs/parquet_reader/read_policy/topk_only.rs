@@ -135,8 +135,9 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         row_group
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
+        let topk_schema = DataSchema::new(vec![self.src_schema.fields.last().unwrap().clone()]);
         let block = read_all(
-            self.src_schema.as_ref(),
+            &topk_schema,
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
@@ -170,7 +171,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             None
         };
 
-        // Fetch  remain columns.
+        // Fetch remain columns.
         row_group
             .fetch(&self.remain_projection, selection.as_ref())
             .await?;

@@ -134,6 +134,7 @@ impl UDFFlightClient {
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
         let flight_data_stream = FlightDataEncoderBuilder::new()
             .with_flight_descriptor(Some(descriptor))
+            .with_schema(input_batch.schema())
             .build(stream::iter(vec![Ok(input_batch)]))
             .map(|data| data.unwrap());
         let request = self.make_request(flight_data_stream);
