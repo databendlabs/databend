@@ -252,7 +252,14 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let selection = self.selection(true_selection, false_selection.0, count, &select_strategy);
+        let selection = self.selection(
+            true_selection,
+            false_selection.0,
+            mutable_true_idx,
+            mutable_false_idx,
+            count,
+            &select_strategy,
+        );
         let children = self.evaluator.get_children(exprs, selection)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
@@ -296,8 +303,14 @@ impl<'a> Selector<'a> {
                 generics,
                 ..
             } if function.signature.name == "if" => {
-                let selection =
-                    self.selection(true_selection, false_selection.0, count, &select_strategy);
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    count,
+                    &select_strategy,
+                );
                 let result = self.evaluator.eval_if(args, generics, None, selection)?;
                 let data_type = self
                     .evaluator
@@ -325,8 +338,14 @@ impl<'a> Selector<'a> {
                 debug_assert!(
                     matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
                 );
-                let selection =
-                    self.selection(true_selection, false_selection.0, count, &select_strategy);
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    count,
+                    &select_strategy,
+                );
                 let args = args
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, selection))
@@ -376,8 +395,14 @@ impl<'a> Selector<'a> {
                 expr,
                 dest_type,
             } => {
-                let selection =
-                    self.selection(true_selection, false_selection.0, count, &select_strategy);
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    count,
+                    &select_strategy,
+                );
                 let value = self.evaluator.get_select_child(expr, selection)?.0;
                 let result = if *is_try {
                     self.evaluator
@@ -410,8 +435,14 @@ impl<'a> Selector<'a> {
                 return_type,
                 ..
             } => {
-                let selection =
-                    self.selection(true_selection, false_selection.0, count, &select_strategy);
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    count,
+                    &select_strategy,
+                );
                 let args = args
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, selection))
@@ -499,12 +530,14 @@ impl<'a> Selector<'a> {
         &self,
         true_selection: &'a mut [u32],
         false_selection: &'a mut [u32],
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
         count: usize,
         select_strategy: &SelectStrategy,
     ) -> Option<&'a [u32]> {
         match select_strategy {
-            SelectStrategy::True => Some(&true_selection[0..count]),
-            SelectStrategy::False => Some(&false_selection[0..count]),
+            SelectStrategy::True => Some(&true_selection[0..*mutable_true_idx + count]),
+            SelectStrategy::False => Some(&false_selection[0..*mutable_false_idx + count]),
             SelectStrategy::All => None,
         }
     }
