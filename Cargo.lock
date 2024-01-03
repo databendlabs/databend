@@ -5153,9 +5153,9 @@ dependencies = [
 
 [[package]]
 name = "feature-set"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aabdd09dbd871b6d46860ead3e6cb27ac8647506f972ebbadd007945c2a46a2"
+checksum = "2356b175ec39f95aed6c1b9f0ec5d44ae55aea73af722e25dd2323b2ef75f6c5"
 dependencies = [
  "chrono",
  "semver",
