@@ -198,24 +198,23 @@ impl BlockReader {
         Ok(native_readers)
     }
 
+    #[inline(always)]
     pub fn fill_missing_native_column_values(
         &self,
         data_block: DataBlock,
         data_block_column_ids: &HashSet<ColumnId>,
     ) -> Result<DataBlock> {
-        let default_vals = self.default_vals.clone();
-
         DataBlock::create_with_default_value_and_block(
             &self.projected_schema,
             &data_block,
             data_block_column_ids,
-            &default_vals,
+            &self.default_vals,
         )
     }
 
     pub fn build_block(
         &self,
-        chunks: Vec<(usize, Box<dyn Array>)>,
+        chunks: &[(usize, Box<dyn Array>)],
         default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
         let mut nums_rows: Option<usize> = None;
