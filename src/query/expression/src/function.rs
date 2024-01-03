@@ -561,9 +561,22 @@ impl<'a> EvalContext<'a> {
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
+                if let Some(selection) = selection {
+                    let mut all_valid = true;
+                    for idx in selection {
+                        if !valids.get(*idx as usize) {
+                            all_valid = false;
+                            break;
+                        }
+                    }
+                    if all_valid {
+                        return Ok(());
+                    }
+                }
                 let first_error_row = valids
                     .iter()
                     .enumerate()

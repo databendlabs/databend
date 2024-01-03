@@ -2,10 +2,13 @@ statement ok
 drop table if exists t;
 
 statement ok
-create table t(a int);
+create table t(a int null, b varchar null);
 
 statement ok
-insert into t values(1), (2), (3), (0), (null);
+insert into t(a, b) values (3, NULL), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (1,'4'), (1,'4');
 
-statement error 1105
-select * from t where 3 / a > 2;
+query I
+select a, b from t where a = 1 and cast(b as int) >= 2;
+----
+1 4
+1 4
