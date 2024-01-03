@@ -163,11 +163,11 @@ impl UserPrivilegeSet {
     }
 
     pub fn available_privileges_on_stage() -> Self {
-        make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
+        make_bitflags!(UserPrivilegeType::{  Read | Write | Ownership }).into()
     }
 
     pub fn available_privileges_on_udf() -> Self {
-        make_bitflags!(UserPrivilegeType::{ Usage }).into()
+        make_bitflags!(UserPrivilegeType::{ Usage | Ownership }).into()
     }
 
     // TODO: remove this, as ALL has different meanings on different objects

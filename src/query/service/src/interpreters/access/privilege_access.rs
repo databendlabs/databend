@@ -20,7 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -69,13 +69,12 @@ impl PrivilegeAccess {
     }
 
     // PrivilegeAccess checks the privilege by names, we'd need to convert the GrantObject to
-    // GrantObjectByID to check the privilege.
-    // Currently we only checks ownerships by id, and other privileges by database/table names.
-    // This will change, all the privileges will be checked by id.
-    async fn convert_grant_object_by_id(
+    // OwnerObject to check the privilege.
+    // Currently we checks db/table ownerships by id, stage/udf ownerships by name.
+    async fn convert_to_owner_object(
         &self,
         object: &GrantObject,
-    ) -> Result<Option<GrantObjectByID>> {
+    ) -> Result<Option<OwnershipObject>> {
         let tenant = self.ctx.get_tenant();
 
         let object = match object {
@@ -92,7 +91,7 @@ impl PrivilegeAccess {
                     .get_db_info()
                     .ident
                     .db_id;
-                GrantObjectByID::Database {
+                OwnershipObject::Database {
                     catalog_name: catalog_name.clone(),
                     db_id,
                 }
@@ -110,22 +109,28 @@ impl PrivilegeAccess {
                     .db_id;
                 let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
-                GrantObjectByID::Table {
+                OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
                     db_id,
                     table_id,
                 }
             }
-            GrantObject::DatabaseById(catalog_name, db_id) => GrantObjectByID::Database {
+            GrantObject::DatabaseById(catalog_name, db_id) => OwnershipObject::Database {
                 catalog_name: catalog_name.clone(),
                 db_id: *db_id,
             },
-            GrantObject::TableById(catalog_name, db_id, table_id) => GrantObjectByID::Table {
+            GrantObject::TableById(catalog_name, db_id, table_id) => OwnershipObject::Table {
                 catalog_name: catalog_name.clone(),
                 db_id: *db_id,
                 table_id: *table_id,
             },
-            _ => return Ok(None),
+            GrantObject::Stage(name) => OwnershipObject::Stage {
+                name: name.to_string(),
+            },
+            GrantObject::UDF(name) => OwnershipObject::UDF {
+                name: name.to_string(),
+            },
+            GrantObject::Global => return Ok(None),
         };
 
         Ok(Some(object))
@@ -143,7 +148,6 @@ impl PrivilegeAccess {
             .validate_access(
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
                 privileges.clone(),
-                true,
             )
             .await
         {
@@ -161,7 +165,6 @@ impl PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
                     privileges,
-                    true,
                 )
                 .await?
             }
@@ -193,7 +196,6 @@ impl PrivilegeAccess {
                     table_name.to_string(),
                 ),
                 privileges.clone(),
-                true,
             )
             .await
         {
@@ -211,7 +213,6 @@ impl PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::TableById(catalog_name.to_string(), db_id, table_id.unwrap()),
                     privileges,
-                    true,
                 )
                 .await?
             }
@@ -221,15 +222,14 @@ impl PrivilegeAccess {
 
     async fn validate_access(
         &self,
-        object: &GrantObject,
+        grant_object: &GrantObject,
         privileges: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
         // translate the db_id and table_id to db_name and table_name, used on
         // skipping the privilege check on system tables, and on the error message.
-        let (db_name, table_name) = match object {
+        let (db_name, table_name) = match grant_object {
             GrantObject::Database(_, db_name) => (db_name.to_lowercase(), "".to_string()),
             GrantObject::Table(_, db_name, table_name) => {
                 (db_name.to_lowercase(), table_name.to_lowercase())
@@ -256,10 +256,19 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
-        // TODO: remove the verify_ownership parameter
+        let verify_ownership = match grant_object {
+            GrantObject::Database(_, _)
+            | GrantObject::Table(_, _, _)
+            | GrantObject::DatabaseById(_, _)
+            | GrantObject::UDF(_)
+            | GrantObject::Stage(_)
+            | GrantObject::TableById(_, _, _) => true,
+            GrantObject::Global => false,
+        };
+
         if verify_ownership {
-            let object_by_id =
-                self.convert_grant_object_by_id(object)
+            let owner_object =
+                self.convert_to_owner_object(grant_object)
                     .await
                     .or_else(|e| match e.code() {
                         ErrorCode::UNKNOWN_DATABASE
@@ -267,8 +276,8 @@ impl PrivilegeAccess {
                         | ErrorCode::UNKNOWN_CATALOG => Ok(None),
                         _ => Err(e.add_message("error on validating access")),
                     })?;
-            if let Some(object_by_id) = &object_by_id {
-                let ok = session.has_ownership(object_by_id).await?;
+            if let Some(object) = &owner_object {
+                let ok = session.has_ownership(object).await?;
                 if ok {
                     return Ok(());
                 }
@@ -276,7 +285,10 @@ impl PrivilegeAccess {
         }
 
         // wrap an user-facing error message with table/db names on cases like TableByID / DatabaseByID
-        match session.validate_privilege(object, privileges.clone()).await {
+        match session
+            .validate_privilege(grant_object, privileges.clone())
+            .await
+        {
             Ok(_) => Ok(()),
             Err(err) => {
                 if err.code() != ErrorCode::PermissionDenied("").code() {
@@ -290,7 +302,7 @@ impl PrivilegeAccess {
                     .map(|r| r.name.clone())
                     .collect::<Vec<_>>()
                     .join(",");
-                match object {
+                match grant_object {
                     GrantObject::TableById(catalog_name, _, _) => {
                         Err(ErrorCode::PermissionDenied(format!(
                             "Permission denied, privilege {:?} is required on '{}'.'{}'.'{}' for user {} with roles [{}]",
@@ -319,7 +331,7 @@ impl PrivilegeAccess {
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
                         privileges.clone(),
-                        object,
+                        grant_object,
                         &current_user.identity(),
                         roles_name,
                     ))),
@@ -357,18 +369,15 @@ impl PrivilegeAccess {
         self.validate_access(
             &GrantObject::Stage(stage_info.stage_name.to_string()),
             vec![privilege],
-            true,
         )
         .await
     }
 
     async fn check_udf_priv(&self, udf_names: HashSet<&String>) -> Result<()> {
         for udf in udf_names {
-            self.validate_access(
-                &GrantObject::UDF(udf.clone()),
-                vec![UserPrivilegeType::Usage],
-                false,
-            )
+            self.validate_access(&GrantObject::UDF(udf.clone()), vec![
+                UserPrivilegeType::Usage,
+            ])
             .await?;
         }
         Ok(())
@@ -478,13 +487,7 @@ impl AccessChecker for PrivilegeAccess {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
-                                for udf in udfs {
-                                    self.validate_access(
-                                        &GrantObject::UDF(udf.clone()),
-                                        vec![UserPrivilegeType::Usage],
-                                        false,
-                                    ).await?
-                                }
+                                self.check_udf_priv(udfs).await?;
                             }
                         }
                         Err(err) => {
@@ -530,14 +533,14 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select]).await?
             }
             Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create])
                     .await?;
             }
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
             | Plan::DropIndex(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
             }
             Plan::UseDatabase(plan) => {
@@ -680,13 +683,7 @@ impl AccessChecker for PrivilegeAccess {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
-                                for udf in udfs {
-                                    self.validate_access(
-                                        &GrantObject::UDF(udf.clone()),
-                                        vec![UserPrivilegeType::Usage],
-                                        false,
-                                    ).await?
-                                }
+                                self.check_udf_priv(udfs).await?;
                             }
                         }
                         Err(err) => {
@@ -730,13 +727,7 @@ impl AccessChecker for PrivilegeAccess {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
-                                    for udf in udfs {
-                                        self.validate_access(
-                                            &GrantObject::UDF(udf.clone()),
-                                            vec![UserPrivilegeType::Usage],
-                                            false,
-                                        ).await?
-                                    }
+                                    self.check_udf_priv(udfs).await?;
                                 }
                             }
                             Err(err) => {
@@ -761,13 +752,7 @@ impl AccessChecker for PrivilegeAccess {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
-                                    for udf in udfs {
-                                        self.validate_access(
-                                            &GrantObject::UDF(udf.clone()),
-                                            vec![UserPrivilegeType::Usage],
-                                            false,
-                                        ).await?
-                                    }
+                                    self.check_udf_priv(udfs).await?;
                                 }
                             }
                             Err(err) => {
@@ -797,7 +782,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     vec![UserPrivilegeType::CreateUser],
-                    false,
                 )
                     .await?;
             }
@@ -805,7 +789,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     vec![UserPrivilegeType::DropUser],
-                    false,
                 )
                     .await?;
             }
@@ -813,7 +796,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     vec![UserPrivilegeType::CreateRole],
-                    false,
                 )
                     .await?;
             }
@@ -821,7 +803,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     vec![UserPrivilegeType::DropRole],
-                    false,
                 )
                     .await?;
             }
@@ -836,18 +817,18 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RevokePriv(_)
             | Plan::AlterUDF(_)
             | Plan::RevokeRole(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant])
                     .await?;
             }
             Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
             Plan::AlterUser(_)
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::RefreshIndex(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
@@ -899,14 +880,13 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
             | Plan::AlterTask(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
             Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
                 self.validate_access(
                     &GrantObject::Global,
                     vec![UserPrivilegeType::CreateDataMask],
-                    false,
                 )
                     .await?;
             }
