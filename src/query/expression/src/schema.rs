@@ -87,11 +87,6 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 }
 
 #[inline]
-pub fn is_internal_stream_column_id(column_id: ColumnId) -> bool {
-    (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
-}
-
-#[inline]
 pub fn is_internal_column(column_name: &str) -> bool {
     matches!(
         column_name,
@@ -186,6 +181,7 @@ pub enum TableDataType {
     EmptyArray,
     EmptyMap,
     Boolean,
+    Binary,
     String,
     Number(NumberDataType),
     Decimal(DecimalDataType),
@@ -1165,6 +1161,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::EmptyArray => DataType::EmptyArray,
             TableDataType::EmptyMap => DataType::EmptyMap,
             TableDataType::Boolean => DataType::Boolean,
+            TableDataType::Binary => DataType::Binary,
             TableDataType::String => DataType::String,
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(*ty),
@@ -1612,6 +1609,7 @@ impl From<&TableDataType> for ArrowDataType {
                 None,
             ),
             TableDataType::Boolean => ArrowDataType::Boolean,
+            TableDataType::Binary => ArrowDataType::LargeBinary,
             TableDataType::String => ArrowDataType::LargeBinary,
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
@@ -1692,6 +1690,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Boolean => Ok(TableDataType::Boolean),
         DataType::EmptyArray => Ok(TableDataType::EmptyArray),
         DataType::EmptyMap => Ok(TableDataType::EmptyMap),
+        DataType::Binary => Ok(TableDataType::Binary),
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),

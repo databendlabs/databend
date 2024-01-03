@@ -48,6 +48,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::RwLock;
+use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -55,6 +56,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -141,6 +143,8 @@ pub trait TableContext: Send + Sync {
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
+    fn set_need_compact_after_write(&self, enable: bool);
+    fn get_need_compact_after_write(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn get_query_str(&self) -> String;
@@ -237,7 +241,13 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, filters: (usize, Vec<Expr<String>>));
+    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn get_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
+
+    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool;
 }

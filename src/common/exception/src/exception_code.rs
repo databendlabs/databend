@@ -225,6 +225,11 @@ build_exceptions! {
     NetworkPolicyAlreadyExists(2208),
     IllegalNetworkPolicy(2209),
     NetworkPolicyIsUsedByUser(2210),
+    UnknownPasswordPolicy(2211),
+    PasswordPolicyAlreadyExists(2212),
+    IllegalPasswordPolicy(2213),
+    PasswordPolicyIsUsedByUser(2214),
+    InvalidPassword(2215),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -307,6 +312,7 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+    ShareStorageError(2719),
 
     // Index error codes.
     CreateIndexWithDropTime(2720),

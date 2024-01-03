@@ -108,7 +108,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #task_warehouse_option
-            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
+            ~ (AFTER ~ #comma_separated_list0(literal_string))?
+            ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ AS ~ #statement
@@ -119,9 +121,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_if_not_exists,
             task,
             warehouse_opts,
-            _,
-            _,
             schedule_opts,
+            after_tasks,
+            when_conditions,
             suspend_opt,
             comment_opt,
             _,
@@ -134,9 +136,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
                 warehouse_opts,
-                schedule_opts,
+                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                after: match after_tasks {
+                    Some((_, tasks)) => tasks,
+                    None => Vec::new(),
+                },
+                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
             })
         },
@@ -917,17 +924,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_index = map(
         rule! {
-            CREATE ~ SYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
-                sync_creation: opt_sync.is_some(),
+                sync_creation: opt_async.is_none(),
             })
         },
     );
@@ -1110,6 +1117,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
+            })
+        },
+    );
+    let grant_ownership = map(
+        rule! {
+            GRANT ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ TO ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Grant(GrantStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
+            })
+        },
+    );
+    let revoke_ownership = map(
+        rule! {
+            REVOKE ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ FROM ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Revoke(RevokeStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
             })
         },
     );
@@ -1521,10 +1556,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_network_policy = map(
         rule! {
-            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
-             ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+             ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1558,10 +1593,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let alter_network_policy = map(
         rule! {
-            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
-             ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            ALTER ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident ~ SET
+             ~ ( ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1595,7 +1630,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let drop_network_policy = map(
         rule! {
-            DROP ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropNetworkPolicyStmt {
@@ -1607,7 +1642,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_network_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
+            ( DESC | DESCRIBE ) ~ NETWORK ~ ^POLICY ~ ^#ident
         },
         |(_, _, _, name)| {
             Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
@@ -1617,7 +1652,64 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_network_policies = value(
         Statement::ShowNetworkPolicies,
-        rule! { SHOW ~ NETWORK ~ POLICIES },
+        rule! { SHOW ~ NETWORK ~ ^POLICIES },
+    );
+
+    let create_password_policy = map(
+        rule! {
+            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+             ~ #password_set_options
+        },
+        |(_, _, _, opt_if_not_exists, name, set_options)| {
+            let stmt = CreatePasswordPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                set_options,
+            };
+            Statement::CreatePasswordPolicy(stmt)
+        },
+    );
+    let alter_password_policy = map(
+        rule! {
+            ALTER ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
+             ~ #alter_password_action
+        },
+        |(_, _, _, opt_if_exists, name, action)| {
+            let stmt = AlterPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                action,
+            };
+            Statement::AlterPasswordPolicy(stmt)
+        },
+    );
+    let drop_password_policy = map(
+        rule! {
+            DROP ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropPasswordPolicy(stmt)
+        },
+    );
+    let describe_password_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PASSWORD ~ ^POLICY ~ ^#ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescPasswordPolicy(DescPasswordPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+    let show_password_policies = map(
+        rule! {
+            SHOW ~ PASSWORD ~ ^POLICIES ~ ^#show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowPasswordPolicies { show_options },
     );
 
     let create_pipe = map(
@@ -1707,13 +1799,18 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
         ),
-        // network policy
+        // network policy / password policy
         rule!(
             #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
             | #describe_network_policy: "`DESC NETWORK POLICY name`"
             | #show_network_policies: "`SHOW NETWORK POLICIES`"
+            | #create_password_policy: "`CREATE PASSWORD POLICY [IF NOT EXISTS] name [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #drop_password_policy: "`DROP PASSWORD POLICY [IF EXISTS] name`"
+            | #describe_password_policy: "`DESC PASSWORD POLICY name`"
+            | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
@@ -1801,6 +1898,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
+            | #revoke_ownership : "REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
@@ -1835,12 +1934,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> }
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ AFTER <string>, <string>...]
+  [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
          | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
@@ -2177,7 +2278,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
-        | #udf_privs: "SELECT ON UDF <udf_name>"
+        | #udf_privs: "USAGE ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -2203,7 +2304,6 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
-        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -2212,10 +2312,6 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
-}
-
-pub fn udf_priv_type(i: Input) -> IResult<UserPrivilegeType> {
-    alt((value(UserPrivilegeType::Select, rule! { SELECT }),))(i)
 }
 
 pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
@@ -2316,6 +2412,52 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+    )(i)
+}
+
+pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    #[derive(Clone)]
+    enum Object {
+        Stage,
+        Udf,
+    }
+    let object = alt((
+        value(Object::Udf, rule! { UDF }),
+        value(Object::Stage, rule! { STAGE }),
+    ));
+
+    // Object object_name
+    let object = map(
+        rule! { #object ~ #ident},
+        |(object, object_name)| match object {
+            Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
+            Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+        },
+    );
+
+    rule!(
+        #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #object : "STAGE | UDF <object_name>"
     )(i)
 }
 
@@ -2795,6 +2937,28 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
             AlterTaskOptions::ModifyAs(sql)
         },
     );
+    let modify_when = map(
+        rule! {
+             MODIFY ~ WHEN ~ #expr
+        },
+        |(_, _, expr)| {
+            let when = expr.to_string();
+            AlterTaskOptions::ModifyWhen(when)
+        },
+    );
+    let add_after = map(
+        rule! {
+             ADD ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::AddAfter(after),
+    );
+    let remove_after = map(
+        rule! {
+             REMOVE ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::RemoveAfter(after),
+    );
+
     let set = map(
         rule! {
              SET
@@ -2822,6 +2986,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+        | #modify_when
+        | #add_after
+        | #remove_after
     )(i)
 }
 
@@ -2874,7 +3041,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
     );
     let cron_expr = map(
         rule! {
@@ -2882,10 +3049,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         },
         |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
     );
-
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+    );
     rule!(
         #interval
         | #cron_expr
+        | #interval_sec
     )(i)
 }
 
@@ -2907,14 +3080,16 @@ pub fn limit_where(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
-pub fn show_limit(i: Input) -> IResult<ShowLimit> {
-    let limit_like = map(
+pub fn limit_like(i: Input) -> IResult<ShowLimit> {
+    map(
         rule! {
             LIKE ~ #literal_string
         },
         |(_, pattern)| ShowLimit::Like { pattern },
-    );
+    )(i)
+}
 
+pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     rule!(
         #limit_like
         | #limit_where
@@ -3030,6 +3205,11 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
+    let tenant_setting = value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING });
+    let no_tenant_setting = value(
+        UserOptionItem::TenantSetting(false),
+        rule! { NOTENANTSETTING },
+    );
     let default_role_option = map(
         rule! {
             "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
@@ -3038,26 +3218,38 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let set_network_policy = map(
         rule! {
-            SET ~ ^NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
+            SET ~ NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ ^NETWORK ~ ^POLICY
+            UNSET ~ NETWORK ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
-    alt((
-        value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
-        value(
-            UserOptionItem::TenantSetting(false),
-            rule! { NOTENANTSETTING },
-        ),
-        default_role_option,
-        set_network_policy,
-        unset_network_policy,
-    ))(i)
+    let set_password_policy = map(
+        rule! {
+            SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, policy)| UserOptionItem::SetPasswordPolicy(policy),
+    );
+    let unset_password_policy = map(
+        rule! {
+            UNSET ~ PASSWORD ~ ^POLICY
+        },
+        |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
+    );
+
+    rule!(
+        #tenant_setting
+        | #no_tenant_setting
+        | #default_role_option
+        | #set_network_policy
+        | #unset_network_policy
+        | #set_password_policy
+        | #unset_password_policy
+    )(i)
 }
 
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
@@ -3211,5 +3403,121 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
         rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
         |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+    )(i)
+}
+
+pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
+    map(
+        rule! {
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( COMMENT ~ Eq ~ ^#literal_string)?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordSetOptions {
+                min_length: opt_min_length.map(|opt| opt.2),
+                max_length: opt_max_length.map(|opt| opt.2),
+                min_upper_case_chars: opt_min_upper_case_chars.map(|opt| opt.2),
+                min_lower_case_chars: opt_min_lower_case_chars.map(|opt| opt.2),
+                min_numeric_chars: opt_min_numeric_chars.map(|opt| opt.2),
+                min_special_chars: opt_min_special_chars.map(|opt| opt.2),
+                min_age_days: opt_min_age_days.map(|opt| opt.2),
+                max_age_days: opt_max_age_days.map(|opt| opt.2),
+                max_retries: opt_max_retries.map(|opt| opt.2),
+                lockout_time_mins: opt_lockout_time_mins.map(|opt| opt.2),
+                history: opt_history.map(|opt| opt.2),
+                comment: opt_comment.map(|opt| opt.2),
+            }
+        },
+    )(i)
+}
+
+pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
+    map(
+        rule! {
+             PASSWORD_MIN_LENGTH ?
+             ~ PASSWORD_MAX_LENGTH ?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
+             ~ PASSWORD_MIN_NUMERIC_CHARS ?
+             ~ PASSWORD_MIN_SPECIAL_CHARS ?
+             ~ PASSWORD_MIN_AGE_DAYS ?
+             ~ PASSWORD_MAX_AGE_DAYS ?
+             ~ PASSWORD_MAX_RETRIES ?
+             ~ PASSWORD_LOCKOUT_TIME_MINS ?
+             ~ PASSWORD_HISTORY ?
+             ~ COMMENT ?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordUnSetOptions {
+                min_length: opt_min_length.is_some(),
+                max_length: opt_max_length.is_some(),
+                min_upper_case_chars: opt_min_upper_case_chars.is_some(),
+                min_lower_case_chars: opt_min_lower_case_chars.is_some(),
+                min_numeric_chars: opt_min_numeric_chars.is_some(),
+                min_special_chars: opt_min_special_chars.is_some(),
+                min_age_days: opt_min_age_days.is_some(),
+                max_age_days: opt_max_age_days.is_some(),
+                max_retries: opt_max_retries.is_some(),
+                lockout_time_mins: opt_lockout_time_mins.is_some(),
+                history: opt_history.is_some(),
+                comment: opt_comment.is_some(),
+            }
+        },
+    )(i)
+}
+
+pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
+    let set_options = map(
+        rule! {
+           SET ~ #password_set_options
+        },
+        |(_, set_options)| AlterPasswordAction::SetOptions(set_options),
+    );
+    let unset_options = map(
+        rule! {
+           UNSET ~ #password_unset_options
+        },
+        |(_, unset_options)| AlterPasswordAction::UnSetOptions(unset_options),
+    );
+
+    rule!(
+        #set_options
+        | #unset_options
     )(i)
 }

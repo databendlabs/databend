@@ -90,11 +90,12 @@ impl StreamPruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         self: &Arc<Self>,
-        mut block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Vec<Arc<BlockMeta>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let mut remain = block_metas.len() % self.max_concurrency;
         let batch_size = block_metas.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
+        let mut block_metas = block_metas.into_iter().enumerate().collect::<Vec<_>>();
 
         while !block_metas.is_empty() {
             let gap_size = std::cmp::min(1, remain);
@@ -194,7 +195,7 @@ impl StreamPruner {
     pub async fn block_pruning(
         &self,
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
-        block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -203,15 +204,18 @@ impl StreamPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
-        let mut blocks = block_metas.iter().enumerate();
+        let mut blocks = block_metas.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if limit_pruner.exceeded() {
                 return None;
             }
 
-            type BlockPruningFutureReturn =
-                Pin<Box<dyn Future<Output = (usize, bool, Option<Range<usize>>, String)> + Send>>;
+            type BlockPruningFutureReturn = Pin<
+                Box<
+                    dyn Future<Output = (usize, bool, Option<Range<usize>>, Arc<BlockMeta>)> + Send,
+                >,
+            >;
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
@@ -273,9 +277,9 @@ impl StreamPruner {
 
                                 let (keep, range) =
                                     page_pruner.should_keep(&block_meta.cluster_stats);
-                                (block_idx, keep, range, block_meta.location.0.clone())
+                                (block_idx, keep, range, block_meta)
                             } else {
-                                (block_idx, keep, None, block_meta.location.0.clone())
+                                (block_idx, keep, None, block_meta)
                             }
                         })
                     });
@@ -284,7 +288,7 @@ impl StreamPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            (block_idx, false, None, block_meta.location.0.clone())
+                            (block_idx, false, None, block_meta)
                         })
                     });
                     v
@@ -304,12 +308,8 @@ impl StreamPruner {
 
         let mut result = Vec::with_capacity(joint.len());
         for item in joint {
-            let (block_idx, keep, range, block_location) = item;
+            let (block_idx, keep, range, block) = item;
             if keep {
-                let block = block_metas[block_idx].clone();
-
-                debug_assert_eq!(block_location, block.location.0);
-
                 result.push((
                     BlockMetaIndex {
                         segment_idx: 0,
@@ -317,7 +317,7 @@ impl StreamPruner {
                         range,
                         page_size: block.page_size() as usize,
                         block_id: 0,
-                        block_location: block_location.clone(),
+                        block_location: block.location.0.clone(),
                         segment_location: "".to_string(),
                         snapshot_location: None,
                     },
@@ -336,7 +336,7 @@ impl StreamPruner {
 
     fn block_pruning_sync(
         &self,
-        block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -346,7 +346,7 @@ impl StreamPruner {
         let start = Instant::now();
 
         let mut result = Vec::with_capacity(block_metas.len());
-        for (block_idx, block_meta) in block_metas.into_iter().enumerate() {
+        for (block_idx, block_meta) in block_metas.into_iter() {
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_before(1);

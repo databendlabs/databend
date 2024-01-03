@@ -235,6 +235,7 @@ pub mod raft_metrics {
             sent_bytes: Family<ToLabels, Counter>,
             recv_bytes: Family<FromLabels, Counter>,
             sent_failures: Family<ToLabels, Counter>,
+            append_sent_seconds: Family<ToLabels, Histogram>,
             snapshot_send_success: Family<ToLabels, Counter>,
             snapshot_send_failure: Family<ToLabels, Counter>,
             snapshot_send_inflights: Family<ToLabels, Gauge>,
@@ -253,6 +254,9 @@ pub mod raft_metrics {
                     sent_bytes: Family::default(),
                     recv_bytes: Family::default(),
                     sent_failures: Family::default(),
+                    append_sent_seconds: Family::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets(0.001f64, 2f64, 20))
+                    }), // 0.001s ~ 1024s
                     snapshot_send_success: Family::default(),
                     snapshot_send_failure: Family::default(),
                     snapshot_send_inflights: Family::default(),
@@ -284,6 +288,11 @@ pub mod raft_metrics {
                     key!("sent_failures"),
                     "sent failures",
                     metrics.sent_failures.clone(),
+                );
+                registry.register(
+                    key!("append_sent_seconds"),
+                    "append entries sent seconds",
+                    metrics.append_sent_seconds.clone(),
                 );
                 registry.register(
                     key!("snapshot_send_success"),
@@ -382,6 +391,14 @@ pub mod raft_metrics {
                 .sent_failures
                 .get_or_create(&ToLabels { to })
                 .inc();
+        }
+
+        pub fn observe_append_sendto_spent(id: &NodeId, v: f64) {
+            let to = id.to_string();
+            RAFT_METRICS
+                .append_sent_seconds
+                .get_or_create(&ToLabels { to })
+                .observe(v);
         }
 
         pub fn incr_snapshot_sendto_result(id: &NodeId, success: bool) {

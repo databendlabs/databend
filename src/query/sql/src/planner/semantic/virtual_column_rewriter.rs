@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -22,6 +23,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 
@@ -45,6 +47,10 @@ pub(crate) struct VirtualColumnRewriter {
     /// Mapping: (table index) -> (derived virtual column indices)
     /// This is used to add virtual column indices to Scan plan
     table_virtual_columns: HashMap<IndexType, Vec<IndexType>>,
+
+    /// Mapping: (table index) -> (virtual column names)
+    /// This is used to check whether the virtual column has be created
+    virtual_column_names: HashMap<IndexType, HashSet<String>>,
 }
 
 impl VirtualColumnRewriter {
@@ -53,10 +59,12 @@ impl VirtualColumnRewriter {
             ctx,
             metadata,
             table_virtual_columns: Default::default(),
+            virtual_column_names: Default::default(),
         }
     }
 
-    pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    #[async_backtrace::framed]
+    pub(crate) async fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let license_manager = get_license_manager();
         if license_manager
             .manager
@@ -66,15 +74,43 @@ impl VirtualColumnRewriter {
             return Ok(s_expr.clone());
         }
 
-        let has_variant_column = self
-            .metadata
-            .read()
-            .columns()
-            .iter()
-            .any(|column| column.data_type().remove_nullable() == DataType::Variant);
-        // If there are no columns of variant type,
-        // no need to check rewrite as virtual columns
-        if !has_variant_column {
+        let metadata = self.metadata.read().clone();
+        for table_entry in metadata.tables() {
+            let table = table_entry.table();
+            // Ignore tables that do not support virtual columns
+            if !table.support_virtual_columns() {
+                continue;
+            }
+
+            let has_variant_column = table
+                .schema()
+                .fields
+                .iter()
+                .any(|field| field.data_type.remove_nullable() == TableDataType::Variant);
+            // Ignore tables that do not have fields of variant type
+            if !has_variant_column {
+                continue;
+            }
+
+            let table_id = table.get_id();
+            let req = ListVirtualColumnsReq {
+                tenant: self.ctx.get_tenant(),
+                table_id: Some(table_id),
+            };
+            let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
+
+            if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
+                if !virtual_column_metas.is_empty() {
+                    let virtual_column_name_set =
+                        HashSet::from_iter(virtual_column_metas[0].virtual_columns.iter().cloned());
+                    self.virtual_column_names
+                        .insert(table_entry.index(), virtual_column_name_set);
+                }
+            }
+        }
+        // If all tables do not have virtual columns created,
+        // there is no need to continue checking for rewrites as virtual columns
+        if self.virtual_column_names.is_empty() {
             return Ok(s_expr.clone());
         }
 
@@ -163,14 +199,7 @@ impl VirtualColumnRewriter {
                 {
                     let column_entry = self.metadata.read().column(column_ref.column.index).clone();
                     if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                        if !self
-                            .metadata
-                            .read()
-                            .table(base_column.table_index)
-                            .table()
-                            .support_virtual_columns()
-                            || base_column.data_type.remove_nullable() != TableDataType::Variant
-                        {
+                        if base_column.data_type.remove_nullable() != TableDataType::Variant {
                             return Some(());
                         }
                         let name = match constant.value.clone() {
@@ -202,6 +231,18 @@ impl VirtualColumnRewriter {
                                 return Some(());
                             }
                         };
+                        // If this field name does not have a virtual column created,
+                        // it cannot be rewritten as a virtual column
+                        match self.virtual_column_names.get(&base_column.table_index) {
+                            Some(names) => {
+                                if !names.contains(&name) {
+                                    return Some(());
+                                }
+                            }
+                            None => {
+                                return Some(());
+                            }
+                        }
 
                         let mut index = 0;
                         // Check for duplicate virtual columns

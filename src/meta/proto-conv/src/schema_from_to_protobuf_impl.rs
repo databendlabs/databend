@@ -225,6 +225,7 @@ impl FromToProto for ex::TableDataType {
                     Dt24::NullT(_) => ex::TableDataType::Null,
                     Dt24::EmptyArrayT(_) => ex::TableDataType::EmptyArray,
                     Dt24::BoolT(_) => ex::TableDataType::Boolean,
+                    Dt24::BinaryT(_) => ex::TableDataType::Binary,
                     Dt24::StringT(_) => ex::TableDataType::String,
                     Dt24::NumberT(n) => {
                         ex::TableDataType::Number(ex::types::NumberDataType::from_pb(n)?)
@@ -276,6 +277,7 @@ impl FromToProto for ex::TableDataType {
             TableDataType::EmptyArray => new_pb_dt24(Dt24::EmptyArrayT(pb::Empty {})),
             TableDataType::EmptyMap => new_pb_dt24(Dt24::EmptyMapT(pb::Empty {})),
             TableDataType::Boolean => new_pb_dt24(Dt24::BoolT(pb::Empty {})),
+            TableDataType::Binary => new_pb_dt24(Dt24::BinaryT(pb::Empty {})),
             TableDataType::String => new_pb_dt24(Dt24::StringT(pb::Empty {})),
             TableDataType::Number(n) => {
                 let x = n.to_pb()?;

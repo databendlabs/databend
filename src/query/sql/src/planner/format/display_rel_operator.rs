@@ -185,9 +185,6 @@ pub fn format_exchange(
     op: &Exchange,
 ) -> std::fmt::Result {
     match op {
-        Exchange::Random => {
-            write!(f, "Exchange(Random)")
-        }
         Exchange::Hash(_) => {
             write!(f, "Exchange(Hash)")
         }

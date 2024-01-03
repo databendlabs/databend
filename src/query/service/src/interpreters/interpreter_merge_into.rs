@@ -104,7 +104,7 @@ impl Interpreter for MergeIntoInterpreter {
         // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
         // build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Compact if 'enable_compact_after_write' is on.
         {
             let compact_target = CompactTargetTableDescription {
                 catalog: self.plan.catalog.clone(),
@@ -127,7 +127,6 @@ impl Interpreter for MergeIntoInterpreter {
             .await;
         }
 
-        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
         // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
         {
             let refresh_desc = RefreshDesc {
@@ -136,7 +135,7 @@ impl Interpreter for MergeIntoInterpreter {
                 table: self.plan.table.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
         }
 
         Ok(build_res)

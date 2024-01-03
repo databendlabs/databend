@@ -29,6 +29,8 @@ use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
+    pub plan_id: u32,
+
     pub catalog_info: CatalogInfo,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,

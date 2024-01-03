@@ -41,6 +41,7 @@ use databend_common_storages_system::MallocStatsTable;
 use databend_common_storages_system::MallocStatsTotalsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::OneTable;
+use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
 use databend_common_storages_system::QueryCacheTable;
@@ -127,6 +128,7 @@ impl SystemDatabase {
             ProcessorProfileTable::create(sys_db_meta.next_table_id()),
             LocksTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
+            PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

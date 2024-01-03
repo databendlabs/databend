@@ -421,6 +421,17 @@ impl SnapshotGenerator for AppendGenerator {
             }
         }
 
+        // check if need to auto compact
+        // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
+        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 1000.
+        let imperfect_count = new_summary.block_count - new_summary.perfect_block_count;
+        let auto_compaction_imperfect_blocks_threshold = self
+            .ctx
+            .get_settings()
+            .get_auto_compaction_imperfect_blocks_threshold()?;
+        let auto_compact = imperfect_count >= auto_compaction_imperfect_blocks_threshold;
+        self.ctx.set_need_compact_after_write(auto_compact);
+
         Ok(TableSnapshot::new(
             Uuid::new_v4(),
             &prev_timestamp,

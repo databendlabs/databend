@@ -1,0 +1,57 @@
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1 (c1 int, c2 int, c3 int64, c4 string default 'ok')
+
+query 
+select * from infer_schema(location => '@data/parquet/diff_schema/f1.parquet')
+----
+c1 BIGINT 1 0
+c2 SMALLINT 1 1
+c3 BIGINT 1 2
+
+query 
+select * from infer_schema(location => '@data/parquet/diff_schema/f2.parquet')
+----
+c6 BIGINT 1 0
+c5 BIGINT 1 1
+c2 BIGINT 1 2
+c4 VARCHAR 1 3
+
+query error get diff schema
+copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet) pattern='.*[.]parquet'
+
+query 
+copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet missing_field_as='field_default') pattern='.*[.]parquet'
+----
+parquet/diff_schema/f1.parquet 10 0 NULL NULL
+parquet/diff_schema/f2.parquet 10 0 NULL NULL
+
+query 
+select * from t1 order by c1,c2,c3,c4
+----
+110 120 130 ok
+111 121 131 ok
+112 122 132 ok
+113 123 133 ok
+114 124 134 ok
+115 125 135 ok
+116 126 136 ok
+117 127 137 ok
+118 128 138 ok
+119 129 139 ok
+NULL 220 NULL 240
+NULL 221 NULL 241
+NULL 222 NULL 242
+NULL 223 NULL 243
+NULL 224 NULL 244
+NULL 225 NULL 245
+NULL 226 NULL 246
+NULL 227 NULL 247
+NULL 228 NULL 248
+NULL 229 NULL 249
+
+query 
+copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet  missing_field_as='field_default') pattern='.*[.]parquet'
+----
