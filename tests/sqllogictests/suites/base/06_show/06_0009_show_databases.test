@@ -19,16 +19,16 @@ CREATE DATABASE ss2
 query T
 SHOW DATABASES like 'ss%'
 ----
-ss account_admin
-ss1 account_admin
-ss2 account_admin
+ss
+ss1
+ss2
 
 query T
 SHOW SCHEMAS like 'ss%'
 ----
-ss account_admin
-ss1 account_admin
-ss2 account_admin
+ss
+ss1
+ss2
 
 statement ok
 DROP DATABASE IF EXISTS ss
