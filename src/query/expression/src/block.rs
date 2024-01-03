@@ -434,24 +434,6 @@ impl DataBlock {
         Ok(DataBlock::new(cols, arrow_chunk.len()))
     }
 
-    pub fn from_arrow_chunk_with_types<A: AsRef<dyn Array>>(
-        arrow_chunk: &ArrowChunk<A>,
-        data_types: &[DataType],
-    ) -> Result<Self> {
-        let cols = data_types
-            .iter()
-            .zip(arrow_chunk.arrays())
-            .map(|(data_type, col)| {
-                Ok(BlockEntry::new(
-                    data_type.clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), data_type)),
-                ))
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(DataBlock::new(cols, arrow_chunk.len()))
-    }
-
     // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
     // Else, DataBlock.column[i] = chuck.column.
     // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],

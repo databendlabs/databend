@@ -27,7 +27,7 @@ use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOption
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::TableDataType;
+use crate::DataField;
 use crate::Value;
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
@@ -84,13 +84,12 @@ pub fn deserialize_column(bytes: &[u8]) -> Option<Column> {
 
     let metadata = read_file_metadata(&mut cursor).ok()?;
     let f = metadata.schema.fields[0].clone();
-    let table_type = TableDataType::from(&f);
-    let data_type = (&table_type).into();
+    let data_field = DataField::try_from(&f).unwrap();
 
     let mut reader = FileReader::new(cursor, metadata, None, None);
     let col = reader.next()?.ok()?.into_arrays().remove(0);
 
-    Some(Column::from_arrow(col.as_ref(), &data_type))
+    Some(Column::from_arrow(col.as_ref(), data_field.data_type()))
 }
 
 /// Convert a column to a arrow array.

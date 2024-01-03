@@ -29,13 +29,13 @@ use databend_common_arrow::arrow::error::Result as ArrowResult;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::converts::arrow2::ARROW_EXT_TYPE_VARIANT;
 use crate::types::DataType;
 use crate::utils::arrow::column_to_arrow_array;
 use crate::Column;
 use crate::DataBlock;
-use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
-use crate::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
