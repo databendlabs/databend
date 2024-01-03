@@ -82,7 +82,7 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2023-12-16: since 1.2.258:
 ///   Meta service: add: ttl to TxnPutRequest and Upsert
 ///
-/// - 2024-01-02: since TODO: fill version when merged.
+/// - 2024-01-02: since 1.2.279:
 ///   Meta client: remove `Compatible` for KVAppError and MetaAPIError, added in `2023-02-16: since 0.9.41`
 ///
 /// Server feature set:
