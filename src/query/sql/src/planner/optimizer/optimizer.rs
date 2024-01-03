@@ -319,12 +319,22 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         false
     };
 
-    // try to optimize distributed join
+    // try to optimize distributed join, only if
+    // - distributed optimization is enabled
+    // - no local table scan
+    // - distributed merge-into is enabled
+    // - join spilling is disabled
     if opt_ctx.enable_distributed_optimization
+        && !contains_local_table_scan(&join_sexpr, &opt_ctx.metadata)
         && opt_ctx
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?
+        && opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_join_spilling_threshold()?
+            == 0
     {
         // input is a Join_SExpr
         let merge_into_join_sexpr =
