@@ -344,7 +344,7 @@ async fn test_show_databases() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    // has two fields: catalog, name
+    // has three fields: catalog, owner, name
     assert_eq!(result.schema.len(), 3, "{:?}", result);
 
     Ok(())
