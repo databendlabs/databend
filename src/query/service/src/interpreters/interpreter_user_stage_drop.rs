@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnerObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storages_stage::StageTable;
@@ -68,6 +70,15 @@ impl Interpreter for DropUserStageInterpreter {
             .await?;
 
         if let Ok(stage) = stage {
+            // we should do `drop ownership` after actually drop stage,
+            // drop the ownership
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .revoke_ownership(&OwnerObject::Stage {
+                    name: self.plan.name.clone(),
+                })
+                .await?;
+
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;
                 op.remove_all("/").await?;

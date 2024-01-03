@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnerObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -135,7 +135,7 @@ impl UserApiProvider {
     pub async fn grant_ownership_to_role(
         &self,
         tenant: &str,
-        object: &GrantObjectByID,
+        object: &OwnerObject,
         new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
@@ -152,7 +152,7 @@ impl UserApiProvider {
     pub async fn get_ownership(
         &self,
         tenant: &str,
-        object: &GrantObjectByID,
+        object: &OwnerObject,
     ) -> Result<Option<OwnershipInfo>> {
         let client = self.get_role_api_client(tenant)?;
         let ownership = client
