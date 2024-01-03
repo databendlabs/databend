@@ -203,73 +203,8 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             );
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => {
-            // optimize source :fix issue #13733
-            // reason: if there is subquery,windowfunc exprs etc. see
-            // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
-            // get dummy index. So we need to use optimizer to solve this.
-            let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone())?;
 
-            // if it's not distributed execution, we should reserve
-            // exchange to merge source data.
-            if opt_ctx.enable_distributed_optimization
-                && opt_ctx
-                    .table_ctx
-                    .get_settings()
-                    .get_enable_distributed_merge_into()?
-            {
-                // we need to remove exchange of right_source, because it's
-                // not an end query.
-                if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
-                    right_source = right_source.child(0)?.clone();
-                }
-            }
-            // replace right source
-            let mut join_sexpr = plan.input.clone();
-            join_sexpr = Box::new(join_sexpr.replace_children(vec![
-                Arc::new(join_sexpr.child(0)?.clone()),
-                Arc::new(right_source),
-            ]));
-
-            // try to optimize distributed join
-            if opt_ctx.enable_distributed_optimization
-                && !contains_local_table_scan(&join_sexpr, &opt_ctx.metadata)
-                && opt_ctx
-                    .table_ctx
-                    .get_settings()
-                    .get_enable_distributed_merge_into()?
-            {
-                // Todo(JackTan25): We should use optimizer to make a decision to use
-                // left join and right join.
-                // input is a Join_SExpr
-                let merge_into_join_sexpr =
-                    optimize_distributed_query(opt_ctx.table_ctx.clone(), &join_sexpr)?;
-                // after optimize source, we need to add
-                let merge_source_optimizer = MergeSourceOptimizer::create();
-                let (optimized_distributed_merge_into_join_sexpr, distributed) =
-                    if !merge_into_join_sexpr
-                        .match_pattern(&merge_source_optimizer.merge_source_pattern)
-                    {
-                        (merge_into_join_sexpr.clone(), false)
-                    } else {
-                        (
-                            merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
-                            true,
-                        )
-                    };
-
-                Ok(Plan::MergeInto(Box::new(MergeInto {
-                    input: Box::new(optimized_distributed_merge_into_join_sexpr),
-                    distributed,
-                    ..*plan
-                })))
-            } else {
-                Ok(Plan::MergeInto(Box::new(MergeInto {
-                    input: join_sexpr,
-                    ..*plan
-                })))
-            }
-        }
+        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan),
         // Passthrough statements.
         _ => Ok(plan),
     }
@@ -335,4 +270,88 @@ fn get_optimized_memo(
         CascadesOptimizer::create(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone(), false)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
+}
+
+fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+    // optimize source :fix issue #13733
+    // reason: if there is subquery,windowfunc exprs etc. see
+    // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
+    // get dummy index. So we need to use optimizer to solve this.
+    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone())?;
+
+    // if it's not distributed execution, we should reserve
+    // exchange to merge source data.
+    if opt_ctx.enable_distributed_optimization
+        && opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_enable_distributed_merge_into()?
+    {
+        // we need to remove exchange of right_source, because it's
+        // not an end query.
+        if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
+            right_source = right_source.child(0)?.clone();
+        }
+    }
+    // replace right source
+    let mut join_sexpr = plan.input.clone();
+    join_sexpr = Box::new(join_sexpr.replace_children(vec![
+        Arc::new(join_sexpr.child(0)?.clone()),
+        Arc::new(right_source),
+    ]));
+
+    // before, we think source table is always the small table.
+    // 1. for matched only, we use inner join
+    // 2. for insert only, we use right anti join
+    // 3. for full merge into, we use right outer join
+    // for now, let's import the statistic info to determine left join or right join
+    // we just do optimization for the top join (target and source),won't do recursive optimization.
+    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+    let mut state = TransformResult::new();
+    // we will reorder the join order according to the cardinality of target and source.
+    rule.apply(&join_sexpr, &mut state)?;
+    assert!(state.results().len() <= 1);
+    // we need to check whether we do swap left and right.
+    let change_join_order = if state.results().len() == 1 {
+        join_sexpr = Box::new(state.results()[0].clone());
+        true
+    } else {
+        false
+    };
+
+    // try to optimize distributed join
+    if opt_ctx.enable_distributed_optimization
+        && opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_enable_distributed_merge_into()?
+    {
+        // input is a Join_SExpr
+        let merge_into_join_sexpr =
+            optimize_distributed_query(opt_ctx.table_ctx.clone(), &join_sexpr)?;
+        // after optimize source, we need to add
+        let merge_source_optimizer = MergeSourceOptimizer::create();
+        let (optimized_distributed_merge_into_join_sexpr, distributed) =
+            if !merge_into_join_sexpr.match_pattern(&merge_source_optimizer.merge_source_pattern) {
+                (merge_into_join_sexpr.clone(), false)
+            } else {
+                (
+                    merge_source_optimizer.optimize(&merge_into_join_sexpr, change_join_order)?,
+                    true,
+                )
+            };
+
+        Ok(Plan::MergeInto(Box::new(MergeInto {
+            input: Box::new(optimized_distributed_merge_into_join_sexpr),
+            distributed,
+            change_join_order,
+            ..*plan
+        })))
+    } else {
+        Ok(Plan::MergeInto(Box::new(MergeInto {
+            input: join_sexpr,
+            change_join_order,
+            ..*plan
+        })))
+    }
 }
