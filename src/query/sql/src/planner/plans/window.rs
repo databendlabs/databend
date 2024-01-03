@@ -93,7 +93,7 @@ impl Window {
 
     // `Window.group_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
     // like `Aggregate.group_columns` only consider `group_items` field.
-    pub fn group_columns(&self) -> Result<ColumnSet> {
+    pub fn partition_by_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
         for part in self.partition_by.iter() {
             col_set.insert(part.index);

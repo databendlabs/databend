@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
@@ -24,6 +23,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOp::Pattern;
 use crate::plans::Window;
+
 /// Input:   Filter
 ///           \
 ///            Window
@@ -92,17 +92,13 @@ impl Rule for RulePushDownFilterWindow {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let window_expr = s_expr.child(0)?;
         let window: Window = window_expr.plan().clone().try_into()?;
-        let window_child_prop =
-            RelExpr::with_s_expr(window_expr).derive_relational_prop_child(0)?;
-        let window_group_columns = window.group_columns()?;
+        let partition_by_columns = window.partition_by_columns()?;
 
         let mut pushed_down_predicates = vec![];
         let mut remaining_predicates = vec![];
         for predicate in filter.predicates.into_iter() {
             let predicate_used_columns = predicate.used_columns();
-            if predicate_used_columns.is_subset(&window_child_prop.output_columns)
-                && predicate_used_columns.is_subset(&window_group_columns)
-            {
+            if predicate_used_columns.is_subset(&partition_by_columns) {
                 pushed_down_predicates.push(predicate);
             } else {
                 remaining_predicates.push(predicate)
