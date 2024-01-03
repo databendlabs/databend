@@ -929,16 +929,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let function_call_with_lambda = map(
         rule! {
             #function_name
-            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+            ~ "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
         },
-        |(name, _, arg, _, param, _, expr, _)| ExprElement::FunctionCall {
+        |(name, _, arg, _, params, _, expr, _)| ExprElement::FunctionCall {
             distinct: false,
             name,
             args: vec![arg],
             params: vec![],
             window: None,
             lambda: Some(Lambda {
-                params: vec![param],
+                params,
                 expr: Box::new(expr),
             }),
         },
