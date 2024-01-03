@@ -260,10 +260,6 @@ impl StageFilesInfo {
 }
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
-    // TODO: remove after opendal 0.44 released
-    if path.is_empty() {
-        return false;
-    }
     if mode.is_file() {
         pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {

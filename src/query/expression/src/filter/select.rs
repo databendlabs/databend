@@ -92,7 +92,7 @@ impl<'a> Selector<'a> {
             op.clone()
         };
 
-        match left_data_type {
+        match left_data_type.remove_nullable() {
             DataType::Number(ty) => {
                 with_number_mapped_type!(|T| match ty {
                     NumberDataType::T => self.select_type_values::<NumberType<T>>(

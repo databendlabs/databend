@@ -1046,7 +1046,7 @@ impl<'a> Evaluator<'a> {
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
             let result = evaluator.run(expr)?;
             arg0 = self
-                .run_cast(None, expr.data_type(), &col_type, result, None, None)?
+                .run_cast(None, expr.data_type(), &col_type, result, None)?
                 .as_scalar()
                 .unwrap()
                 .clone();

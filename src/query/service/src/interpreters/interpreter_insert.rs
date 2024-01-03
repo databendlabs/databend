@@ -281,7 +281,7 @@ impl Interpreter for InsertInterpreter {
                     table: self.plan.table.clone(),
                 };
 
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
                 return Ok(build_res);
             }
@@ -333,7 +333,7 @@ impl Interpreter for InsertInterpreter {
             table: self.plan.table.clone(),
         };
 
-        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
         Ok(build_res)
     }
