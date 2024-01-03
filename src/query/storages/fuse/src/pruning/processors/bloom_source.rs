@@ -12,28 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use std::sync::Arc;
 
 use async_channel::Receiver;
-
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
-
-
-
-
-
 use databend_common_pipeline_sources::AsyncSource;
-
-
 use databend_storages_common_table_meta::meta::BlockMeta;
-
 use serde::Deserialize;
 use serde::Serialize;
-
 
 use crate::pruning::BloomPrunerCreator;
 
