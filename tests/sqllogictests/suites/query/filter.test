@@ -1,0 +1,11 @@
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1), (2), (3), (0), (null);
+
+statement error 1105
+select * from t where 3 / a > 2;

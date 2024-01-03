@@ -324,6 +324,8 @@ impl<'a> Selector<'a> {
                 )
             }
             Expr::FunctionCall {
+                span,
+                id,
                 function,
                 generics,
                 args,
@@ -355,6 +357,7 @@ impl<'a> Selector<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
