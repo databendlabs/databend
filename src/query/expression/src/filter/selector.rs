@@ -413,7 +413,9 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result = self.evaluator.run_lambda(name, args, lambda_expr)?;
+                let result = self
+                    .evaluator
+                    .run_lambda(name, args, lambda_expr, return_type)?;
                 self.select_value(
                     result,
                     return_type,

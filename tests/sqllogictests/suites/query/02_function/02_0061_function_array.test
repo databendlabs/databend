@@ -185,7 +185,7 @@ select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggrega
 3 1 9
 
 query III
-select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 'sum') from t
+select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggregate(col1, 'sum') from t
 ----
 3 1 9
 
@@ -263,6 +263,53 @@ query T
 select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
 ----
 [1,2,3,3]
+
+query T
+select array_reduce([],(x,y)->x+y), array_reduce([null],(x,y)->x+y), array_reduce(null,(x,y)->x+y);
+----
+[] NULL NULL
+
+query TT
+select array_reduce([1,2,3],(x,y)->x+y-1), array_reduce([3,4,5],(x,y)->x-y)
+----
+4 -6
+
+query T
+select array_reduce([1, 2,null], (x,y) -> x + y)
+----
+NULL
+
+query T
+select array_reduce([1.21312,2.21332,3.2213],(x,y)->(x+y))
+----
+6.64774
+
+query T
+select array_reduce(['hello', 'world'], (x,y) -> x || y)
+----
+helloworld
+
+query T
+select array_reduce(col1,(x,y)->x+y+1) from t
+----
+12
+
+statement ok
+create table t1(col1 Array(Int Null) not null, col2 Array(Float Null) not null, col3 Array(Decimal (10,5)Null) not null, col4 Array(String Null) not null)
+
+statement ok
+insert into t1 values([1,2,3], [3.1, 5.42, 6.25], [1.1231, 4.131, 6.56], ['hello', 'world', '2024'])
+
+query TTTT
+select array_reduce(col1,(x,y)->x+y), array_reduce(col2,(x,y)->x-y), array_reduce(col3,(x,y)->x+y), array_reduce(col4,(x,y)->x||y) from t1
+----
+6 -8.570000171661377 11.81410 helloworld2024
+
+
+query IIII
+select length(col1), length(col2), length(col3), length(col4) from t
+----
+4 4 1 1
 
 statement ok
 DROP DATABASE array_func_test
