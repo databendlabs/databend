@@ -156,6 +156,7 @@ impl PipelineBuilder {
             self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
+
         build_side_builder.cte_state = self.cte_state.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
