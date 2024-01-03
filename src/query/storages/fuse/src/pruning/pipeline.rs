@@ -30,25 +30,25 @@ pub fn build_pruning_pipelines(fuse_pruner: FusePruner) -> Result<Vec<Pipeline>>
         max_concurrency,
         table_schema,
         pruning_ctx,
-        push_down,
+        push_down: _,
         inverse_range_index,
-        deleted_segments,
+        deleted_segments: _,
     } = fuse_pruner;
     let PruningContext {
         ctx,
         dal,
-        pruning_runtime,
-        pruning_semaphore,
-        limit_pruner,
+        pruning_runtime: _,
+        pruning_semaphore: _,
+        limit_pruner: _,
         range_pruner,
-        bloom_pruner,
-        page_pruner,
+        bloom_pruner: _,
+        page_pruner: _,
         internal_column_pruner,
-        pruning_stats,
+        pruning_stats: _,
     } = pruning_ctx.as_ref();
 
-    let (sender, receiver) = async_channel::unbounded();
-    let (inverse_range_index_context, whole_block_delete_receiver, whole_segment_delete_recevier) =
+    let (sender, _receiver) = async_channel::unbounded();
+    let (inverse_range_index_context, _whole_block_delete_receiver, _whole_segment_delete_recevier) =
         match inverse_range_index {
             Some(inverse_range_index) => {
                 let (whole_block_delete_sender, whole_block_delete_receiver) =

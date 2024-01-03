@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+
+
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use databend_common_exception::ErrorCode;
+
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchemaRef;
+
+
+
+
+
 use databend_common_pipeline_sources::AsyncSource;
-use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_index::BloomIndex;
+
+
 use databend_storages_common_table_meta::meta::BlockMeta;
-use opendal::Operator;
+
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::io::BloomBlockFilterReader;
+
 use crate::pruning::BloomPrunerCreator;
 
 struct BloomSource {
@@ -74,7 +74,7 @@ impl AsyncSource for BloomSource {
                         bytes: self
                             .bloom_pruner
                             .load_filters_without_deserialize(
-                                &block_meta.bloom_filter_index_location.as_ref().unwrap(),
+                                block_meta.bloom_filter_index_location.as_ref().unwrap(),
                                 block_meta.block_size,
                                 column_ids,
                             )

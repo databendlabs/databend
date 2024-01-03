@@ -25,11 +25,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
+
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_sources::AsyncSourcer;
+
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::RangePruner;
