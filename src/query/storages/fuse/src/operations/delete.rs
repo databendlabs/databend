@@ -219,24 +219,26 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
-        let _max_threads = (ctx.get_settings().get_max_threads()? as usize)
+        let max_threads = (ctx.get_settings().get_max_threads()? as usize)
             .min(ctx.partition_num())
             .max(1);
         // Add source pipe.
-        pipeline.add_transform(|input, output| {
-            MutationSource::try_create(
-                ctx.clone(),
-                MutationAction::Deletion,
-                input,
-                output,
-                filter_expr.clone(),
-                block_reader.clone(),
-                remain_reader.clone(),
-                ops.clone(),
-                self.storage_format,
-                query_row_id_col,
-            )
-        })?;
+        pipeline.add_source(
+            |output| {
+                MutationSource::try_create(
+                    ctx.clone(),
+                    MutationAction::Deletion,
+                    output,
+                    filter_expr.clone(),
+                    block_reader.clone(),
+                    remain_reader.clone(),
+                    ops.clone(),
+                    self.storage_format,
+                    query_row_id_col,
+                )
+            },
+            max_threads,
+        )?;
         Ok(())
     }
 

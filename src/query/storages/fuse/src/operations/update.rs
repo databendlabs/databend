@@ -214,23 +214,25 @@ impl FuseTable {
                 .project_column_ref(|name| schema.index_of(name).unwrap())
         }));
 
-        let _max_threads = (ctx.get_settings().get_max_threads()? as usize)
+        let max_threads = (ctx.get_settings().get_max_threads()? as usize)
             .min(ctx.partition_num())
             .max(1);
         // Add source pipe.
-        pipeline.add_transform(|input, output| {
-            MutationSource::try_create(
-                ctx.clone(),
-                MutationAction::Update,
-                input,
-                output,
-                filter_expr.clone(),
-                block_reader.clone(),
-                remain_reader.clone(),
-                ops.clone(),
-                self.storage_format,
-                true,
-            )
-        })
+        pipeline.add_source(
+            |output| {
+                MutationSource::try_create(
+                    ctx.clone(),
+                    MutationAction::Update,
+                    output,
+                    filter_expr.clone(),
+                    block_reader.clone(),
+                    remain_reader.clone(),
+                    ops.clone(),
+                    self.storage_format,
+                    true,
+                )
+            },
+            max_threads,
+        )
     }
 }
