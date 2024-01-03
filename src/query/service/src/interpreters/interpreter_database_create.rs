@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
@@ -132,7 +132,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
-                    &OwnerObject::Database {
+                    &OwnershipObject::Database {
                         catalog_name: self.plan.catalog.clone(),
                         db_id: reply.db_id,
                     },

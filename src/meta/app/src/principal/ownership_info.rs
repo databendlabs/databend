@@ -18,11 +18,11 @@ use std::fmt::Display;
 use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
 
-use crate::principal::OwnerObject;
+use crate::principal::OwnershipObject;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct OwnershipInfo {
-    pub object: OwnerObject,
+    pub object: OwnershipObject,
     pub role: String,
 }
 

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
@@ -84,7 +84,7 @@ impl GrantPrivilegeInterpreter {
                     .get_db_info()
                     .ident
                     .db_id;
-                OwnerObject::Database {
+                OwnershipObject::Database {
                     catalog_name,
                     db_id,
                 }
@@ -102,25 +102,25 @@ impl GrantPrivilegeInterpreter {
                     .get_table(tenant, db_name.as_str(), table_name)
                     .await?
                     .get_id();
-                OwnerObject::Table {
+                OwnershipObject::Table {
                     catalog_name,
                     db_id,
                     table_id,
                 }
             }
-            GrantObject::TableById(_, db_id, table_id) => OwnerObject::Table {
+            GrantObject::TableById(_, db_id, table_id) => OwnershipObject::Table {
                 catalog_name: catalog_name.unwrap(),
                 db_id: *db_id,
                 table_id: *table_id,
             },
-            GrantObject::DatabaseById(_, db_id) => OwnerObject::Database {
+            GrantObject::DatabaseById(_, db_id) => OwnershipObject::Database {
                 catalog_name: catalog_name.unwrap(),
                 db_id: *db_id,
             },
-            GrantObject::Stage(name) => OwnerObject::Stage {
+            GrantObject::Stage(name) => OwnershipObject::Stage {
                 name: name.to_string(),
             },
-            GrantObject::UDF(name) => OwnerObject::UDF {
+            GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
             GrantObject::Global => {

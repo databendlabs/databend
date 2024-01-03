@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::UserApiProvider;
@@ -53,7 +53,7 @@ impl Interpreter for DropDatabaseInterpreter {
         let db = catalog.get_database(&tenant, &self.plan.database).await;
         if let Ok(db) = db {
             role_api
-                .revoke_ownership(&OwnerObject::Database {
+                .revoke_ownership(&OwnershipObject::Database {
                     catalog_name: self.plan.catalog.clone(),
                     db_id: db.get_db_info().ident.db_id,
                 })

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -64,7 +64,7 @@ pub trait SessionPrivilegeManager {
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()>;
 
-    async fn has_ownership(&self, object: &OwnerObject) -> Result<bool>;
+    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -266,7 +266,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn has_ownership(&self, object: &OwnerObject) -> Result<bool> {
+    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
 

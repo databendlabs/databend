@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateUDFPlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -61,7 +61,7 @@ impl Interpreter for CreateUserUDFInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &OwnerObject::UDF {
+                    &OwnershipObject::UDF {
                         name: self.plan.udf.name.clone(),
                     },
                     &current_role.name,

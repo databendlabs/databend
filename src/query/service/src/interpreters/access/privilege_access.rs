@@ -20,7 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -71,7 +71,10 @@ impl PrivilegeAccess {
     // PrivilegeAccess checks the privilege by names, we'd need to convert the GrantObject to
     // OwnerObject to check the privilege.
     // Currently we checks db/table ownerships by id, stage/udf ownerships by name.
-    async fn convert_to_owner_object(&self, object: &GrantObject) -> Result<Option<OwnerObject>> {
+    async fn convert_to_owner_object(
+        &self,
+        object: &GrantObject,
+    ) -> Result<Option<OwnershipObject>> {
         let tenant = self.ctx.get_tenant();
 
         let object = match object {
@@ -88,7 +91,7 @@ impl PrivilegeAccess {
                     .get_db_info()
                     .ident
                     .db_id;
-                OwnerObject::Database {
+                OwnershipObject::Database {
                     catalog_name: catalog_name.clone(),
                     db_id,
                 }
@@ -106,25 +109,25 @@ impl PrivilegeAccess {
                     .db_id;
                 let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
-                OwnerObject::Table {
+                OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
                     db_id,
                     table_id,
                 }
             }
-            GrantObject::DatabaseById(catalog_name, db_id) => OwnerObject::Database {
+            GrantObject::DatabaseById(catalog_name, db_id) => OwnershipObject::Database {
                 catalog_name: catalog_name.clone(),
                 db_id: *db_id,
             },
-            GrantObject::TableById(catalog_name, db_id, table_id) => OwnerObject::Table {
+            GrantObject::TableById(catalog_name, db_id, table_id) => OwnershipObject::Table {
                 catalog_name: catalog_name.clone(),
                 db_id: *db_id,
                 table_id: *table_id,
             },
-            GrantObject::Stage(name) => OwnerObject::Stage {
+            GrantObject::Stage(name) => OwnershipObject::Stage {
                 name: name.to_string(),
             },
-            GrantObject::UDF(name) => OwnerObject::UDF {
+            GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
             GrantObject::Global => return Ok(None),
@@ -253,14 +256,14 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
-        let verify_ownership = match object {
+        let verify_ownership = match grant_object {
             GrantObject::Database(_, _)
             | GrantObject::Table(_, _, _)
             | GrantObject::DatabaseById(_, _)
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::TableById(_, _, _) => true,
-            GrantObject::Global |  => false,
+            GrantObject::Global => false,
         };
 
         if verify_ownership {

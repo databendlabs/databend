@@ -18,7 +18,7 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStagePlan;
@@ -92,7 +92,7 @@ impl Interpreter for CreateUserStageInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
-                    &OwnerObject::Stage {
+                    &OwnershipObject::Stage {
                         name: self.plan.stage_info.stage_name.clone(),
                     },
                     &current_role.name,

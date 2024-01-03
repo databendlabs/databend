@@ -18,7 +18,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_fuse::FuseTable;
@@ -111,7 +111,7 @@ impl Interpreter for DropTableInterpreter {
         // drop the ownership
         let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
         role_api
-            .revoke_ownership(&OwnerObject::Table {
+            .revoke_ownership(&OwnershipObject::Table {
                 catalog_name: self.plan.catalog.clone(),
                 db_id: db.get_db_info().ident.db_id,
                 table_id: tbl.get_table_info().ident.table_id,

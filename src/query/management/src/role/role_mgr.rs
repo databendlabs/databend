@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ToErrorCode;
-use databend_common_meta_app::principal::OwnerObject;
 use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -83,9 +83,9 @@ impl RoleMgr {
         format!("{}/{}", self.role_prefix, role)
     }
 
-    fn make_object_owner_key(&self, object: &OwnerObject) -> String {
+    fn make_object_owner_key(&self, object: &OwnershipObject) -> String {
         match object {
-            OwnerObject::Database {
+            OwnershipObject::Database {
                 catalog_name: _,
                 db_id: database_id,
             } => {
@@ -94,17 +94,17 @@ impl RoleMgr {
                     self.object_owner_prefix, database_id
                 )
             }
-            OwnerObject::Table {
+            OwnershipObject::Table {
                 catalog_name: _,
                 db_id: _,
                 table_id,
             } => {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
-            OwnerObject::Stage { name } => {
+            OwnershipObject::Stage { name } => {
                 format!("{}/stage-by-name/{}", self.object_owner_prefix, name)
             }
-            OwnerObject::UDF { name } => {
+            OwnershipObject::UDF { name } => {
                 format!("{}/udf-by-name/{}", self.object_owner_prefix, name)
             }
         }
@@ -201,7 +201,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn grant_ownership(
         &self,
-        object: &OwnerObject,
+        object: &OwnershipObject,
         role: &str,
     ) -> databend_common_exception::Result<()> {
         let match_seq = MatchSeq::GE(0);
@@ -229,7 +229,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn get_ownership(
         &self,
-        object: &OwnerObject,
+        object: &OwnershipObject,
     ) -> databend_common_exception::Result<Option<OwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;
@@ -245,7 +245,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn revoke_ownership(
         &self,
-        object: &OwnerObject,
+        object: &OwnershipObject,
     ) -> databend_common_exception::Result<()> {
         let seq = MatchSeq::Exact(0);
         let key = self.make_object_owner_key(object);

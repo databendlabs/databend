@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnerObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropUDFPlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -60,7 +60,7 @@ impl Interpreter for DropUserUDFInterpreter {
         {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
-                .revoke_ownership(&OwnerObject::UDF {
+                .revoke_ownership(&OwnershipObject::UDF {
                     name: self.plan.udf.clone(),
                 })
                 .await?;
