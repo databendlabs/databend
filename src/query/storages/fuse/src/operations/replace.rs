@@ -177,10 +177,11 @@ impl FuseTable {
     // are supported by bloom index.
     pub async fn choose_bloom_filter_columns(
         &self,
+        ctx: Arc<dyn TableContext>,
         on_conflicts: &[OnConflictField],
         max_num_columns: u64,
     ) -> Result<Vec<FieldIndex>> {
-        let col_stats_provider = self.column_statistics_provider().await?;
+        let col_stats_provider = self.column_statistics_provider(ctx).await?;
         let mut cols = on_conflicts
             .iter()
             .enumerate()

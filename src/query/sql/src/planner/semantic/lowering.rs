@@ -22,7 +22,6 @@ use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
@@ -230,11 +229,7 @@ impl ScalarExpr {
             ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
                 span: func.span,
                 name: func.func_name.clone(),
-                params: func
-                    .params
-                    .iter()
-                    .map(|x| Scalar::Number((*x).into()))
-                    .collect(),
+                params: func.params.clone(),
                 args: func.arguments.iter().map(ScalarExpr::as_raw_expr).collect(),
             },
             ScalarExpr::CastExpr(cast) => RawExpr::Cast {

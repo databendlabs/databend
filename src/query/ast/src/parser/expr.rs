@@ -265,7 +265,7 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        params: Vec<Literal>,
+        params: Vec<Expr>,
         window: Option<Window>,
         lambda: Option<Lambda>,
     },
@@ -912,7 +912,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let trivial_function_call = map(
+    let function_call = map(
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
@@ -961,25 +961,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let function_call_with_params = map(
         rule! {
             #function_name
-            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
+            ~ ("(" ~ #comma_separated_list1(subexpr(0)) ~ ")")?
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
         |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
-            params: params.map(|x| x.1).unwrap_or_default(),
+            params: params.map(|(_, x, _)| x).unwrap_or_default(),
             window: None,
             lambda: None,
         },
     );
-
-    let function_call = alt((
-        function_call_with_lambda,
-        function_call_with_window,
-        function_call_with_params,
-        trivial_function_call,
-    ));
 
     let case = map(
         rule! {
@@ -1213,17 +1206,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
             | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+            | #position : "`POSITION(... IN ...)`"
         ),
         rule!(
-            #position : "`POSITION(... IN ...)`"
-            | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+            #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #chain_function_call : "x.func(...)"
+            | #chain_function_call : "x.function(...)"
             | #list_comprehensions: "[expr for x in ... [if ...]]"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call : "<function>"
+            | #function_call_with_lambda : "`function(..., x -> ...)`"
+            | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+            | #function_call_with_params : "`function(...)(...)`"
+            | #function_call : "`function(...)`"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
@@ -1232,8 +1228,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #current_timestamp: "CURRENT_TIMESTAMP"
-            | #array : "`[...]`"
-            | #map_expr : "`{...}`"
+            | #array : "`[<expr>, ...]`"
+            | #map_expr : "`{ <literal> : <expr>, ... }`"
         ),
     )))(i)?;
 
@@ -1569,9 +1565,13 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
     );
+    let ty_binary = value(
+        TypeName::Binary,
+        rule! { ( BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
     let ty_string = value(
         TypeName::String,
-        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
@@ -1599,6 +1599,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_binary
             | #ty_string
             | #ty_variant
             | #ty_nullable

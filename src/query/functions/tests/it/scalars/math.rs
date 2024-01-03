@@ -40,6 +40,7 @@ fn test_math() {
 
 fn test_abs(file: &mut impl Write) {
     run_ast(file, "abs(1)", &[]);
+    run_ast(file, "abs(-2.3434)", &[]);
     run_ast(file, "abs(-1)", &[]);
     run_ast(file, "abs(null)", &[]);
     run_ast(file, "abs(a)", &[(
@@ -139,8 +140,9 @@ fn test_truncate(file: &mut impl Write) {
     run_ast(file, "truncate(1)(1.223, 1)", &[]);
     run_ast(file, "truncate(0)(1.999)", &[]);
     run_ast(file, "truncate(1)(1.999, 1)", &[]);
-    // todo(negative param)
-    // run_ast(file, "truncate(-2)(122, -2)", &[]);
+    run_ast(file, "truncate(-2)(122::DECIMAL(3))", &[]);
+    run_ast(file, "truncate(1+3-6)(122::DECIMAL(3))", &[]);
+    run_ast(file, "truncate(122, -1)", &[]);
     run_ast(file, "truncate(0)(10.28*100, 0)", &[]);
     run_ast(file, "truncate(a, 1)", &[(
         "a",

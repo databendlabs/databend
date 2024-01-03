@@ -123,9 +123,22 @@ echo "select case when i > 100 then 200 else f2(f1(100)) end as c1 from t;" | $T
 echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $TEST_USER_CONNECT
 echo "delete from t;" | $TEST_USER_CONNECT
 
+#udf server test
+echo "drop function if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop function if exists b;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE FUNCTION a (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE FUNCTION b (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';" | $BENDSQL_CLIENT_CONNECT
+
+echo "grant usage on udf a to 'test-user'" | $BENDSQL_CLIENT_CONNECT
+echo "select a(1,1,1,1)" | $TEST_USER_CONNECT
+echo "select b(1,1,1,1)" | $TEST_USER_CONNECT
+
+
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f2;" |  $BENDSQL_CLIENT_CONNECT
+echo "drop function if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop function if exists b;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists default.t;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists default.t2;" | $BENDSQL_CLIENT_CONNECT
 echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

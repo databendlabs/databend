@@ -108,7 +108,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #task_warehouse_option
-            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
+            ~ (AFTER ~ #comma_separated_list0(literal_string))?
+            ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ AS ~ #statement
@@ -119,9 +121,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_if_not_exists,
             task,
             warehouse_opts,
-            _,
-            _,
             schedule_opts,
+            after_tasks,
+            when_conditions,
             suspend_opt,
             comment_opt,
             _,
@@ -134,9 +136,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
                 warehouse_opts,
-                schedule_opts,
+                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                after: match after_tasks {
+                    Some((_, tasks)) => tasks,
+                    None => Vec::new(),
+                },
+                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
             })
         },
@@ -917,17 +924,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_index = map(
         rule! {
-            CREATE ~ SYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
-                sync_creation: opt_sync.is_some(),
+                sync_creation: opt_async.is_none(),
             })
         },
     );
@@ -1110,6 +1117,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
+            })
+        },
+    );
+    let grant_ownership = map(
+        rule! {
+            GRANT ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ TO ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Grant(GrantStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
+            })
+        },
+    );
+    let revoke_ownership = map(
+        rule! {
+            REVOKE ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ FROM ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Revoke(RevokeStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
             })
         },
     );
@@ -1863,6 +1898,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
+            | #revoke_ownership : "REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
@@ -1897,12 +1934,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> }
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ AFTER <string>, <string>...]
+  [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
          | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
@@ -2239,7 +2278,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
-        | #udf_privs: "SELECT ON UDF <udf_name>"
+        | #udf_privs: "USAGE ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -2265,7 +2304,6 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
-        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -2274,10 +2312,6 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
     ))(i)
-}
-
-pub fn udf_priv_type(i: Input) -> IResult<UserPrivilegeType> {
-    alt((value(UserPrivilegeType::Select, rule! { SELECT }),))(i)
 }
 
 pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
@@ -2378,6 +2412,52 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+    )(i)
+}
+
+pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    #[derive(Clone)]
+    enum Object {
+        Stage,
+        Udf,
+    }
+    let object = alt((
+        value(Object::Udf, rule! { UDF }),
+        value(Object::Stage, rule! { STAGE }),
+    ));
+
+    // Object object_name
+    let object = map(
+        rule! { #object ~ #ident},
+        |(object, object_name)| match object {
+            Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
+            Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+        },
+    );
+
+    rule!(
+        #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #object : "STAGE | UDF <object_name>"
     )(i)
 }
 
@@ -2857,6 +2937,28 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
             AlterTaskOptions::ModifyAs(sql)
         },
     );
+    let modify_when = map(
+        rule! {
+             MODIFY ~ WHEN ~ #expr
+        },
+        |(_, _, expr)| {
+            let when = expr.to_string();
+            AlterTaskOptions::ModifyWhen(when)
+        },
+    );
+    let add_after = map(
+        rule! {
+             ADD ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::AddAfter(after),
+    );
+    let remove_after = map(
+        rule! {
+             REMOVE ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::RemoveAfter(after),
+    );
+
     let set = map(
         rule! {
              SET
@@ -2884,6 +2986,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+        | #modify_when
+        | #add_after
+        | #remove_after
     )(i)
 }
 
@@ -2936,7 +3041,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
     );
     let cron_expr = map(
         rule! {
@@ -2944,10 +3049,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         },
         |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
     );
-
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+    );
     rule!(
         #interval
         | #cron_expr
+        | #interval_sec
     )(i)
 }
 

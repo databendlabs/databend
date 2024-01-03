@@ -184,3 +184,55 @@ select 1 as c union all select 3.3::Double;
 ----
 1.0
 3.3
+
+query I
+with
+t1 as (select number as a from numbers(10)),
+t2 as (select number as a from numbers(1000)),
+t3 as (select number as a from numbers(10))
+select sum(a) from (
+select t1.a from t1, t2 where t1.a = t2.a
+union all
+select t1.a from t1, t3 where t1.a = t3.a
+) t
+----
+90
+
+query I
+with
+t1 as (select number as a from numbers(10)),
+t2 as (select number as a from numbers(1000)),
+t3 as (select number as a from numbers(10))
+select sum(a) from (
+select t1.a from t1, t2 where t1.a = t2.a
+union all
+select t1.a from t1
+) t
+----
+90
+
+query I
+with
+t1 as (select number as a from numbers(10)),
+t2 as (select number as a from numbers(1000)),
+t3 as (select number as a from numbers(10))
+select sum(a) from (
+select t1.a from t1, t2 where t1.a = t2.a
+union all
+select sum(t1.a) from t1, t3 where t1.a = t3.a
+) t
+----
+90
+
+query I
+with
+t1 as (select number as a from numbers(10)),
+t2 as (select number as a from numbers(1000)),
+t3 as (select number as a from numbers(10))
+select sum(a) from (
+select sum(t1.a) as a from t1, t3 where t1.a = t3.a
+union all
+select t1.a from t1, t2 where t1.a = t2.a
+) t
+----
+90

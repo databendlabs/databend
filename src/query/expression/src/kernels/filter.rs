@@ -122,6 +122,10 @@ impl Column {
                 let column = Self::filter_boolean_types(bm, filter);
                 Column::Boolean(column)
             }
+            Column::Binary(column) => {
+                let column = Self::filter_string_scalars(column, filter);
+                Column::Binary(column)
+            }
             Column::String(column) => {
                 let column = Self::filter_string_scalars(column, filter);
                 Column::String(column)

@@ -990,7 +990,7 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
             rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
             |(_, s, _, e)| (s, e),
         ),
-        map(rule! {#window_frame_bound}, |s| {
+        map(rule! { #window_frame_bound }, |s| {
             (s, WindowFrameBound::CurrentRow)
         }),
     ))(i)

@@ -33,7 +33,7 @@ const MAX_DISPLAY_ERROR_COUNT: usize = 60;
 /// through a parse tree. This take a deepest error at `alt` combinator.
 #[derive(Clone, Debug)]
 pub struct Error<'a> {
-    /// The span of the next token when encountering an error.
+    /// The span of the next token of the last valid one when encountering an error.
     pub span: Range,
     /// List of errors tried in various branches that consumed
     /// the same (farthest) length of input.
@@ -76,7 +76,7 @@ impl Backtrace {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BacktraceInner {
-    /// The span of the next token when encountering an error.
+    /// The span of the next token of the last valid one when encountering an error.
     span: Range,
     /// List of errors tried in various branches that consumed
     /// the same (farthest) length of input.

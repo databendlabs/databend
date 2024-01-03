@@ -1,0 +1,73 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+statement ok
+DROP TASK IF EXISTS mytaskroot
+
+statement ok
+DROP TASK IF EXISTS mytaskchild
+
+statement ok
+CREATE TASK mytaskroot
+  WAREHOUSE = 'mywh'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  WHEN SYSTEM$STREAM_HAS_DATA('mystream')
+  AS SELECT 1;
+
+query SSSSSS
+select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskroot'
+----
+mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1 SYSTEM$STREAM_HAS_DATA('mystream') (empty)
+
+statement error
+CREATE TASK mytaskerr
+  WAREHOUSE = 'mywh'
+  SCHEDULE = 5 SECOND
+  AFTER 'mytaskroot'
+  WHEN SYSTEM$STREAM_HAS_DATA('stream2')
+  AS SELECT 11;
+
+statement ok
+CREATE TASK mytaskchild
+  WAREHOUSE = 'mywh'
+  AFTER 'mytaskroot'
+  WHEN SYSTEM$STREAM_HAS_DATA('stream2')
+  AS SELECT 1;
+
+query SSSS
+select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
+----
+mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream2') mytaskroot
+
+statement ok
+ALTER TASK mytaskchild MODIFY WHEN SYSTEM$STREAM_HAS_DATA('stream3');
+
+query SSSS
+select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
+----
+mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
+
+statement ok
+ALTER TASK mytaskchild REMOVE AFTER 'mytaskroot';
+
+query SSSS
+select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
+----
+mytaskchild mywh INTERVAL 0 SECOND SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') (empty)
+
+statement ok
+ALTER TASK mytaskchild ADD AFTER 'mytaskroot';
+
+query SSSS
+select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
+----
+mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
+
+statement ok
+EXECUTE TASK mytaskroot;
+
+query SSSS
+select name, warehouse, schedule, definition from system.task_history where name = 'mytaskroot'
+----
+mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1
+

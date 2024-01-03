@@ -31,7 +31,7 @@ use databend_common_expression::ValueRef;
 use ethnum::i256;
 
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
-    let factory = |params: &[Scalar], args_type: &[DataType], round_mode: RoundMode| {
+    let factory_rounds = |params: &[Scalar], args_type: &[DataType], round_mode: RoundMode| {
         if args_type.is_empty() {
             return None;
         }
@@ -69,7 +69,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
-                    decimal_math(
+                    decimal_rounds(
                         &args[0],
                         ctx,
                         from_type.clone(),
@@ -96,9 +96,43 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
     ] {
         let name = format!("{:?}", m).to_lowercase();
         registry.register_function_factory(&name, move |params, args_type| {
-            Some(Arc::new(factory(params, args_type, m)?))
+            Some(Arc::new(factory_rounds(params, args_type, m)?))
         });
     }
+
+    let factory_abs = |_params: &[Scalar], args_type: &[DataType]| {
+        if args_type.is_empty() {
+            return None;
+        }
+
+        let from_type = args_type[0].remove_nullable();
+        if !matches!(from_type, DataType::Decimal(_)) {
+            return None;
+        }
+        let f = Function {
+            signature: FunctionSignature {
+                name: "abs".to_string(),
+                args_type: vec![from_type.clone()],
+                return_type: from_type.clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
+                eval: Box::new(move |args, ctx| {
+                    decimal_abs(&args[0], ctx, from_type.as_decimal().unwrap())
+                }),
+            },
+        };
+
+        if args_type[0].is_nullable() {
+            Some(f.passthrough_nullable())
+        } else {
+            Some(f)
+        }
+    };
+
+    registry.register_function_factory("abs", move |params, args_type| {
+        Some(Arc::new(factory_abs(params, args_type)?))
+    });
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -246,7 +280,7 @@ where
     })(value, ctx)
 }
 
-fn decimal_math(
+fn decimal_rounds(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
     from_type: DataType,
@@ -261,13 +295,13 @@ fn decimal_math(
         return arg.clone().to_owned();
     }
 
-    let none_negative = target_scale >= 0;
+    let zero_or_positive = target_scale >= 0;
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
             let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
 
-            let result = match (none_negative, mode) {
+            let result = match (zero_or_positive, mode) {
                 (true, RoundMode::Round) => {
                     decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
                 }
@@ -285,6 +319,23 @@ fn decimal_math(
             };
 
             result.upcast_decimal(dest_type.size())
+        }
+    })
+}
+
+fn decimal_abs(
+    arg: &ValueRef<AnyType>,
+    ctx: &mut EvalContext,
+    data_type: &DecimalDataType,
+) -> Value<AnyType> {
+    with_decimal_mapped_type!(|DECIMAL_TYPE| match data_type {
+        DecimalDataType::DECIMAL_TYPE(_) => {
+            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
+            let result =
+                vectorize_1_arg::<DecimalType<DECIMAL_TYPE>, DecimalType<DECIMAL_TYPE>>(|a, _| {
+                    a.abs()
+                })(value, ctx);
+            result.upcast_decimal(data_type.size())
         }
     })
 }

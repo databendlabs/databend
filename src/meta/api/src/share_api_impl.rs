@@ -19,7 +19,6 @@ use databend_common_meta_app::app_error::CannotShareDatabaseCreatedFromShare;
 use databend_common_meta_app::app_error::ShareAccountsAlreadyExists;
 use databend_common_meta_app::app_error::ShareAlreadyExists;
 use databend_common_meta_app::app_error::ShareEndpointAlreadyExists;
-use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::app_error::UnknownShare;
 use databend_common_meta_app::app_error::UnknownShareAccounts;
 use databend_common_meta_app::app_error::UnknownTable;
@@ -65,13 +64,13 @@ use crate::list_keys;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::util::get_share_endpoint_id_to_name_or_err;
 use crate::util::get_share_endpoint_or_err;
 use crate::ShareApi;
-use crate::TXN_MAX_RETRY_TIMES;
 
 /// ShareApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls ShareApi.
@@ -94,9 +93,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             // Get share by name to ensure absence
             let (share_id_seq, share_id) = get_u64_value(self, name_key).await?;
@@ -164,10 +164,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_share", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     // When drop a share, need to:
@@ -183,9 +179,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             let res = get_share_or_err(self, name_key, format!("drop_share: {}", &name_key)).await;
 
@@ -297,10 +294,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_share", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn add_share_tenants(
@@ -310,9 +303,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             let res =
                 get_share_or_err(self, name_key, format!("add_share_tenants: {}", &name_key)).await;
@@ -406,10 +400,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("add_share_tenants", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn remove_share_tenants(
@@ -419,10 +409,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
-        let mut retry = 0;
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             let res = get_share_or_err(
                 self,
@@ -528,10 +518,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("remove_share_tenants", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn grant_share_object(
@@ -541,9 +527,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             let res = get_share_or_err(
                 self,
                 share_name_key,
@@ -650,10 +638,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("grant_share_object", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn revoke_share_object(
@@ -663,9 +647,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             let res = get_share_or_err(
                 self,
                 share_name_key,
@@ -788,10 +774,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("revoke_share_object", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn get_share_grant_objects(
@@ -992,9 +974,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             // Get share endpoint by name to ensure absence
             let (share_endpoint_id_seq, share_endpoint_id) = get_u64_value(self, name_key).await?;
@@ -1063,10 +1046,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_share_endpoint", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn upsert_share_endpoint(
@@ -1076,9 +1055,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             // Get share endpoint by name to ensure absence
             let (share_endpoint_id_seq, share_endpoint_id) = get_u64_value(self, name_key).await?;
@@ -1174,10 +1154,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_share_endpoint", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     async fn get_share_endpoint(
@@ -1219,9 +1195,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             let res = get_share_endpoint_or_err(
                 self,
@@ -1299,10 +1276,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_share_endpoint", TXN_MAX_RETRY_TIMES),
-        )))
     }
 }
 

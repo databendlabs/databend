@@ -131,6 +131,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         col.index(index)
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index_unchecked(index)
     }

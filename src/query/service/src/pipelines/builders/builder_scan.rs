@@ -17,7 +17,6 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -72,16 +71,9 @@ impl PipelineBuilder {
 
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
-            if table.support_row_id_column() {
-                self.main_pipeline.add_transform(|input, output| {
-                    TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
-                })?;
-            } else {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "Table engine `{}` does not support virtual column _row_id",
-                    table.engine()
-                )));
-            }
+            self.main_pipeline.add_transform(|input, output| {
+                TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
+            })?;
         }
 
         let schema = scan.source.schema();

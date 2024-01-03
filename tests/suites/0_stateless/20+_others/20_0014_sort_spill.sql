@@ -1,3 +1,4 @@
+SELECT '==TEST GLOBAL SORT==';
 set sort_spilling_bytes_threshold_per_proc = 8;
 drop table if exists t;
 CREATE TABLE t (a INT,  b INT,  c BOOLEAN NULL);
@@ -52,5 +53,31 @@ SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC;
 
-set sort_spilling_bytes_threshold_per_proc = 0;
+
 set max_threads = 16;
+
+-- Test spill in Top-N scenario.
+SELECT '==TEST TOP-N SORT==';
+
+truncate table system.metrics;
+
+SELECT '===================';
+
+SELECT c FROM t ORDER BY c limit 1;
+
+SELECT '===================';
+
+set sort_spilling_bytes_threshold_per_proc = 0;
+select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+set sort_spilling_bytes_threshold_per_proc = 60;
+
+SELECT '===================';
+
+SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST LIMIT 3;
+SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST LIMIT 3;
+SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST LIMIT 3;
+
+SELECT '===================';
+
+set sort_spilling_bytes_threshold_per_proc = 0;
+select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;

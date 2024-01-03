@@ -116,7 +116,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     let index_name = "index1";
 
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -258,7 +258,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     let index_name = "index1";
 
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -377,7 +377,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
     // Create index
     let index_name = "index1";
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -494,7 +494,7 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
 
     fixture
         .execute_command(&format!(
-            "CREATE AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"
+            "CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"
         ))
         .await?;
 
@@ -543,7 +543,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
     // Create index
     let index_name = "index1";
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
     )
         .await?;
 
@@ -636,7 +636,7 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     // Create agg index
     execute_sql(
         ctx.clone(),
-        &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
+        &format!("CREATE ASYNC AGGREGATING INDEX index AS {index_sql}"),
     )
     .await?;
 

@@ -42,6 +42,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -90,6 +91,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use xorf::BinaryFuse16;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -201,8 +203,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };
@@ -908,32 +910,55 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, Vec<Expr<String>>)) {
+    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
             Entry::Vacant(v) => {
-                info!(
-                    "set {:?} runtime filters for {:?}",
-                    filters.1.len(),
-                    filters.0
-                );
                 v.insert(filters.1);
             }
             Entry::Occupied(mut v) => {
-                info!(
-                    "add {:?} runtime filters for {:?}",
-                    filters.1.len(),
-                    filters.0
-                );
-                v.get_mut().extend(filters.1);
+                for filter in filters.1.get_inlist() {
+                    v.get_mut().add_inlist(filter.clone());
+                }
+                for filter in filters.1.get_min_max() {
+                    v.get_mut().add_min_max(filter.clone());
+                }
+                for filter in filters.1.blooms() {
+                    v.get_mut().add_bloom(filter);
+                }
             }
         }
     }
 
-    fn get_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
-        // If don't find the runtime filters, return empty vector.
-        runtime_filters.get(&id).cloned().unwrap_or_default()
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_bloom()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_inlist()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_min_max()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool {
+        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
+            return !runtime_filter.get_bloom().is_empty();
+        }
+        false
     }
 }
 

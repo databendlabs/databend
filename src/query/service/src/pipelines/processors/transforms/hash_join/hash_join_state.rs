@@ -40,10 +40,8 @@ use ethnum::U256;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
-use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::INLIST_RUNTIME_FILTER_THRESHOLD;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
-use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -78,7 +76,6 @@ pub enum HashJoinHashTable {
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
-    pub(crate) ctx: Arc<QueryContext>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
     /// It will be increased by 1 when a new hash join build processor is created.
@@ -120,6 +117,7 @@ pub struct HashJoinState {
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
     pub(crate) partition_id: AtomicI8,
+    pub(crate) enable_spill: bool,
 
     /// If the join node generate runtime filters, the scan node will use it to do prune.
     pub(crate) table_index: IndexType,
@@ -145,8 +143,13 @@ impl HashJoinState {
         }
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
+        let mut enable_spill = false;
+        if hash_join_desc.join_type == JoinType::Inner
+            && ctx.get_settings().get_join_spilling_threshold()? != 0
+        {
+            enable_spill = true;
+        }
         Ok(Arc::new(HashJoinState {
-            ctx: ctx.clone(),
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: AtomicUsize::new(0),
             build_done_watcher,
@@ -161,6 +164,7 @@ impl HashJoinState {
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
+            enable_spill,
             table_index,
         }))
     }
@@ -247,35 +251,5 @@ impl HashJoinState {
             build_state.mark_scan_map.clear();
         }
         build_state.generation_state.is_build_projected = true;
-    }
-
-    // Generate runtime filters
-    pub(crate) fn generate_runtime_filters(&self) -> Result<()> {
-        // If build side rows < 10k, using inlist filter
-        // TODO: else using bloom filter
-        let func_ctx = self.ctx.get_function_context()?;
-        let build_state = unsafe { &mut *self.build_state.get() };
-        let data_blocks = &mut build_state.build_chunks;
-
-        let num_rows = build_state.generation_state.build_num_rows;
-        if num_rows > INLIST_RUNTIME_FILTER_THRESHOLD {
-            data_blocks.clear();
-            return Ok(());
-        }
-        let mut runtime_filters = Vec::with_capacity(self.hash_join_desc.build_keys.len());
-        for (build_key, probe_key) in self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .zip(self.hash_join_desc.probe_keys_rt.iter())
-        {
-            if let Some(filter) = inlist_filter(&func_ctx, build_key, probe_key, data_blocks)? {
-                runtime_filters.push(filter);
-            }
-        }
-        self.ctx
-            .set_runtime_filter((self.table_index, runtime_filters));
-        data_blocks.clear();
-        Ok(())
     }
 }

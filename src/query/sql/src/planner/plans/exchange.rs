@@ -29,7 +29,6 @@ use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
-    Random,
     Hash(Vec<ScalarExpr>),
     Broadcast,
     Merge,
@@ -48,7 +47,6 @@ impl Operator for Exchange {
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
-                Exchange::Random => Distribution::Random,
                 Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge => Distribution::Serial,
@@ -57,7 +55,7 @@ impl Operator for Exchange {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 
@@ -69,5 +67,14 @@ impl Operator for Exchange {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

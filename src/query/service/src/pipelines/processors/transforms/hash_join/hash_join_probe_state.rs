@@ -21,7 +21,6 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Barrier;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
@@ -377,7 +376,7 @@ impl HashJoinProbeState {
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
-        if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+        if self.hash_join_state.enable_spill {
             worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
             self.spill_workers.fetch_add(1, Ordering::Relaxed);
         }
