@@ -343,7 +343,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         let merge_source_optimizer = MergeSourceOptimizer::create();
         let (optimized_distributed_merge_into_join_sexpr, distributed) = if !merge_into_join_sexpr
             .match_pattern(&merge_source_optimizer.merge_source_pattern)
-            && !change_join_order
+            || change_join_order
         {
             (merge_into_join_sexpr.clone(), false)
         } else {
