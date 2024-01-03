@@ -73,6 +73,58 @@ impl TopKSorter {
         }
     }
 
+    // Push the column into this sorted and update the selection
+    // The selection could be used in filter
+    pub fn push_column_with_selection(
+        &mut self,
+        col: &Column,
+        selection: &mut [u32],
+        count: usize,
+    ) -> usize {
+        with_number_mapped_type!(|NUM_TYPE| match col.data_type() {
+            DataType::Number(NumberDataType::NUM_TYPE) => self
+                .push_column_with_selection_internal::<NumberType::<NUM_TYPE>>(
+                    col, selection, count
+                ),
+            DataType::String =>
+                self.push_column_with_selection_internal::<StringType>(col, selection, count),
+            DataType::Timestamp =>
+                self.push_column_with_selection_internal::<TimestampType>(col, selection, count),
+            DataType::Date =>
+                self.push_column_with_selection_internal::<DateType>(col, selection, count),
+            _ => count,
+        })
+    }
+
+    fn push_column_with_selection_internal<T: ValueType>(
+        &mut self,
+        col: &Column,
+        selection: &mut [u32],
+        count: usize,
+    ) -> usize
+    where
+        for<'a> T::ScalarRef<'a>: Ord,
+    {
+        let col = T::try_downcast_column(col).unwrap();
+        let mut result_count = 0;
+        for i in 0..count {
+            let idx = selection[i];
+            let value = unsafe { T::index_column_unchecked(&col, idx as usize) };
+            if self.data.len() < self.limit {
+                self.data.push(T::upcast_scalar(T::to_owned_scalar(value)));
+                if self.data.len() == self.limit {
+                    self.make_heap();
+                }
+                selection[result_count] = idx;
+                result_count += 1;
+            } else if self.push_value(value) {
+                selection[result_count] = idx;
+                result_count += 1;
+            }
+        }
+        result_count
+    }
+
     #[inline]
     fn push_value<T: ValueType>(&mut self, value: T::ScalarRef<'_>) -> bool
     where for<'a> T::ScalarRef<'a>: Ord {

@@ -39,7 +39,6 @@ use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
-use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
@@ -216,6 +215,7 @@ use crate::remove_db_from_share;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -230,11 +230,9 @@ use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
-use crate::util::txn_trials;
 use crate::IdGenerator;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
-use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
@@ -258,9 +256,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )));
         }
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_u64_value(self, name_key).await?;
             debug!(db_id_seq = db_id_seq, db_id = db_id, name_key = as_debug!(name_key); "get_database");
@@ -343,10 +342,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_database", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -355,10 +350,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.name_ident;
-        let mut retry = 0;
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             let res = get_db_or_err(
                 self,
                 tenant_dbname,
@@ -536,10 +532,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 });
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_database", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -552,9 +544,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let name_key = &req.name_ident;
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             let res =
                 get_db_or_err(self, name_key, format!("undrop_database: {}", &name_key)).await;
 
@@ -638,10 +631,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("undrop_database", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -658,9 +647,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             db_name: req.new_db_name.clone(),
         };
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // get old db, not exists return err
             let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
             if req.if_exists {
@@ -781,10 +771,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("rename_database", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -1037,9 +1023,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )));
         }
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // Get index by name to ensure absence
             let (index_id_seq, index_id) = get_u64_value(self, tenant_index).await?;
             debug!(
@@ -1108,10 +1095,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_index", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -1120,11 +1103,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let tenant_index = &req.name_ident;
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
 
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let res = get_index_or_err(self, tenant_index).await?;
 
@@ -1393,10 +1375,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateVirtualColumnReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &req.name_ident).await?;
@@ -1462,10 +1443,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<UpdateVirtualColumnReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let ctx = func_name!();
+
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let (seq, old_virtual_column_meta) =
                 match get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
@@ -1525,10 +1507,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<DropVirtualColumnReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let ctx = func_name!();
+
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             if let Err(err) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
                 if req.if_exists {
@@ -1619,9 +1602,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )));
         }
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -1776,10 +1760,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_table", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     /// List all tables belonging to every db and every tenant.
@@ -1821,9 +1801,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut tb_count = 0;
         let mut tb_count_seq;
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -1959,10 +1940,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("undrop_table", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -1978,9 +1955,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             table_name: req.new_table_name.clone(),
         };
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             // Get db by name to ensure presence
 
             let (_, db_id, db_meta_seq, db_meta) =
@@ -2158,10 +2136,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("rename_table", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -2484,10 +2458,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut tb_count_seq;
         let tbid = TableId { table_id };
         let tenant = &req.tenant;
-        let mut retry = 0;
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             // Check if table exists.
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
@@ -2688,9 +2662,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
         }
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_table_by_id", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[minitrace::trace]
@@ -2758,8 +2729,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // NOTE: this method read and remove in multiple transactions.
         // It is not atomic, but it is safe because it deletes only the files that matches the seq.
 
-        let ctx = &func_name!();
-        debug!(req = as_debug!(&req); "SchemaApi: {}", ctx);
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+
+        let ctx = func_name!();
 
         let table_id = TableId {
             table_id: req.table_id,
@@ -2774,9 +2746,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let (mut seq_1, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
 
-        let mut trials = txn_trials(None, ctx);
+        let mut trials = txn_backoff(None, func_name!());
         let copied_files = loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let copied_files = list_table_copied_files(self, table_id.table_id).await?;
 
@@ -2822,9 +2794,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if_then.push(TxnOp::delete_exact(copied_str_key, Some(copied_seq)));
             }
 
-            let mut trials = txn_trials(None, ctx);
+            let mut trials = txn_backoff(None, func_name!());
             loop {
-                trials.next().unwrap()?;
+                trials.next().unwrap()?.await;
 
                 let (tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
 
@@ -3114,9 +3086,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             table_id: req.table_id,
         };
         let req_seq = req.seq;
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_pb_value(self, &tbid).await?;
 
@@ -3199,10 +3173,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 });
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("set_table_column_mask_policy", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[logcall::logcall("debug")]
@@ -3505,10 +3475,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
         let key = lock_key.gen_key(revision);
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let ctx = func_name!();
+
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
@@ -3561,6 +3532,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
+        let ctx = func_name!();
+
         let lock_key = &req.lock_key;
         let table_id = lock_key.get_table_id();
         let tbid = TableId { table_id };
@@ -3568,11 +3541,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = req.revision;
         let key = lock_key.gen_key(revision);
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
-
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
@@ -3632,11 +3603,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = lock_key.get_table_id();
         let tbid = TableId { table_id };
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
-
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
             if lock_seq == 0 {
@@ -3710,12 +3679,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let name_key = &req.name_ident;
 
-        let ctx = &func_name!();
-
-        let mut trials = txn_trials(None, ctx);
-
-        let catalog_id = loop {
-            trials.next().unwrap()?;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
             // Get catalog by name to ensure absence
             let (catalog_id_seq, catalog_id) = get_u64_value(self, name_key).await?;
@@ -3776,12 +3742,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    break catalog_id;
+                    return Ok(CreateCatalogReply { catalog_id });
                 }
             }
-        };
-
-        Ok(CreateCatalogReply { catalog_id })
+        }
     }
 
     #[logcall::logcall("debug")]
@@ -3810,12 +3774,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let name_key = &req.name_ident;
 
-        let ctx = &func_name!();
-
-        let mut trials = txn_trials(None, ctx);
-
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let res =
                 get_catalog_or_err(self, name_key, format!("drop_catalog: {}", &name_key)).await;
@@ -3943,11 +3904,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
 
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let lvt_key = LeastVisibleTimeKey { table_id };
             let (lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =

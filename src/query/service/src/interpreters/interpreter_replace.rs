@@ -137,7 +137,7 @@ impl Interpreter for ReplaceInterpreter {
                 table: self.plan.table.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut pipeline.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut pipeline.main_pipeline, refresh_desc).await;
         }
 
         Ok(pipeline)

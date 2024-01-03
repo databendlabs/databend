@@ -260,11 +260,11 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn validate_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<()> {
+    pub async fn has_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
-            return Ok(());
+            return Ok(true);
         }
-        self.privilege_mgr.validate_ownership(object).await
+        self.privilege_mgr.has_ownership(object).await
     }
 
     #[async_backtrace::framed]
