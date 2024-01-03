@@ -495,7 +495,7 @@ impl<'a> Selector<'a> {
         )
     }
 
-    pub fn selection(
+    fn selection(
         &self,
         true_selection: &'a mut [u32],
         false_selection: &'a mut [u32],
