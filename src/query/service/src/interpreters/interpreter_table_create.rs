@@ -27,7 +27,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::schema::TableMeta;
@@ -183,7 +183,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &GrantObjectByID::Table {
+                    &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
                         db_id,
                         table_id: table.get_id(),
@@ -267,7 +267,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &GrantObjectByID::Table {
+                    &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
                         db_id,
                         table_id: reply.table_id,

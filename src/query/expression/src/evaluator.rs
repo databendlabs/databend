@@ -177,6 +177,7 @@ impl<'a> Evaluator<'a> {
                 name,
                 args,
                 lambda_expr,
+                return_type,
                 ..
             } => {
                 let args = args
@@ -192,7 +193,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                self.run_lambda(name, args, lambda_expr)
+                self.run_lambda(name, args, lambda_expr, return_type)
             }
         };
 
@@ -960,13 +961,69 @@ impl<'a> Evaluator<'a> {
         unreachable!("expr is not a set returning function: {expr}")
     }
 
+    fn run_array_reduce(&self, column: &Column, expr: &Expr) -> Result<Scalar> {
+        let col_type = column.data_type();
+        if col_type.is_null() || column.len() < 1 {
+            return Ok(Scalar::Null);
+        }
+        let mut arg0 = column.index(0).unwrap().to_owned();
+        for i in 1..column.len() {
+            let arg1 = column.index(i).unwrap().to_owned();
+            let entries = {
+                vec![
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg0.clone())),
+                    BlockEntry::new(col_type.clone(), Value::Scalar(arg1)),
+                ]
+            };
+            let block = DataBlock::new(entries, 1);
+            let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+            let result = evaluator.run(expr)?;
+            arg0 = self
+                .run_cast(None, expr.data_type(), &col_type, result, None)?
+                .as_scalar()
+                .unwrap()
+                .clone();
+        }
+        Ok(arg0)
+    }
+
     pub fn run_lambda(
         &self,
         func_name: &str,
         args: Vec<Value<AnyType>>,
         lambda_expr: &RemoteExpr,
+        return_type: &DataType,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
+        // array_reduce differs
+        if func_name == "array_reduce" {
+            match &args[0] {
+                Value::Scalar(s) => match s {
+                    Scalar::Array(c) => {
+                        let result = self.run_array_reduce(c, &expr)?;
+                        return Ok(Value::Scalar(result));
+                    }
+                    _ => unreachable!(),
+                },
+                Value::Column(c) => {
+                    let mut builder = ColumnBuilder::with_capacity(return_type, c.len());
+                    for val in c.iter() {
+                        match &val.to_owned() {
+                            Scalar::Array(c) => {
+                                let result = self.run_array_reduce(c, &expr)?;
+                                let item = result.as_ref();
+                                builder.push(item);
+                            }
+                            Scalar::Null => {
+                                builder.push_default();
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    return Ok(Value::Column(builder.build()));
+                }
+            }
+        }
         // TODO: Support multi args
         match &args[0] {
             Value::Scalar(s) => match s {
@@ -1209,7 +1266,7 @@ impl<'a> Evaluator<'a> {
                 );
 
                 Ok((
-                    self.run_lambda(name, args, lambda_expr)?,
+                    self.run_lambda(name, args, lambda_expr, return_type)?,
                     return_type.clone(),
                 ))
             }
