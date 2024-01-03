@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_types::MatchSeq;
+use log::info;
 use passwords::analyzer;
 
 use crate::UserApiProvider;
@@ -244,11 +245,11 @@ impl UserApiProvider {
         Ok(password_policies)
     }
 
-    // Verify the password according to the options of the password policy
-    // New user's password must meet the password complexity requirements
-    // In addition to the complexity requirement, there are two additional conditions for changing passwords
-    // 1. the current time must exceed the minimum number of days allowed for password change
-    // 2. the password must not be repeated with recently history passwords
+    // Verify the password according to the options of the password policy.
+    // Both creating and changing password must meet the password complexity requirements.
+    // And two additional conditions must meet for changing passwords:
+    // 1. the current time must exceed the minimum number of days allowed for password changing.
+    // 2. the password must not be repeated with recently history passwords.
     #[async_backtrace::framed]
     pub async fn verify_password(
         &self,
@@ -363,12 +364,12 @@ impl UserApiProvider {
         Ok(())
     }
 
-    // Check login password meets the password policy options
-    // There are three conditions that need to be met in order to log in
-    // 1. Cannot be in a lockout period where logins are not allowed
+    // Check login password meets the password policy options.
+    // There are three conditions that need to be met in order to log in.
+    // 1. Cannot be in a lockout period where logins are not allowed.
     // 2. the number of recent failed login attempts must not exceed the maximum retries,
-    //    otherwise the user will be locked out
-    // 3. must be within the maximum allowed number of days since last password changed
+    //    otherwise the user will be locked out.
+    // 3. must be within the maximum allowed number of days since last password changed.
     #[async_backtrace::framed]
     pub async fn check_login_password(
         &self,
@@ -377,11 +378,15 @@ impl UserApiProvider {
         user_info: &UserInfo,
     ) -> Result<()> {
         let now = Utc::now();
-        // Locked users cannot log in for the duration of the lockout
+        // Locked users cannot login for the duration of the lockout
         if let Some(lockout_time) = user_info.lockout_time {
             if let Ordering::Greater = lockout_time.cmp(&now) {
+                info!(
+                    "user {} can not login until {} because too many password fails",
+                    identity, lockout_time
+                );
                 return Err(ErrorCode::InvalidPassword(format!(
-                    "Disable logging in before {} because of too many password fails",
+                    "Disable login before {} because of too many password fails",
                     lockout_time
                 )));
             }
@@ -405,6 +410,10 @@ impl UserApiProvider {
                         .count();
 
                     if failed_retries >= password_policy.max_retries as usize {
+                        info!(
+                            "user {} can not login because password fails for {} time retries",
+                            identity, failed_retries
+                        );
                         let lockout_time = now
                             .checked_add_signed(Duration::minutes(
                                 password_policy.lockout_time_mins as i64,
@@ -414,7 +423,7 @@ impl UserApiProvider {
                             .await?;
 
                         return Err(ErrorCode::InvalidPassword(format!(
-                            "Disable logging in before {} because of too many password fails",
+                            "Disable login before {} because of too many password fails",
                             lockout_time
                         )));
                     }
@@ -426,6 +435,10 @@ impl UserApiProvider {
                             .checked_add_signed(Duration::days(password_policy.max_age_days as i64))
                             .unwrap();
 
+                        info!(
+                            "user {} can not login because password must be changed before {}",
+                            identity, max_change_time
+                        );
                         // Password has not been changed for more than max age days, cannot login
                         if let Ordering::Less = max_change_time.cmp(&now) {
                             return Err(ErrorCode::InvalidPassword(
