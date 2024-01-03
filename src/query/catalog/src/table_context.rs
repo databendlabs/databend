@@ -48,7 +48,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::RwLock;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -243,7 +243,7 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse8)>;
+    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 
     fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 

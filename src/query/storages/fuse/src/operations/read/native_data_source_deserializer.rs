@@ -61,7 +61,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
@@ -121,7 +121,7 @@ impl ReadPartState {
         }
     }
 
-    /// Reset all the state. Mark the state as finsihed.
+    /// Reset all the state. Mark the state as finished.
     fn finish(&mut self) {
         self.array_iters.clear();
         self.array_skip_pages.clear();
@@ -159,6 +159,10 @@ impl ReadPartState {
     /// Return false if the column is finished.
     #[inline(always)]
     fn read_page(&mut self, index: usize) -> Result<bool> {
+        if self.read_columns.contains(&index) {
+            return Ok(true);
+        }
+
         if let Some(array_iter) = self.array_iters.get_mut(&index) {
             let skipped_pages = self.array_skip_pages.get(&index).unwrap();
             match array_iter.nth(*skipped_pages) {
@@ -217,13 +221,12 @@ pub struct NativeDeserializeDataTransform {
 
     // Structures for the bloom runtime filter:
     ctx: Arc<dyn TableContext>,
-    bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse8)>>,
+    bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
 
     // Other structures:
     remain_columns: Vec<usize>,
     index_reader: Arc<Option<AggIndexReader>>,
     base_block_ids: Option<Scalar>,
-
     /// Record the state while reading a native partition.
     read_state: ReadPartState,
 
@@ -649,7 +652,7 @@ impl NativeDeserializeDataTransform {
             return Ok(None);
         }
 
-        // Each loop trys to read a set of pages and produce a block.
+        // Each loop tries to read a set of pages and produce a block.
         // If the pages are skipped, start a new loop.
         loop {
             if self.read_state.is_finished() {
@@ -657,7 +660,7 @@ impl NativeDeserializeDataTransform {
                 return Ok(None);
             }
 
-            // Prepate to read a new set of pages.
+            // Prepare to read a new set of pages.
             self.read_state.new_pages();
 
             // 1. check the TopK heap.
@@ -732,8 +735,8 @@ impl NativeDeserializeDataTransform {
                 debug_assert!(self.read_state.is_finished());
                 return Ok(false);
             }
-            // TopK should always be the first column to check.
-            if let Some((_, array)) = self.read_state.arrays.first() {
+            // TopK should always be the last column read.
+            if let Some((_, array)) = self.read_state.arrays.last() {
                 let data_type = top_k.field.data_type().into();
                 let col = Column::from_arrow(array.as_ref(), &data_type);
                 if sorter.never_match_any(&col) {
