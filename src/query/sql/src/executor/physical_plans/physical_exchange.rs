@@ -63,6 +63,7 @@ impl PhysicalPlanBuilder {
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
+            crate::plans::Exchange::Random => FragmentKind::Init,
             crate::plans::Exchange::Hash(scalars) => {
                 for scalar in scalars {
                     let expr = scalar

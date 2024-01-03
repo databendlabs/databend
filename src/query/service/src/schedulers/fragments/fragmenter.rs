@@ -40,6 +40,7 @@ use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::MergeInto;
 use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.

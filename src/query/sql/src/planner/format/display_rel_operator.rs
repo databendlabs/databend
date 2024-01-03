@@ -197,6 +197,9 @@ pub fn format_exchange(
         Exchange::MergeSort => {
             write!(f, "Exchange(MergeSort)")
         }
+        Exchange::Random => {
+            write!(f, "Exchange(Random)")
+        }
     }
 }
 

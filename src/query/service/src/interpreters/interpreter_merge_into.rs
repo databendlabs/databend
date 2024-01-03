@@ -196,7 +196,6 @@ impl MergeIntoInterpreter {
         // build source for MergeInto
         let join_input = builder.build(&input, *columns_set.clone()).await?;
 
-
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
