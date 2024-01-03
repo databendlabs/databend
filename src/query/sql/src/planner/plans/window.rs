@@ -91,7 +91,7 @@ impl Window {
         Ok(used_columns)
     }
 
-    // `Window.group_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
+    // `Window.partition_by_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
     // like `Aggregate.group_columns` only consider `group_items` field.
     pub fn partition_by_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();

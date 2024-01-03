@@ -750,6 +750,21 @@ SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC) AS rank
 2 2
 2 2
 
+statement ok
+drop table if exists t
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values (1),(2),(3),(4),(5)
+
+query II
+select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3
+----
+4
+5
+
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
 DROP TABLE IF EXISTS tbpush
@@ -772,9 +787,9 @@ select b, row_number() over (order by b) from tbpush where b > 1;
 2 1
 
 query II
-select b, row_number() over (order by b) from tbpush where b > 1;
+select * from vwpush where b > 1;
 ----
-2 1
+2 2
 
 query II
 select * from (select b, row_number() over (order by b) from tbpush) where b > 1;
