@@ -315,10 +315,11 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = cascades.optimize(s_expr)?;
     }
 
-    if !opt_ctx.enable_join_reorder {
-        return RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr);
-    }
-    s_expr = RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)?;
+    s_expr = if !opt_ctx.enable_join_reorder {
+        RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?
+    } else {
+        RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)?
+    };
 
     // Run distributed query optimization.
     //
