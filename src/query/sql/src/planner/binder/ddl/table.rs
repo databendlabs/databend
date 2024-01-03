@@ -157,6 +157,7 @@ impl Binder {
                 .with_column("'BASE TABLE' AS Table_type")
                 .with_column("database AS Database")
                 .with_column("catalog AS Catalog")
+                .with_column("owner")
                 .with_column("engine")
                 .with_column("cluster_by AS Cluster_by")
                 .with_column("created_on AS create_time");
