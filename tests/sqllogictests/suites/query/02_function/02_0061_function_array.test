@@ -267,7 +267,7 @@ select col1 from t where get(array_transform(col1, x -> x + 1), 1) = 2
 query T
 select array_reduce([],(x,y)->x+y), array_reduce([null],(x,y)->x+y), array_reduce(null,(x,y)->x+y);
 ----
-[] null null
+[] NULL NULL
 
 query TT
 select array_reduce([1,2,3],(x,y)->x+y-1), array_reduce([3,4,5],(x,y)->x-y)
@@ -277,7 +277,7 @@ select array_reduce([1,2,3],(x,y)->x+y-1), array_reduce([3,4,5],(x,y)->x-y)
 query T
 select array_reduce([1, 2,null], (x,y) -> x + y)
 ----
-null
+NULL
 
 query T
 select array_reduce([1.21312,2.21332,3.2213],(x,y)->(x+y))
@@ -295,7 +295,7 @@ select array_reduce(col1,(x,y)->x+y+1) from t
 12
 
 statement ok
-create table t1(col1 Array(Int Null) not null, col2 Array(Float null) not null, col3 Array(Decimal (10,5)null) not null, col4 Array(String) not null)
+create table t1(col1 Array(Int Null) not null, col2 Array(Float Null) not null, col3 Array(Decimal (10,5)Null) not null, col4 Array(String Null) not null)
 
 statement ok
 insert into t1 values([], [], [], [])
@@ -309,9 +309,9 @@ insert into t1 values([1,2,3], [3.1, 5.42, 6.25], [1.1231, 4.131, 6.56], ['hello
 query TTTT
 select array_reduce(col1,(x,y)->x+y), array_reduce(col2,(x,y)->x-y), array_reduce(col3,(x,y)->x+y), array_reduce(col4,(x,y)->x||y) from t1
 ----
-null null null null
-null null null null
 6 -8.570000171661377 11.81410 helloworld2024
+NULL NULL NULL NULL
+NULL NULL NULL NULL
 
 
 query IIII
