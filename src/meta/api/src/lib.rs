@@ -22,7 +22,6 @@ mod background_api;
 mod background_api_impl;
 mod background_api_keys;
 mod background_api_test_suite;
-pub mod compat_errors;
 mod data_mask_api;
 mod data_mask_api_impl;
 mod data_mask_api_keys;
