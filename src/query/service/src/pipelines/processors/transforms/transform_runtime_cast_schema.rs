@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -72,11 +74,19 @@ impl Transform for TransformRuntimeCastSchema {
                     display_name: to.name().clone(),
                 };
                 if &from.data_type != to.data_type() {
-                    Expr::Cast {
-                        span: None,
-                        is_try: false,
-                        expr: Box::new(expr),
-                        dest_type: to.data_type().clone(),
+                    if from.data_type.remove_nullable() == DataType::String
+                        && to.data_type().remove_nullable() == DataType::Variant
+                    {
+                        // parse string to JSON value, avoid cast string to JSON string
+                        check_function(None, "parse_json", &[], &[expr], &BUILTIN_FUNCTIONS)
+                            .unwrap()
+                    } else {
+                        Expr::Cast {
+                            span: None,
+                            is_try: false,
+                            expr: Box::new(expr),
+                            dest_type: to.data_type().clone(),
+                        }
                     }
                 } else {
                     expr

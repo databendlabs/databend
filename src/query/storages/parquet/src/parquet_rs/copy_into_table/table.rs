@@ -53,7 +53,9 @@ impl ParquetTableForCopy {
 
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
         // User set the files.
-        let files = stage_table_info.list_files(None).await?;
+        let files = stage_table_info.files_to_copy.as_ref().expect(
+            "ParquetTableForCopy::do_read_partitions must be called with files_to_copy set",
+        );
         let file_infos = files
             .iter()
             .map(|f| (f.path.clone(), f.size))

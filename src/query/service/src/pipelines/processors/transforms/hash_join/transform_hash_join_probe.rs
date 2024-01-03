@@ -45,8 +45,8 @@ enum HashJoinProbeStep {
     FastReturn,
     // Spill step is used to spill the probe side data.
     Spill,
-    // Async running will read the spilled data, then go to probe
-    AsyncRunning,
+    // Restore the spilled data, then go to probe
+    Restore,
 }
 
 pub struct TransformHashJoinProbe {
@@ -131,7 +131,7 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
-    fn async_run(&mut self) -> Result<Event> {
+    fn restore(&mut self) -> Result<Event> {
         debug_assert!(self.input_port.is_finished());
         if !self.input_data.is_empty() {
             self.step = HashJoinProbeStep::Running;
@@ -313,7 +313,7 @@ impl Processor for TransformHashJoinProbe {
                 Ok(Event::Finished)
             }
             HashJoinProbeStep::Running => self.run(),
-            HashJoinProbeStep::AsyncRunning => self.async_run(),
+            HashJoinProbeStep::Restore => self.restore(),
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
@@ -379,7 +379,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::FastReturn
             | HashJoinProbeStep::WaitBuild
             | HashJoinProbeStep::Spill
-            | HashJoinProbeStep::AsyncRunning => unreachable!("{:?}", self.step),
+            | HashJoinProbeStep::Restore => unreachable!("{:?}", self.step),
         }
     }
 
@@ -443,8 +443,8 @@ impl Processor for TransformHashJoinProbe {
                         self.step = HashJoinProbeStep::Spill;
                         self.step_logs.push(HashJoinProbeStep::Spill);
                     } else {
-                        self.step = HashJoinProbeStep::AsyncRunning;
-                        self.step_logs.push(HashJoinProbeStep::AsyncRunning);
+                        self.step = HashJoinProbeStep::Restore;
+                        self.step_logs.push(HashJoinProbeStep::Restore);
                     }
                 } else {
                     self.step = HashJoinProbeStep::Running;
@@ -497,7 +497,7 @@ impl Processor for TransformHashJoinProbe {
                     }
                 }
             }
-            HashJoinProbeStep::AsyncRunning => {
+            HashJoinProbeStep::Restore => {
                 let spill_state = self.spill_state.as_ref().unwrap();
                 let p_id = self
                     .join_probe_state

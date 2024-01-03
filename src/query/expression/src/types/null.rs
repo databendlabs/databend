@@ -112,6 +112,7 @@ impl ValueType for NullType {
         if index < *len { Some(()) } else { None }
     }
 
+    #[inline(always)]
     unsafe fn index_column_unchecked(_col: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
 
     fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {

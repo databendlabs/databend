@@ -40,12 +40,13 @@ ucase -> upper
 uuid -> gen_random_uuid
 
 Functions overloads:
-0 abs(UInt64) :: UInt64
-1 abs(UInt64 NULL) :: UInt64 NULL
-2 abs(Int64) :: UInt64
-3 abs(Int64 NULL) :: UInt64 NULL
-4 abs(Float64) :: Float64
-5 abs(Float64 NULL) :: Float64 NULL
+0 abs FACTORY
+1 abs(UInt64) :: UInt64
+2 abs(UInt64 NULL) :: UInt64 NULL
+3 abs(Int64) :: UInt64
+4 abs(Int64 NULL) :: UInt64 NULL
+5 abs(Float64) :: Float64
+6 abs(Float64 NULL) :: Float64 NULL
 0 acos(Float64) :: Float64
 1 acos(Float64 NULL) :: Float64 NULL
 0 add_days(Date, Int64) :: Date

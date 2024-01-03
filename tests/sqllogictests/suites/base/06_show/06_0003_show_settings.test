@@ -11,7 +11,7 @@ select value=default from system.settings where name in ('max_threads', 'max_mem
 1
 
 query TTT
-select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage')
+select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage') order by name
 ----
 max_memory_usage  SESSION  Sets the maximum memory usage in bytes for processing a single query.
 max_threads       SESSION  Sets the maximum number of threads to execute a request.
@@ -44,23 +44,23 @@ SHOW SETTINGS ilike 'ff%' LIMIT 1
 statement error
 SHOW SETTINGS WHERE cc='err' LIMIT 1
 
-
+onlyif mysql
 statement ok
 set max_memory_usage = 1024*1024*1024*1.5
 
-
-statement error
+onlyif mysql
+statement error 1105
 set max_memory_usage = 1024*1024*1024*1.3
 
-
-statement error
+onlyif mysql
+statement error 1105
 set max_memory_usage = true
 
-
-statement error
+onlyif mysql
+statement error 1065
 set max_memory_usage = rand()
 
-
+onlyif mysql
 query TT
 select name, value from system.settings where name = 'max_memory_usage'
 ----

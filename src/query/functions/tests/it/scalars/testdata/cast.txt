@@ -1127,7 +1127,7 @@ output         : 1
 
 ast            : CAST(0.0 AS BOOLEAN)
 raw expr       : CAST(0.0 AS Boolean)
-checked expr   : to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+checked expr   : to_boolean<Float64>(to_float64<Decimal(1, 1)>(0.0_d128(1,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1136,7 +1136,7 @@ output         : false
 
 ast            : CAST(1.0 AS BOOLEAN)
 raw expr       : CAST(1.0 AS Boolean)
-checked expr   : to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+checked expr   : to_boolean<Float64>(to_float64<Decimal(2, 1)>(1.0_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3126,7 +3126,7 @@ output         : 1
 
 ast            : TRY_CAST(0.0 AS BOOLEAN)
 raw expr       : TRY_CAST(0.0 AS Boolean)
-checked expr   : try_to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+checked expr   : try_to_boolean<Float64>(to_float64<Decimal(1, 1)>(0.0_d128(1,1)))
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3135,7 +3135,7 @@ output         : false
 
 ast            : TRY_CAST(1.0 AS BOOLEAN)
 raw expr       : TRY_CAST(1.0 AS Boolean)
-checked expr   : try_to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+checked expr   : try_to_boolean<Float64>(to_float64<Decimal(2, 1)>(1.0_d128(2,1)))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
