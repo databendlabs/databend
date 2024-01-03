@@ -772,7 +772,10 @@ impl NativeDeserializeDataTransform {
         }
 
         // Evaluate the filter.
-        if self.prewhere_filter.is_some() {
+        // If `self.read_state.arrays.is_empty()`,
+        // it means there are only default columns in prewhere columns. (all prewhere columns are newly added by `alter table`)
+        // In this case, we don't need to evaluate the filter, because the unsatisfied blocks are already filtered in `read_partitions`.
+        if self.prewhere_filter.is_some() && !self.read_state.arrays.is_empty() {
             debug_assert!(self.filter_executor.is_some());
             let mut prewhere_block = if self.read_state.arrays.len() < self.prewhere_columns.len() {
                 self.block_reader
@@ -853,7 +856,7 @@ impl NativeDeserializeDataTransform {
             }
         }
 
-        Ok(false)
+        Ok(true)
     }
 
     /// Update the top-k heap with by the topk column.
@@ -867,14 +870,15 @@ impl NativeDeserializeDataTransform {
             let data_type = top_k.field.data_type().into();
             let col = Column::from_arrow(array.as_ref(), &data_type);
 
-            let mut count = self.read_state.filtered_count.unwrap_or_default();
+            let mut bitmap = MutableBitmap::from_len_set(col.len());
+            sorter.push_column(&col, &mut bitmap);
 
             let filter_executor = self.filter_executor.as_mut().unwrap();
-            count = sorter.push_column_with_selection(
-                &col,
-                filter_executor.mut_true_selection(),
-                count,
-            );
+            let count = if let Some(count) = self.read_state.filtered_count {
+                filter_executor.select_bitmap(count, bitmap)
+            } else {
+                filter_executor.from_bitmap(bitmap)
+            };
 
             if count == 0 {
                 return Ok(false);
@@ -1023,7 +1027,7 @@ impl Processor for NativeDeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.chunks.is_empty() || !self.read_state.is_finished() {
+        if !self.chunks.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
