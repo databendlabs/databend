@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnerObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_types::MatchSeq;
@@ -45,13 +45,13 @@ pub trait RoleApi: Sync + Send {
     /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
     /// None RoleInfo means the role is built-in role, could only update grant object metadata
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(&self, object: &GrantObjectByID, role: &str) -> Result<()>;
+    async fn grant_ownership(&self, object: &OwnerObject, role: &str) -> Result<()>;
 
-    /// Remember to call this method when you dropped a database/table, etc.
-    async fn drop_ownership(&self, object: &GrantObjectByID) -> Result<()>;
+    /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
+    async fn revoke_ownership(&self, object: &OwnerObject) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
-    async fn get_ownership(&self, object: &GrantObjectByID) -> Result<Option<OwnershipInfo>>;
+    async fn get_ownership(&self, object: &OwnerObject) -> Result<Option<OwnershipInfo>>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

@@ -21,18 +21,30 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
-/// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
+/// [`OwnerObject`] is used to maintain the grant object that support rename by id. Using ID over name
 /// have many benefits, it can avoid lost privileges after the object get renamed.
+/// But Stage and UDF do not support the concept of renaming and do not have ids, so names can be used.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum GrantObjectByID {
+pub enum OwnerObject {
     /// used on the fuse databases
-    Database { catalog_name: String, db_id: u64 },
+    Database {
+        catalog_name: String,
+        db_id: u64,
+    },
 
     /// used on the fuse tables
     Table {
         catalog_name: String,
         db_id: u64,
         table_id: u64,
+    },
+
+    Stage {
+        name: String,
+    },
+
+    UDF {
+        name: String,
     },
 }
 

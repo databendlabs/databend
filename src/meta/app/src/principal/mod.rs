@@ -50,7 +50,7 @@ pub use user_defined_function::UDFServer;
 pub use user_defined_function::UserDefinedFunction;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;
-pub use user_grant::GrantObjectByID;
+pub use user_grant::OwnerObject;
 pub use user_grant::UserGrantSet;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;
