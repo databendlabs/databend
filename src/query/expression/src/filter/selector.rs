@@ -255,9 +255,8 @@ impl<'a> Selector<'a> {
         let selection = self.selection(
             true_selection,
             false_selection.0,
-            mutable_true_idx,
-            mutable_false_idx,
-            count,
+            *mutable_true_idx + count,
+            *mutable_false_idx + count,
             &select_strategy,
         );
         let children = self.evaluator.get_children(exprs, selection)?;
@@ -306,9 +305,8 @@ impl<'a> Selector<'a> {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    count,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
                     &select_strategy,
                 );
                 let result = self.evaluator.eval_if(args, generics, None, selection)?;
@@ -341,9 +339,8 @@ impl<'a> Selector<'a> {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    count,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
                     &select_strategy,
                 );
                 let args = args
@@ -398,9 +395,8 @@ impl<'a> Selector<'a> {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    count,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
                     &select_strategy,
                 );
                 let value = self.evaluator.get_select_child(expr, selection)?.0;
@@ -438,9 +434,8 @@ impl<'a> Selector<'a> {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    count,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
                     &select_strategy,
                 );
                 let args = args
@@ -528,16 +523,15 @@ impl<'a> Selector<'a> {
 
     fn selection(
         &self,
-        true_selection: &'a mut [u32],
-        false_selection: &'a mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        count: usize,
+        true_selection: &'a [u32],
+        false_selection: &'a [u32],
+        true_count: usize,
+        false_count: usize,
         select_strategy: &SelectStrategy,
     ) -> Option<&'a [u32]> {
         match select_strategy {
-            SelectStrategy::True => Some(&true_selection[0..*mutable_true_idx + count]),
-            SelectStrategy::False => Some(&false_selection[0..*mutable_false_idx + count]),
+            SelectStrategy::True => Some(&true_selection[0..true_count]),
+            SelectStrategy::False => Some(&false_selection[0..false_count]),
             SelectStrategy::All => None,
         }
     }
