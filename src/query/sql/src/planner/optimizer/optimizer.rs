@@ -38,6 +38,8 @@ use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::Exchange;
+use crate::plans::Join;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
@@ -337,7 +339,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             == 0
     {
         // input is a Join_SExpr
-        let merge_into_join_sexpr =
+        let mut merge_into_join_sexpr =
             optimize_distributed_query(opt_ctx.table_ctx.clone(), &join_sexpr)?;
         // after optimize source, we need to add
         let merge_source_optimizer = MergeSourceOptimizer::create();
@@ -345,6 +347,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             .match_pattern(&merge_source_optimizer.merge_source_pattern)
             || change_join_order
         {
+            // we need to judge whether it'a broadcast join to support runtime filter.
+            merge_into_join_sexpr = try_to_change_as_broadcast_join(merge_into_join_sexpr)?;
             (merge_into_join_sexpr.clone(), false)
         } else {
             (
@@ -366,4 +370,19 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             ..*plan
         })))
     }
+}
+
+fn try_to_change_as_broadcast_join(merge_into_join_sexpr: SExpr) -> Result<SExpr> {
+    if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
+        let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
+        if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
+            let mut join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
+            join.broadcast = true;
+            let join_s_expr = merge_into_join_sexpr
+                .child(0)?
+                .replace_plan(Arc::new(RelOperator::Join(join)));
+            return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
+        }
+    }
+    return Ok(merge_into_join_sexpr);
 }

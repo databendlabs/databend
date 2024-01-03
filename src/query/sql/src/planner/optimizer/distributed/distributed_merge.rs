@@ -46,7 +46,6 @@ impl MergeSourceOptimizer {
     // change join order.
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let join_s_expr = s_expr.child(0)?;
-
         let left_exchange = join_s_expr.child(0)?;
         assert!(left_exchange.children.len() == 1);
         let left_exchange_input = left_exchange.child(0)?;
@@ -69,6 +68,7 @@ impl MergeSourceOptimizer {
 
         let mut join: Join = join_s_expr.plan().clone().try_into()?;
         join.need_hold_hash_table = true;
+        join.broadcast = true;
         let mut join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         join_s_expr = join_s_expr.replace_children(new_join_children);
         Ok(s_expr.replace_children(vec![Arc::new(join_s_expr)]))
