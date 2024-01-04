@@ -671,7 +671,7 @@ impl Column {
                     Column::Nullable(Box::new(NullableColumn { column, validity }))
                 }
                 (ty, arrow_ty) => {
-                    return Err(ErrorCode::Unimplemented(&format!(
+                    return Err(ErrorCode::Unimplemented(format!(
                         "conversion from arrow type {arrow_ty:?} to {ty:?} is not supported"
                     )));
                 }
