@@ -22,7 +22,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
-// TODO(sky): make TableMutationAggregator distributed
 /// The commit sink is used to commit the data to the table.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CommitSink {
@@ -34,4 +33,5 @@ pub struct CommitSink {
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub need_lock: bool,
+    pub deduplicated_label: Option<String>,
 }

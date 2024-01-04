@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
 use databend_common_ast::ast::AccountMgrLevel;
 use databend_common_ast::ast::AccountMgrSource;
 use databend_common_ast::ast::AlterUserStmt;
-use databend_common_ast::ast::AuthOption;
 use databend_common_ast::ast::CreateUserStmt;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::RevokeStmt;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
-use passwords::analyzer;
 
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
@@ -182,13 +180,22 @@ impl Binder {
         for option in user_options {
             option.apply(&mut user_option);
         }
-        self.verify_password(&user_option, auth_option).await?;
+        UserApiProvider::instance()
+            .verify_password(
+                &self.ctx.get_tenant(),
+                &user_option,
+                auth_option,
+                None,
+                None,
+            )
+            .await?;
 
         let plan = CreateUserPlan {
+            if_not_exists: *if_not_exists,
             user: user.clone(),
             auth_info: AuthInfo::create2(&auth_option.auth_type, &auth_option.password)?,
             user_option,
-            if_not_exists: *if_not_exists,
+            password_update_on: Some(Utc::now()),
         };
         Ok(Plan::CreateUser(Box::new(plan)))
     }
@@ -219,11 +226,19 @@ impl Binder {
 
         // None means no change to make
         let new_auth_info = if let Some(auth_option) = &auth_option {
-            // verify the password if changed
-            self.verify_password(&user_option, auth_option).await?;
             let auth_info = user_info
                 .auth_info
                 .alter2(&auth_option.auth_type, &auth_option.password)?;
+            // verify the password if changed
+            UserApiProvider::instance()
+                .verify_password(
+                    &self.ctx.get_tenant(),
+                    &user_option,
+                    auth_option,
+                    Some(&user_info),
+                    Some(&auth_info),
+                )
+                .await?;
             if user_info.auth_info == auth_info {
                 None
             } else {
@@ -245,74 +260,5 @@ impl Binder {
         };
 
         Ok(Plan::AlterUser(Box::new(plan)))
-    }
-
-    // Verify the password according to the options of the password policy
-    #[async_backtrace::framed]
-    async fn verify_password(
-        &mut self,
-        user_option: &UserOption,
-        auth_option: &AuthOption,
-    ) -> Result<()> {
-        if let (Some(name), Some(password)) = (user_option.password_policy(), &auth_option.password)
-        {
-            if let Ok(password_policy) = UserApiProvider::instance()
-                .get_password_policy(&self.ctx.get_tenant(), name)
-                .await
-            {
-                let analyzed = analyzer::analyze(password);
-
-                let mut invalids = Vec::new();
-                if analyzed.length() < password_policy.min_length as usize
-                    || analyzed.length() > password_policy.max_length as usize
-                {
-                    invalids.push(format!(
-                        "expect length range {} to {}, but got {}",
-                        password_policy.min_length,
-                        password_policy.max_length,
-                        analyzed.length()
-                    ));
-                }
-                if analyzed.uppercase_letters_count()
-                    < password_policy.min_upper_case_chars as usize
-                {
-                    invalids.push(format!(
-                        "expect {} uppercase chars, but got {}",
-                        password_policy.min_upper_case_chars,
-                        analyzed.uppercase_letters_count()
-                    ));
-                }
-                if analyzed.lowercase_letters_count()
-                    < password_policy.min_lower_case_chars as usize
-                {
-                    invalids.push(format!(
-                        "expect {} lowercase chars, but got {}",
-                        password_policy.min_lower_case_chars,
-                        analyzed.lowercase_letters_count()
-                    ));
-                }
-                if analyzed.numbers_count() < password_policy.min_numeric_chars as usize {
-                    invalids.push(format!(
-                        "expect {} numeric chars, but got {}",
-                        password_policy.min_numeric_chars,
-                        analyzed.numbers_count()
-                    ));
-                }
-                if analyzed.symbols_count() < password_policy.min_special_chars as usize {
-                    invalids.push(format!(
-                        "expect {} special chars, but got {}",
-                        password_policy.min_special_chars,
-                        analyzed.symbols_count()
-                    ));
-                }
-                if !invalids.is_empty() {
-                    return Err(ErrorCode::InvalidPassword(format!(
-                        "Invalid password: {}",
-                        invalids.join(", ")
-                    )));
-                }
-            }
-        }
-        Ok(())
     }
 }

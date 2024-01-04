@@ -74,6 +74,7 @@ impl FuseTable {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
 
@@ -105,6 +106,7 @@ impl FuseTable {
                 None,
                 None,
                 prev_snapshot_id,
+                deduplicated_label.clone(),
             )
         })?;
 
@@ -151,6 +153,7 @@ impl FuseTable {
             copied_files,
             &[],
             operator,
+            None,
         )
         .await;
         if need_to_save_statistics {
@@ -181,6 +184,7 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
@@ -215,7 +219,7 @@ impl FuseTable {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: copied_files.clone(),
-            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
+            deduplicated_label,
             update_stream_meta: update_stream_meta.to_vec(),
         };
 

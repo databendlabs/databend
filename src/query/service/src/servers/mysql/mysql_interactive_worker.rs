@@ -260,10 +260,18 @@ impl InteractiveWorkerBase {
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
         let user_info = UserApiProvider::instance()
-            .get_user_with_client_ip(&ctx.get_tenant(), identity, Some(client_ip))
+            .get_user_with_client_ip(&ctx.get_tenant(), identity.clone(), Some(client_ip))
+            .await?;
+
+        // Check password policy for login
+        UserApiProvider::instance()
+            .check_login_password(&ctx.get_tenant(), identity.clone(), &user_info)
             .await?;
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
+        UserApiProvider::instance()
+            .update_user_login_result(&ctx.get_tenant(), identity, authed)
+            .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;
         }

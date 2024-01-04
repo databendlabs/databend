@@ -35,9 +35,9 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::operations::mutation::compact::compact_part::CompactPartInfo;
-use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
-use crate::operations::mutation::mutation_meta::SerializeBlock;
+use crate::operations::mutation::ClusterStatsGenType;
+use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::operations::BlockMetaIndex;
 use crate::FuseStorageFormat;
