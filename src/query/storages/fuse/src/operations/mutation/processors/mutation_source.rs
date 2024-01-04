@@ -41,13 +41,13 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 
-use super::mutation_meta::SerializeBlock;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
-use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
+use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::Mutation;
+use crate::operations::mutation::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
