@@ -237,6 +237,7 @@ impl Interpreter for UpdateInterpreter {
                 catalog_info,
                 query_row_id_col,
                 is_distributed,
+                self.ctx.clone(),
             )?;
 
             build_res =
@@ -273,6 +274,7 @@ impl UpdateInterpreter {
         catalog_info: CatalogInfo,
         query_row_id_col: bool,
         is_distributed: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
         let merge_meta = partitions.is_lazy;
         let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
@@ -306,7 +308,7 @@ impl UpdateInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
-            deduplicated_label: None,
+            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
         })))
     }
 }
