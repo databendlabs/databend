@@ -28,7 +28,11 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::SyncSenderSink;
 use databend_common_pipeline_sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::ExecutorWorkerContext;
+use databend_query::pipelines::executor::PipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
+use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::pipelines::processors::InputPort;
 use databend_query::pipelines::processors::OutputPort;
 use databend_query::sessions::QueryContext;
@@ -310,6 +314,75 @@ async fn test_resize_schedule_queue() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_queue_twice_without_processing() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let pipeline = create_simple_pipeline(ctx)?;
+
+    let init_queue = unsafe { pipeline.init_schedule_queue(0)? };
+    unsafe {
+        let _ = init_queue.sync_queue.front().unwrap().process();
+    }
+
+    let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(2))? };
+    assert_eq!(scheduled.sync_queue.len(), 1);
+
+    // schedule a need data node twice, the second time should be ignored and return empty queue
+    let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(2))? };
+    assert_eq!(scheduled.sync_queue.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_with_one_tasks() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let graph = create_simple_pipeline(ctx.clone())?;
+
+    let executor = create_executor_with_simple_pipeline(ctx, 1).await?;
+
+    let mut context =
+        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+
+    let init_queue = unsafe { graph.init_schedule_queue(0)? };
+    assert_eq!(init_queue.sync_queue.len(), 1);
+    init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
+    assert!(context.has_task());
+    assert_eq!(
+        format!("{:?}", context.take_task()),
+        "ExecutorTask::Sync { id: 2, name: SyncSenderSink}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_with_two_tasks() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let graph = create_parallel_simple_pipeline(ctx.clone())?;
+
+    let executor = create_executor_with_simple_pipeline(ctx, 2).await?;
+
+    let mut context =
+        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+
+    let init_queue = unsafe { graph.init_schedule_queue(0)? };
+    assert_eq!(init_queue.sync_queue.len(), 2);
+    init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
+    assert!(context.has_task());
+    assert_eq!(
+        format!("{:?}", context.take_task()),
+        "ExecutorTask::Sync { id: 4, name: SyncSenderSink}"
+    );
+
+    Ok(())
+}
+
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
@@ -405,4 +478,23 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
     }
 
     Ok((rxs, Pipe::create(size, 0, items)))
+}
+
+async fn create_executor_with_simple_pipeline(
+    ctx: Arc<QueryContext>,
+    size: usize,
+) -> Result<Arc<PipelineExecutor>> {
+    let (_rx, sink_pipe) = create_sink_pipe(size)?;
+    let (_tx, source_pipe) = create_source_pipe(ctx, size)?;
+    let mut pipeline = Pipeline::create();
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(create_transform_pipe(size)?);
+    pipeline.add_pipe(sink_pipe);
+    pipeline.set_max_threads(size);
+    let settings = ExecutorSettings {
+        enable_profiling: false,
+        query_id: Arc::new("".to_string()),
+        max_execute_time_in_seconds: Default::default(),
+    };
+    PipelineExecutor::create(pipeline, settings)
 }
