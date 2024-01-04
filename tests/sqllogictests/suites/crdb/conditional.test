@@ -53,5 +53,24 @@ SELECT    CASE    WHEN 1 = 1 THEN 'one'    END,    CASE false    WHEN 0 = 1 THEN
 ----
 one one three four two
 
+# issue 13869: https://github.com/datafuselabs/databend/issues/13869
+statement ok
+DROP TABLE IF EXISTS tt1;
+
+statement ok
+create table tt1(a bool, b int);
+
+statement ok
+insert into tt1 values(true, 1),(false, 2);
+
+query T
+SELECT CASE WHEN tt1.a THEN last_value([{}, {}, {}]) OVER (PARTITION BY FALSE) WHEN tt1.a THEN [{}] END FROM tt1;
+----
+[{},{},{}]
+NULL
+
+statement ok
+DROP TABLE tt1
+
 statement ok
 DROP TABLE t

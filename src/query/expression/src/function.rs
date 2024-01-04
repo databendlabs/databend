@@ -565,26 +565,24 @@ impl<'a> EvalContext<'a> {
     ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
-                if let Some(selection) = selection {
-                    let mut all_valid = true;
-                    for idx in selection {
-                        if !valids.get(*idx as usize) {
-                            all_valid = false;
-                            break;
-                        }
-                    }
-                    if all_valid {
+                let first_error_row = if let Some(selection) = selection {
+                    if let Some(first_invalid) =
+                        selection.iter().find(|idx| !valids.get(**idx as usize))
+                    {
+                        *first_invalid as usize
+                    } else {
                         return Ok(());
                     }
-                }
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
+                } else {
+                    valids
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, valid)| !valid)
+                        .take(1)
+                        .next()
+                        .unwrap()
+                        .0
+                };
                 let args = args
                     .iter()
                     .map(|arg| {
