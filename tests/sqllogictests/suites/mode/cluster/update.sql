@@ -31,8 +31,8 @@ Fragment 0:
     ├── output columns: []
     ├── destination fragment: [1]
     └── UpdateSource
-
-
+(empty)
+(empty)
 Fragment 1:
     CommitSink
     └── ExchangeSource
