@@ -3664,7 +3664,6 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
- "databend-storages-common-index",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "ethnum 1.5.0",

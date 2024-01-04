@@ -28,8 +28,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -205,7 +203,7 @@ impl FuseTable {
             .push_downs
             .as_ref()
             .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|x| x.top_k(plan.schema().as_ref(), RangeIndex::supported_type));
+            .and_then(|x| x.top_k(plan.schema().as_ref()));
 
         let index_reader = Arc::new(
             plan.push_downs

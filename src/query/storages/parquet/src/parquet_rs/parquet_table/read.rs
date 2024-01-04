@@ -20,8 +20,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::Pipeline;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 
 use super::ParquetRSTable;
 use crate::parquet_rs::source::ParquetSource;
@@ -66,7 +64,7 @@ impl ParquetRSTable {
         let topk = plan
             .push_downs
             .as_ref()
-            .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
+            .and_then(|p| p.top_k(&self.schema()));
 
         let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),

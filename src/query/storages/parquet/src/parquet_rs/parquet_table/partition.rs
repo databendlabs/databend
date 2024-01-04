@@ -29,8 +29,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 use parquet::arrow::arrow_reader::RowSelector;
 
 use super::table::ParquetRSTable;
@@ -131,9 +129,7 @@ impl ParquetRSTable {
         };
 
         let num_columns_to_read = columns_to_read.len();
-        let topk = push_down
-            .as_ref()
-            .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
+        let topk = push_down.as_ref().and_then(|p| p.top_k(&self.schema()));
 
         let (mut stats, mut partitions) = if parquet_metas.is_empty() {
             self.read_and_prune_metas_in_parallel(

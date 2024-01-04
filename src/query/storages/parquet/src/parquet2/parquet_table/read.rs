@@ -28,8 +28,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TopKSorter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 
 use super::Parquet2Table;
 use crate::parquet2::parquet_reader::Parquet2Reader;
@@ -84,7 +82,7 @@ impl Parquet2Table {
         let top_k = plan
             .push_downs
             .as_ref()
-            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
+            .map(|p| p.top_k(&table_schema))
             .unwrap_or_default();
 
         // Build prewhere info.
