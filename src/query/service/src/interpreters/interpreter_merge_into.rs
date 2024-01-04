@@ -481,6 +481,7 @@ impl MergeIntoInterpreter {
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
+            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         }));
 
         Ok((physical_plan, table_info))

@@ -98,6 +98,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
+    deduplicated_label: Option<String>,
 }
 
 impl<F> CommitSink<F>
@@ -114,6 +115,7 @@ where F: SnapshotGenerator + Send + 'static
         max_retry_elapsed: Option<Duration>,
         lock: Option<Arc<dyn Lock>>,
         prev_snapshot_id: Option<SnapshotId>,
+        deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -135,6 +137,7 @@ where F: SnapshotGenerator + Send + 'static
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
+            deduplicated_label,
         })))
     }
 
@@ -334,6 +337,7 @@ where F: SnapshotGenerator + Send + 'static
                     &self.copied_files,
                     &self.update_stream_meta,
                     &self.dal,
+                    self.deduplicated_label.clone(),
                 )
                 .await
                 {
