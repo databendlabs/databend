@@ -12,32 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact;
-mod mutation_meta;
-mod mutation_part;
-mod mutation_source;
-mod recluster_aggregator;
-mod recluster_mutator;
+mod meta;
+mod mutator;
+mod processors;
 
-pub use compact::BlockCompactMutator;
-pub use compact::CompactExtraInfo;
-pub use compact::CompactLazyPartInfo;
-pub use compact::CompactPartInfo;
-pub use compact::CompactSource;
-pub use compact::CompactTaskInfo;
-pub use compact::SegmentCompactMutator;
-pub use compact::SegmentCompactionState;
-pub use compact::SegmentCompactor;
-pub use mutation_meta::ClusterStatsGenType;
-pub use mutation_meta::SerializeDataMeta;
-pub use mutation_part::DeletedSegmentInfo;
-pub use mutation_part::Mutation;
-pub use mutation_part::MutationPartInfo;
-pub use mutation_source::MutationAction;
-pub use mutation_source::MutationSource;
-pub use recluster_aggregator::ReclusterAggregator;
-pub use recluster_mutator::ReclusterMutator;
+pub use meta::*;
+pub use mutator::*;
+pub use processors::*;
 
-pub static MAX_BLOCK_COUNT: usize = 1000_1000;
+pub static MAX_BLOCK_COUNT: usize = 10_1000;
 pub type SegmentIndex = usize;
 pub type BlockIndex = usize;

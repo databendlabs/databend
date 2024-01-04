@@ -393,6 +393,10 @@ async fn test_users_table() -> Result<()> {
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
                 option: UserOption::default(),
+                history_auth_infos: vec![],
+                password_fail_ons: vec![],
+                password_update_on: None,
+                lockout_time: None,
             },
             false,
         )
@@ -409,6 +413,10 @@ async fn test_users_table() -> Result<()> {
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
                 option: UserOption::default().with_default_role(Some("role1".to_string())),
+                history_auth_infos: vec![],
+                password_fail_ons: vec![],
+                password_update_on: None,
+                lockout_time: None,
             },
             false,
         )

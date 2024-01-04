@@ -117,10 +117,23 @@ pub struct TopK {
     pub leaf_id: usize,
 }
 
+impl TopK {
+    fn support_type(data_type: &DataType) -> bool {
+        matches!(
+            data_type,
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        )
+    }
+}
+
 pub const TOPK_PUSHDOWN_THRESHOLD: usize = 1000;
 
 impl PushDownInfo {
-    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
+    pub fn top_k(&self, schema: &TableSchema) -> Option<TopK> {
         if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
@@ -131,7 +144,7 @@ impl PushDownInfo {
 
             if let RemoteExpr::<String>::ColumnRef { id, data_type, .. } = &order.0 {
                 // TODO: support sub column of nested type.
-                if !support(data_type) {
+                if !TopK::support_type(data_type) {
                     return None;
                 }
 

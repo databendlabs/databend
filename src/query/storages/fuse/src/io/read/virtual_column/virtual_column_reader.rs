@@ -34,18 +34,18 @@ use crate::io::BlockReader;
 // For example the following data:
 // {
 //     "id": 1,
-//     "name": "databend"
+//     "name": "databend",
 //     "tags": ["powerful", "fast"],
 //     "pricings": [
-//          {
-//              "type": "Standard",
-//              "price": "Pay as you go",
-//          },
-//          {
-//              "type": "Enterprise",
-//              "price": "Custom",
-//          }
-//      ]
+//         {
+//             "type": "Standard",
+//             "price": "Pay as you go"
+//         },
+//         {
+//             "type": "Enterprise",
+//             "price": "Custom"
+//         }
+//     ]
 // }
 // We can extract these fields `val['id']`, `val['name']`, `val['tags'][0]`,
 // `val['pricings'][0]['type']` and so on as virtual columns,

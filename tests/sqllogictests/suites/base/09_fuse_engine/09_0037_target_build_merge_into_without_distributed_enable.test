@@ -1,0 +1,170 @@
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+create table target_build_table(a int,b string,c string) cluster by(a,b);
+
+statement ok
+create table source_probe_table(a int,b string,c string);
+
+## target table should be small table
+statement ok
+insert into target_build_table values(1,'b1','c1');
+
+statement ok
+insert into target_build_table values(2,'b2','c2');
+
+query TTT
+select * from target_build_table order by a; 
+----
+1 b1 c1
+2 b2 c2
+
+statement ok
+insert into source_probe_table values(1,'b3','c3');
+
+statement ok
+insert into source_probe_table values(2,'b4','c4');
+
+statement ok
+insert into source_probe_table values(3,'b5','c5');
+
+statement ok
+insert into source_probe_table values(4,'b6','c6');
+
+statement ok
+insert into source_probe_table values(5,'b7','c7');
+
+statement ok
+insert into source_probe_table values(6,'b8','c8');
+
+query TTT
+select * from source_probe_table order by a; 
+----
+1 b3 c3
+2 b4 c4
+3 b5 c5
+4 b6 c6
+5 b7 c7
+6 b8 c8
+
+## test matched only
+query T
+merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when matched then update *;
+----
+2
+
+query TTT
+select * from target_build_table order by a; 
+----
+1 b3 c3
+2 b4 c4
+
+## test insert only
+query T
+merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when not matched then insert *;
+----
+4
+
+query TTT
+select * from target_build_table order by a; 
+----
+1 b3 c3
+2 b4 c4
+3 b5 c5
+4 b6 c6
+5 b7 c7
+6 b8 c8
+
+## test full operation
+statement ok
+delete from target_build_table where a >= 3;
+
+query TTT
+select * from target_build_table order by a; 
+----
+1 b3 c3
+2 b4 c4
+
+query T
+merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+4 2
+
+query TTT
+select * from target_build_table order by a; 
+----
+1 b3 c3
+2 b4 c4
+3 b5 c5
+4 b6 c6
+5 b7 c7
+6 b8 c8
+
+### test complex source but for target build
+statement ok
+DROP TABLE IF EXISTS orders_small;
+
+statement ok
+CREATE TABLE orders_small (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) row_per_block=513;
+
+statement ok
+DROP TABLE IF EXISTS orders_large;
+
+statement ok
+CREATE TABLE orders_large (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) row_per_block=513;
+
+
+statement ok
+DROP TABLE IF EXISTS orders_random;
+
+statement ok
+CREATE TABLE orders_random (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) engine = random;
+
+statement ok
+insert into orders_large (select * from orders_random limit 500000);
+
+statement ok
+insert into orders_small (select * from orders_random limit 10);
+
+statement ok
+MERGE INTO orders_small as orders USING (
+    SELECT user_id, asset_type, SUM(quantity) AS total_quantity
+    FROM orders_large
+    GROUP BY user_id, asset_type
+) AS agg_orders ON orders.user_id = agg_orders.user_id AND orders.asset_type = agg_orders.asset_type
+    WHEN MATCHED THEN
+        UPDATE SET orders.quantity = agg_orders.total_quantity;
+
+statement ok
+set enable_experimental_merge_into = 0;

@@ -259,7 +259,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 arrays.push((*index, array));
             }
             offset = *page + 1;
-            let block = reader.build_block(arrays, None)?;
+            let block = reader.build_block(&arrays, None)?;
             blocks.push(block);
         }
 

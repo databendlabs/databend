@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mutator;
-mod processors;
+mod block_compact_mutator;
+mod recluster_mutator;
+mod segment_compact_mutator;
 
-pub use mutator::MatchedAggregator;
-pub use processors::MatchedSplitProcessor;
-pub use processors::MergeIntoNotMatchedProcessor;
-pub use processors::MergeIntoSplitProcessor;
-pub use processors::MixRowIdKindAndLog;
-pub use processors::RowNumberAndLogSplitProcessor;
-pub use processors::SourceFullMatched;
-pub use processors::TransformAddRowNumberColumnProcessor;
-pub use processors::TransformDistributedMergeIntoBlockDeserialize;
-pub use processors::TransformDistributedMergeIntoBlockSerialize;
+pub use block_compact_mutator::BlockCompactMutator;
+pub use recluster_mutator::ReclusterMutator;
+pub use segment_compact_mutator::SegmentCompactMutator;
+pub use segment_compact_mutator::SegmentCompactionState;
+pub use segment_compact_mutator::SegmentCompactor;

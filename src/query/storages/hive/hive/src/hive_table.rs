@@ -591,6 +591,7 @@ impl Table for HiveTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",

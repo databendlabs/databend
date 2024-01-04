@@ -67,6 +67,10 @@ fn test_user_info() -> mt::principal::UserInfo {
             max_storage_in_bytes: 20480,
         },
         option,
+        history_auth_infos: vec![],
+        password_fail_ons: vec![],
+        password_update_on: None,
+        lockout_time: None,
     }
 }
 

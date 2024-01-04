@@ -37,6 +37,7 @@ impl PipelineBuilder {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         append_mode: AppendMode,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         Self::build_fill_missing_columns_pipeline(
             ctx.clone(),
@@ -54,6 +55,7 @@ impl PipelineBuilder {
             update_stream_meta,
             overwrite,
             None,
+            deduplicated_label,
         )?;
 
         Ok(())
