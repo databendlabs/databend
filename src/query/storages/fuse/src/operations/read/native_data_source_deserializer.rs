@@ -737,7 +737,7 @@ impl NativeDeserializeDataTransform {
             // TopK should always be the first read column.
             debug_assert_eq!(self.read_state.arrays.len(), 1);
             let (i, array) = self.read_state.arrays.last().unwrap();
-            debugassert_eq!(i, index);
+            debug_assert_eq!(i, index);
             let data_type = top_k.field.data_type().into();
             let col = Column::from_arrow(array.as_ref(), &data_type);
             if sorter.never_match_any(&col) {
