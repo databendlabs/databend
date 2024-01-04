@@ -77,7 +77,7 @@ use crate::DEFAULT_ROW_PER_PAGE;
 #[derive(Default)]
 struct ReadPartState {
     // Structures for reading a partition:
-    /// The [`ArrayIter`]` of each columns to read native pages in order.
+    /// The [`ArrayIter`] of each columns to read native pages in order.
     array_iters: BTreeMap<usize, ArrayIter<'static>>,
     /// The number of pages need to be skipped for each iter in `array_iters`.
     array_skip_pages: BTreeMap<usize, usize>,
@@ -102,7 +102,8 @@ struct ReadPartState {
     read_columns: HashSet<usize>,
     /// Columns are already read into memory.
     arrays: Vec<(usize, Box<dyn Array>)>,
-    /// The number of rows that are filter while reading current set of pages.
+    /// The number of rows that are filtered while reading current set of pages.
+    /// It's used for the filter executor.
     filtered_count: Option<usize>,
 }
 
@@ -113,7 +114,7 @@ impl ReadPartState {
             array_skip_pages: BTreeMap::new(),
             read_column_ids: HashSet::new(),
             if_need_fill_defaults: false,
-            is_finished: true,
+            is_finished: true, // new state should be finished.
             offset: 0,
             read_columns: HashSet::new(),
             arrays: Vec::new(),
@@ -133,7 +134,7 @@ impl ReadPartState {
         self.is_finished = true;
     }
 
-    /// Reset the state for reading a new set of pages (prepare to read a new block).
+    /// Reset the state for reading a new set of pages (prepare to produce a new block).
     fn new_pages(&mut self) {
         self.read_columns.clear();
         self.arrays.clear();
@@ -223,13 +224,14 @@ pub struct NativeDeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
     bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
 
-    // Other structures:
-    remain_columns: Vec<usize>,
+    // Structures for aggregating index:
     index_reader: Arc<Option<AggIndexReader>>,
+    remain_columns: Vec<usize>,
+
+    // Other structures:
     base_block_ids: Option<Scalar>,
     /// Record the state while reading a native partition.
     read_state: ReadPartState,
-
     /// Record how many sets of pages have been skipped.
     /// It's used for metrics.
     skipped_pages: usize,
@@ -409,7 +411,7 @@ impl NativeDeserializeDataTransform {
         self.output_data = Some(data_block);
     }
 
-    /// If the virtual column has already generated, add it directly,
+    /// If the virtual column has been already generated, add it directly,
     /// otherwise extract it from the source column
     fn add_virtual_columns(
         &self,
@@ -555,6 +557,7 @@ impl NativeDeserializeDataTransform {
         self.chunks.pop_front();
         self.parts.pop_front();
     }
+
     /// Build a block whose columns are all default values.
     fn build_default_block(&self, fuse_part: &FusePartInfo) -> Result<DataBlock> {
         let mut data_block = self
@@ -634,6 +637,7 @@ impl NativeDeserializeDataTransform {
                 }
             }
 
+            // Mark the state as active.
             self.read_state.is_finished = false;
         }
 
@@ -642,18 +646,13 @@ impl NativeDeserializeDataTransform {
 
     /// Read and produce one [`DataBlock`].
     ///
-    /// Columns in native format are stored in pages and each page has the same number the rows.
-    /// Each `read_block_without_filter` produce a block by reading a page from each column.
+    /// Columns in native format are stored in pages and each page has the same number of rows.
+    /// Each `read_pages` produce a block by reading a page from each column.
     ///
     /// **NOTES**: filter and internal columns will be applied after calling this method.
     fn read_pages(&mut self) -> Result<Option<DataBlock>> {
-        if self.read_state.is_finished() {
-            // The reader is already finished.
-            return Ok(None);
-        }
-
-        // Each loop tries to read a set of pages and produce a block.
-        // If the pages are skipped, start a new loop.
+        // Each loop tries to read one page of each column and combine them into a block.
+        // If a page is skipped, ignore all the parallel pages of other columns and start a new loop.
         loop {
             if self.read_state.is_finished() {
                 // The reader is already finished.
@@ -735,14 +734,15 @@ impl NativeDeserializeDataTransform {
                 debug_assert!(self.read_state.is_finished());
                 return Ok(false);
             }
-            // TopK should always be the last column read.
-            if let Some((_, array)) = self.read_state.arrays.last() {
-                let data_type = top_k.field.data_type().into();
-                let col = Column::from_arrow(array.as_ref(), &data_type);
-                if sorter.never_match_any(&col) {
-                    // skip current page.
-                    return Ok(false);
-                }
+            // TopK should always be the first read column.
+            debug_assert_eq!(self.read_state.arrays.len(), 1);
+            let (i, array) = self.read_state.arrays.last().unwrap();
+            debugassert_eq!(i, index);
+            let data_type = top_k.field.data_type().into();
+            let col = Column::from_arrow(array.as_ref(), &data_type);
+            if sorter.never_match_any(&col) {
+                // skip current page.
+                return Ok(false);
             }
         }
         Ok(true)
@@ -1058,8 +1058,10 @@ impl Processor for NativeDeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        // Try to get the bloom runtime filter from the context if existed.
         self.try_init_bloom_runtime_filter();
 
+        // Only if current read state is finished can we start to read a new partition.
         if self.read_state.is_finished() {
             if let Some(chunks) = self.chunks.front_mut() {
                 let chunks = match chunks {
@@ -1091,14 +1093,17 @@ impl Processor for NativeDeserializeDataTransform {
                     return Ok(());
                 }
 
+                // Prepare to read a new partition.
                 self.pre_process_partition()?;
             }
         }
 
         if self.read_state.is_finished() {
+            // There is no more partitions to read.
             return Ok(());
         }
 
+        // Each `process` try to produce one `DataBlock`.
         if let Some(block) = self.read_pages()? {
             let block = self.post_process_block(block)?;
             self.add_output_block(block);
@@ -1121,6 +1126,7 @@ fn new_dummy_filter_executor(func_ctx: FunctionContext) -> FilterExecutor {
         data_type: DataType::Boolean,
     };
     let (select_expr, has_or) = build_select_expr(&dummy_expr);
+    // TODO: specify the capacity (max_block_size) of the selection.
     FilterExecutor::new(
         select_expr,
         func_ctx,
