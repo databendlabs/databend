@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_array::RecordBatchOptions;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -76,16 +75,25 @@ impl From<&DataField> for ArrowField {
 impl DataBlock {
     pub fn to_record_batch(self, data_schema: &DataSchema) -> Result<RecordBatch> {
         let mut arrays = Vec::with_capacity(self.columns().len());
-        for entry in self.convert_to_full().columns() {
+        let mut arrow_fields = Vec::with_capacity(self.columns().len());
+        for (entry, f) in self
+            .convert_to_full()
+            .columns()
+            .iter()
+            .zip(data_schema.fields())
+        {
             let column = entry.value.to_owned().into_column().unwrap();
-            arrays.push(column.into_arrow_rs()?)
+            let array = column.into_arrow_rs()?;
+            let arrow_field = ArrowField::new(
+                f.name(),
+                array.data_type().clone(),
+                f.data_type().is_nullable(),
+            );
+            arrays.push(array);
+            arrow_fields.push(arrow_field);
         }
-        let schema = Arc::new(data_schema.into());
-        Ok(RecordBatch::try_new_with_options(
-            schema,
-            arrays,
-            &RecordBatchOptions::default().with_match_field_names(false),
-        )?)
+        let schema = Arc::new(ArrowSchema::new(arrow_fields));
+        Ok(RecordBatch::try_new(schema, arrays)?)
     }
 }
 
