@@ -235,6 +235,7 @@ impl PipelineBuilder {
                 None,
                 Some(lock.clone()),
                 None,
+                None,
             )
         })
     }

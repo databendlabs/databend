@@ -251,6 +251,7 @@ impl Table for MemoryTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 
