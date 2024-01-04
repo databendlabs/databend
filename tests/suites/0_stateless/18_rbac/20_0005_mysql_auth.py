@@ -18,13 +18,17 @@ try:
     cursor.execute("drop user if exists u1;")
     cursor.execute("drop user if exists u2;")
     cursor.execute("drop user if exists u3;")
-    cursor.execute("create user u1 identified by 'abc123';")
     cursor.execute("drop network policy if exists p1;")
     cursor.execute("drop network policy if exists p2;")
+    cursor.execute("drop password policy if exists pp1;")
     cursor.execute("create network policy p1 allowed_ip_list=('127.0.0.0/24');")
     cursor.execute(
         "create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');"
     )
+    cursor.execute(
+        "create password policy pp1 PASSWORD_MAX_RETRIES=2;"
+    )
+    cursor.execute("create user u1 identified by 'abcDEF123' with set password policy='pp1';")
     cursor.execute(
         "create user u2 identified by 'abc123' with set network policy='p1';"
     )
@@ -36,10 +40,40 @@ except mysql.connector.errors.OperationalError:
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abc123", port="3307", connection_timeout=3
+        host="127.0.0.1", user="u1", passwd="abcDEF123", port="3307", connection_timeout=3
     )
 except mysql.connector.errors.OperationalError:
     print("u1 is timeout")
+
+# try with wrong password first time
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u1", passwd="abcDEF1231", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u1 wrong password 1 is timeout")
+except mysql.connector.errors.ProgrammingError:
+    print("u1 wrong password 1 login fail")
+
+# try with wrong password second time
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u1", passwd="abcDEF1232", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u1 wrong password 2 is timeout")
+except mysql.connector.errors.ProgrammingError:
+    print("u1 wrong password 2 login fail")
+
+# locked for the wrong passwords twice in a row
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u1", passwd="abcDEF123", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u1 correct password is timeout")
+except mysql.connector.errors.ProgrammingError:
+    print("u1 correct password locked out")
 
 try:
     mydb = mysql.connector.connect(

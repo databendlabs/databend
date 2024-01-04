@@ -15,6 +15,7 @@ io-uring = ["databend-common-meta-store/io-uring"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+databend-common-ast = { path = "../ast" }
 databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-grpc = { path = "../../common/grpc" }
@@ -36,6 +37,7 @@ jwt-simple = "0.11"
 log = { workspace = true }
 p256 = "0.13"
 parking_lot = { workspace = true }
+passwords = { version = "3.1.16", features = ["common-password"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
