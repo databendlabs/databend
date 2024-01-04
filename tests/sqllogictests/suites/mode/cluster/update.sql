@@ -22,7 +22,7 @@ SELECT * FROM t1 ORDER BY b
 1 2022-12-30
 2 2023-01-01
 
-statement ok
+query T
 explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 ----
 Fragment 0:
@@ -45,7 +45,7 @@ SELECT * FROM t1 ORDER BY b
 1 2022-12-30
 2 2023-01-01
 
-statement ok
+query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
 Nothing to update
