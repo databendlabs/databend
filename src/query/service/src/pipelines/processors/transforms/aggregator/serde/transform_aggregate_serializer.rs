@@ -188,7 +188,7 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
     }
 
     for builder in state_builders.into_iter() {
-        columns.push(Column::String(builder.build()));
+        columns.push(Column::Binary(builder.build()));
     }
     columns.push(group_key_builder.finish());
     Ok(DataBlock::new_from_columns(columns))
