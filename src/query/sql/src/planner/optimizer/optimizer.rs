@@ -231,12 +231,22 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
                 Arc::new(right_source),
             ]));
 
-            // try to optimize distributed join
+            // try to optimize distributed join, only if
+            // - distributed optimization is enabled
+            // - no local table scan
+            // - distributed merge-into is enabled
+            // - join spilling is disabled
             if opt_ctx.enable_distributed_optimization
+                && !contains_local_table_scan(&join_sexpr, &opt_ctx.metadata)
                 && opt_ctx
                     .table_ctx
                     .get_settings()
                     .get_enable_distributed_merge_into()?
+                && opt_ctx
+                    .table_ctx
+                    .get_settings()
+                    .get_join_spilling_threshold()?
+                    == 0
             {
                 // Todo(JackTan25): We should use optimizer to make a decision to use
                 // left join and right join.
@@ -305,6 +315,12 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = cascades.optimize(s_expr)?;
     }
 
+    s_expr = if !opt_ctx.enable_join_reorder {
+        RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?
+    } else {
+        RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)?
+    };
+
     // Run distributed query optimization.
     //
     // So far, we don't have ability to execute distributed query
@@ -315,10 +331,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
     }
 
-    if !opt_ctx.enable_join_reorder {
-        return RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr);
-    }
-    RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)
+    Ok(s_expr)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`

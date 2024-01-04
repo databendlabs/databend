@@ -68,6 +68,7 @@ impl Interpreter for AlterVirtualColumnInterpreter {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let update_virtual_column_req = UpdateVirtualColumnReq {
+            if_exists: self.plan.if_exists,
             name_ident: VirtualColumnNameIdent { tenant, table_id },
             virtual_columns: self.plan.virtual_columns.clone(),
         };

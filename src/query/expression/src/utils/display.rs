@@ -114,6 +114,13 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
+            ScalarRef::Binary(s) => {
+                write!(f, "0x")?;
+                for c in *s {
+                    write!(f, "{:02x}", c)?;
+                }
+                Ok(())
+            }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
@@ -171,6 +178,7 @@ impl Debug for Column {
             Column::Number(col) => write!(f, "{col:?}"),
             Column::Decimal(col) => write!(f, "{col:?}"),
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
+            Column::Binary(col) => write!(f, "{col:?}"),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
@@ -193,6 +201,13 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
+            ScalarRef::Binary(s) => {
+                write!(f, "0x")?;
+                for c in *s {
+                    write!(f, "{:02x}", c)?;
+                }
+                Ok(())
+            }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
@@ -463,6 +478,7 @@ impl Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
             DataType::Boolean => write!(f, "Boolean"),
+            DataType::Binary => write!(f, "Binary"),
             DataType::String => write!(f, "String"),
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
@@ -503,6 +519,7 @@ impl Display for TableDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
             TableDataType::Boolean => write!(f, "Boolean"),
+            TableDataType::Binary => write!(f, "Binary"),
             TableDataType::String => write!(f, "String"),
             TableDataType::Number(num) => write!(f, "{num}"),
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),

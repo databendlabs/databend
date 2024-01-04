@@ -57,7 +57,7 @@ impl Operator for PatternPlan {
         ))
     }
 
-    fn derive_cardinality(
+    fn derive_stats(
         &self,
         _rel_expr: &RelExpr,
     ) -> databend_common_exception::Result<Arc<StatInfo>> {
@@ -73,6 +73,19 @@ impl Operator for PatternPlan {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> databend_common_exception::Result<RequiredProperty> {
-        unreachable!()
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for pattern plan",
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for pattern plan",
+        ))
     }
 }

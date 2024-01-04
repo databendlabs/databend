@@ -219,7 +219,10 @@ impl StageFilesInfo {
                     if path == STDIN_FD {
                         return Ok(vec![stdin_stage_info()?]);
                     }
-                    return Err(ErrorCode::BadArguments("object mode is unknown"));
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unable to determine the mode of the object at path '{}'. The mode is unknown or unsupported.",
+                        path
+                    )));
                 }
             },
             Err(e) => {
@@ -235,7 +238,7 @@ impl StageFilesInfo {
         let mut files = Vec::new();
         let mut lister = operator
             .lister_with(path)
-            .delimiter("")
+            .recursive(true)
             .metakey(StageFileInfo::meta_query())
             .await?;
         let mut limit: usize = 0;
@@ -299,7 +302,7 @@ fn blocking_list_files_with_pattern(
     let mut files = Vec::new();
     let list = operator
         .lister_with(path)
-        .delimiter("")
+        .recursive(true)
         .metakey(StageFileInfo::meta_query())
         .call()?;
     let mut limit = 0;

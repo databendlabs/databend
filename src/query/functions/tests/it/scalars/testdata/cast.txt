@@ -1080,6 +1080,15 @@ output domain  : {-10000000000..=-10000000000}
 output         : -10000000000
 
 
+ast            : CAST('-0.000000' AS DECIMAL(11, 0))
+raw expr       : CAST('-0.000000' AS Decimal(11, 0))
+checked expr   : to_decimal<String>(11, 0)("-0.000000")
+optimized expr : 0_d128(11,0)
+output type    : Decimal(11, 0)
+output domain  : {0..=0}
+output         : 0
+
+
 ast            : CAST(0 AS BOOLEAN)
 raw expr       : CAST(0 AS Boolean)
 checked expr   : to_boolean<UInt8>(0_u8)
@@ -1118,7 +1127,7 @@ output         : 1
 
 ast            : CAST(0.0 AS BOOLEAN)
 raw expr       : CAST(0.0 AS Boolean)
-checked expr   : to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+checked expr   : to_boolean<Float64>(to_float64<Decimal(1, 1)>(0.0_d128(1,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1127,7 +1136,7 @@ output         : false
 
 ast            : CAST(1.0 AS BOOLEAN)
 raw expr       : CAST(1.0 AS Boolean)
-checked expr   : to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+checked expr   : to_boolean<Float64>(to_float64<Decimal(2, 1)>(1.0_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3070,6 +3079,15 @@ output domain  : {-10000000000..=-10000000000}
 output         : -10000000000
 
 
+ast            : TRY_CAST('-0.000000' AS DECIMAL(11, 0))
+raw expr       : TRY_CAST('-0.000000' AS Decimal(11, 0))
+checked expr   : try_to_decimal<String>(11, 0)("-0.000000")
+optimized expr : 0_d128(11,0)
+output type    : Decimal(11, 0) NULL
+output domain  : {0..=0}
+output         : 0
+
+
 ast            : TRY_CAST(0 AS BOOLEAN)
 raw expr       : TRY_CAST(0 AS Boolean)
 checked expr   : try_to_boolean<UInt8>(0_u8)
@@ -3108,7 +3126,7 @@ output         : 1
 
 ast            : TRY_CAST(0.0 AS BOOLEAN)
 raw expr       : TRY_CAST(0.0 AS Boolean)
-checked expr   : try_to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+checked expr   : try_to_boolean<Float64>(to_float64<Decimal(1, 1)>(0.0_d128(1,1)))
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3117,7 +3135,7 @@ output         : false
 
 ast            : TRY_CAST(1.0 AS BOOLEAN)
 raw expr       : TRY_CAST(1.0 AS Boolean)
-checked expr   : try_to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+checked expr   : try_to_boolean<Float64>(to_float64<Decimal(2, 1)>(1.0_d128(2,1)))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}

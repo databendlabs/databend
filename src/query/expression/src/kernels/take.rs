@@ -31,6 +31,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::MapType;
 use crate::types::NumberType;
@@ -105,6 +106,11 @@ impl Column {
                 }
             }),
             Column::Boolean(bm) => Column::Boolean(Self::take_boolean_types(bm, indices)),
+            Column::Binary(column) => BinaryType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
             Column::String(column) => StringType::upcast_column(Self::take_string_types(
                 column,
                 indices,

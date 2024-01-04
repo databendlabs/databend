@@ -49,7 +49,7 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
 pub trait FunctionFactory =
-    Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
+    Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -131,7 +131,7 @@ pub enum FunctionID {
     Factory {
         name: String,
         id: usize,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         args_type: Vec<DataType>,
     },
 }
@@ -327,7 +327,7 @@ impl FunctionRegistry {
     pub fn search_candidates<Index: ColumnIndex>(
         &self,
         name: &str,
-        params: &[usize],
+        params: &[Scalar],
         args: &[Expr<Index>],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
@@ -522,7 +522,7 @@ impl FunctionID {
         }
     }
 
-    pub fn params(&self) -> &[usize] {
+    pub fn params(&self) -> &[Scalar] {
         match self {
             FunctionID::Builtin { .. } => &[],
             FunctionID::Factory { params, .. } => params.as_slice(),
@@ -558,12 +558,25 @@ impl<'a> EvalContext<'a> {
     pub fn render_error(
         &self,
         span: Span,
-        params: &[usize],
+        params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
+                if let Some(selection) = selection {
+                    let mut all_valid = true;
+                    for idx in selection {
+                        if !valids.get(*idx as usize) {
+                            all_valid = false;
+                            break;
+                        }
+                    }
+                    if all_valid {
+                        return Ok(());
+                    }
+                }
                 let first_error_row = valids
                     .iter()
                     .enumerate()

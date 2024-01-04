@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -344,8 +344,8 @@ async fn test_show_databases() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    // has two fields: catalog, name
-    assert_eq!(result.schema.len(), 2, "{:?}", result);
+    // has three fields: catalog, owner, name
+    assert_eq!(result.schema.len(), 3, "{:?}", result);
 
     Ok(())
 }

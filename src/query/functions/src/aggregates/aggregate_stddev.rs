@@ -173,7 +173,7 @@ where
         self.count += 1;
         if self.count > 1 {
             let t = match value
-                .checked_mul(T::Scalar::from_u64(self.count))
+                .checked_mul(T::Scalar::from_i128(self.count))
                 .and_then(|v| v.checked_sub(self.sum))
                 .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32)))
             {
@@ -204,7 +204,7 @@ where
                 }
             };
 
-            let count = T::Scalar::from_u64(self.count * (self.count - 1));
+            let count = T::Scalar::from_i128(self.count * (self.count - 1));
 
             let add_variance = match t.checked_div(count) {
                 Some(t) => t,
@@ -236,8 +236,8 @@ where
             return Ok(());
         }
 
-        let other_count = T::Scalar::from_u64(other.count);
-        let self_count = T::Scalar::from_u64(self.count);
+        let other_count = T::Scalar::from_i128(other.count);
+        let self_count = T::Scalar::from_i128(self.count);
         let t = match other_count
             .checked_mul(self.sum)
             .and_then(|v| v.checked_mul(T::Scalar::e(VARIANCE_PRECISION as u32)))

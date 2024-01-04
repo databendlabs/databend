@@ -65,9 +65,10 @@ impl PipelineBuilder {
             union_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
-            self.main_pipeline.plans_scope.clone(),
+            self.main_pipeline.get_scopes(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();
+
         let mut build_res = pipeline_builder.finalize(input)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);

@@ -246,4 +246,8 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
     fn details_status(&self) -> Option<String> {
         (**self).details_status()
     }
+
+    fn record_profile(&self, profile: &Profile) {
+        (**self).record_profile(profile)
+    }
 }

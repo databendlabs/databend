@@ -349,7 +349,8 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let params = params.to_vec();
+        let params: Vec<usize> = params.iter().map(|p| p.get_i64().unwrap() as _).collect();
+
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "grouping".to_string(),

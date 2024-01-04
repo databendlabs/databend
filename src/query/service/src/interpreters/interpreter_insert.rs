@@ -14,6 +14,7 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
@@ -32,7 +33,10 @@ use databend_common_sql::NameResolutionContext;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::hook::hook_compact;
 use crate::interpreters::hook::hook_refresh;
+use crate::interpreters::hook::CompactHookTraceCtx;
+use crate::interpreters::hook::CompactTargetTableDescription;
 use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -94,6 +98,7 @@ impl Interpreter for InsertInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
 
+        let start = Instant::now();
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
                 unreachable!()
@@ -247,13 +252,36 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
+                // Compact if 'enable_compact_after_write' on.
+                {
+                    let compact_target = CompactTargetTableDescription {
+                        catalog: self.plan.catalog.clone(),
+                        database: self.plan.database.clone(),
+                        table: self.plan.table.clone(),
+                    };
+
+                    let trace_ctx = CompactHookTraceCtx {
+                        start,
+                        operation_name: "insert_into_table".to_owned(),
+                    };
+
+                    hook_compact(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        compact_target,
+                        trace_ctx,
+                        true,
+                    )
+                    .await;
+                }
+
                 let refresh_desc = RefreshDesc {
                     catalog: self.plan.catalog.clone(),
                     database: self.plan.database.clone(),
                     table: self.plan.table.clone(),
                 };
 
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
                 return Ok(build_res);
             }
@@ -276,13 +304,36 @@ impl Interpreter for InsertInterpreter {
             append_mode,
         )?;
 
+        // Compact if 'enable_compact_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            let trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "insert_into_table".to_owned(),
+            };
+
+            hook_compact(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                compact_target,
+                trace_ctx,
+                true,
+            )
+            .await;
+        }
+
         let refresh_desc = RefreshDesc {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),
             table: self.plan.table.clone(),
         };
 
-        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
         Ok(build_res)
     }

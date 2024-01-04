@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
@@ -73,32 +73,25 @@ impl GrantPrivilegeInterpreter {
             role,
         );
 
-        let (catalog, catalog_name) = match object.catalog() {
-            Some(ref catalog_name) => (
-                self.ctx.get_catalog(catalog_name).await?,
-                catalog_name.clone(),
-            ),
-            None => {
-                return Err(ErrorCode::IllegalGrant(
-                    "Illegal GRANT/REVOKE command, unknown catalog",
-                ));
-            }
-        };
-
-        let object_by_id = match object {
+        let catalog_name = object.catalog();
+        let owner_object = match object {
             GrantObject::Database(_, db_name) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                GrantObjectByID::Database {
+                OwnershipObject::Database {
                     catalog_name,
                     db_id,
                 }
             }
             GrantObject::Table(_, db_name, table_name) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -109,13 +102,28 @@ impl GrantPrivilegeInterpreter {
                     .get_table(tenant, db_name.as_str(), table_name)
                     .await?
                     .get_id();
-                GrantObjectByID::Table {
+                OwnershipObject::Table {
                     catalog_name,
                     db_id,
                     table_id,
                 }
             }
-            _ => {
+            GrantObject::TableById(_, db_id, table_id) => OwnershipObject::Table {
+                catalog_name: catalog_name.unwrap(),
+                db_id: *db_id,
+                table_id: *table_id,
+            },
+            GrantObject::DatabaseById(_, db_id) => OwnershipObject::Database {
+                catalog_name: catalog_name.unwrap(),
+                db_id: *db_id,
+            },
+            GrantObject::Stage(name) => OwnershipObject::Stage {
+                name: name.to_string(),
+            },
+            GrantObject::UDF(name) => OwnershipObject::UDF {
+                name: name.to_string(),
+            },
+            GrantObject::Global => {
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
                 ));
@@ -123,7 +131,7 @@ impl GrantPrivilegeInterpreter {
         };
 
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
-        let owner = user_mgr.get_ownership(tenant, &object_by_id).await?;
+        let owner = user_mgr.get_ownership(tenant, &owner_object).await?;
         if let Some(owner) = owner {
             let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
             if !can_grant_ownership {
@@ -141,7 +149,7 @@ impl GrantPrivilegeInterpreter {
         }
 
         user_mgr
-            .grant_ownership_to_role(tenant, &object_by_id, role)
+            .grant_ownership_to_role(tenant, &owner_object, role)
             .await?;
 
         Ok(())

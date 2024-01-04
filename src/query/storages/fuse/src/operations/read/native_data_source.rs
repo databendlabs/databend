@@ -12,62 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
-
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoPtr;
-use serde::Deserializer;
-use serde::Serializer;
 
 use crate::io::NativeSourceData;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
-pub enum DataSource {
+pub enum NativeDataSource {
     AggIndex(NativeSourceData),
     Normal(NativeSourceData),
 }
 
-pub struct NativeDataSourceMeta {
-    pub part: Vec<PartInfoPtr>,
-    pub data: Vec<DataSource>,
-}
-
-impl NativeDataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
-        Box::new(NativeDataSourceMeta { part, data })
-    }
-}
-
-impl Debug for NativeDataSourceMeta {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NativeDataSourceMeta")
-            .field("part", &self.part)
-            .finish()
-    }
-}
-
-impl serde::Serialize for NativeDataSourceMeta {
-    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize NativeDataSourceMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for NativeDataSourceMeta {
-    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize NativeDataSourceMeta")
-    }
-}
-
 #[typetag::serde(name = "fuse_data_source")]
-impl BlockMetaInfo for NativeDataSourceMeta {
+impl BlockMetaInfo for DataSourceWithMeta<NativeDataSource> {
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals NativeDataSourceMeta")
+        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone NativeDataSourceMeta")
+        unimplemented!("Unimplemented clone DataSourceMeta")
     }
 }

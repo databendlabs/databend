@@ -26,13 +26,10 @@ statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
 statement ok
-SET enable_refresh_aggregating_index_after_write=1;
-
-statement ok
 CREATE TABLE t (a int, b int, c int)
 
 statement ok
-CREATE SYNC AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
+CREATE AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
 
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
@@ -47,9 +44,6 @@ SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
 2 3
 3 1
-
-statement ok
-SET enable_refresh_aggregating_index_after_write=0;
 
 statement ok
 DROP AGGREGATING INDEX testi

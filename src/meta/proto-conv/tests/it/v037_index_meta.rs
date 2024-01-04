@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
         let table_id = 7;
         let index_type = IndexType::AGGREGATING;
         let created_on = Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap();
+        let original_query = "".to_string();
         let query = "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string();
 
         IndexMeta {
@@ -51,6 +52,7 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
             index_type,
             created_on,
             dropped_on: None,
+            original_query,
             query,
             updated_on: None,
             sync_creation: false,

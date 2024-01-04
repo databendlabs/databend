@@ -17,12 +17,13 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::RoleCacheManager;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 
 use crate::sessions::SessionContext;
@@ -63,7 +64,7 @@ pub trait SessionPrivilegeManager {
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()>;
 
-    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()>;
+    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -261,40 +262,24 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             return Ok(());
         }
 
-        let roles_name = effective_roles
-            .iter()
-            .map(|r| r.name.clone())
-            .collect::<Vec<_>>()
-            .join(",");
-        Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
-            privilege.clone(),
-            object,
-            &current_user.identity(),
-            roles_name,
-        )))
+        Err(ErrorCode::PermissionDenied("Permission denied"))
     }
 
     #[async_backtrace::framed]
-    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()> {
+    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
 
-        // if the object is not owned by any role, then considered as PUBLIC, which is always true
-        let owner_role = match role_mgr.find_object_owner(&tenant, object).await? {
-            Some(owner_role) => owner_role,
-            None => return Ok(()),
+        // if the object is not owned by any role, then considered as ACCOUNT_ADMIN, the normal users
+        // can not access it unless ACCOUNT_ADMIN grant relevant privileges to them.
+        let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
+            Some(owner_role) => owner_role.name,
+            None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
         };
 
         let available_roles = self.get_all_available_roles().await?;
-        if !available_roles.iter().any(|r| r.name == owner_role.name) {
-            return Err(ErrorCode::PermissionDenied(
-                "Permission denied, current session do not have the ownership of this object"
-                    .to_string(),
-            ));
-        }
-
-        Ok(())
+        let exists = available_roles.iter().any(|r| r.name == owner_role_name);
+        return Ok(exists);
     }
 
     #[async_backtrace::framed]

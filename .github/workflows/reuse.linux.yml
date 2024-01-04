@@ -278,6 +278,28 @@ jobs:
         with:
           name: test-stateful-standalone-linux
 
+  test_ee_management_mode:
+    needs: [build, check, license]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    if: needs.license.outputs.license
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_bendsql
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/test_ee_management_mode_linux
+        timeout-minutes: 10
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-ee-management-mode-linux
+
   sqllogic_ee:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license

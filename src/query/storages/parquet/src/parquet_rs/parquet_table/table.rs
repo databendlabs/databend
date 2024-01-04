@@ -16,8 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
@@ -37,10 +35,8 @@ use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -55,8 +51,9 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
-use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
+use crate::parquet_rs::meta::read_metas_in_parallel;
+use crate::parquet_rs::schema::arrow_to_table_schema;
 
 pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
@@ -172,7 +169,7 @@ impl ParquetRSTable {
         // If not, throw error during reading.
         let size = operator.stat(path).await?.content_length();
         let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
-        let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.file_metadata().schema_descr_ptr();
         Ok((arrow_schema, schema_descr, compression_ratio))
@@ -250,7 +247,10 @@ impl Table for ParquetRSTable {
         true
     }
 
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         if !self.need_stats_provider {
             return Ok(Box::new(DummyColumnStatisticsProvider));
         }
@@ -302,7 +302,10 @@ impl Table for ParquetRSTable {
         Ok(Box::new(provider))
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         if parquet_metas.is_empty() {
@@ -320,38 +323,6 @@ impl Table for ParquetRSTable {
             ..Default::default()
         }))
     }
-}
-
-fn lower_field_name(field: &ArrowField) -> ArrowField {
-    let name = field.name().to_lowercase();
-    let field = field.clone().with_name(name);
-    match &field.data_type() {
-        ArrowDataType::List(f) => {
-            let inner = lower_field_name(f);
-            field.with_data_type(ArrowDataType::List(Arc::new(inner)))
-        }
-        ArrowDataType::Struct(fields) => {
-            let typ = ArrowDataType::Struct(
-                fields
-                    .iter()
-                    .map(|f| lower_field_name(f))
-                    .collect::<Vec<_>>()
-                    .into(),
-            );
-            field.with_data_type(typ)
-        }
-        _ => field,
-    }
-}
-
-fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
-    let fields = schema
-        .fields
-        .iter()
-        .map(|f| Arc::new(lower_field_name(f)))
-        .collect::<Vec<_>>();
-    let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
-    TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
 fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {

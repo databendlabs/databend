@@ -7,6 +7,15 @@ output domain  : {1..=1}
 output         : 1
 
 
+ast            : abs(-2.3434)
+raw expr       : abs(minus(2.3434))
+checked expr   : abs<Decimal(5, 4)>(minus<Decimal(5, 4)>(2.3434_d128(5,4)))
+optimized expr : 2.3434_d128(5,4)
+output type    : Decimal(5, 4)
+output domain  : {2.3434..=2.3434}
+output         : 2.3434
+
+
 ast            : abs(-1)
 raw expr       : abs(minus(1))
 checked expr   : abs<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
@@ -279,45 +288,36 @@ evaluation (internal):
 +--------+----------------------------------------------------------+
 
 
-ast            : round(-1.23)
-raw expr       : round(minus(1.23))
-checked expr   : round<Decimal(3, 2)>(76)(minus<Decimal(3, 2)>(1.23_d128(3,2)))
+ast            : round(0)(-1.23)
+raw expr       : round(0)(minus(1.23))
+checked expr   : round<Decimal(3, 2)>(0)(minus<Decimal(3, 2)>(1.23_d128(3,2)))
 optimized expr : -1_d128(3,0)
 output type    : Decimal(3, 0)
 output domain  : {-1..=-1}
 output         : -1
 
 
-ast            : round(1.298, 1)
-raw expr       : round(1.298, 1)
-checked expr   : round<Decimal(4, 3), UInt8>(77)(1.298_d128(4,3), 1_u8)
+ast            : round(1)(1.298, 1)
+raw expr       : round(1)(1.298, 1)
+checked expr   : round<Decimal(4, 3), UInt8>(1)(1.298_d128(4,3), 1_u8)
 optimized expr : 1.3_d128(4,1)
 output type    : Decimal(4, 1)
 output domain  : {1.3..=1.3}
 output         : 1.3
 
 
-ast            : round(1.298, 0)
-raw expr       : round(1.298, 0)
-checked expr   : round<Decimal(4, 3), UInt8>(76)(1.298_d128(4,3), 0_u8)
+ast            : round(0)(1.298, 0)
+raw expr       : round(0)(1.298, 0)
+checked expr   : round<Decimal(4, 3), UInt8>(0)(1.298_d128(4,3), 0_u8)
 optimized expr : 1_d128(4,0)
 output type    : Decimal(4, 0)
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : round(23.298, -1)
-raw expr       : round(23.298, minus(1))
-checked expr   : round<Decimal(5, 3), Int16>(75)(23.298_d128(5,3), minus<UInt8>(1_u8))
-optimized expr : 20_d128(5,0)
-output type    : Decimal(5, 0)
-output domain  : {20..=20}
-output         : 20
-
-
-ast            : round(0.12345678901234567890123456789012345, 35)
-raw expr       : round(0.12345678901234567890123456789012345, 35)
-checked expr   : round<Decimal(35, 35), UInt8>(111)(0.12345678901234567890123456789012345_d128(35,35), 35_u8)
+ast            : round(35)(0.12345678901234567890123456789012345, 35)
+raw expr       : round(35)(0.12345678901234567890123456789012345, 35)
+checked expr   : round<Decimal(35, 35), UInt8>(35)(0.12345678901234567890123456789012345_d128(35,35), 35_u8)
 optimized expr : 0.12345678901234567890123456789012345_d128(35,35)
 output type    : Decimal(35, 35)
 output domain  : {0.12345678901234567890123456789012345..=0.12345678901234567890123456789012345}
@@ -408,45 +408,63 @@ evaluation (internal):
 +--------+----------------------------------------------------+
 
 
-ast            : truncate(1.223, 1)
-raw expr       : truncate(1.223, 1)
-checked expr   : truncate<Decimal(4, 3), UInt8>(77)(1.223_d128(4,3), 1_u8)
+ast            : truncate(1)(1.223, 1)
+raw expr       : truncate(1)(1.223, 1)
+checked expr   : truncate<Decimal(4, 3), UInt8>(1)(1.223_d128(4,3), 1_u8)
 optimized expr : 1.2_d128(4,1)
 output type    : Decimal(4, 1)
 output domain  : {1.2..=1.2}
 output         : 1.2
 
 
-ast            : truncate(1.999)
-raw expr       : truncate(1.999)
-checked expr   : truncate<Decimal(4, 3)>(76)(1.999_d128(4,3))
+ast            : truncate(0)(1.999)
+raw expr       : truncate(0)(1.999)
+checked expr   : truncate<Decimal(4, 3)>(0)(1.999_d128(4,3))
 optimized expr : 1_d128(4,0)
 output type    : Decimal(4, 0)
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : truncate(1.999, 1)
-raw expr       : truncate(1.999, 1)
-checked expr   : truncate<Decimal(4, 3), UInt8>(77)(1.999_d128(4,3), 1_u8)
+ast            : truncate(1)(1.999, 1)
+raw expr       : truncate(1)(1.999, 1)
+checked expr   : truncate<Decimal(4, 3), UInt8>(1)(1.999_d128(4,3), 1_u8)
 optimized expr : 1.9_d128(4,1)
 output type    : Decimal(4, 1)
 output domain  : {1.9..=1.9}
 output         : 1.9
 
 
-ast            : truncate(122, -2)
-raw expr       : truncate(122, minus(2))
-checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(2_u8)))
-optimized expr : 100_f64
-output type    : Float64
+ast            : truncate(-2)(122::DECIMAL(3))
+raw expr       : truncate(-2)(CAST(122 AS Decimal(3, 0)))
+checked expr   : truncate<Decimal(3, 0)>(-2)(to_decimal<UInt8>(3, 0)(122_u8))
+optimized expr : 100_d128(3,0)
+output type    : Decimal(3, 0)
 output domain  : {100..=100}
 output         : 100
 
 
-ast            : truncate(10.28*100, 0)
-raw expr       : truncate(multiply(10.28, 100), 0)
-checked expr   : truncate<Decimal(7, 2), UInt8>(76)(multiply<Decimal(7, 2), Decimal(7, 0)>(to_decimal<Decimal(4, 2)>(7, 2)(10.28_d128(4,2)), to_decimal<UInt8>(7, 0)(100_u8)), 0_u8)
+ast            : truncate(1+3-6)(122::DECIMAL(3))
+raw expr       : truncate(-2)(CAST(122 AS Decimal(3, 0)))
+checked expr   : truncate<Decimal(3, 0)>(-2)(to_decimal<UInt8>(3, 0)(122_u8))
+optimized expr : 100_d128(3,0)
+output type    : Decimal(3, 0)
+output domain  : {100..=100}
+output         : 100
+
+
+ast            : truncate(122, -1)
+raw expr       : truncate(122, minus(1))
+checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(1_u8)))
+optimized expr : 120_f64
+output type    : Float64
+output domain  : {120..=120}
+output         : 120
+
+
+ast            : truncate(0)(10.28*100, 0)
+raw expr       : truncate(0)(multiply(10.28, 100), 0)
+checked expr   : truncate<Decimal(7, 2), UInt8>(0)(multiply<Decimal(7, 2), Decimal(7, 0)>(to_decimal<Decimal(4, 2)>(7, 2)(10.28_d128(4,2)), to_decimal<UInt8>(7, 0)(100_u8)), 0_u8)
 optimized expr : 1028_d128(7,0)
 output type    : Decimal(7, 0)
 output domain  : {1028..=1028}
@@ -521,12 +539,26 @@ output domain  : {0.6931471805..=0.6931471805}
 output         : 0.6931471805
 
 
-error: 
-  --> SQL:1:10
-  |
-1 | round(2, a)
-  |          ^ Need constant number.
-
+ast            : round(2, a)
+raw expr       : round(2, a::Int64)
+checked expr   : round<UInt8, Int64>(2_u8, a)
+evaluation:
++--------+--------------+--------------+
+|        | a            | Output       |
++--------+--------------+--------------+
+| Type   | Int64        | Float64      |
+| Domain | {10..=65536} | {-inf..=NaN} |
+| Row 0  | 22           | 2            |
+| Row 1  | 65536        | 2            |
+| Row 2  | 10           | 2            |
++--------+--------------+--------------+
+evaluation (internal):
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| a      | Int64([22, 65536, 10]) |
+| Output | Float64([2, 2, 2])     |
++--------+------------------------+
 
 
 ast            : factorial(5)

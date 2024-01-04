@@ -33,6 +33,9 @@ use crate::types::DataType;
 use crate::utils::arrow::column_to_arrow_array;
 use crate::Column;
 use crate::DataBlock;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
@@ -247,10 +250,11 @@ fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCom
 }
 
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    assert_eq!(left.data_type(), right.data_type());
     match left.data_type() {
         ArrowType::Extension(name, _, _) => match name.as_str() {
-            "Variant" => compare_variant(left, right),
-            "EmptyArray" | "EmptyMap" => compare_null(),
+            ARROW_EXT_TYPE_VARIANT => compare_variant(left, right),
+            ARROW_EXT_TYPE_EMPTY_ARRAY | ARROW_EXT_TYPE_EMPTY_MAP => compare_null(),
             _ => Err(ArrowError::NotYetImplemented(format!(
                 "Sort not supported for data type {:?}",
                 left.data_type()

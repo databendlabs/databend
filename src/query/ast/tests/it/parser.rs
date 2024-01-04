@@ -141,7 +141,7 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
-        r#"CREATE TABLE t(c1 varbinary);"#,
+        r#"CREATE TABLE t(c1 varbinary, c2 binary(10));"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
@@ -507,13 +507,20 @@ fn test_statement() {
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         // tasks
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
+        r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
+        r#"ALTER TASK MyTask1 REMOVE AFTER 'task2'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
+        r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,
         r#"EXECUTE TASK MyTask"#,
@@ -536,6 +543,13 @@ fn test_statement() {
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
+        "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON STAGE s1 FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON UDF f1 FROM ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
     ];
 
     for case in cases {
@@ -625,6 +639,11 @@ fn test_statement_error() {
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
         r#"select $0 from t1"#,
+        "GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';",
+        "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
+        "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
+        "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
     ];
 
     for case in cases {
@@ -809,6 +828,7 @@ fn test_expr() {
         r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
+        r#"ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)"#,
     ];
 
     for case in cases {

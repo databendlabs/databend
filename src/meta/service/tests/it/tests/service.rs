@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,9 +94,8 @@ pub fn next_port() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
 }
 
+/// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
 pub struct MetaSrvTestContext {
-    // /// To hold a per-case logging guard
-    // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
     pub meta_node: Option<Arc<MetaNode>>,

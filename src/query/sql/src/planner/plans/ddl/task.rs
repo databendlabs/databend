@@ -38,6 +38,8 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("schedule", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
+        DataField::new("condition_text", DataType::String),
+        DataField::new("after", DataType::String),
         DataField::new(
             "suspend_task_after_num_failures",
             DataType::Number(UInt64).wrap_nullable(),
@@ -58,6 +60,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("warehouse", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
+        DataField::new("condition_text", DataType::String),
         DataField::new("run_id", DataType::String),
         DataField::new("query_id", DataType::String),
         DataField::new("exception_code", DataType::Number(Int64)),
@@ -65,6 +68,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("attempt_number", DataType::Number(Int32)),
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
+        DataField::new("root_task_id", DataType::String),
     ]))
 }
 
@@ -74,7 +78,9 @@ pub struct CreateTaskPlan {
     pub tenant: String,
     pub task_name: String,
     pub warehouse_opts: WarehouseOptions,
-    pub schedule_opts: ScheduleOptions,
+    pub schedule_opts: Option<ScheduleOptions>,
+    pub after: Vec<String>,
+    pub when_condition: Option<String>,
     pub suspend_task_after_num_failures: Option<u64>,
     pub sql: String,
     pub comment: String,

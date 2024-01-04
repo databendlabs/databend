@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::executor::PhysicalPlanReplacer;
@@ -52,7 +53,6 @@ use opendal::Operator;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
-use crate::schedulers::ReplaceReadSource;
 use crate::sessions::QueryContext;
 
 pub struct RefreshIndexInterpreter {
@@ -285,7 +285,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let new_index_meta = self.update_index_meta(&new_read_source)?;
 
-        let mut replace_read_source = ReplaceReadSource {
+        let mut replace_read_source = ReadSourceReplacer {
             source: new_read_source,
         };
         query_plan = replace_read_source.replace(&query_plan)?;
@@ -387,4 +387,16 @@ async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Resu
     let handler = get_agg_index_handler();
     let _ = handler.do_update_index(catalog, req).await?;
     Ok(())
+}
+
+struct ReadSourceReplacer {
+    source: DataSourcePlan,
+}
+
+impl PhysicalPlanReplacer for ReadSourceReplacer {
+    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
+        let mut plan = plan.clone();
+        plan.source = Box::new(self.source.clone());
+        Ok(PhysicalPlan::TableScan(plan))
+    }
 }

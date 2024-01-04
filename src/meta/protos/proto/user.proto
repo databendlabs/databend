@@ -51,10 +51,21 @@ message GrantObject {
     string db = 2;
   }
 
+  message GrantDatabaseIdObject {
+    string catalog = 1;
+    uint64 db = 2;
+  }
+
   message GrantTableObject {
     string catalog = 1;
     string db = 2;
     string table = 3;
+  }
+
+  message GrantTableIdObject {
+    string catalog = 1;
+    uint64 db = 2;
+    uint64 table = 3;
   }
 
   message GrantUdfObject {
@@ -71,6 +82,8 @@ message GrantObject {
     GrantTableObject table = 3;
     GrantUdfObject udf = 4;
     GrantStageObject stage = 5;
+    GrantDatabaseIdObject databasebyid = 6;
+    GrantTableIdObject tablebyid = 7;
   }
 }
 
@@ -106,6 +119,7 @@ message UserOption {
   uint64 flags = 1;
   optional string default_role = 2;
   optional string network_policy = 3;
+  optional string password_policy = 4;
 }
 
 message UserInfo {
@@ -138,4 +152,25 @@ message NetworkPolicy {
   string comment = 4;
   string create_on = 5;
   optional string update_on = 6;
+}
+
+message PasswordPolicy {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string name = 1;
+  uint64 min_length = 2;
+  uint64 max_length = 3;
+  uint64 min_upper_case_chars = 4;
+  uint64 min_lower_case_chars = 5;
+  uint64 min_numeric_chars = 6;
+  uint64 min_special_chars = 7;
+  uint64 min_age_days = 8;
+  uint64 max_age_days = 9;
+  uint64 max_retries = 10;
+  uint64 lockout_time_mins = 11;
+  uint64 history = 12;
+  string comment = 13;
+  string create_on = 14;
+  optional string update_on = 15;
 }

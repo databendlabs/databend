@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,63 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_grpc::ConnectionFactory;
-use databend_common_meta_api::SchemaApi;
-use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::Streamed;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_kvapi::kvapi::GetKVReq;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
+use futures::StreamExt;
+use log::info;
+use tonic::codegen::BoxStream;
 
+use crate::grpc_server::rand_local_addr;
 use crate::grpc_server::start_grpc_server;
+use crate::grpc_server::start_grpc_server_addr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_grpc_client_action_timeout() {
+async fn test_grpc_client_timeout() -> anyhow::Result<()> {
     // start_grpc_server will sleep 1 second.
-    let srv_addr = start_grpc_server();
+    let (srv_addr, _shutdown, _task_handle) = start_grpc_server();
 
     // use `timeout=3secs` here cause our mock grpc
     // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
+    let client = new_client(&srv_addr, Some(timeout))?;
 
-    let client = MetaGrpcClient::try_create(
-        vec![srv_addr],
-        "",
-        "",
-        Some(timeout),
-        None,
-        Duration::from_secs(10),
-        None,
-    )
-    .unwrap();
+    let res = client.request(GetKVReq::new("foo")).await;
 
-    let res = client
-        .get_database(GetDatabaseReq::new("tenant1", "xx"))
-        .await;
-    let got = res.unwrap_err();
-    let got = ErrorCode::from(got).message();
+    let err = res.unwrap_err();
+    let got = err.to_string();
     let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
-    assert_eq!(got, expect);
+    assert_eq!(expect, got);
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grpc_client_handshake_timeout() {
-    let srv_addr = start_grpc_server();
+    let (srv_addr, _shutdown, _task_handle) = start_grpc_server();
 
     // timeout will happen
     {
         // our mock grpc server's handshake impl will sleep 2secs.
         // see: GrpcServiceForTestImp.handshake
-        let timeout = Duration::from_secs(2);
+        let timeout = Duration::from_secs(1);
         let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None)
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+        let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
         let res = MetaGrpcClient::handshake(
             &mut client,
@@ -93,7 +93,7 @@ async fn test_grpc_client_handshake_timeout() {
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+        let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
         let res = MetaGrpcClient::handshake(
             &mut client,
@@ -106,4 +106,68 @@ async fn test_grpc_client_handshake_timeout() {
 
         assert!(res.is_ok());
     }
+}
+
+/// When server is down, client should try to reconnect.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
+    let srv_addr = rand_local_addr();
+    let client = new_client(&srv_addr, Some(Duration::from_secs(3)))?;
+
+    // Send a Get request and return the first item.
+    async fn send_req(client: &Arc<ClientHandle>) -> Result<StreamItem, MetaError> {
+        let res: Result<BoxStream<StreamItem>, MetaError> =
+            client.request(Streamed(GetKVReq::new("foo"))).await;
+
+        let mut strm = res?;
+        let first = strm.next().await.unwrap();
+        let first = first?;
+        Ok(first)
+    }
+
+    info!("--- no server, client does not work");
+    {
+        let res = send_req(&client).await;
+        info!("--- expected error: {:?}", res.unwrap_err());
+    }
+
+    info!("--- start server, client works as expected");
+    let (shutdown, task_handle) = start_grpc_server_addr(&srv_addr);
+    {
+        let got = send_req(&client).await?;
+        info!("--- rpc got: {:?}", got);
+    }
+
+    info!("--- shutdown server, client can not connect");
+    {
+        shutdown.send(()).unwrap();
+        let r = task_handle.await;
+        info!("--- task_handle.await: {:?}", r);
+
+        let res = send_req(&client).await;
+        info!("--- expected error: {:?}", res.unwrap_err());
+    }
+
+    info!("--- restart server, client auto reconnect");
+    let (_shutdown, _task_handle) = start_grpc_server_addr(&srv_addr);
+    {
+        let got = send_req(&client).await?;
+        info!("--- rpc got: {:?}", got);
+    }
+
+    Ok(())
+}
+
+fn new_client(addr: impl ToString, timeout: Option<Duration>) -> anyhow::Result<Arc<ClientHandle>> {
+    let client = MetaGrpcClient::try_create(
+        vec![addr.to_string()],
+        "",
+        "",
+        timeout,
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
+
+    Ok(client)
 }

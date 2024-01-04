@@ -350,6 +350,10 @@ pub enum TokenKind {
     ASC,
     #[token("ANTI", ignore(ascii_case))]
     ANTI,
+    #[token("ASYNC", ignore(ascii_case))]
+    ASYNC,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
@@ -420,8 +424,6 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("ATTACH", ignore(ascii_case))]
-    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
@@ -747,6 +749,30 @@ pub enum TokenKind {
     PARTITION,
     #[token("PARQUET", ignore(ascii_case))]
     PARQUET,
+    #[token("PASSWORD", ignore(ascii_case))]
+    PASSWORD,
+    #[token("PASSWORD_MIN_LENGTH", ignore(ascii_case))]
+    PASSWORD_MIN_LENGTH,
+    #[token("PASSWORD_MAX_LENGTH", ignore(ascii_case))]
+    PASSWORD_MAX_LENGTH,
+    #[token("PASSWORD_MIN_UPPER_CASE_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_UPPER_CASE_CHARS,
+    #[token("PASSWORD_MIN_LOWER_CASE_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_LOWER_CASE_CHARS,
+    #[token("PASSWORD_MIN_NUMERIC_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_NUMERIC_CHARS,
+    #[token("PASSWORD_MIN_SPECIAL_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_SPECIAL_CHARS,
+    #[token("PASSWORD_MIN_AGE_DAYS", ignore(ascii_case))]
+    PASSWORD_MIN_AGE_DAYS,
+    #[token("PASSWORD_MAX_AGE_DAYS", ignore(ascii_case))]
+    PASSWORD_MAX_AGE_DAYS,
+    #[token("PASSWORD_MAX_RETRIES", ignore(ascii_case))]
+    PASSWORD_MAX_RETRIES,
+    #[token("PASSWORD_LOCKOUT_TIME_MINS", ignore(ascii_case))]
+    PASSWORD_LOCKOUT_TIME_MINS,
+    #[token("PASSWORD_HISTORY", ignore(ascii_case))]
+    PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
     #[token("PIPELINE", ignore(ascii_case))]
@@ -1338,6 +1364,7 @@ impl TokenKind {
             | TokenKind::ANALYZE
             | TokenKind::AND
             | TokenKind::ANY
+            | TokenKind::FUNCTION
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC
@@ -1442,6 +1469,7 @@ impl TokenKind {
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
+            | TokenKind::UDF
             | TokenKind::SHARE
             | TokenKind::SHARES
             | TokenKind::TO
