@@ -103,6 +103,10 @@ fn test_decode_v67_password_policy() -> anyhow::Result<()> {
             .with_default_role(Some("role1".into()))
             .with_network_policy(Some("mypolicy".to_string()))
             .with_password_policy(Some("testpasswordpolicy1".to_string())),
+        history_auth_infos: vec![],
+        password_fail_ons: vec![],
+        password_update_on: None,
+        lockout_time: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

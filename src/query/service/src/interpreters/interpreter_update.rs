@@ -35,6 +35,8 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
@@ -257,6 +259,7 @@ impl UpdateInterpreter {
                 )
                 .await?;
 
+            let is_distributed = !self.ctx.get_cluster().is_empty();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,
@@ -267,6 +270,8 @@ impl UpdateInterpreter {
                 snapshot,
                 catalog_info,
                 query_row_id_col,
+                is_distributed,
+                self.ctx.clone(),
             )?;
             return Ok(Some(physical_plan));
         }
@@ -283,9 +288,11 @@ impl UpdateInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         query_row_id_col: bool,
+        is_distributed: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
         let merge_meta = partitions.is_lazy;
-        let root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
+        let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
@@ -296,6 +303,17 @@ impl UpdateInterpreter {
             computed_list,
         }));
 
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+        }
+
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
@@ -305,6 +323,7 @@ impl UpdateInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
+            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
         })))
     }
 }

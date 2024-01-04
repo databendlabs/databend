@@ -345,6 +345,7 @@ impl ModifyTableColumnInterpreter {
             vec![],
             true,
             prev_snapshot_id,
+            None,
         )?;
 
         build_res.main_pipeline.add_lock_guard(lock_guard);
