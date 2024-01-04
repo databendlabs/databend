@@ -50,6 +50,7 @@ async-trait = { workspace = true }
 backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
+feature-set = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
 itertools = { workspace = true }

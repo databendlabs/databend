@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta;
-mod mutator;
-mod processors;
+mod block_compact_mutator;
+mod recluster_mutator;
+mod segment_compact_mutator;
 
-pub use meta::*;
-pub use mutator::*;
-pub use processors::*;
-
-pub static MAX_BLOCK_COUNT: usize = 10_1000;
-pub type SegmentIndex = usize;
-pub type BlockIndex = usize;
+pub use block_compact_mutator::BlockCompactMutator;
+pub use recluster_mutator::ReclusterMutator;
+pub use segment_compact_mutator::SegmentCompactMutator;
+pub use segment_compact_mutator::SegmentCompactionState;
+pub use segment_compact_mutator::SegmentCompactor;
