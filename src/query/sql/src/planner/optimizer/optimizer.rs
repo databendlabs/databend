@@ -384,5 +384,5 @@ fn try_to_change_as_broadcast_join(merge_into_join_sexpr: SExpr) -> Result<SExpr
             return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
         }
     }
-    return Ok(merge_into_join_sexpr);
+    Ok(merge_into_join_sexpr)
 }
