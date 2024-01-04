@@ -213,8 +213,8 @@ impl ReadPolicy for TopkOnlyPolicy {
             debug_assert!(
                 self.prefetched.is_none() || !self.prefetched.as_ref().unwrap().is_empty()
             );
-            let mut block =
-                transform_record_batch(self.src_schema.as_ref(), &batch, &self.remain_field_paths)?;
+            let topk_schema = DataSchema::new(vec![self.src_schema.fields.last().unwrap().clone()]);
+            let mut block = transform_record_batch(&topk_schema, &batch, &self.remain_field_paths)?;
             if let Some(q) = self.prefetched.as_mut() {
                 let prefetched = q.pop_front().unwrap();
                 block.add_column(prefetched);
