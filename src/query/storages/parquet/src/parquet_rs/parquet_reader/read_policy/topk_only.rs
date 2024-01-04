@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
@@ -48,6 +49,8 @@ pub struct TopkOnlyPolicyBuilder {
     remain_field_levels: FieldLevels,
     remain_field_paths: Arc<Option<FieldPaths>>,
 
+    prefetch_schema: DataSchemaRef,
+    remain_schema: DataSchemaRef,
     src_schema: DataSchemaRef,
     dst_schema: DataSchemaRef,
 
@@ -96,18 +99,22 @@ impl TopkOnlyPolicyBuilder {
             inner_projection,
         )?);
 
-        let mut src_schema = remain_schema;
+        let mut src_schema = remain_schema.clone();
         if topk_in_output {
             src_schema.fields.push(topk_field.clone());
         }
         let src_schema = Arc::new(DataSchema::from(&src_schema));
         let dst_schema = Arc::new(DataSchema::from(output_schema));
+        let prefetch_schema = Arc::new(DataSchema::new(vec![DataField::from(topk_field)]));
+        let remain_schema = Arc::new(DataSchema::from(&remain_schema));
 
         Ok(Box::new(Self {
             topk: topk.clone(),
             remain_projection,
             remain_field_levels,
             remain_field_paths,
+            prefetch_schema,
+            remain_schema,
             src_schema,
             dst_schema,
             topk_in_output,
@@ -135,9 +142,8 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         row_group
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
-        let topk_schema = DataSchema::new(vec![self.src_schema.fields.last().unwrap().clone()]);
         let block = read_all(
-            &topk_schema,
+            &self.prefetch_schema,
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
@@ -185,6 +191,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             prefetched: prefetched_cols,
             reader,
             remain_field_paths: self.remain_field_paths.clone(),
+            remain_schema: self.remain_schema.clone(),
             src_schema: self.src_schema.clone(),
             dst_schema: self.dst_schema.clone(),
         })))
@@ -200,6 +207,8 @@ pub struct TopkOnlyPolicy {
 
     /// See the comments of `field_paths` in [`super::NoPrefetchPolicy`].
     remain_field_paths: Arc<Option<FieldPaths>>,
+    /// The schema of remain columns.
+    remain_schema: DataSchemaRef,
     /// The schema of remain columns + topk column (topk column is at the last).
     src_schema: DataSchemaRef,
     /// The final output schema.
@@ -213,8 +222,8 @@ impl ReadPolicy for TopkOnlyPolicy {
             debug_assert!(
                 self.prefetched.is_none() || !self.prefetched.as_ref().unwrap().is_empty()
             );
-            let topk_schema = DataSchema::new(vec![self.src_schema.fields.last().unwrap().clone()]);
-            let mut block = transform_record_batch(&topk_schema, &batch, &self.remain_field_paths)?;
+            let mut block =
+                transform_record_batch(&self.remain_schema, &batch, &self.remain_field_paths)?;
             if let Some(q) = self.prefetched.as_mut() {
                 let prefetched = q.pop_front().unwrap();
                 block.add_column(prefetched);
