@@ -44,12 +44,22 @@ pub struct UserInfo {
 
     pub option: UserOption,
 
+    // Recently changed history passwords,
+    // used to detect whether the newly changed password
+    // is repeated with the history passwords.
     pub history_auth_infos: Vec<AuthInfo>,
 
+    // The time of the most recent failed login with wrong passwords,
+    // used to detect whether the number of failed logins exceeds the limit,
+    // if so, the login will be locked for a while.
     pub password_fail_ons: Vec<DateTime<Utc>>,
 
+    // The time of the last password change,
+    // used to check if the minimum allowed time has been exceeded when changing the password,
+    // and to check if the maximum time that must be changed has been exceeded when login.
     pub password_update_on: Option<DateTime<Utc>>,
 
+    // Login lockout time, records the end time of login lockout due to multiple password fails.
     pub lockout_time: Option<DateTime<Utc>>,
 }
 
