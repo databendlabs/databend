@@ -25,7 +25,19 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 ----
+Fragment 0:
+  DataExchange: Merge
+    ExchangeSink
+    ├── output columns: []
+    ├── destination fragment: [1]
+    └── UpdateSource
 
+
+Fragment 1:
+    CommitSink
+    └── ExchangeSource
+        ├── output columns: []
+        └── source fragment: [0]
 
 query IT
 SELECT * FROM t1 ORDER BY b
@@ -36,7 +48,6 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
--[ EXPLAIN ]-----------------------------------
 Nothing to update
 
 
