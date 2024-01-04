@@ -460,12 +460,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("merge_into_static_filter_partition_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1500),
-                    desc: "Max number of partitions allowed for static filtering of merge into statement",
-                    mode: SettingMode::Both,
-                    range: None,
-                }),
                 ("enable_distributed_replace_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of replace into.",
