@@ -18,6 +18,7 @@
 #![feature(let_chains)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
+#![feature(box_patterns)]
 #![allow(clippy::diverging_sub_expression)]
 
 mod parquet2;

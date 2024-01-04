@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::Plan;
@@ -31,7 +32,6 @@ use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_storages_common_table_meta::meta::Location;
-use log::error;
 use log::info;
 use parking_lot::RwLock;
 
@@ -50,42 +50,37 @@ pub struct RefreshDesc {
 
 /// Hook refresh action with a on-finished callback.
 /// errors (if any) are ignored.
-pub async fn hook_refresh(
-    ctx: Arc<QueryContext>,
-    pipeline: &mut Pipeline,
-    desc: RefreshDesc,
-) -> Result<()> {
+pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
     if pipeline.is_empty() {
-        return Ok(());
+        return;
     }
 
     let refresh_virtual_column = ctx
         .get_settings()
-        .get_enable_refresh_virtual_column_after_write()?;
+        .get_enable_refresh_virtual_column_after_write()
+        .unwrap_or(false);
 
-    pipeline.set_on_finished(move |may_error| match may_error {
-        Ok(_) => {
+    pipeline.set_on_finished(move |err| {
+        if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
-            GlobalIORuntime::instance().block_on(async move {
-                let result = do_hook_refresh(ctx, desc, refresh_virtual_column).await;
-                match result {
-                    Ok(_) => Ok(()),
-                    Err(e) if e.code() == ErrorCode::LICENSE_KEY_INVALID => {
-                        error!("license key invalid: {}", e.message());
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
+            match GlobalIORuntime::instance().block_on(execute_refresh_job(
+                ctx,
+                desc,
+                refresh_virtual_column,
+            )) {
+                Ok(_) => {
+                    info!("execute refresh job successfully.");
                 }
-            })
+                Err(e) => {
+                    info!("execute refresh job failed. {:?}", e);
+                }
+            }
         }
-        Err(e) => Err(e.clone()),
+        Ok(())
     });
-
-    Ok(())
 }
 
-/// Hook refresh action with a on-finished callback.
-async fn do_hook_refresh(
+async fn execute_refresh_job(
     ctx: Arc<QueryContext>,
     desc: RefreshDesc,
     refresh_virtual_column: bool,
@@ -102,7 +97,9 @@ async fn do_hook_refresh(
 
     if refresh_virtual_column {
         let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
-        plans.push(virtual_column_plan);
+        if let Some(virtual_column_plan) = virtual_column_plan {
+            plans.push(virtual_column_plan);
+        }
     }
 
     let mut tasks = Vec::with_capacity(std::cmp::min(
@@ -231,15 +228,30 @@ async fn build_refresh_index_plan(
 async fn generate_refresh_virtual_column_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
-) -> Result<Plan> {
+) -> Result<Option<Plan>> {
     let segment_locs = ctx.get_segment_locations()?;
 
+    let table_info = ctx
+        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .await?;
+    let catalog = ctx.get_catalog(&desc.catalog).await?;
+    let res = catalog
+        .list_virtual_columns(ListVirtualColumnsReq {
+            tenant: ctx.get_tenant(),
+            table_id: Some(table_info.get_id()),
+        })
+        .await?;
+
+    if res.is_empty() || res[0].virtual_columns.is_empty() {
+        return Ok(None);
+    }
     let plan = RefreshVirtualColumnPlan {
         catalog: desc.catalog.clone(),
         database: desc.database.clone(),
         table: desc.table.clone(),
+        virtual_columns: res[0].virtual_columns.clone(),
         segment_locs: Some(segment_locs),
     };
 
-    Ok(Plan::RefreshVirtualColumn(Box::new(plan)))
+    Ok(Some(Plan::RefreshVirtualColumn(Box::new(plan))))
 }

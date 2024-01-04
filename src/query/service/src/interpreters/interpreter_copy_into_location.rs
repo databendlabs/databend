@@ -120,6 +120,7 @@ impl CopyIntoLocationInterpreter {
             vec![],
             false,
             AppendMode::Normal,
+            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
         Ok(build_res)
     }

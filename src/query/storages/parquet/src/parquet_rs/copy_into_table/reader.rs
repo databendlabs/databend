@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::compute::cast::can_cast_types;
 use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -76,6 +79,7 @@ impl RowGroupReaderForCopy {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
         let parquet_table_schema = arrow_to_table_schema(&arrow_schema)?;
+        let mut pushdown_columns = vec![];
         let mut output_projection = vec![];
 
         let mut num_inputs = 0;
@@ -87,10 +91,11 @@ impl RowGroupReaderForCopy {
                 .position(|f| f.name() == field_name)
             {
                 Some(pos) => {
+                    pushdown_columns.push(pos);
                     let from_field = parquet_table_schema.field(pos);
                     let expr = Expr::ColumnRef {
                         span: None,
-                        id: num_inputs,
+                        id: pos,
                         data_type: from_field.data_type().into(),
                         display_name: from_field.name().clone(),
                     };
@@ -100,7 +105,7 @@ impl RowGroupReaderForCopy {
                         expr
                     } else if can_cast_types(
                         ArrowField::from(from_field).data_type(),
-                        ArrowField::from(from_field).data_type(),
+                        ArrowField::from(to_field).data_type(),
                     ) {
                         Expr::Cast {
                             span: None,
@@ -133,13 +138,34 @@ impl RowGroupReaderForCopy {
                 "not column name match in parquet file {location}",
             )));
         }
-
+        pushdown_columns.sort();
+        let mapping = pushdown_columns
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(i, pos)| (pos, i))
+            .collect::<HashMap<_, _>>();
+        for expr in output_projection.iter_mut() {
+            match expr {
+                Expr::ColumnRef { id, .. } => *id = mapping[id],
+                Expr::Cast {
+                    expr: box Expr::ColumnRef { id, .. },
+                    ..
+                } => *id = mapping[id],
+                _ => {}
+            }
+        }
+        let pushdowns = PushDownInfo {
+            projection: Some(Projection::Columns(pushdown_columns)),
+            ..Default::default()
+        };
         let mut reader_builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx,
             op,
             Arc::new(parquet_table_schema),
             schema_descr,
-        );
+        )
+        .with_push_downs(Some(&pushdowns));
         reader_builder.build_output()?;
 
         let row_group_reader_builder = reader_builder.create_no_prefetch_policy_builder()?;

@@ -74,6 +74,10 @@ impl Interpreter for CreateUserInterpreter {
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
             option: plan.user_option,
+            history_auth_infos: vec![plan.auth_info.clone()],
+            password_fail_ons: Vec::new(),
+            password_update_on: plan.password_update_on,
+            lockout_time: None,
         };
         user_mgr
             .add_user(&tenant, user_info, plan.if_not_exists)
