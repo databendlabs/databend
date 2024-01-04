@@ -164,7 +164,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             ..plan.clone()
         })))
     }
-  
+
     fn replace_update_source(
         &mut self,
         plan: &databend_common_sql::executor::physical_plans::UpdateSource,
