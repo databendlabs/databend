@@ -22,8 +22,6 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
@@ -59,7 +57,7 @@ impl Parquet2Table {
 
         let top_k = push_down
             .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
+            .map(|p| p.top_k(&self.table_info.schema()))
             .unwrap_or_default();
 
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.

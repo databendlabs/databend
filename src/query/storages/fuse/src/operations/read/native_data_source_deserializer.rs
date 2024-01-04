@@ -73,60 +73,168 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
 use crate::DEFAULT_ROW_PER_PAGE;
 
-pub struct NativeDeserializeDataTransform {
-    ctx: Arc<dyn TableContext>,
-    table_index: IndexType,
-    func_ctx: FunctionContext,
-    scan_progress: Arc<Progress>,
-    block_reader: Arc<BlockReader>,
-    column_leaves: Vec<Vec<ColumnDescriptor>>,
+/// A helper struct to store the intermediate state while reading a native partition.
+#[derive(Default)]
+struct ReadPartState {
+    // Structures for reading a partition:
+    /// The [`ArrayIter`] of each columns to read native pages in order.
+    array_iters: BTreeMap<usize, ArrayIter<'static>>,
+    /// The number of pages need to be skipped for each iter in `array_iters`.
+    array_skip_pages: BTreeMap<usize, usize>,
+    /// `read_column_ids` is the columns that are in the block to read.
+    /// The not read columns may have two cases:
+    /// 1. the columns added after `alter table`.
+    /// 2. the source columns used to generate virtual columns,
+    ///    and all the virtual columns have been generated,
+    ///    then the source columns are not needed.
+    /// These columns need to be filled with their default values.
+    read_column_ids: HashSet<ColumnId>,
+    /// If the block to read has default values, this flag is used for a short path.
+    if_need_fill_defaults: bool,
+    /// If current partition is finished.
+    is_finished: bool,
+    /// Row offset of next pages.
+    offset: usize,
 
+    // Structures for reading a set of pages (and produce a block):
+    /// Indices of columns are already read into memory.
+    /// It's used to mark the prefethed columns such as top-k and prewhere columns.
+    read_columns: HashSet<usize>,
+    /// Columns are already read into memory.
+    arrays: Vec<(usize, Box<dyn Array>)>,
+    /// The number of rows that are filtered while reading current set of pages.
+    /// It's used for the filter executor.
+    filtered_count: Option<usize>,
+}
+
+impl ReadPartState {
+    fn new() -> Self {
+        Self {
+            array_iters: BTreeMap::new(),
+            array_skip_pages: BTreeMap::new(),
+            read_column_ids: HashSet::new(),
+            if_need_fill_defaults: false,
+            is_finished: true, // new state should be finished.
+            offset: 0,
+            read_columns: HashSet::new(),
+            arrays: Vec::new(),
+            filtered_count: None,
+        }
+    }
+
+    /// Reset all the state. Mark the state as finished.
+    fn finish(&mut self) {
+        self.array_iters.clear();
+        self.array_skip_pages.clear();
+        self.read_column_ids.clear();
+        self.if_need_fill_defaults = false;
+        self.offset = 0;
+        self.new_pages();
+
+        self.is_finished = true;
+    }
+
+    /// Reset the state for reading a new set of pages (prepare to produce a new block).
+    fn new_pages(&mut self) {
+        self.read_columns.clear();
+        self.arrays.clear();
+        self.filtered_count = None;
+    }
+
+    /// Skip one page for each unread column.
+    fn skip_pages(&mut self) {
+        for (i, s) in self.array_skip_pages.iter_mut() {
+            if self.read_columns.contains(i) {
+                continue;
+            }
+            *s += 1;
+        }
+        if let Some((_, array)) = self.arrays.first() {
+            // Advance the offset.
+            self.offset += array.len();
+        }
+    }
+
+    /// Read one page of one column.
+    ///
+    /// Return false if the column is finished.
+    #[inline(always)]
+    fn read_page(&mut self, index: usize) -> Result<bool> {
+        if self.read_columns.contains(&index) {
+            return Ok(true);
+        }
+
+        if let Some(array_iter) = self.array_iters.get_mut(&index) {
+            let skipped_pages = self.array_skip_pages.get(&index).unwrap();
+            match array_iter.nth(*skipped_pages) {
+                Some(array) => {
+                    self.read_columns.insert(index);
+                    self.arrays.push((index, array?));
+                    // reset the skipped pages for next reading.
+                    self.array_skip_pages.insert(index, 0);
+                }
+                None => {
+                    self.finish();
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    /// Check if current partition is finished.
+    #[inline(always)]
+    fn is_finished(&self) -> bool {
+        self.is_finished
+    }
+}
+
+pub struct NativeDeserializeDataTransform {
+    // Structures for driving the pipeline:
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: VecDeque<PartInfoPtr>,
     chunks: VecDeque<NativeDataSource>,
+    scan_progress: Arc<Progress>,
 
-    prewhere_columns: Vec<usize>,
-    prewhere_schema: DataSchema,
-    remain_columns: Vec<usize>,
-
+    // Structures for table scan information:
+    table_index: IndexType,
+    block_reader: Arc<BlockReader>,
+    column_leaves: Vec<Vec<ColumnDescriptor>>,
     src_schema: DataSchema,
     output_schema: DataSchema,
-    virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
+    // Structures for TopK:
+    top_k: Option<(TopK, TopKSorter, usize)>,
+
+    // Structures for prewhere and filter:
+    func_ctx: FunctionContext,
+    prewhere_schema: DataSchema,
+    prewhere_columns: Vec<usize>,
     prewhere_filter: Arc<Option<Expr>>,
-    prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
     filter_executor: Option<FilterExecutor>,
 
-    skipped_page: usize,
-    // The row offset of current part.
-    // It's used to compute the row offset in one block (single data file in one segment).
-    offset_in_part: usize,
-
-    read_columns: Vec<usize>,
-    // Column ids are columns that have been read out,
-    // not readded columns have two cases:
-    // 1. newly added columns, no data insertion
-    // 2. the source columns used to generate virtual columns,
-    //    and all the virtual columns have been generated,
-    //    then the source columns are not needed.
-    // These columns need to fill in the default values.
-    read_column_ids: HashSet<ColumnId>,
-    top_k: Option<(TopK, TopKSorter, usize)>,
-    // Identifies whether the ArrayIter has been initialised.
-    inited: bool,
-    // The ArrayIter of each columns to read Pages in order.
-    array_iters: BTreeMap<usize, ArrayIter<'static>>,
-    // The Page numbers of each ArrayIter can skip.
-    array_skip_pages: BTreeMap<usize, usize>,
-
-    index_reader: Arc<Option<AggIndexReader>>,
+    // Structures for virtual columns:
+    virtual_columns: Option<Vec<VirtualColumnInfo>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
+    // Structures for the bloom runtime filter:
+    ctx: Arc<dyn TableContext>,
+    bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+
+    // Structures for aggregating index:
+    index_reader: Arc<Option<AggIndexReader>>,
+    remain_columns: Vec<usize>,
+
+    // Other structures:
     base_block_ids: Option<Scalar>,
-
-    cached_bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    /// Record the state while reading a native partition.
+    read_state: ReadPartState,
+    /// Record how many sets of pages have been skipped.
+    /// It's used for metrics.
+    skipped_pages: usize,
 }
 
 impl NativeDeserializeDataTransform {
@@ -224,6 +332,8 @@ impl NativeDeserializeDataTransform {
                 &BUILTIN_FUNCTIONS,
                 false,
             ))
+        } else if top_k.is_some() {
+            Some(new_dummy_filter_executor(func_ctx.clone()))
         } else {
             None
         };
@@ -255,31 +365,22 @@ impl NativeDeserializeDataTransform {
                 output_data: None,
                 parts: VecDeque::new(),
                 chunks: VecDeque::new(),
-
                 prewhere_columns,
                 prewhere_schema,
                 remain_columns,
                 src_schema,
                 output_schema,
                 virtual_columns,
-
                 prewhere_filter,
                 prewhere_virtual_columns,
                 filter_executor,
-                skipped_page: 0,
+                skipped_pages: 0,
                 top_k,
-                read_columns: vec![],
-                read_column_ids: HashSet::new(),
-                inited: false,
-                array_iters: BTreeMap::new(),
-                array_skip_pages: BTreeMap::new(),
-                offset_in_part: 0,
-
                 index_reader,
                 virtual_reader,
-
                 base_block_ids: plan.base_block_ids.clone(),
-                cached_bloom_runtime_filter: None,
+                bloom_runtime_filter: None,
+                read_state: ReadPartState::new(),
             },
         )))
     }
@@ -297,10 +398,10 @@ impl NativeDeserializeDataTransform {
         ))
     }
 
-    fn add_block(&mut self, data_block: DataBlock) -> Result<()> {
+    fn add_output_block(&mut self, data_block: DataBlock) {
         let rows = data_block.num_rows();
         if rows == 0 {
-            return Ok(());
+            return;
         }
         let progress_values = ProgressValues {
             rows,
@@ -308,14 +409,13 @@ impl NativeDeserializeDataTransform {
         };
         self.scan_progress.incr(&progress_values);
         self.output_data = Some(data_block);
-        Ok(())
     }
 
-    /// If the virtual column has already generated, add it directly,
+    /// If the virtual column has been already generated, add it directly,
     /// otherwise extract it from the source column
     fn add_virtual_columns(
         &self,
-        chunks: Vec<(usize, Box<dyn Array>)>,
+        chunks: &[(usize, Box<dyn Array>)],
         schema: &DataSchema,
         virtual_columns: &Option<Vec<VirtualColumnInfo>>,
         block: &mut DataBlock,
@@ -370,12 +470,13 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
+    /// Check if can skip the whole block by default values.
     /// If the top-k or all prewhere columns are default values, check if the filter is met,
     /// and if not, ignore all pages, otherwise continue without repeating the check for subsequent processes.
     fn check_default_values(&mut self) -> Result<bool> {
         if self.prewhere_columns.len() > 1 {
             if let Some((_, sorter, index)) = self.top_k.as_mut() {
-                if !self.array_iters.contains_key(index) {
+                if !self.read_state.array_iters.contains_key(index) {
                     let default_val = self.block_reader.default_vals[*index].clone();
                     if sorter.never_match_value(&default_val) {
                         return Ok(true);
@@ -387,12 +488,12 @@ impl NativeDeserializeDataTransform {
             let all_defaults = &self
                 .prewhere_columns
                 .iter()
-                .all(|index| !self.array_iters.contains_key(index));
+                .all(|index| !self.read_state.array_iters.contains_key(index));
 
             let all_virtual_defaults = match &self.prewhere_virtual_columns {
                 Some(ref prewhere_virtual_columns) => prewhere_virtual_columns.iter().all(|c| {
                     let src_index = self.src_schema.index_of(&c.source_name).unwrap();
-                    !self.array_iters.contains_key(&src_index)
+                    !self.read_state.array_iters.contains_key(&src_index)
                 }),
                 None => true,
             };
@@ -433,7 +534,7 @@ impl NativeDeserializeDataTransform {
 
                 // Default value satisfies the filter, update the value of top-k column.
                 if let Some((_, sorter, index)) = self.top_k.as_mut() {
-                    if !self.array_iters.contains_key(index) {
+                    if !self.read_state.array_iters.contains_key(index) {
                         let part = FusePartInfo::from_part(&self.parts[0])?;
                         let num_rows = part.nums_rows;
 
@@ -450,28 +551,19 @@ impl NativeDeserializeDataTransform {
         Ok(false)
     }
 
-    /// No more data need to read, finish process.
-    fn finish_process(&mut self) -> Result<()> {
-        let _ = self.chunks.pop_front();
-        let _ = self.parts.pop_front().unwrap();
-
-        self.inited = false;
-        self.array_iters.clear();
-        self.array_skip_pages.clear();
-        self.offset_in_part = 0;
-        self.read_column_ids.clear();
-        Ok(())
+    /// Finish the processing of current partition.
+    fn finish_partition(&mut self) {
+        self.read_state.finish();
+        self.chunks.pop_front();
+        self.parts.pop_front();
     }
 
-    /// All columns are default values, not need to read.
-    fn finish_process_with_default_values(&mut self) -> Result<()> {
-        let _ = self.chunks.pop_front();
-        let part = self.parts.pop_front().unwrap();
-        let fuse_part = FusePartInfo::from_part(&part)?;
-
-        let num_rows = fuse_part.nums_rows;
-        let mut data_block = self.block_reader.build_default_values_block(num_rows)?;
-        if let Some(ref virtual_columns) = &self.virtual_columns {
+    /// Build a block whose columns are all default values.
+    fn build_default_block(&self, fuse_part: &FusePartInfo) -> Result<DataBlock> {
+        let mut data_block = self
+            .block_reader
+            .build_default_values_block(fuse_part.nums_rows)?;
+        if let Some(virtual_columns) = &self.virtual_columns {
             for virtual_column in virtual_columns {
                 // if the source column is default value, the virtual column is always Null.
                 let column = BlockEntry::new(
@@ -481,7 +573,6 @@ impl NativeDeserializeDataTransform {
                 data_block.add_column(column);
             }
         }
-
         if self.block_reader.query_internal_columns() {
             data_block = fill_internal_column_meta(
                 data_block,
@@ -490,63 +581,331 @@ impl NativeDeserializeDataTransform {
                 self.base_block_ids.clone(),
             )?;
         }
-
         if self.block_reader.update_stream_columns() {
             let inner_meta = data_block.take_meta();
             let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
             data_block = data_block.add_meta(Some(Box::new(meta)))?;
         }
+        data_block.resort(&self.src_schema, &self.output_schema)
+    }
 
-        let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
-        self.add_block(data_block)?;
+    /// Initialize the read state for a new partition.
+    fn new_read_state(&mut self) -> Result<()> {
+        debug_assert!(self.read_state.is_finished());
+        debug_assert!(!self.chunks.is_empty());
+        debug_assert!(!self.parts.is_empty());
 
-        self.inited = false;
-        self.array_iters.clear();
-        self.array_skip_pages.clear();
-        self.offset_in_part = 0;
-        self.read_column_ids.clear();
+        if let NativeDataSource::Normal(chunks) = self.chunks.front_mut().unwrap() {
+            let part = self.parts.front().unwrap();
+            let part = FusePartInfo::from_part(part)?;
+
+            if let Some(range) = part.range() {
+                self.read_state.offset = part.page_size() * range.start;
+            }
+
+            for (index, column_node) in self.block_reader.project_column_nodes.iter().enumerate() {
+                let readers = chunks.remove(&index).unwrap_or_default();
+                if !readers.is_empty() {
+                    let leaves = self.column_leaves.get(index).unwrap().clone();
+                    let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
+                    self.read_state.array_iters.insert(index, array_iter);
+                    self.read_state.array_skip_pages.insert(index, 0);
+
+                    for column_id in &column_node.leaf_column_ids {
+                        self.read_state.read_column_ids.insert(*column_id);
+                    }
+                } else {
+                    self.read_state.if_need_fill_defaults = true;
+                }
+            }
+
+            // Add optional virtual columns' array_iters.
+            if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                for (index, virtual_column_info) in
+                    virtual_reader.virtual_column_infos.iter().enumerate()
+                {
+                    let virtual_index = index + self.block_reader.project_column_nodes.len();
+                    if let Some(readers) = chunks.remove(&virtual_index) {
+                        let array_iter = BlockReader::build_virtual_array_iter(
+                            virtual_column_info.name.clone(),
+                            readers,
+                        )?;
+                        let index = self.src_schema.index_of(&virtual_column_info.name)?;
+                        self.read_state.array_iters.insert(index, array_iter);
+                        self.read_state.array_skip_pages.insert(index, 0);
+                    }
+                }
+            }
+
+            // Mark the state as active.
+            self.read_state.is_finished = false;
+        }
+
         Ok(())
     }
 
-    /// Empty projection use empty block.
-    fn finish_process_with_empty_block(&mut self) -> Result<()> {
-        let _ = self.chunks.pop_front();
-        let part = self.parts.pop_front().unwrap();
-        let fuse_part = FusePartInfo::from_part(&part)?;
+    /// Read and produce one [`DataBlock`].
+    ///
+    /// Columns in native format are stored in pages and each page has the same number of rows.
+    /// Each `read_pages` produce a block by reading a page from each column.
+    ///
+    /// **NOTES**: filter and internal columns will be applied after calling this method.
+    fn read_pages(&mut self) -> Result<Option<DataBlock>> {
+        // Each loop tries to read one page of each column and combine them into a block.
+        // If a page is skipped, ignore all the parallel pages of other columns and start a new loop.
+        loop {
+            if self.read_state.is_finished() {
+                // The reader is already finished.
+                return Ok(None);
+            }
 
-        let num_rows = fuse_part.nums_rows;
-        let data_block = DataBlock::new(vec![], num_rows);
-        let data_block = if self.block_reader.query_internal_columns() {
-            fill_internal_column_meta(data_block, fuse_part, None, self.base_block_ids.clone())?
-        } else {
-            data_block
-        };
+            // Prepare to read a new set of pages.
+            self.read_state.new_pages();
 
-        self.add_block(data_block)?;
-        Ok(())
-    }
-
-    /// Update the number of pages that can be skipped per column.
-    fn finish_process_skip_page(&mut self) -> Result<()> {
-        self.skipped_page += 1;
-        for (i, skip_num) in self.array_skip_pages.iter_mut() {
-            if self.read_columns.contains(i) {
+            // 1. check the TopK heap.
+            if !self.read_and_check_topk()? {
+                // skip current pages.
+                self.skipped_pages += 1;
+                self.read_state.skip_pages();
                 continue;
             }
-            *skip_num += 1;
+
+            // 2. check prewhere columns and evaluator the filter.
+            if !self.read_and_check_prewhere()? {
+                // skip current pages.
+                self.skipped_pages += 1;
+                self.read_state.skip_pages();
+                continue;
+            }
+
+            // 3. Update the topk heap and the filter.
+            if !self.update_topk_heap()? {
+                // skip current pages.
+                self.skipped_pages += 1;
+                self.read_state.skip_pages();
+                continue;
+            }
+
+            // 4. check and evaluator the bloom runtime filter.
+            if !self.read_and_check_bloom_runtime_filter()? {
+                // skip current pages.
+                self.skipped_pages += 1;
+                self.read_state.skip_pages();
+                continue;
+            }
+
+            // 5. read remain columns and generate a data block.
+            if !self.read_remain_columns()? {
+                debug_assert!(self.read_state.is_finished());
+                return Ok(None);
+            }
+            let mut block = self
+                .block_reader
+                .build_block(&self.read_state.arrays, None)?;
+
+            // 6. fill missing fields with default values.
+            if self.read_state.if_need_fill_defaults {
+                block = self
+                    .block_reader
+                    .fill_missing_native_column_values(block, &self.read_state.read_column_ids)?;
+            }
+
+            // 7. add optional virtual columns.
+            self.add_virtual_columns(
+                &self.read_state.arrays,
+                &self.src_schema,
+                &self.virtual_columns,
+                &mut block,
+            )?;
+
+            return Ok(Some(block));
         }
-        Ok(())
+    }
+
+    /// Read and check the top-k column (only one column).
+    ///
+    /// It's always the first checking when read pages.
+    /// So it will never skip any page.
+    ///
+    /// Returns false if skip the current page or the partition is finished.
+    fn read_and_check_topk(&mut self) -> Result<bool> {
+        if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
+            if !self.read_state.read_page(*index)? {
+                debug_assert!(self.read_state.is_finished());
+                return Ok(false);
+            }
+            // TopK should always be the first read column.
+            debug_assert_eq!(self.read_state.arrays.len(), 1);
+            let (i, array) = self.read_state.arrays.last().unwrap();
+            debug_assert_eq!(i, index);
+            let data_type = top_k.field.data_type().into();
+            let col = Column::from_arrow(array.as_ref(), &data_type);
+            if sorter.never_match_any(&col) {
+                // skip current page.
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Read and check prewhere columns.
+    ///
+    /// Returns false if skip the current page or the partition is finished.
+    fn read_and_check_prewhere(&mut self) -> Result<bool> {
+        let mut prewhere_default_val_indices = HashSet::new();
+        // Read the columns into memory.
+        for index in self.prewhere_columns.iter() {
+            if self.read_state.read_columns.contains(index) {
+                continue;
+            }
+
+            let num_columns = self.read_state.arrays.len();
+            if !self.read_state.read_page(*index)? {
+                debug_assert!(self.read_state.is_finished());
+                return Ok(false);
+            }
+
+            if num_columns == self.read_state.arrays.len() {
+                // It means the column is not read and it's a default value.
+                prewhere_default_val_indices.insert(*index);
+            }
+        }
+
+        // Evaluate the filter.
+        // If `self.read_state.arrays.is_empty()`,
+        // it means there are only default columns in prewhere columns. (all prewhere columns are newly added by `alter table`)
+        // In this case, we don't need to evaluate the filter, because the unsatisfied blocks are already filtered in `read_partitions`.
+        if self.prewhere_filter.is_some() && !self.read_state.arrays.is_empty() {
+            debug_assert!(self.filter_executor.is_some());
+            let mut prewhere_block = if self.read_state.arrays.len() < self.prewhere_columns.len() {
+                self.block_reader
+                    .build_block(&self.read_state.arrays, Some(prewhere_default_val_indices))?
+            } else {
+                self.block_reader
+                    .build_block(&self.read_state.arrays, None)?
+            };
+            // Add optional virtual columns for prewhere
+            self.add_virtual_columns(
+                &self.read_state.arrays,
+                &self.prewhere_schema,
+                &self.prewhere_virtual_columns,
+                &mut prewhere_block,
+            )?;
+
+            let filter_executor = self.filter_executor.as_mut().unwrap();
+            let count = filter_executor.select(&prewhere_block)?;
+
+            // If it's all filtered, we can skip the current pages.
+            if count == 0 {
+                return Ok(false);
+            }
+
+            self.read_state.filtered_count = Some(count);
+        }
+
+        Ok(true)
     }
 
     // TODO(xudong): add selectivity prediction
-    fn bloom_runtime_filter(
-        &mut self,
-        arrays: &mut Vec<(usize, Box<dyn Array>)>,
-        count: Option<usize>,
-    ) -> Result<(bool, Option<usize>)> {
-        let mut local_arrays = vec![];
-        // Check if already cached runtime filters
-        if self.cached_bloom_runtime_filter.is_none() {
+    /// Read and check the column for the bloom runtime filter (only one column).
+    ///
+    /// Returns false if skip the current page or the partition is finished.
+    fn read_and_check_bloom_runtime_filter(&mut self) -> Result<bool> {
+        if let Some(bloom_runtime_filter) = self.bloom_runtime_filter.as_ref() {
+            let mut bitmaps = Vec::with_capacity(bloom_runtime_filter.len());
+            for (idx, filter) in bloom_runtime_filter.iter() {
+                let array = if let Some((_, array)) =
+                    self.read_state.arrays.iter().find(|(i, _)| i == idx)
+                {
+                    (*idx, array.clone())
+                } else if !self.read_state.read_page(*idx)? {
+                    debug_assert!(self.read_state.is_finished());
+                    return Ok(false);
+                } else {
+                    // The runtime filter column must be the last column to read.
+                    let (i, array) = self.read_state.arrays.last().unwrap();
+                    debug_assert_eq!(i, idx);
+                    (*idx, array.clone())
+                };
+
+                let probe_block = self.block_reader.build_block(&[array], None)?;
+                let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
+                let probe_column = probe_block.get_last_column().clone();
+                update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
+                let unset_bits = bitmap.unset_bits();
+                if unset_bits == bitmap.len() {
+                    // skip current page.
+                    return Ok(false);
+                } else if unset_bits != 0 {
+                    bitmaps.push(bitmap);
+                }
+            }
+            if !bitmaps.is_empty() {
+                let rf_bitmap = bitmaps
+                    .into_iter()
+                    .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
+                    .unwrap();
+
+                let filter_executor = self.filter_executor.as_mut().unwrap();
+                let filter_count = if let Some(count) = self.read_state.filtered_count {
+                    filter_executor.select_bitmap(count, rf_bitmap)
+                } else {
+                    filter_executor.from_bitmap(rf_bitmap)
+                };
+                self.read_state.filtered_count = Some(filter_count);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Update the top-k heap with by the topk column.
+    ///
+    /// Returns false if skip the current page.
+    fn update_topk_heap(&mut self) -> Result<bool> {
+        if let Some((top_k, sorter, index)) = &mut self.top_k {
+            // Topk column should always be the first column read.
+            let (i, array) = self.read_state.arrays.first().unwrap();
+            debug_assert_eq!(i, index);
+            let data_type = top_k.field.data_type().into();
+            let col = Column::from_arrow(array.as_ref(), &data_type);
+
+            let mut bitmap = MutableBitmap::from_len_set(col.len());
+            sorter.push_column(&col, &mut bitmap);
+
+            let filter_executor = self.filter_executor.as_mut().unwrap();
+            let count = if let Some(count) = self.read_state.filtered_count {
+                filter_executor.select_bitmap(count, bitmap)
+            } else {
+                filter_executor.from_bitmap(bitmap)
+            };
+
+            if count == 0 {
+                return Ok(false);
+            }
+
+            self.read_state.filtered_count = Some(count);
+        };
+
+        Ok(true)
+    }
+
+    /// Read remain columns.
+    ///
+    /// Returns false if the partition is finished.
+    fn read_remain_columns(&mut self) -> Result<bool> {
+        for index in self.remain_columns.iter() {
+            if !self.read_state.read_page(*index)? {
+                debug_assert!(self.read_state.is_finished());
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Try to get bloom runtime filter from context.
+    fn try_init_bloom_runtime_filter(&mut self) {
+        if self.bloom_runtime_filter.is_none() {
             let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
             let bloom_filters = bloom_filters
                 .into_iter()
@@ -558,92 +917,88 @@ impl NativeDeserializeDataTransform {
                         .ok()
                         .map(|idx| (idx, filter.1.clone()))
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
-            if bloom_filters.is_empty() {
-                return Ok((false, count));
-            }
-            self.cached_bloom_runtime_filter = Some(bloom_filters);
-        }
-        let mut bitmaps =
-            Vec::with_capacity(self.cached_bloom_runtime_filter.as_ref().unwrap().len());
-        for (idx, filter) in self.cached_bloom_runtime_filter.as_ref().unwrap().iter() {
-            let mut find_array = false;
-            // It's possible that the column has multiple filters, so we need to avoid duplicate reads.
-            // Or the column in prewhere columns has been read.
-            for (i, array) in arrays.iter() {
-                if i == idx {
-                    local_arrays.push((*idx, array.clone()));
-                    find_array = true;
-                    break;
+                .collect::<Vec<_>>();
+            if !bloom_filters.is_empty() {
+                self.bloom_runtime_filter = Some(bloom_filters);
+                if self.filter_executor.is_none() {
+                    self.filter_executor = Some(new_dummy_filter_executor(self.func_ctx.clone()));
                 }
             }
-            if !find_array {
-                if let Some(array_iter) = self.array_iters.get_mut(idx) {
-                    let skip_pages = self.array_skip_pages.get(idx).unwrap();
-                    match array_iter.nth(*skip_pages) {
-                        Some(array) => {
-                            let array = array.as_ref().unwrap();
-                            if let Some(pos) = self.remain_columns.iter().position(|i| i == idx) {
-                                self.remain_columns.remove(pos);
-                            }
-                            self.read_columns.push(*idx);
-                            arrays.push((*idx, array.clone()));
-                            local_arrays.push((*idx, array.clone()));
-                            self.array_skip_pages.insert(*idx, 0);
-                        }
-                        None => {
-                            return Ok((false, count));
-                        }
-                    }
-                }
-            }
-            let probe_block = self.block_reader.build_block(local_arrays.clone(), None)?;
-            let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
-            local_arrays.clear();
-            let probe_column = probe_block.get_last_column().clone();
-            update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
-            let unset_bits = bitmap.unset_bits();
-            if unset_bits == bitmap.len() {
-                self.offset_in_part += probe_block.num_rows();
-                self.finish_process_skip_page()?;
-                return Ok((true, None));
-            } else if unset_bits != 0 {
-                bitmaps.push(bitmap);
-            }
         }
-        if !bitmaps.is_empty() {
-            let rf_bitmap = bitmaps
-                .into_iter()
-                .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
-                .unwrap();
-            if self.filter_executor.is_none() {
-                // If prewhere filter is None, we need to build a dummy filter executor.
-                let dummy_expr = Expr::Constant {
-                    span: None,
-                    scalar: Scalar::Boolean(true),
-                    data_type: DataType::Boolean,
-                };
-                let (select_expr, has_or) = build_select_expr(&dummy_expr);
-                self.filter_executor = Some(FilterExecutor::new(
-                    select_expr,
-                    self.ctx.get_function_context()?,
-                    has_or,
-                    DEFAULT_ROW_PER_PAGE,
-                    None,
-                    &BUILTIN_FUNCTIONS,
-                    false,
-                ));
-            }
+    }
+
+    /// Pre-process the partition before reading it.
+    fn pre_process_partition(&mut self) -> Result<()> {
+        debug_assert!(!self.chunks.is_empty());
+        debug_assert!(!self.parts.is_empty());
+
+        // Create a new read state.
+        self.new_read_state()?;
+
+        if self.read_state.if_need_fill_defaults && self.check_default_values()? {
+            // Check if the default value matches the top-k or filter,
+            // if not, finish current partition.
+            self.finish_partition();
+            return Ok(());
+        }
+
+        if self.read_state.array_iters.is_empty() {
+            // All columns are default values, not need to read.
+            let part = self.parts.front().unwrap();
+            let fuse_part = FusePartInfo::from_part(part)?;
+            let block = self.build_default_block(fuse_part)?;
+            self.add_output_block(block);
+            self.finish_partition();
+            return Ok(());
+        }
+
+        Ok(())
+    }
+
+    /// Post preprocess after reading a block.
+    fn post_process_block(&mut self, block: DataBlock) -> Result<DataBlock> {
+        let origin_num_rows = block.num_rows();
+        let block = if let Some(count) = &self.read_state.filtered_count {
             let filter_executor = self.filter_executor.as_mut().unwrap();
-            let filter_count = if let Some(count) = count {
-                filter_executor.select_bitmap(count, rf_bitmap)
-            } else {
-                filter_executor.from_bitmap(rf_bitmap)
-            };
-            Ok((false, Some(filter_count)))
+            filter_executor.take(block, origin_num_rows, *count)?
         } else {
-            Ok((false, count))
+            block
+        };
+
+        // Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
+        // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
+        let mut block = block.resort(&self.src_schema, &self.output_schema)?;
+        if self.block_reader.query_internal_columns() {
+            let offset = self.read_state.offset;
+            let offsets = if let Some(count) = self.read_state.filtered_count {
+                let filter_executor = self.filter_executor.as_mut().unwrap();
+                filter_executor.mut_true_selection()[0..count]
+                    .iter()
+                    .map(|idx| *idx as usize + offset)
+                    .collect::<Vec<_>>()
+            } else {
+                (offset..offset + origin_num_rows).collect()
+            };
+
+            let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+            block = fill_internal_column_meta(
+                block,
+                fuse_part,
+                Some(offsets),
+                self.base_block_ids.clone(),
+            )?;
         }
+
+        if self.block_reader.update_stream_columns() {
+            let inner_meta = block.take_meta();
+            let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
+            block = block.add_meta(Some(Box::new(meta)))?;
+        }
+
+        self.read_state.offset += origin_num_rows;
+
+        Ok(block)
     }
 }
 
@@ -693,7 +1048,7 @@ impl Processor for NativeDeserializeDataTransform {
         }
 
         if self.input.is_finished() {
-            metrics_inc_pruning_prewhere_nums(self.skipped_page as u64);
+            metrics_inc_pruning_prewhere_nums(self.skipped_pages as u64);
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -703,283 +1058,82 @@ impl Processor for NativeDeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(chunks) = self.chunks.front_mut() {
-            let chunks = match chunks {
-                NativeDataSource::AggIndex(data) => {
-                    let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_native_data(data)?;
-                    self.output_data = Some(block);
-                    return self.finish_process();
-                }
-                NativeDataSource::Normal(data) => data,
-            };
+        // Try to get the bloom runtime filter from the context if existed.
+        self.try_init_bloom_runtime_filter();
 
-            // this means it's empty projection
-            if chunks.is_empty() && !self.inited {
-                return self.finish_process_with_empty_block();
-            }
-
-            // Init array_iters and array_skip_pages to read pages in subsequent processes.
-            if !self.inited {
-                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                if let Some(range) = fuse_part.range() {
-                    self.offset_in_part = fuse_part.page_size() * range.start;
-                }
-
-                if let Some(((_top_k, sorter, _index), min_max)) =
-                    self.top_k.as_mut().zip(fuse_part.sort_min_max.as_ref())
-                {
-                    if sorter.never_match(min_max) {
-                        return self.finish_process();
+        // Only if current read state is finished can we start to read a new partition.
+        if self.read_state.is_finished() {
+            if let Some(chunks) = self.chunks.front_mut() {
+                let chunks = match chunks {
+                    NativeDataSource::AggIndex(data) => {
+                        let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
+                        let block = agg_index_reader.deserialize_native_data(data)?;
+                        self.output_data = Some(block);
+                        self.finish_partition();
+                        return Ok(());
                     }
-                }
-
-                let mut has_default_value = false;
-                self.inited = true;
-                for (index, column_node) in
-                    self.block_reader.project_column_nodes.iter().enumerate()
-                {
-                    let readers = chunks.remove(&index).unwrap_or_default();
-                    if !readers.is_empty() {
-                        let leaves = self.column_leaves.get(index).unwrap().clone();
-                        let array_iter =
-                            BlockReader::build_array_iter(column_node, leaves, readers)?;
-                        self.array_iters.insert(index, array_iter);
-                        self.array_skip_pages.insert(index, 0);
-
-                        for column_id in &column_node.leaf_column_ids {
-                            self.read_column_ids.insert(*column_id);
-                        }
-                    } else {
-                        has_default_value = true;
-                    }
-                }
-                // Add optional virtual column array_iter
-                if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                    for (index, virtual_column_info) in
-                        virtual_reader.virtual_column_infos.iter().enumerate()
-                    {
-                        let virtual_index = index + self.block_reader.project_column_nodes.len();
-                        if let Some(readers) = chunks.remove(&virtual_index) {
-                            let array_iter = BlockReader::build_virtual_array_iter(
-                                virtual_column_info.name.clone(),
-                                readers,
-                            )?;
-                            let index = self.src_schema.index_of(&virtual_column_info.name)?;
-                            self.array_iters.insert(index, array_iter);
-                            self.array_skip_pages.insert(index, 0);
-                        }
-                    }
-                }
-
-                if has_default_value {
-                    // Check if the default value matches the top-k or filter,
-                    // if not, return empty block.
-                    if self.check_default_values()? {
-                        return self.finish_process();
-                    }
-                }
-                // No columns need to read, return default value directly.
-                if self.array_iters.is_empty() {
-                    return self.finish_process_with_default_values();
-                }
-            }
-
-            let mut need_to_fill_data = false;
-            self.read_columns.clear();
-            let mut arrays = Vec::with_capacity(self.array_iters.len());
-
-            // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
-            if self.prewhere_columns.len() > 1 {
-                if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
-                    if let Some(array_iter) = self.array_iters.get_mut(index) {
-                        match array_iter.next() {
-                            Some(array) => {
-                                let array = array?;
-                                self.read_columns.push(*index);
-                                let data_type = top_k.field.data_type().into();
-                                let col = Column::from_arrow(array.as_ref(), &data_type);
-
-                                arrays.push((*index, array));
-                                if sorter.never_match_any(&col) {
-                                    self.offset_in_part += col.len();
-                                    return self.finish_process_skip_page();
-                                }
-                            }
-                            None => {
-                                return self.finish_process();
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Step 2: Read Prewhere columns and get the filter
-            let mut prewhere_default_val_indices = HashSet::new();
-            for index in self.prewhere_columns.iter() {
-                if self.read_columns.contains(index) {
-                    continue;
-                }
-                if let Some(array_iter) = self.array_iters.get_mut(index) {
-                    let skip_pages = self.array_skip_pages.get(index).unwrap();
-
-                    match array_iter.nth(*skip_pages) {
-                        Some(array) => {
-                            self.read_columns.push(*index);
-                            arrays.push((*index, array?));
-                            self.array_skip_pages.insert(*index, 0);
-                        }
-                        None => {
-                            return self.finish_process();
-                        }
-                    }
-                } else {
-                    prewhere_default_val_indices.insert(*index);
-                    need_to_fill_data = true;
-                }
-            }
-
-            let filtered_count = match self.prewhere_filter.as_ref() {
-                Some(_) => {
-                    // Arrays are empty means all prewhere columns are default values,
-                    // the filter have checked in the first process, don't need check again.
-                    if arrays.is_empty() {
-                        None
-                    } else {
-                        let mut prewhere_block = if arrays.len() < self.prewhere_columns.len() {
-                            self.block_reader
-                                .build_block(arrays.clone(), Some(prewhere_default_val_indices))?
-                        } else {
-                            self.block_reader.build_block(arrays.clone(), None)?
-                        };
-                        // Add optional virtual columns for prewhere
-                        self.add_virtual_columns(
-                            arrays.clone(),
-                            &self.prewhere_schema,
-                            &self.prewhere_virtual_columns,
-                            &mut prewhere_block,
-                        )?;
-
-                        let filter_executor = self.filter_executor.as_mut().unwrap();
-                        let mut count = filter_executor.select(&prewhere_block)?;
-
-                        // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
-                        if count == 0 {
-                            self.offset_in_part += prewhere_block.num_rows();
-                            return self.finish_process_skip_page();
-                        }
-
-                        // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                        if let Some((_, sorter, index)) = &mut self.top_k {
-                            let index_prewhere = self
-                                .prewhere_columns
-                                .iter()
-                                .position(|x| x == index)
-                                .unwrap();
-                            let top_k_column = prewhere_block
-                                .get_by_offset(index_prewhere)
-                                .value
-                                .as_column()
-                                .unwrap();
-                            count = sorter.push_column_with_selection(
-                                top_k_column,
-                                filter_executor.mut_true_selection(),
-                                count,
-                            );
-                        };
-
-                        if count == 0 {
-                            self.offset_in_part += prewhere_block.num_rows();
-                            return self.finish_process_skip_page();
-                        }
-                        Some(count)
-                    }
-                }
-                None => None,
-            };
-
-            let (skipped, filtered_count) =
-                self.bloom_runtime_filter(&mut arrays, filtered_count)?;
-
-            if skipped {
-                return Ok(());
-            }
-
-            // Step 5: read remain columns and filter block if needed.
-            for index in self.remain_columns.iter() {
-                if let Some(array_iter) = self.array_iters.get_mut(index) {
-                    let skip_pages = self.array_skip_pages.get(index).unwrap();
-
-                    match array_iter.nth(*skip_pages) {
-                        Some(array) => {
-                            self.read_columns.push(*index);
-                            arrays.push((*index, array?));
-                            self.array_skip_pages.insert(*index, 0);
-                        }
-                        None => {
-                            return self.finish_process();
-                        }
-                    }
-                } else {
-                    need_to_fill_data = true;
-                }
-            }
-
-            let block = self.block_reader.build_block(arrays.clone(), None)?;
-            // Step 6: fill missing field default value if need
-            let mut block = if need_to_fill_data {
-                self.block_reader
-                    .fill_missing_native_column_values(block, &self.read_column_ids)?
-            } else {
-                block
-            };
-
-            // Step 7: Add optional virtual columns
-            self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
-
-            let origin_num_rows = block.num_rows();
-            let block = if let Some(count) = &filtered_count {
-                let filter_executor = self.filter_executor.as_mut().unwrap();
-                filter_executor.take(block, origin_num_rows, *count)?
-            } else {
-                block
-            };
-
-            // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
-            // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
-            let mut block = block.resort(&self.src_schema, &self.output_schema)?;
-            if self.block_reader.query_internal_columns() {
-                let offsets = if let Some(count) = filtered_count {
-                    let filter_executor = self.filter_executor.as_mut().unwrap();
-                    filter_executor.mut_true_selection()[0..count]
-                        .iter()
-                        .map(|idx| *idx as usize + self.offset_in_part)
-                        .collect::<Vec<_>>()
-                } else {
-                    (self.offset_in_part..self.offset_in_part + origin_num_rows).collect()
+                    NativeDataSource::Normal(data) => data,
                 };
 
-                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                block = fill_internal_column_meta(
-                    block,
-                    fuse_part,
-                    Some(offsets),
-                    self.base_block_ids.clone(),
-                )?;
-            }
+                if chunks.is_empty() {
+                    // This means it's an empty projection
+                    let part = self.parts.front().unwrap();
+                    let fuse_part = FusePartInfo::from_part(part)?;
+                    let mut data_block = DataBlock::new(vec![], fuse_part.nums_rows);
+                    if self.block_reader.query_internal_columns() {
+                        data_block = fill_internal_column_meta(
+                            data_block,
+                            fuse_part,
+                            None,
+                            self.base_block_ids.clone(),
+                        )?;
+                    }
+                    self.finish_partition();
+                    self.add_output_block(data_block);
+                    return Ok(());
+                }
 
-            if self.block_reader.update_stream_columns() {
-                let inner_meta = block.take_meta();
-                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
-                block = block.add_meta(Some(Box::new(meta)))?;
+                // Prepare to read a new partition.
+                self.pre_process_partition()?;
             }
+        }
 
-            // Step 9: Add the block to output data
-            self.offset_in_part += origin_num_rows;
-            self.add_block(block)?;
+        if self.read_state.is_finished() {
+            // There is no more partitions to read.
+            return Ok(());
+        }
+
+        // Each `process` try to produce one `DataBlock`.
+        if let Some(block) = self.read_pages()? {
+            let block = self.post_process_block(block)?;
+            self.add_output_block(block);
+        } else {
+            // No more data can be read from current partition.
+            self.finish_partition();
         }
 
         Ok(())
     }
+}
+
+/// Build a dummy filter executor to retain a selection.
+///
+/// This method may be used by `update_topk_heap` and `read_and_check_bloom_runtime_filter`.
+fn new_dummy_filter_executor(func_ctx: FunctionContext) -> FilterExecutor {
+    let dummy_expr = Expr::Constant {
+        span: None,
+        scalar: Scalar::Boolean(true),
+        data_type: DataType::Boolean,
+    };
+    let (select_expr, has_or) = build_select_expr(&dummy_expr);
+    // TODO: specify the capacity (max_block_size) of the selection.
+    FilterExecutor::new(
+        select_expr,
+        func_ctx,
+        has_or,
+        DEFAULT_ROW_PER_PAGE,
+        None,
+        &BUILTIN_FUNCTIONS,
+        false,
+    )
 }
