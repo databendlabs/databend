@@ -38,6 +38,7 @@ Fragment 1:
     └── ExchangeSource
         ├── output columns: []
         └── source fragment: [0]
+(empty)
 
 query IT
 SELECT * FROM t1 ORDER BY b
