@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta;
-mod mutator;
-mod processors;
+mod compact_part;
+mod mutation_meta;
+mod mutation_part;
 
-pub use meta::*;
-pub use mutator::*;
-pub use processors::*;
-
-pub static MAX_BLOCK_COUNT: usize = 10_1000;
-pub type SegmentIndex = usize;
-pub type BlockIndex = usize;
+pub use compact_part::CompactExtraInfo;
+pub use compact_part::CompactLazyPartInfo;
+pub use compact_part::CompactPartInfo;
+pub use compact_part::CompactTaskInfo;
+pub use mutation_meta::ClusterStatsGenType;
+pub use mutation_meta::SerializeBlock;
+pub use mutation_meta::SerializeDataMeta;
+pub use mutation_part::DeletedSegmentInfo;
+pub use mutation_part::Mutation;
+pub use mutation_part::MutationPartInfo;

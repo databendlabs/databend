@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_compact_mutator;
-mod compact_part;
 mod compact_source;
-mod segment_compact_mutator;
+mod mutation_source;
+mod recluster_aggregator;
 
-pub use block_compact_mutator::BlockCompactMutator;
-pub use compact_part::CompactExtraInfo;
-pub use compact_part::CompactLazyPartInfo;
-pub use compact_part::CompactPartInfo;
-pub use compact_part::CompactTaskInfo;
 pub use compact_source::CompactSource;
-pub use segment_compact_mutator::SegmentCompactMutator;
-pub use segment_compact_mutator::SegmentCompactionState;
-pub use segment_compact_mutator::SegmentCompactor;
+pub use mutation_source::MutationAction;
+pub use mutation_source::MutationSource;
+pub use recluster_aggregator::ReclusterAggregator;

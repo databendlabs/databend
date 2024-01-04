@@ -48,13 +48,16 @@ def create_task_request_to_task(id, create_task_request):
     )
 
     task.when_condition = (
-        create_task_request.when_condition if create_task_request.HasField("when_condition") else ""
+        create_task_request.when_condition
+        if create_task_request.HasField("when_condition")
+        else ""
     )
     task.after.extend(create_task_request.after)
     task.created_at = datetime.now(timezone.utc).isoformat()
     task.updated_at = datetime.now(timezone.utc).isoformat()
 
     return task
+
 
 def get_root_task_id(task):
     if len(task.after) == 0:
@@ -66,6 +69,7 @@ def get_root_task_id(task):
 
         dedup = list(set(root_ids))
         return ",".join(dedup)
+
 
 def create_task_run_from_task(task):
     task_run = task_pb2.TaskRun()
@@ -177,7 +181,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             after = task.after
             print(request)
             if len(request.remove_after) > 0:
-                filtered_array = [elem for elem in after if elem not in request.remove_after]
+                filtered_array = [
+                    elem for elem in after if elem not in request.remove_after
+                ]
                 task.after[:] = []
                 task.after.extend(filtered_array)
             else:
