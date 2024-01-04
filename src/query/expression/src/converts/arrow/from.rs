@@ -67,6 +67,8 @@ impl DataBlock {
         schema: &DataSchema,
         batch: &RecordBatch,
     ) -> Result<(Self, DataSchema)> {
+        assert_eq!(schema.num_fields(), batch.num_columns());
+
         if batch.num_columns() == 0 {
             return Ok((DataBlock::new(vec![], batch.num_rows()), schema.clone()));
         }

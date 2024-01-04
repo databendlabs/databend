@@ -213,10 +213,10 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
-        let schema = Arc::new(DataSchema::from(&self.table_schema.as_ref()));
+        let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
         Ok(ParquetRSFullReader {
             op: self.op.clone(),
-            schema,
+            output_schema: output_schema.clone(),
             predicate,
             projection,
             field_paths,
