@@ -1094,6 +1094,14 @@ impl<'a> TypeChecker<'a> {
         window: &Window,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction) {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in set-returning function".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_aggregate_function {
             // Reset the state
             self.in_aggregate_function = false;
@@ -1630,6 +1638,14 @@ impl<'a> TypeChecker<'a> {
         ) {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction) {
+            return Err(ErrorCode::SemanticError(
+                "aggregate functions can not be used in set-returning function".to_string(),
             )
             .set_span(span));
         }
