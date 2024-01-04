@@ -891,7 +891,7 @@ impl Column {
                 value: None,
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
-            Column::EmptyMap { .. } => Domain::Undefined,
+            Column::EmptyMap { .. } => Domain::Map(None),
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
