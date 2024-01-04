@@ -426,7 +426,7 @@ impl DataBlock {
             .map(|(field, col)| {
                 Ok(BlockEntry::new(
                     field.data_type().clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
+                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())?),
                 ))
             })
             .collect::<Result<_>>()?;
@@ -462,7 +462,7 @@ impl DataBlock {
                     chunk_idx += 1;
                     BlockEntry::new(
                         data_type.clone(),
-                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)?),
                     )
                 }
             };

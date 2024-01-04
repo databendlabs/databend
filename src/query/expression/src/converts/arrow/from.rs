@@ -85,8 +85,7 @@ impl DataBlock {
 impl Column {
     pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = array.into();
-
-        Ok(Column::from_arrow(arrow2_array.as_ref(), data_type))
+        Column::from_arrow(arrow2_array.as_ref(), data_type)
     }
 }
 

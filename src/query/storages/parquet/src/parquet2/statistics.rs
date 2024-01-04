@@ -130,8 +130,8 @@ impl BatchStatistics {
             .downcast_ref::<UInt64Array>()
             .map(|d| d.values())
             .cloned();
-        let min_values = Column::from_arrow(&*stats.min_value, data_type);
-        let max_values = Column::from_arrow(&*stats.max_value, data_type);
+        let min_values = Column::from_arrow(&*stats.min_value, data_type)?;
+        let max_values = Column::from_arrow(&*stats.max_value, data_type)?;
         Ok(Self {
             null_count,
             distinct_count,
@@ -145,8 +145,8 @@ impl BatchStatistics {
         data_type: &DataType,
     ) -> Result<Self> {
         let null_count = stats.null_count.values().clone();
-        let min_values = Column::from_arrow(&*stats.min, data_type);
-        let max_values = Column::from_arrow(&*stats.max, data_type);
+        let min_values = Column::from_arrow(&*stats.min, data_type)?;
+        let max_values = Column::from_arrow(&*stats.max, data_type)?;
         Ok(Self {
             null_count,
             distinct_count: None,

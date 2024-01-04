@@ -212,10 +212,12 @@ impl DataBlock {
 
 fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     let left = Column::from_arrow(left, &DataType::Variant)
+        .unwrap()
         .as_variant()
         .cloned()
         .unwrap();
     let right = Column::from_arrow(right, &DataType::Variant)
+        .unwrap()
         .as_variant()
         .cloned()
         .unwrap();

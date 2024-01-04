@@ -233,7 +233,7 @@ impl VirtualColumnReader {
                             let data_type = DataType::from(&*virtual_column.data_type);
                             let column = BlockEntry::new(
                                 data_type.clone(),
-                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                             );
                             virtual_values.insert(index, column);
                         }

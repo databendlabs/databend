@@ -163,13 +163,13 @@ impl Column {
     pub fn from_arrow(
         arrow_col: &dyn databend_common_arrow::arrow::array::Array,
         data_type: &DataType,
-    ) -> Column {
+    ) -> Result<Column> {
         fn from_arrow_with_arrow_type(
             arrow_col: &dyn databend_common_arrow::arrow::array::Array,
             arrow_type: &ArrowDataType,
             data_type: &DataType,
-        ) -> Column {
-            match (data_type, arrow_type) {
+        ) -> Result<Column> {
+            let column = match (data_type, arrow_type) {
                 (DataType::Null, ArrowDataType::Null) => Column::Null {
                     len: arrow_col.len(),
                 },
@@ -538,7 +538,7 @@ impl Column {
                         .expect(
                             "fail to read `Array` from arrow: array should be `ListArray<i32>`",
                         );
-                    let values = Column::from_arrow(&**values_col.values(), ty);
+                    let values = Column::from_arrow(&**values_col.values(), ty)?;
                     let offsets = values_col
                         .offsets()
                         .buffer()
@@ -557,7 +557,7 @@ impl Column {
                         .expect(
                             "fail to read `Array` from arrow: array should be `ListArray<i64>`",
                         );
-                    let values = Column::from_arrow(&**values_col.values(), ty);
+                    let values = Column::from_arrow(&**values_col.values(), ty)?;
                     let offsets = values_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
@@ -568,7 +568,7 @@ impl Column {
                         .as_any()
                         .downcast_ref::<databend_common_arrow::arrow::array::MapArray>()
                         .expect("fail to read `Map` from arrow: array should be `MapArray`");
-                    let values = Column::from_arrow(&**map_col.field(), ty);
+                    let values = Column::from_arrow(&**map_col.field(), ty)?;
                     let offsets = map_col
                         .offsets()
                         .buffer()
@@ -590,7 +590,7 @@ impl Column {
                         .iter()
                         .zip(fields)
                         .map(|(field_col, f)| Column::from_arrow(&**field_col, f))
-                        .collect::<Vec<_>>();
+                        .collect::<Result<Vec<_>>>()?;
                     Column::Tuple(field_cols)
                 }
                 (
@@ -660,10 +660,10 @@ impl Column {
                     Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (data_type, ArrowDataType::Extension(_, arrow_type, _)) => {
-                    from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)
+                    from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)?
                 }
                 (DataType::Nullable(ty), _) => {
-                    let column = Column::from_arrow(arrow_col, ty);
+                    let column = Column::from_arrow(arrow_col, ty)?;
                     let validity = arrow_col
                         .validity()
                         .cloned()
@@ -671,11 +671,12 @@ impl Column {
                     Column::Nullable(Box::new(NullableColumn { column, validity }))
                 }
                 (ty, arrow_ty) => {
-                    unimplemented!(
+                    return Err(ErrorCode::Unimplemented(&format!(
                         "conversion from arrow type {arrow_ty:?} to {ty:?} is not supported"
-                    )
+                    )));
                 }
-            }
+            };
+            Ok(column)
         }
 
         from_arrow_with_arrow_type(arrow_col, arrow_col.data_type(), data_type)
