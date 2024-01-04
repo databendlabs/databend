@@ -640,6 +640,7 @@ impl Table for FuseTable {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         self.do_commit(
             ctx,
@@ -648,6 +649,7 @@ impl Table for FuseTable {
             update_stream_meta,
             overwrite,
             prev_snapshot_id,
+            deduplicated_label,
         )
     }
 

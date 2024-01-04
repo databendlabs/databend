@@ -711,6 +711,7 @@ impl TestFixture {
                 vec![],
                 overwrite,
                 None,
+                None,
             )?;
         } else {
             build_res

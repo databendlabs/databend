@@ -82,6 +82,7 @@ impl PipelineBuilder {
                 None,
                 lock.clone(),
                 None,
+                plan.deduplicated_label.clone(),
             )
         })
     }
