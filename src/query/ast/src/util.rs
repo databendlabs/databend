@@ -72,6 +72,18 @@ pub fn any_token(i: Input) -> IResult<&Token> {
     }
 }
 
+pub fn lambda_params(i: Input) -> IResult<Vec<Identifier>> {
+    let single_param = map(rule! {#ident}, |param| vec![param]);
+    let multi_params = map(
+        rule! { "(" ~ #comma_separated_list1(ident) ~ ")" },
+        |(_, params, _)| params,
+    );
+    rule!(
+        #single_param
+        | #multi_params
+    )(i)
+}
+
 pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }

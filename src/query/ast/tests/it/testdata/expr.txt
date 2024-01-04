@@ -4107,3 +4107,116 @@ Tuple {
 }
 
 
+---------- Input ----------
+ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
+---------- Output ---------
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..41,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ARRAY_REDUCE",
+        quote: None,
+        span: Some(
+            0..12,
+        ),
+    },
+    args: [
+        Array {
+            span: Some(
+                13..20,
+            ),
+            exprs: [
+                Literal {
+                    span: Some(
+                        14..15,
+                    ),
+                    lit: UInt64(
+                        1,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        16..17,
+                    ),
+                    lit: UInt64(
+                        2,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        18..19,
+                    ),
+                    lit: UInt64(
+                        3,
+                    ),
+                },
+            ],
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: Some(
+        Lambda {
+            params: [
+                Identifier {
+                    name: "acc",
+                    quote: None,
+                    span: Some(
+                        23..26,
+                    ),
+                },
+                Identifier {
+                    name: "t",
+                    quote: None,
+                    span: Some(
+                        27..28,
+                    ),
+                },
+            ],
+            expr: BinaryOp {
+                span: Some(
+                    37..38,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        33..36,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "acc",
+                            quote: None,
+                            span: Some(
+                                33..36,
+                            ),
+                        },
+                    ),
+                },
+                right: ColumnRef {
+                    span: Some(
+                        39..40,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                    ),
+                },
+            },
+        },
+    ),
+}
+
+

@@ -140,6 +140,7 @@ dashmap = "5.4.0"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+feature-set = { version = "0.1.1" }
 itertools = "0.10.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
