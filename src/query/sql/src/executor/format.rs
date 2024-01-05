@@ -155,12 +155,6 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
                 ];
 
-                let _estimated_rows = if let Some(info) = &union_all.stat_info {
-                    format!("{0:.2}", info.estimated_rows)
-                } else {
-                    String::from("none")
-                };
-
                 Ok(FormatTreeNode::with_children(
                     "UnionAll".to_string(),
                     children,
