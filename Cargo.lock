@@ -2863,6 +2863,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-protos",
  "databend-common-storage",
+ "enumflags2",
  "minitrace",
  "mockall",
  "serde_json",

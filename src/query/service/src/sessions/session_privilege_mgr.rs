@@ -277,8 +277,8 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
         };
 
-        let available_roles = self.get_all_available_roles().await?;
-        let exists = available_roles.iter().any(|r| r.name == owner_role_name);
+        let effective_roles = self.get_all_effective_roles().await?;
+        let exists = effective_roles.iter().any(|r| r.name == owner_role_name);
         return Ok(exists);
     }
 

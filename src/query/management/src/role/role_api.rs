@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -44,11 +46,37 @@ pub trait RoleApi: Sync + Send {
     /// from: the role that currently owns the object, it could be empty on the first time
     /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
     /// None RoleInfo means the role is built-in role, could only update grant object metadata
+    ///
+    /// Grant ownership used when create new object, contains two step:
+    /// 1. grant ownership privilege obj to role,
+    /// 2. kv api upsert new owner object key.
+    ///
+    /// Note: if role is `account_admin` no need to grant
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(&self, object: &OwnershipObject, role: &str) -> Result<()>;
 
     /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
-    async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<()>;
+    /// Revoke ownership used when drop old object, contains two step:
+    /// 1. revoke ownership privilege obj to new role,
+    /// 2. kv api delete old owner object key.
+    ///
+    /// Note: if role is `account_admin` or None no need to revoke
+    async fn revoke_ownership(&self, object: &OwnershipObject, role: Option<String>) -> Result<()>;
+
+    /// Move ownership contains three steps:
+    /// 1. revoke ownership on obj from old role,
+    /// 2. grant ownership on obj to new role,
+    /// 3. kv api upsert new owner object key.
+    /// Note: if old role is `account_admin` no need to revoke ownership
+    #[allow(clippy::ptr_arg)]
+    async fn move_ownership(
+        &self,
+        old_role: &str,
+        new_role: &str,
+        grant_object: &GrantObject,
+        owner_object: &OwnershipObject,
+        privileges: &UserPrivilegeSet,
+    ) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
     async fn get_ownership(&self, object: &OwnershipObject) -> Result<Option<OwnershipInfo>>;

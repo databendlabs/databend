@@ -149,6 +149,27 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
+    pub async fn move_ownership_to_role(
+        &self,
+        tenant: &str,
+        old_role: &str,
+        new_role: &str,
+        grant_object: &GrantObject,
+        owner_object: &OwnershipObject,
+        privileges: &UserPrivilegeSet,
+    ) -> Result<()> {
+        // user_mgr.move_ownership_to_role(&tenant, &old_role, new_role, grant_object, &owner_object, priv_set);
+        // from and to role must exists
+        self.get_role(tenant, new_role.to_string()).await?;
+
+        let client = self.get_role_api_client(tenant)?;
+        client
+            .move_ownership(old_role, new_role, grant_object, owner_object, privileges)
+            .await
+            .map_err(|e| e.add_message_back("(while move role ownership)"))
+    }
+
+    #[async_backtrace::framed]
     pub async fn get_ownership(
         &self,
         tenant: &str,
