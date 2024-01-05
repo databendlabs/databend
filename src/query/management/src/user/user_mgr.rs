@@ -70,7 +70,7 @@ impl UserMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
+                "User '{}' update failed: User not found or invalid request.",
                 user_info.name
             ))),
         }
@@ -95,8 +95,8 @@ impl UserApi for UserMgr {
             None,
         ));
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
-            ErrorCode::UserAlreadyExists(format!("User already exists, seq [{}]", v.seq))
+        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
+            ErrorCode::UserAlreadyExists(format!("User {} already exists.", user_key))
         })?;
 
         Ok(res_seq)
@@ -109,14 +109,17 @@ impl UserApi for UserMgr {
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("User {} not found.", user_key)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
+            Err(_) => Err(ErrorCode::UnknownUser(format!(
+                "User {} not found.",
+                user_key
+            ))),
         }
     }
 
@@ -171,7 +174,10 @@ impl UserApi for UserMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key)))
+            Err(ErrorCode::UnknownUser(format!(
+                "Cannot delete user {}. User does not exist or invalid operation.",
+                user_key
+            )))
         }
     }
 }

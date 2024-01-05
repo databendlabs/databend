@@ -79,10 +79,10 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(&key, match_seq, value, None));
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
             ErrorCode::PasswordPolicyAlreadyExists(format!(
-                "PasswordPolicy already exists, seq [{}]",
-                v.seq
+                "Password policy '{}' already exists.",
+                password_policy.name
             ))
         })?;
 
@@ -111,8 +111,8 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         match upsert_kv.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownPasswordPolicy(format!(
-                "Unknown PasswordPolicy, or seq not match {}",
-                password_policy.name.clone()
+                "Password policy '{}' not found.",
+                password_policy.name
             ))),
         }
     }
@@ -129,7 +129,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownPasswordPolicy(format!(
-                "Unknown PasswordPolicy {}",
+                "Cannot delete password policy '{}'. It may not exist.",
                 name
             )))
         }
@@ -141,7 +141,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         let key = self.make_password_policy_key(name)?;
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownPasswordPolicy(format!("Unknown PasswordPolicy {}", name))
+            ErrorCode::UnknownPasswordPolicy(format!("Password policy '{}' not found.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -150,7 +150,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalPasswordPolicy, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownPasswordPolicy(format!(
-                "Unknown PasswordPolicy {}",
+                "Password policy '{}' not found.",
                 name
             ))),
         }

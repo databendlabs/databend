@@ -72,10 +72,10 @@ impl ConnectionApi for ConnectionMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
             ErrorCode::ConnectionAlreadyExists(format!(
-                "connection already exists, seq [{}]",
-                v.seq
+                "Connection '{}' already exists.",
+                info.name
             ))
         })?;
 
@@ -93,8 +93,9 @@ impl ConnectionApi for ConnectionMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .ok_or_else(|| ErrorCode::UnknownConnection(format!("Unknown connection {}", name)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownConnection(format!("Connection '{}' not found.", name))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -102,7 +103,7 @@ impl ConnectionApi for ConnectionMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalConnection, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownConnection(format!(
-                "Unknown connection {}",
+                "Connection '{}' not found.",
                 name
             ))),
         }
@@ -137,7 +138,7 @@ impl ConnectionApi for ConnectionMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownConnection(format!(
-                "Unknown connection {}",
+                "Connection '{}' not found.",
                 name
             )))
         }
