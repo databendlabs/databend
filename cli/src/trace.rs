@@ -21,21 +21,42 @@ use anyhow::Result;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 
+const MAX_LOG_FILES: usize = 10;
+
 #[allow(dyn_drop)]
 pub async fn init_logging(
     dir: &str,
     level: &str,
+    stderr: bool,
 ) -> Result<Vec<Box<dyn Drop + Send + Sync + 'static>>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
     let mut logger = fern::Dispatch::new();
 
-    let rolling = RollingFileAppender::new(Rotation::DAILY, dir, "bendsql");
+    let rolling = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("bendsql.log")
+        .max_log_files(MAX_LOG_FILES)
+        .build(dir)?;
     let (non_blocking, flush_guard) = tracing_appender::non_blocking(rolling);
     let buffered_non_blocking = BufWriter::with_capacity(64 * 1024 * 1024, non_blocking);
 
     guards.push(Box::new(flush_guard));
-    logger = logger.chain(
-        fern::Dispatch::new()
+    let dispatch_file = fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{}] - {} - [{}] {}",
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(LevelFilter::from_str(level)?)
+        .chain(Box::new(buffered_non_blocking) as Box<dyn Write + Send>);
+    logger = logger.chain(dispatch_file);
+    if stderr {
+        let dispatch_stderr = fern::Dispatch::new()
+            .level(LevelFilter::Warn)
             .format(|out, message, record| {
                 out.finish(format_args!(
                     "[{}] - {} - [{}] {}",
@@ -45,9 +66,9 @@ pub async fn init_logging(
                     message
                 ))
             })
-            .level(LevelFilter::from_str(level)?)
-            .chain(Box::new(buffered_non_blocking) as Box<dyn Write + Send>),
-    );
+            .chain(std::io::stderr());
+        logger = logger.chain(dispatch_stderr);
+    }
 
     if logger.apply().is_err() {
         eprintln!("logger has already been set");

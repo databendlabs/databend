@@ -61,6 +61,8 @@ pub struct QueryResponse {
     pub data: Vec<Vec<String>>,
     pub state: String,
     pub error: Option<QueryError>,
+    // make it optional for backward compatibility
+    pub warnings: Option<Vec<String>>,
     pub stats: QueryStats,
     // pub affect: Option<QueryAffect>,
     pub stats_uri: Option<String>,
