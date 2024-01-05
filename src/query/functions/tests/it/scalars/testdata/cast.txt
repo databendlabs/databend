@@ -1846,6 +1846,166 @@ error:
 
 
 
+ast            : to_binary('Abc')
+raw expr       : to_binary('Abc')
+checked expr   : to_binary<String>("Abc")
+optimized expr : 0x416263
+output type    : Binary
+output domain  : Undefined
+output         : 0x416263
+
+
+ast            : to_binary('Dobrý den')
+raw expr       : to_binary('Dobrý den')
+checked expr   : to_binary<String>("Dobrý den")
+optimized expr : 0x446f6272c3bd2064656e
+output type    : Binary
+output domain  : Undefined
+output         : 0x446f6272c3bd2064656e
+
+
+ast            : to_binary('ß😀山')
+raw expr       : to_binary('ß😀山')
+checked expr   : to_binary<String>("ß😀山")
+optimized expr : 0xc39ff09f9880e5b1b1
+output type    : Binary
+output domain  : Undefined
+output         : 0xc39ff09f9880e5b1b1
+
+
+ast            : to_binary(NULL)
+raw expr       : to_binary(NULL)
+checked expr   : to_binary<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_binary(a)
+raw expr       : to_binary(a::String)
+checked expr   : to_binary<String>(a)
+evaluation:
++--------+-------------------+------------------------+
+|        | a                 | Output                 |
++--------+-------------------+------------------------+
+| Type   | String            | Binary                 |
+| Domain | {"Abc"..="ß😀山"} | Undefined              |
+| Row 0  | 'Abc'             | 0x416263               |
+| Row 1  | 'Dobrý den'       | 0x446f6272c3bd2064656e |
+| Row 2  | 'ß😀山'           | 0xc39ff09f9880e5b1b1   |
++--------+-------------------+------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                           |
++--------+------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] } |
+| Output | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] } |
++--------+------------------------------------------------------------------------------------------------+
+
+
+ast            : to_binary(a)
+raw expr       : to_binary(a::String NULL)
+checked expr   : to_binary<String NULL>(a)
+evaluation:
++--------+----------------------------+------------------------+
+|        | a                          | Output                 |
++--------+----------------------------+------------------------+
+| Type   | String NULL                | Binary NULL            |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
+| Row 0  | 'Abc'                      | 0x416263               |
+| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
+| Row 2  | NULL                       | NULL                   |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_string(to_binary('Abc'))
+raw expr       : to_string(to_binary('Abc'))
+checked expr   : to_string<Binary>(to_binary<String>("Abc"))
+optimized expr : "Abc"
+output type    : String
+output domain  : {"Abc"..="Abc"}
+output         : 'Abc'
+
+
+ast            : to_string(to_binary('Dobrý den'))
+raw expr       : to_string(to_binary('Dobrý den'))
+checked expr   : to_string<Binary>(to_binary<String>("Dobrý den"))
+optimized expr : "Dobrý den"
+output type    : String
+output domain  : {"Dobrý den"..="Dobrý den"}
+output         : 'Dobrý den'
+
+
+ast            : to_string(to_binary('ß😀山'))
+raw expr       : to_string(to_binary('ß😀山'))
+checked expr   : to_string<Binary>(to_binary<String>("ß😀山"))
+optimized expr : "ß😀山"
+output type    : String
+output domain  : {"ß😀山"..="ß😀山"}
+output         : 'ß😀山'
+
+
+ast            : to_string(to_binary(NULL))
+raw expr       : to_string(to_binary(NULL))
+checked expr   : to_string<Binary NULL>(to_binary<String NULL>(CAST(NULL AS String NULL)))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_string(to_binary(a))
+raw expr       : to_string(to_binary(a::String))
+checked expr   : to_string<Binary>(to_binary<String>(a))
+evaluation:
++--------+-------------------+-------------+
+|        | a                 | Output      |
++--------+-------------------+-------------+
+| Type   | String            | String      |
+| Domain | {"Abc"..="ß😀山"} | {""..}      |
+| Row 0  | 'Abc'             | 'Abc'       |
+| Row 1  | 'Dobrý den'       | 'Dobrý den' |
+| Row 2  | 'ß😀山'           | 'ß😀山'     |
++--------+-------------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                           |
++--------+------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] } |
+| Output | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] } |
++--------+------------------------------------------------------------------------------------------------+
+
+
+ast            : to_string(to_binary(a))
+raw expr       : to_string(to_binary(a::String NULL))
+checked expr   : to_string<Binary NULL>(to_binary<String NULL>(a))
+evaluation:
++--------+----------------------------+-----------------+
+|        | a                          | Output          |
++--------+----------------------------+-----------------+
+| Type   | String NULL                | String NULL     |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                      | 'Abc'           |
+| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
+| Row 2  | NULL                       | NULL            |
++--------+----------------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : TRY_CAST(0 AS UINT8)
 raw expr       : TRY_CAST(0 AS UInt8)
 checked expr   : TRY_CAST(0_u8 AS UInt8 NULL)
@@ -3881,5 +4041,165 @@ optimized expr : [[NULL], [NULL, NULL]]
 output type    : Array(Array(Int32 NULL) NULL) NULL
 output domain  : [[{0..=0} ∪ {NULL}]]
 output         : [[NULL], [NULL, NULL]]
+
+
+ast            : TRY_to_binary('Abc')
+raw expr       : TRY_to_binary('Abc')
+checked expr   : try_to_binary<String>("Abc")
+optimized expr : 0x416263
+output type    : Binary NULL
+output domain  : Undefined
+output         : 0x416263
+
+
+ast            : TRY_to_binary('Dobrý den')
+raw expr       : TRY_to_binary('Dobrý den')
+checked expr   : try_to_binary<String>("Dobrý den")
+optimized expr : 0x446f6272c3bd2064656e
+output type    : Binary NULL
+output domain  : Undefined
+output         : 0x446f6272c3bd2064656e
+
+
+ast            : TRY_to_binary('ß😀山')
+raw expr       : TRY_to_binary('ß😀山')
+checked expr   : try_to_binary<String>("ß😀山")
+optimized expr : 0xc39ff09f9880e5b1b1
+output type    : Binary NULL
+output domain  : Undefined
+output         : 0xc39ff09f9880e5b1b1
+
+
+ast            : TRY_to_binary(NULL)
+raw expr       : TRY_to_binary(NULL)
+checked expr   : try_to_binary<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_to_binary(a)
+raw expr       : TRY_to_binary(a::String)
+checked expr   : try_to_binary<String>(a)
+evaluation:
++--------+-------------------+------------------------+
+|        | a                 | Output                 |
++--------+-------------------+------------------------+
+| Type   | String            | Binary NULL            |
+| Domain | {"Abc"..="ß😀山"} | Undefined ∪ {NULL}     |
+| Row 0  | 'Abc'             | 0x416263               |
+| Row 1  | 'Dobrý den'       | 0x446f6272c3bd2064656e |
+| Row 2  | 'ß😀山'           | 0xc39ff09f9880e5b1b1   |
++--------+-------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____111] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_to_binary(a)
+raw expr       : TRY_to_binary(a::String NULL)
+checked expr   : try_to_binary<String NULL>(a)
+evaluation:
++--------+----------------------------+------------------------+
+|        | a                          | Output                 |
++--------+----------------------------+------------------------+
+| Type   | String NULL                | Binary NULL            |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
+| Row 0  | 'Abc'                      | 0x416263               |
+| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
+| Row 2  | NULL                       | NULL                   |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_to_string(to_binary('Abc'))
+raw expr       : TRY_to_string(to_binary('Abc'))
+checked expr   : try_to_string<Binary>(to_binary<String>("Abc"))
+optimized expr : "Abc"
+output type    : String NULL
+output domain  : {"Abc"..="Abc"}
+output         : 'Abc'
+
+
+ast            : TRY_to_string(to_binary('Dobrý den'))
+raw expr       : TRY_to_string(to_binary('Dobrý den'))
+checked expr   : try_to_string<Binary>(to_binary<String>("Dobrý den"))
+optimized expr : "Dobrý den"
+output type    : String NULL
+output domain  : {"Dobrý den"..="Dobrý den"}
+output         : 'Dobrý den'
+
+
+ast            : TRY_to_string(to_binary('ß😀山'))
+raw expr       : TRY_to_string(to_binary('ß😀山'))
+checked expr   : try_to_string<Binary>(to_binary<String>("ß😀山"))
+optimized expr : "ß😀山"
+output type    : String NULL
+output domain  : {"ß😀山"..="ß😀山"}
+output         : 'ß😀山'
+
+
+ast            : TRY_to_string(to_binary(NULL))
+raw expr       : TRY_to_string(to_binary(NULL))
+checked expr   : try_to_string<Binary NULL>(to_binary<String NULL>(CAST(NULL AS String NULL)))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_to_string(to_binary(a))
+raw expr       : TRY_to_string(to_binary(a::String))
+checked expr   : try_to_string<Binary>(to_binary<String>(a))
+evaluation:
++--------+-------------------+-----------------+
+|        | a                 | Output          |
++--------+-------------------+-----------------+
+| Type   | String            | String NULL     |
+| Domain | {"Abc"..="ß😀山"} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'             | 'Abc'           |
+| Row 1  | 'Dobrý den'       | 'Dobrý den'     |
+| Row 2  | 'ß😀山'           | 'ß😀山'         |
++--------+-------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____111] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_to_string(to_binary(a))
+raw expr       : TRY_to_string(to_binary(a::String NULL))
+checked expr   : try_to_string<Binary NULL>(to_binary<String NULL>(a))
+evaluation:
++--------+----------------------------+-----------------+
+|        | a                          | Output          |
++--------+----------------------------+-----------------+
+| Type   | String NULL                | String NULL     |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                      | 'Abc'           |
+| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
+| Row 2  | NULL                       | NULL            |
++--------+----------------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

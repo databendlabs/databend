@@ -706,6 +706,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
 }
 
 pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
+    "to_binary",
     "to_string",
     "to_uint8",
     "to_uint16",

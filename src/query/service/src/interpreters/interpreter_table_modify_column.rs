@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
@@ -271,8 +272,82 @@ impl ModifyTableColumnInterpreter {
                 )));
             }
         }
+
         // check if schema has changed
         if schema == new_schema {
+            return Ok(PipelineBuildResult::create());
+        }
+
+        // if alter column from string to binary, we don't need to rebuild table
+        let is_alter_column_string_to_binary =
+            schema
+                .fields()
+                .iter()
+                .zip(new_schema.fields())
+                .all(|(old_field, new_field)| {
+                    fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+                        match (old_ty, new_ty) {
+                            (TableDataType::String, TableDataType::Binary) => true,
+                            (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+                                is_string_to_binary(old_ty, new_ty)
+                            }
+                            (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+                                is_string_to_binary(old_ty, new_ty)
+                            }
+                            (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+                                is_string_to_binary(old_ty, new_ty)
+                            }
+                            (
+                                TableDataType::Tuple {
+                                    fields_type: old_tys,
+                                    ..
+                                },
+                                TableDataType::Tuple {
+                                    fields_type: new_tys,
+                                    ..
+                                },
+                            ) => {
+                                old_tys.len() == new_tys.len()
+                                    && old_tys
+                                        .iter()
+                                        .zip(new_tys)
+                                        .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
+                            }
+                            _ => false,
+                        }
+                    }
+
+                    old_field.data_type == new_field.data_type
+                        || is_string_to_binary(&old_field.data_type, &new_field.data_type)
+                });
+        if is_alter_column_string_to_binary {
+            table_info.meta.schema = new_schema.into();
+
+            let table_id = table_info.ident.table_id;
+            let table_version = table_info.ident.seq;
+
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta: table_info.meta,
+                copied_files: None,
+                deduplicated_label: None,
+                update_stream_meta: vec![],
+            };
+
+            let res = catalog
+                .update_table_meta(table.get_table_info(), req)
+                .await?;
+
+            if let Some(share_table_info) = res.share_table_info {
+                save_share_table_info(
+                    &self.ctx.get_tenant(),
+                    self.ctx.get_data_operator()?.operator(),
+                    share_table_info,
+                )
+                .await?;
+            }
+
             return Ok(PipelineBuildResult::create());
         }
 

@@ -117,6 +117,11 @@ impl FieldEncoderCSV {
     pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
         match &column {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+
+            Column::Binary(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                self.string_formatter.write_string(buf, out_buf);
+            }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf, out_buf);
