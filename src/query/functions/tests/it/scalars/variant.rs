@@ -59,6 +59,7 @@ fn test_variant() {
     test_json_path_match(file);
     test_json_path_match_op(file);
     test_json_path_exists_op(file);
+    test_concat_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1432,6 +1433,52 @@ fn test_contains_in_right_op(file: &mut impl Write) {
     run_ast(
         file,
         r#"parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')"#,
+        &[],
+    );
+}
+
+fn test_concat_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('[1,2,3]') || NULL", &[]);
+    run_ast(file, "parse_json('[1,2,3]') || parse_json('10')", &[]);
+    run_ast(file, r#"parse_json('"asd"') || parse_json('[1,2,3]')"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('true')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')"#,
         &[],
     );
 }
