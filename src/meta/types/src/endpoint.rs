@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::net::SocketAddrV4;
 
 use anyerror::AnyError;
 use serde::Deserialize;
@@ -43,10 +42,17 @@ impl Endpoint {
 
     /// Parse `1.2.3.4:5555` into `Endpoint`.
     pub fn parse(address: &str) -> Result<Self, AnyError> {
-        match address.parse::<SocketAddrV4>() {
-            Ok(a) => Ok(Self::new(a.ip().to_string(), a.port())),
-            Err(e) => Err(AnyError::error(format!("Failed to parse address: {}", e))),
+        let x = address.splitn(2, ':').collect::<Vec<_>>();
+        if x.len() != 2 {
+            return Err(AnyError::error(format!(
+                "Failed to parse address: {}",
+                address
+            )));
         }
+        let port = x[1].parse::<u16>().map_err(|e| {
+            AnyError::error(format!("Failed to parse port: {}; address: {}", e, address))
+        })?;
+        Ok(Self::new(x[0], port))
     }
 }
 

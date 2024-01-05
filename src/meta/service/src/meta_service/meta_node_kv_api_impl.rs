@@ -61,13 +61,16 @@ impl kvapi::KVApi for MetaNode {
             keys: keys.to_vec(),
         };
 
-        let strm = self
+        let res = self
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::MGetKV(req)))
             .await;
 
-        server_metrics::incr_read_result(&strm);
+        server_metrics::incr_read_result(&res);
 
-        let strm = strm?.map_err(MetaAPIError::from);
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+        let strm = strm.map_err(MetaAPIError::from);
+
         Ok(strm.boxed())
     }
 
@@ -77,13 +80,16 @@ impl kvapi::KVApi for MetaNode {
             prefix: prefix.to_string(),
         };
 
-        let strm = self
+        let res = self
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::ListKV(req)))
             .await;
 
-        server_metrics::incr_read_result(&strm);
+        server_metrics::incr_read_result(&res);
 
-        let strm = strm?.map_err(MetaAPIError::from);
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+
+        let strm = strm.map_err(MetaAPIError::from);
         Ok(strm.boxed())
     }
 
