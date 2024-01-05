@@ -11,6 +11,11 @@ count() of base table after deletion
 1
 count() of test attach only table
 1
+alter table modify column
+expects column number as varchar
+number	VARCHAR	YES	NULL
+expects own row
+0
 delete not allowed
 Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 update not allowed

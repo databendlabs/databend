@@ -33,8 +33,14 @@ echo "count() of test attach only table"
 echo "select count() from attach_read_only;" | $BENDSQL_CLIENT_CONNECT
 
 # 3. READ_ONLY attach table should aware of the schema evolution of table being attached
-# TODO currently, there is a design issue blocking this feature (the constructor of table is sync style)
-# will be implemented in later PR
+echo "alter table modify column"
+echo "alter table base modify column number varchar;" | $BENDSQL_CLIENT_CONNECT
+echo "expects column number as varchar"
+echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
+echo "expects own row"
+echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
+
+
 
 # 4. READ_ONLY attach table is not allowed to be mutated
 
