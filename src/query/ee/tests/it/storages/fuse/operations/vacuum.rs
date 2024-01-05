@@ -150,7 +150,6 @@ mod test_accessor {
             cap.batch = true;
             cap.delete = true;
             cap.list = true;
-            cap.list_without_recursive = true;
             info
         }
 

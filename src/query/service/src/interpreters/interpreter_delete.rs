@@ -283,6 +283,7 @@ impl DeleteInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
+            deduplicated_label: None,
         })))
     }
 }

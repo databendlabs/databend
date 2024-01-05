@@ -46,6 +46,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
+        RuleID::PushDownFilterWindow,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
         RuleID::SplitAggregate,

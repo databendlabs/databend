@@ -58,7 +58,7 @@ use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
@@ -833,7 +833,7 @@ impl HashJoinBuildState {
                 hashes.into_iter().for_each(|hash| {
                     hashes_vec.push(hash);
                 });
-                let filter = BinaryFuse8::try_from(&hashes_vec)?;
+                let filter = BinaryFuse16::try_from(&hashes_vec)?;
                 runtime_filter.add_bloom((id.to_string(), filter));
             }
         }

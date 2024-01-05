@@ -33,8 +33,6 @@ use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -236,7 +234,7 @@ impl FuseTable {
         let top_k = push_downs
             .as_ref()
             .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
+            .and_then(|p| p.top_k(self.schema().as_ref()))
             .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
 

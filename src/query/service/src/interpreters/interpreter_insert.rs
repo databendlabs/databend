@@ -250,6 +250,7 @@ impl Interpreter for InsertInterpreter {
                     update_stream_meta,
                     self.plan.overwrite,
                     None,
+                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 )?;
 
                 // Compact if 'enable_compact_after_write' on.
@@ -281,7 +282,7 @@ impl Interpreter for InsertInterpreter {
                     table: self.plan.table.clone(),
                 };
 
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
                 return Ok(build_res);
             }
@@ -302,6 +303,7 @@ impl Interpreter for InsertInterpreter {
             vec![],
             self.plan.overwrite,
             append_mode,
+            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 
         // Compact if 'enable_compact_after_write' on.
@@ -333,7 +335,7 @@ impl Interpreter for InsertInterpreter {
             table: self.plan.table.clone(),
         };
 
-        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+        hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
 
         Ok(build_res)
     }

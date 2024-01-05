@@ -131,25 +131,36 @@ impl AuthMgr {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(n, "%");
                 let user = user_api
-                    .get_user_with_client_ip(&tenant, identity, client_ip.as_deref())
+                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
-                let user = match &user.auth_info {
-                    AuthInfo::None => user,
+                // Check password policy for login
+                UserApiProvider::instance()
+                    .check_login_password(&tenant, identity.clone(), &user)
+                    .await?;
+
+                let authed = match &user.auth_info {
+                    AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
                     } => match p {
-                        None => return Err(ErrorCode::AuthenticateFailure("password required")),
+                        None => Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {
                             if *h == t.hash(p) {
-                                user
+                                Ok(())
                             } else {
-                                return Err(ErrorCode::AuthenticateFailure("wrong password"));
+                                Err(ErrorCode::AuthenticateFailure("wrong password"))
                             }
                         }
                     },
-                    _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                    _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
+                UserApiProvider::instance()
+                    .update_user_login_result(&tenant, identity, authed.is_ok())
+                    .await?;
+
+                authed?;
+
                 session.set_authed_user(user, None).await?;
             }
         };

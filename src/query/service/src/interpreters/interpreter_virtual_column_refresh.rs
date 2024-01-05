@@ -18,7 +18,6 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_sql::plans::RefreshVirtualColumnPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
@@ -47,7 +46,6 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -64,25 +62,11 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-
-        let list_virtual_columns_req = ListVirtualColumnsReq {
-            tenant,
-            table_id: Some(table.get_id()),
-        };
-
-        let handler = get_virtual_column_handler();
-        let res = handler
-            .do_list_virtual_columns(catalog, list_virtual_columns_req)
-            .await?;
-
-        if res.is_empty() {
-            return Ok(PipelineBuildResult::create());
-        }
-        let virtual_columns = res[0].virtual_columns.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let virtual_columns = self.plan.virtual_columns.clone();
         let segment_locs = self.plan.segment_locs.clone();
 
+        let handler = get_virtual_column_handler();
         let _ = handler
             .do_refresh_virtual_column(fuse_table, self.ctx.clone(), virtual_columns, segment_locs)
             .await?;

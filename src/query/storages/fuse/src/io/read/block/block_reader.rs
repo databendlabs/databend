@@ -28,7 +28,6 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNode;
@@ -161,11 +160,14 @@ impl BlockReader {
         let mut indices = BTreeMap::new();
         for column in columns {
             for (i, index) in column.leaf_indices.iter().enumerate() {
-                let f: TableField = (&column.field).into();
-                let data_type: DataType = f.data_type().into();
+                let f = DataField::try_from(&column.field).unwrap();
                 indices.insert(
                     *index,
-                    (column.leaf_column_ids[i], column.field.clone(), data_type),
+                    (
+                        column.leaf_column_ids[i],
+                        column.field.clone(),
+                        f.data_type().clone(),
+                    ),
                 );
             }
         }

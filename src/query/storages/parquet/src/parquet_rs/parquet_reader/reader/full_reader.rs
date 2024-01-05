@@ -19,9 +19,9 @@ use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
@@ -45,7 +45,7 @@ use crate::ParquetRSPruner;
 /// The reader to read a whole parquet file.
 pub struct ParquetRSFullReader {
     pub(super) op: Operator,
-    pub(super) schema: DataSchemaRef,
+    pub(super) output_schema: TableSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
     /// Columns to output.
@@ -150,7 +150,11 @@ impl ParquetRSFullReader {
         let record_batch = stream.next().await.transpose()?;
 
         if let Some(batch) = record_batch {
-            let blocks = transform_record_batch(self.schema.as_ref(), &batch, &self.field_paths)?;
+            let blocks = transform_record_batch(
+                &self.output_schema.as_ref().into(),
+                &batch,
+                &self.field_paths,
+            )?;
             Ok(Some(blocks))
         } else {
             Ok(None)
@@ -218,7 +222,10 @@ impl ParquetRSFullReader {
                 .into_iter()
                 .map(|batch| {
                     let batch = batch?;
-                    Ok(DataBlock::from_record_batch(self.schema.as_ref(), &batch)?.0)
+                    Ok(
+                        DataBlock::from_record_batch(&self.output_schema.as_ref().into(), &batch)?
+                            .0,
+                    )
                 })
                 .collect()
         }

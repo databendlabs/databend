@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -63,7 +62,6 @@ impl<'a> Selector<'a> {
         let mut mutable_false_idx = 0;
         self.process_select_expr(
             select_expr,
-            None,
             true_selection,
             (false_selection, false),
             &mut mutable_true_idx,
@@ -78,7 +76,6 @@ impl<'a> Selector<'a> {
     fn process_select_expr(
         &self,
         select_expr: &SelectExpr,
-        validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -89,7 +86,6 @@ impl<'a> Selector<'a> {
         let count = match select_expr {
             SelectExpr::And(exprs) => self.process_and(
                 exprs,
-                validity,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -99,7 +95,6 @@ impl<'a> Selector<'a> {
             )?,
             SelectExpr::Or(exprs) => self.process_or(
                 exprs,
-                validity,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -111,7 +106,6 @@ impl<'a> Selector<'a> {
                 select_op,
                 exprs,
                 generics,
-                validity,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -121,7 +115,6 @@ impl<'a> Selector<'a> {
             )?,
             SelectExpr::Others(expr) => self.process_others(
                 expr,
-                validity,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -159,7 +152,6 @@ impl<'a> Selector<'a> {
     fn process_and(
         &self,
         exprs: &Vec<SelectExpr>,
-        validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -173,7 +165,6 @@ impl<'a> Selector<'a> {
         for (i, expr) in exprs.iter().enumerate() {
             let true_count = self.process_select_expr(
                 expr,
-                validity.clone(),
                 true_selection,
                 (false_selection.0, false_selection.1),
                 &mut temp_mutable_true_idx,
@@ -206,7 +197,6 @@ impl<'a> Selector<'a> {
     fn process_or(
         &self,
         exprs: &Vec<SelectExpr>,
-        validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -220,7 +210,6 @@ impl<'a> Selector<'a> {
         for (i, expr) in exprs.iter().enumerate() {
             let true_count = self.process_select_expr(
                 expr,
-                validity.clone(),
                 true_selection,
                 (false_selection.0, true),
                 &mut temp_mutable_true_idx,
@@ -256,7 +245,6 @@ impl<'a> Selector<'a> {
         select_op: &SelectOp,
         exprs: &[Expr],
         generics: &[DataType],
-        validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -264,7 +252,14 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        let children = self.evaluator.get_children(exprs, validity)?;
+        let selection = self.selection(
+            true_selection,
+            false_selection.0,
+            *mutable_true_idx + count,
+            *mutable_false_idx + count,
+            &select_strategy,
+        );
+        let children = self.evaluator.get_children(exprs, selection)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
         let left_data_type = self
@@ -293,7 +288,6 @@ impl<'a> Selector<'a> {
     fn process_others(
         &self,
         expr: &Expr,
-        validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -308,7 +302,14 @@ impl<'a> Selector<'a> {
                 generics,
                 ..
             } if function.signature.name == "if" => {
-                let result = self.evaluator.eval_if(args, generics, validity)?;
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
+                let result = self.evaluator.eval_if(args, generics, None, selection)?;
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
@@ -324,6 +325,8 @@ impl<'a> Selector<'a> {
                 )
             }
             Expr::FunctionCall {
+                span,
+                id,
                 function,
                 generics,
                 args,
@@ -333,9 +336,16 @@ impl<'a> Selector<'a> {
                 debug_assert!(
                     matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
                 );
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, validity.clone()))
+                    .map(|expr| self.evaluator.partial_run(expr, None, selection))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -349,12 +359,19 @@ impl<'a> Selector<'a> {
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.evaluator.data_block().num_rows(),
-                    validity,
+                    validity: None,
                     errors: None,
                     func_ctx: self.evaluator.func_ctx(),
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                ctx.render_error(
+                    *span,
+                    id.params(),
+                    &args,
+                    &function.signature.name,
+                    selection,
+                )?;
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
@@ -375,13 +392,26 @@ impl<'a> Selector<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.evaluator.get_select_child(expr, validity.clone())?.0;
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
+                let value = self.evaluator.get_select_child(expr, selection)?.0;
                 let result = if *is_try {
                     self.evaluator
                         .run_try_cast(*span, expr.data_type(), dest_type, value)?
                 } else {
-                    self.evaluator
-                        .run_cast(*span, expr.data_type(), dest_type, value, validity)?
+                    self.evaluator.run_cast(
+                        *span,
+                        expr.data_type(),
+                        dest_type,
+                        value,
+                        None,
+                        selection,
+                    )?
                 };
                 self.select_value(
                     result,
@@ -401,9 +431,16 @@ impl<'a> Selector<'a> {
                 return_type,
                 ..
             } => {
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, validity.clone()))
+                    .map(|expr| self.evaluator.partial_run(expr, None, selection))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -413,7 +450,9 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result = self.evaluator.run_lambda(name, args, lambda_expr)?;
+                let result = self
+                    .evaluator
+                    .run_lambda(name, args, lambda_expr, return_type)?;
                 self.select_value(
                     result,
                     return_type,
@@ -480,5 +519,20 @@ impl<'a> Selector<'a> {
             select_strategy,
             count,
         )
+    }
+
+    fn selection(
+        &self,
+        true_selection: &'a [u32],
+        false_selection: &'a [u32],
+        true_count: usize,
+        false_count: usize,
+        select_strategy: &SelectStrategy,
+    ) -> Option<&'a [u32]> {
+        match select_strategy {
+            SelectStrategy::True => Some(&true_selection[0..true_count]),
+            SelectStrategy::False => Some(&false_selection[0..false_count]),
+            SelectStrategy::All => None,
+        }
     }
 }

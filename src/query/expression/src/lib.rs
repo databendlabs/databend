@@ -42,7 +42,6 @@
 mod block;
 
 pub mod aggregate;
-mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
 mod expression;

@@ -35,6 +35,8 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
@@ -89,7 +91,6 @@ impl Interpreter for UpdateInterpreter {
 
         let catalog_name = self.plan.catalog.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
 
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
@@ -101,9 +102,45 @@ impl Interpreter for UpdateInterpreter {
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
+        // build physical plan.
+        let physical_plan = self.get_physical_plan().await?;
+
+        // build pipeline.
+        let mut build_res = PipelineBuildResult::create();
+        if let Some(physical_plan) = physical_plan {
+            build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                    .await?;
+            // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
+            {
+                let refresh_desc = RefreshDesc {
+                    catalog: catalog_name.to_string(),
+                    database: db_name.to_string(),
+                    table: tbl_name.to_string(),
+                };
+
+                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
+            }
+        }
+
+        build_res.main_pipeline.add_lock_guard(lock_guard);
+        Ok(build_res)
+    }
+}
+
+impl UpdateInterpreter {
+    pub async fn get_physical_plan(&self) -> Result<Option<PhysicalPlan>> {
+        let catalog_name = self.plan.catalog.as_str();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let catalog_info = catalog.info();
+
+        let db_name = self.plan.database.as_str();
+        let tbl_name = self.plan.table.as_str();
+        let tbl = catalog
+            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .await?;
         // refresh table.
         let tbl = tbl.refresh(self.ctx.as_ref()).await?;
-
         // check mutability
         tbl.check_mutable()?;
 
@@ -201,7 +238,6 @@ impl Interpreter for UpdateInterpreter {
             ))
         })?;
 
-        let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
         if let Some(snapshot) = fuse_table
             .fast_update(
@@ -223,6 +259,7 @@ impl Interpreter for UpdateInterpreter {
                 )
                 .await?;
 
+            let is_distributed = !self.ctx.get_cluster().is_empty();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,
@@ -233,30 +270,13 @@ impl Interpreter for UpdateInterpreter {
                 snapshot,
                 catalog_info,
                 query_row_id_col,
+                is_distributed,
+                self.ctx.clone(),
             )?;
-
-            build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
-
-            // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
-            {
-                let refresh_desc = RefreshDesc {
-                    catalog: catalog_name.to_string(),
-                    database: db_name.to_string(),
-                    table: tbl_name.to_string(),
-                };
-
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
-            }
+            return Ok(Some(physical_plan));
         }
-
-        build_res.main_pipeline.add_lock_guard(lock_guard);
-        Ok(build_res)
+        Ok(None)
     }
-}
-
-impl UpdateInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
         filters: Option<Filters>,
@@ -268,9 +288,11 @@ impl UpdateInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         query_row_id_col: bool,
+        is_distributed: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
         let merge_meta = partitions.is_lazy;
-        let root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
+        let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
@@ -281,6 +303,17 @@ impl UpdateInterpreter {
             computed_list,
         }));
 
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+        }
+
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
@@ -290,6 +323,7 @@ impl UpdateInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
+            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
         })))
     }
 }

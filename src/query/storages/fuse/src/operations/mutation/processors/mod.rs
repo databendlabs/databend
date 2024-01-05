@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod array;
-mod record_batch;
-mod schema;
+mod compact_source;
+mod mutation_source;
+mod recluster_aggregator;
+
+pub use compact_source::CompactSource;
+pub use mutation_source::MutationAction;
+pub use mutation_source::MutationSource;
+pub use recluster_aggregator::ReclusterAggregator;

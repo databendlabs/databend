@@ -123,7 +123,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 type MetaType = (String, String, String);
 
@@ -753,7 +753,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse8)> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
         todo!()
     }
 

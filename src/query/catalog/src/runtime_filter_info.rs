@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use databend_common_expression::Expr;
-use xorf::BinaryFuse8;
+use xorf::BinaryFuse16;
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeFilterInfo {
     inlist: Vec<Expr<String>>,
     min_max: Vec<Expr<String>>,
-    bloom: Vec<(String, BinaryFuse8)>,
+    bloom: Vec<(String, BinaryFuse16)>,
 }
 
 impl RuntimeFilterInfo {
@@ -27,7 +27,7 @@ impl RuntimeFilterInfo {
         self.inlist.push(expr);
     }
 
-    pub fn add_bloom(&mut self, bloom: (String, BinaryFuse8)) {
+    pub fn add_bloom(&mut self, bloom: (String, BinaryFuse16)) {
         self.bloom.push(bloom);
     }
 
@@ -39,7 +39,7 @@ impl RuntimeFilterInfo {
         &self.inlist
     }
 
-    pub fn get_bloom(&self) -> &Vec<(String, BinaryFuse8)> {
+    pub fn get_bloom(&self) -> &Vec<(String, BinaryFuse16)> {
         &self.bloom
     }
 
@@ -47,7 +47,7 @@ impl RuntimeFilterInfo {
         &self.min_max
     }
 
-    pub fn blooms(self) -> Vec<(String, BinaryFuse8)> {
+    pub fn blooms(self) -> Vec<(String, BinaryFuse16)> {
         self.bloom
     }
 

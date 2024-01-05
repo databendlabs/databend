@@ -60,6 +60,10 @@ fn test_decode_v69_user() -> anyhow::Result<()> {
         ),
         quota: Default::default(),
         option: Default::default(),
+        history_auth_infos: vec![],
+        password_fail_ons: vec![],
+        password_update_on: None,
+        lockout_time: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), user_info_v69.as_slice(), 69, want())?;

@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod from_data_schema;
-mod from_table_schema;
-mod to_data_schema;
-mod to_table_schema;
+mod from;
+mod to;
+
+pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
+pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
+
+pub use to::set_validities;

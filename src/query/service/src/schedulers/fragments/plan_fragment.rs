@@ -40,6 +40,7 @@ use crate::schedulers::QueryFragmentAction;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::UpdateSource;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanReplacer;
 
@@ -63,6 +64,7 @@ pub enum FragmentType {
     ReplaceInto,
     Compact,
     Recluster,
+    Update,
 }
 
 #[derive(Clone)]
@@ -134,6 +136,9 @@ impl PlanFragment {
             }
             FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
+            }
+            FragmentType::Update => {
+                self.redistribute_update(ctx, &mut fragment_actions)?;
             }
         }
 
@@ -212,6 +217,37 @@ impl PlanFragment {
 
             let mut replace_delete_source = ReplaceDeleteSource { partitions: parts };
             plan = replace_delete_source.replace(&plan)?;
+
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
+        }
+
+        Ok(())
+    }
+
+    fn redistribute_update(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::UpdateSource(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let partitions: &Partitions = &plan.parts;
+        let executors = Fragmenter::get_executors(ctx);
+
+        let partition_reshuffle = partitions.reshuffle(executors)?;
+
+        for (executor, parts) in partition_reshuffle.into_iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_update = ReplaceUpdate { partitions: parts };
+            plan = replace_update.replace(&plan)?;
 
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -495,6 +531,19 @@ struct ReplaceDeleteSource {
 impl PhysicalPlanReplacer for ReplaceDeleteSource {
     fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DeleteSource(Box::new(DeleteSource {
+            parts: self.partitions.clone(),
+            ..plan.clone()
+        })))
+    }
+}
+
+struct ReplaceUpdate {
+    pub partitions: Partitions,
+}
+
+impl PhysicalPlanReplacer for ReplaceUpdate {
+    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: self.partitions.clone(),
             ..plan.clone()
         })))

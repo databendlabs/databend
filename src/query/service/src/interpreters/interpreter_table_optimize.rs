@@ -138,6 +138,7 @@ impl OptimizeTableInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock,
+            deduplicated_label: None,
         })))
     }
 

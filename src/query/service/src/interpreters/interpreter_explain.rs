@@ -26,6 +26,7 @@ use databend_common_profile::QueryProfileManager;
 use databend_common_profile::SharedProcessorProfiles;
 use databend_common_sql::executor::ProfileHelper;
 use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
@@ -34,6 +35,7 @@ use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
 
 use super::InterpreterFactory;
+use super::UpdateInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -185,6 +187,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
+                Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
@@ -314,6 +317,28 @@ impl ExplainInterpreter {
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
+        let line_split_result = display_string
+            .lines()
+            .map(|s| s.as_bytes().to_vec())
+            .collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    #[async_backtrace::framed]
+    async fn explain_update_fragments(&self, update: &UpdatePlan) -> Result<Vec<DataBlock>> {
+        let interpreter = UpdateInterpreter::try_create(self.ctx.clone(), update.clone())?;
+        let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
+            let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+
+            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone(), false);
+            root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+            let ident = fragments_actions.display_indent(&update.metadata);
+            ident.to_string()
+        } else {
+            "Nothing to update".to_string()
+        };
         let line_split_result = display_string
             .lines()
             .map(|s| s.as_bytes().to_vec())

@@ -50,6 +50,7 @@ async-trait = { workspace = true }
 backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
+feature-set = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
 itertools = { workspace = true }
@@ -58,7 +59,7 @@ logcall = { workspace = true }
 maplit = "1.0.2"
 minitrace = { workspace = true }
 poem = { workspace = true }
-prometheus-client = "0.21.2"
+prometheus-client = "0.22"
 prost = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

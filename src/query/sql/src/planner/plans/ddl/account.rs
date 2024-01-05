@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_ast::ast::AlterPasswordAction;
 use databend_common_ast::ast::PasswordSetOptions;
 use databend_common_expression::types::DataType;
@@ -28,10 +30,11 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
+    pub if_not_exists: bool,
     pub user: UserIdentity,
     pub auth_info: AuthInfo,
     pub user_option: UserOption,
-    pub if_not_exists: bool,
+    pub password_update_on: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

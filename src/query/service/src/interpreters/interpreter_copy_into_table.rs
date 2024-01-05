@@ -241,6 +241,7 @@ impl CopyIntoTableInterpreter {
         plan: &CopyIntoTablePlan,
         files: &[StageFileInfo],
         update_stream_meta: Vec<UpdateStreamMetaReq>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -268,6 +269,7 @@ impl CopyIntoTableInterpreter {
                 update_stream_meta,
                 plan.write_mode.is_overwrite(),
                 None,
+                deduplicated_label,
             )?;
         }
 
@@ -319,6 +321,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 &self.plan,
                 &files,
                 update_stream_meta,
+                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             )
             .await?;
         }
@@ -355,7 +358,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 table: self.plan.table_name.clone(),
             };
 
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await?;
+            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
         }
 
         Ok(build_res)

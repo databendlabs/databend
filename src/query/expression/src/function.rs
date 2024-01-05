@@ -561,17 +561,28 @@ impl<'a> EvalContext<'a> {
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
+                let first_error_row = if let Some(selection) = selection {
+                    if let Some(first_invalid) =
+                        selection.iter().find(|idx| !valids.get(**idx as usize))
+                    {
+                        *first_invalid as usize
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    valids
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, valid)| !valid)
+                        .take(1)
+                        .next()
+                        .unwrap()
+                        .0
+                };
                 let args = args
                     .iter()
                     .map(|arg| {

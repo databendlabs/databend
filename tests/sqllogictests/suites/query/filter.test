@@ -1,0 +1,34 @@
+# AND filter short circuit
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a int null, b varchar null);
+
+statement ok
+insert into t(a, b) values (3, NULL), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (1,'4'), (1,'4');
+
+query I
+select a, b from t where a = 1 and cast(b as int) >= 2;
+----
+1 4
+1 4
+
+# OR filter short circuit
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(0), (1), (2), (3), (NULL)
+
+query I
+select a from t where a = 0 or 3 / a > 2 order by a
+----
+0
+1
+
+statement ok
+drop table if exists t;

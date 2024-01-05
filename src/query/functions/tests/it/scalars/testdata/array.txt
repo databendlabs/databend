@@ -2179,7 +2179,7 @@ raw expr       : array_sort_asc_null_first(array(map(array(), array()), map(arra
 checked expr   : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>(array<T0=Map(Nothing)><T0, T0, T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>())))
 optimized expr : [{}, {}, {}]
 output type    : Array(Map(Nothing))
-output domain  : [Undefined]
+output domain  : [{}]
 output         : [{}, {}, {}]
 
 
