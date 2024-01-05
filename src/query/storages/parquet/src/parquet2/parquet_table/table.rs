@@ -201,7 +201,7 @@ pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
     schema.fields.iter_mut().for_each(|f| {
         lower_field_name(f);
     });
-    TableSchema::from(&schema)
+    TableSchema::try_from(&schema).unwrap()
 }
 
 pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageInfo) -> TableInfo {

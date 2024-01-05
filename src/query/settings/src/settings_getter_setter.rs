@@ -411,10 +411,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_merge_into")? != 0)
     }
 
-    pub fn get_merge_into_static_filter_partition_threshold(&self) -> Result<u64> {
-        self.try_get_u64("merge_into_static_filter_partition_threshold")
-    }
-
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
     }

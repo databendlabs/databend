@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod from_data_schema;
-mod from_table_schema;
-mod to_data_schema;
-mod to_table_schema;
+mod from;
+mod to;
+
+pub const EXTENSION_KEY: &str = "Extension";

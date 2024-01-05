@@ -14,7 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::converts::from_schema;
+use databend_common_expression::converts::datavalues::from_schema;
 use databend_common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;

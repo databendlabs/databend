@@ -23,7 +23,7 @@ use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_expression::converts::scalar_to_datavalue;
+use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
