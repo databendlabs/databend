@@ -69,7 +69,7 @@ pub trait RoleApi: Sync + Send {
     /// 3. kv api upsert new owner object key.
     /// Note: if old role is `account_admin` no need to revoke ownership
     #[allow(clippy::ptr_arg)]
-    async fn move_ownership(
+    async fn transfer_ownership(
         &self,
         old_role: &str,
         new_role: &str,

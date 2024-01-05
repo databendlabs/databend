@@ -45,6 +45,7 @@ static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
+static BUILTIN_ROLE_PUBLIC: &str = "public";
 
 static TXN_MAX_RETRY_TIMES: u32 = 10;
 
@@ -230,7 +231,7 @@ impl RoleApi for RoleMgr {
             role: role.to_string(),
         })?;
 
-        if role != BUILTIN_ROLE_ACCOUNT_ADMIN {
+        if role != BUILTIN_ROLE_ACCOUNT_ADMIN && role != BUILTIN_ROLE_PUBLIC {
             let new_key = self.make_role_key(role);
             let SeqV {
                 seq: new_seq,
@@ -285,7 +286,7 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn move_ownership(
+    async fn transfer_ownership(
         &self,
         old_role: &str,
         new_role: &str,
@@ -311,40 +312,40 @@ impl RoleApi for RoleMgr {
 
         let mut retry = 0;
 
+        let mut condition = vec![txn_cond_seq(&new_key, Eq, new_seq)];
+        let mut if_then = vec![
+            txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?),
+            txn_op_put(&owner_key, owner_value.clone()),
+        ];
+
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let txn_req = if old_role == BUILTIN_ROLE_ACCOUNT_ADMIN {
-                TxnRequest {
-                    condition: vec![txn_cond_seq(&new_key, Eq, new_seq)],
-                    if_then: vec![
-                        txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?),
-                        txn_op_put(&owner_key, owner_value.clone()),
-                    ],
-                    else_then: vec![],
-                }
-            } else {
-                let old_key = self.make_role_key(old_role);
-                let mut condition = vec![txn_cond_seq(&new_key, Eq, new_seq)];
-                let mut if_then = vec![
-                    txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?),
-                    txn_op_put(&owner_key, owner_value.clone()),
-                ];
-                if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
-                    let old_seq = seqv.seq;
-                    let mut old_role_info = seqv.data;
-                    old_role_info
-                        .grants
-                        .revoke_privileges(grant_object, *privileges);
-                    condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
-                }
-                TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                }
-            };
+            let txn_req =
+                if old_role == BUILTIN_ROLE_ACCOUNT_ADMIN || old_role == BUILTIN_ROLE_PUBLIC {
+                    TxnRequest {
+                        condition: condition.clone(),
+                        if_then: if_then.clone(),
+                        else_then: vec![],
+                    }
+                } else {
+                    let old_key = self.make_role_key(old_role);
+
+                    if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
+                        let old_seq = seqv.seq;
+                        let mut old_role_info = seqv.data;
+                        old_role_info
+                            .grants
+                            .revoke_privileges(grant_object, *privileges);
+                        condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                        if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
+                    }
+                    TxnRequest {
+                        condition: condition.clone(),
+                        if_then: if_then.clone(),
+                        else_then: vec![],
+                    }
+                };
 
             let tx_reply = self.kv_api.transaction(txn_req).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
@@ -355,7 +356,7 @@ impl RoleApi for RoleMgr {
         }
 
         Err(ErrorCode::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("move_ownership", TXN_MAX_RETRY_TIMES).to_string(),
+            TxnRetryMaxTimes::new("transfer_ownership", TXN_MAX_RETRY_TIMES).to_string(),
         ))
     }
 
@@ -386,7 +387,7 @@ impl RoleApi for RoleMgr {
         let owner_key = self.make_object_owner_key(object);
 
         if let Some(role) = role {
-            if role == BUILTIN_ROLE_ACCOUNT_ADMIN {
+            if role == BUILTIN_ROLE_ACCOUNT_ADMIN || role == BUILTIN_ROLE_PUBLIC {
                 self.kv_api
                     .upsert_kv(UpsertKVReq::new(&owner_key, seq, Operation::Delete, None))
                     .await?;
@@ -424,7 +425,7 @@ impl RoleApi for RoleMgr {
                 }
 
                 Err(ErrorCode::TxnRetryMaxTimes(
-                    TxnRetryMaxTimes::new("grant_ownership", TXN_MAX_RETRY_TIMES).to_string(),
+                    TxnRetryMaxTimes::new("revoke_ownership", TXN_MAX_RETRY_TIMES).to_string(),
                 ))
             }
         } else {

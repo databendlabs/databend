@@ -161,7 +161,7 @@ impl GrantPrivilegeInterpreter {
                     .await?;
             } else {
                 user_mgr
-                    .move_ownership_to_role(
+                    .transfer_ownership_to_role(
                         tenant,
                         &old_role,
                         new_role,

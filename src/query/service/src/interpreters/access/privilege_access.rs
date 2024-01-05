@@ -236,9 +236,10 @@ impl PrivilegeAccess {
                 _ => Err(e.add_message("error on validating access")),
             })?;
         if let Some(object) = &owner_object {
-            let ok = session.has_ownership(object).await?;
-            if ok {
-                return Ok(true);
+            if let Ok(ok) = session.has_ownership(object).await {
+                if ok {
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
