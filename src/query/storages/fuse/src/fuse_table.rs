@@ -120,14 +120,12 @@ impl FuseTable {
 
     pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
         // check if table is AttachedReadOnly in a lighter way
-        let need_refresh_schema = if table_info.db_type == DatabaseType::NormalDB {
-            if table_info.meta.storage_params.is_some() {
-                Self::is_table_attached_read_only(&table_info.meta.options)
-            } else {
-                false
+        let need_refresh_schema = match table_info.db_type {
+            DatabaseType::ShareDB(_) => false,
+            DatabaseType::NormalDB => {
+                table_info.meta.storage_params.is_some()
+                    && Self::is_table_attached_read_only(&table_info.meta.options)
             }
-        } else {
-            false
         };
 
         if need_refresh_schema {
