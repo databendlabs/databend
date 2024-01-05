@@ -224,7 +224,7 @@ impl BlockReader {
                 let data_type: DataType = self.projected_schema.field(index).data_type().into();
                 entries.push(BlockEntry::new(
                     data_type.clone(),
-                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                 ));
                 match nums_rows {
                     Some(rows) => {

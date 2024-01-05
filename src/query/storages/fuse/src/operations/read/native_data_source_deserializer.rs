@@ -432,7 +432,7 @@ impl NativeDeserializeDataTransform {
                         (*self.src_schema.field(src_index).data_type()).clone();
                     let column = BlockEntry::new(
                         data_type.clone(),
-                        Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                        Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                     );
                     // If the source column is the default value, num_rows may be zero
                     if block.num_columns() > 0 && block.num_rows() == 0 {
@@ -739,7 +739,7 @@ impl NativeDeserializeDataTransform {
             let (i, array) = self.read_state.arrays.last().unwrap();
             debug_assert_eq!(i, index);
             let data_type = top_k.field.data_type().into();
-            let col = Column::from_arrow(array.as_ref(), &data_type);
+            let col = Column::from_arrow(array.as_ref(), &data_type)?;
             if sorter.never_match_any(&col) {
                 // skip current page.
                 return Ok(false);
@@ -868,7 +868,7 @@ impl NativeDeserializeDataTransform {
             let (i, array) = self.read_state.arrays.first().unwrap();
             debug_assert_eq!(i, index);
             let data_type = top_k.field.data_type().into();
-            let col = Column::from_arrow(array.as_ref(), &data_type);
+            let col = Column::from_arrow(array.as_ref(), &data_type)?;
 
             let mut bitmap = MutableBitmap::from_len_set(col.len());
             sorter.push_column(&col, &mut bitmap);

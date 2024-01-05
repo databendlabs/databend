@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::converts::from_scalar;
+use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;

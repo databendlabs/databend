@@ -19,6 +19,7 @@ use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_expression::converts::arrow2::set_validities;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -482,7 +483,7 @@ fn fuzz_test() {
                                 )
                                 .unwrap(),
                             );
-                            Column::set_validity(array, &c.validity)
+                            set_validities(array, &c.validity)
                         }
                         _ => col.as_arrow(),
                     },
