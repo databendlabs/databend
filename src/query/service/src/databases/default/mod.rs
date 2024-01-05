@@ -15,5 +15,3 @@
 mod default_database;
 
 pub use default_database::DefaultDatabase;
-
-// mod meta_with_refresher;
