@@ -146,6 +146,26 @@ impl PhysicalPlan {
                     children,
                 ))
             }
+            PhysicalPlan::UnionAll(union_all) => {
+                let left_child = union_all.left.format_join(metadata)?;
+                let right_child = union_all.right.format_join(metadata)?;
+
+                let children = vec![
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                ];
+
+                let _estimated_rows = if let Some(info) = &union_all.stat_info {
+                    format!("{0:.2}", info.estimated_rows)
+                } else {
+                    String::from("none")
+                };
+
+                Ok(FormatTreeNode::with_children(
+                    "UnionAll".to_string(),
+                    children,
+                ))
+            }
             other => {
                 let children = other
                     .children()
