@@ -2705,6 +2705,7 @@ dependencies = [
  "match-template",
  "micromarshal 0.4.0",
  "num",
+ "num-traits",
  "ordered-float 4.2.0",
  "pretty_assertions",
  "roaring",

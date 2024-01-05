@@ -20,6 +20,7 @@ lexical-core = "0.8.5"
 match-template = { workspace = true }
 micromarshal = "0.4.0"
 num = "0.4.0"
+num-traits = "0.2.15"
 ordered-float = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 serde_json = { workspace = true }

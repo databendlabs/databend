@@ -138,10 +138,12 @@ impl InputFormatTextBase for InputFormatXML {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
         Arc::new(SeparatedTextDecoder::create_xml(
             XmlFileFormatParams::downcast_unchecked(params),
             options,
+            rounding_mode,
         ))
     }
 

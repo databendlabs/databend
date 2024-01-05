@@ -407,7 +407,13 @@ impl AsyncSource for ValueSource {
         }
 
         let format = self.ctx.get_format_settings()?;
-        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
+        let numeric_cast_option = self
+            .ctx
+            .get_settings()
+            .get_numeric_cast_option()
+            .unwrap_or("rounding".to_string());
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format, rounding_mode);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
         let estimated_rows = values_decoder.estimated_rows();
