@@ -124,7 +124,7 @@ CREATE TABLE `05_0003_at_t4`(a string not null, b string null, c array(string) n
 statement ok
 INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
 
-query T
+query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (
@@ -151,7 +151,7 @@ ALTER TABLE `05_0003_at_t4` MODIFY COLUMN c array(binary) null
 statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(binary, binary) null
 
-query T
+query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (
@@ -178,7 +178,7 @@ ALTER TABLE `05_0003_at_t4` MODIFY COLUMN c array(string) null
 statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(string, string) null
 
-query T
+query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (
@@ -188,7 +188,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
   `d` TUPLE(1 STRING, 2 STRING) NULL
 ) ENGINE=FUSE
 
-query 
+query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
 a b ['c1','c2'] ('d1','d2')

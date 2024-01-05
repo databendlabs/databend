@@ -1846,8 +1846,8 @@ error:
 
 
 
-ast            : to_binary('Abc')
-raw expr       : to_binary('Abc')
+ast            : CAST('Abc' AS BINARY)
+raw expr       : CAST('Abc' AS Binary)
 checked expr   : to_binary<String>("Abc")
 optimized expr : 0x416263
 output type    : Binary
@@ -1855,8 +1855,8 @@ output domain  : Undefined
 output         : 0x416263
 
 
-ast            : to_binary('Dobrý den')
-raw expr       : to_binary('Dobrý den')
+ast            : CAST('Dobrý den' AS BINARY)
+raw expr       : CAST('Dobrý den' AS Binary)
 checked expr   : to_binary<String>("Dobrý den")
 optimized expr : 0x446f6272c3bd2064656e
 output type    : Binary
@@ -1864,8 +1864,8 @@ output domain  : Undefined
 output         : 0x446f6272c3bd2064656e
 
 
-ast            : to_binary('ß😀山')
-raw expr       : to_binary('ß😀山')
+ast            : CAST('ß😀山' AS BINARY)
+raw expr       : CAST('ß😀山' AS Binary)
 checked expr   : to_binary<String>("ß😀山")
 optimized expr : 0xc39ff09f9880e5b1b1
 output type    : Binary
@@ -1873,17 +1873,25 @@ output domain  : Undefined
 output         : 0xc39ff09f9880e5b1b1
 
 
-ast            : to_binary(NULL)
-raw expr       : to_binary(NULL)
-checked expr   : to_binary<String NULL>(CAST(NULL AS String NULL))
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS BINARY)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+
+
+
+ast            : CAST(NULL AS BINARY NULL)
+raw expr       : CAST(NULL AS Binary NULL)
+checked expr   : CAST(NULL AS Binary NULL)
 optimized expr : NULL
 output type    : Binary NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : to_binary(a)
-raw expr       : to_binary(a::String)
+ast            : CAST(a AS BINARY)
+raw expr       : CAST(a::String AS Binary)
 checked expr   : to_binary<String>(a)
 evaluation:
 +--------+-------------------+------------------------+
@@ -1904,9 +1912,17 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 
 
-ast            : to_binary(a)
-raw expr       : to_binary(a::String NULL)
-checked expr   : to_binary<String NULL>(a)
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS BINARY)
+  | ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`
+
+
+
+ast            : CAST(a AS BINARY NULL)
+raw expr       : CAST(a::String NULL AS Binary NULL)
+checked expr   : CAST(a AS Binary NULL)
 evaluation:
 +--------+----------------------------+------------------------+
 |        | a                          | Output                 |
@@ -1926,8 +1942,8 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : to_string(to_binary('Abc'))
-raw expr       : to_string(to_binary('Abc'))
+ast            : CAST(CAST('Abc' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('Abc' AS Binary) AS String)
 checked expr   : to_string<Binary>(to_binary<String>("Abc"))
 optimized expr : "Abc"
 output type    : String
@@ -1935,8 +1951,8 @@ output domain  : {"Abc"..="Abc"}
 output         : 'Abc'
 
 
-ast            : to_string(to_binary('Dobrý den'))
-raw expr       : to_string(to_binary('Dobrý den'))
+ast            : CAST(CAST('Dobrý den' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('Dobrý den' AS Binary) AS String)
 checked expr   : to_string<Binary>(to_binary<String>("Dobrý den"))
 optimized expr : "Dobrý den"
 output type    : String
@@ -1944,8 +1960,8 @@ output domain  : {"Dobrý den"..="Dobrý den"}
 output         : 'Dobrý den'
 
 
-ast            : to_string(to_binary('ß😀山'))
-raw expr       : to_string(to_binary('ß😀山'))
+ast            : CAST(CAST('ß😀山' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('ß😀山' AS Binary) AS String)
 checked expr   : to_string<Binary>(to_binary<String>("ß😀山"))
 optimized expr : "ß😀山"
 output type    : String
@@ -1953,17 +1969,25 @@ output domain  : {"ß😀山"..="ß😀山"}
 output         : 'ß😀山'
 
 
-ast            : to_string(to_binary(NULL))
-raw expr       : to_string(to_binary(NULL))
-checked expr   : to_string<Binary NULL>(to_binary<String NULL>(CAST(NULL AS String NULL)))
+error: 
+  --> SQL:1:6
+  |
+1 | CAST(CAST(NULL AS BINARY) AS STRING)
+  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+
+
+
+ast            : CAST(CAST(NULL AS BINARY NULL) AS STRING NULL)
+raw expr       : CAST(CAST(NULL AS Binary NULL) AS String NULL)
+checked expr   : CAST(CAST(NULL AS Binary NULL) AS String NULL)
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : to_string(to_binary(a))
-raw expr       : to_string(to_binary(a::String))
+ast            : CAST(CAST(a AS BINARY) AS STRING)
+raw expr       : CAST(CAST(a::String AS Binary) AS String)
 checked expr   : to_string<Binary>(to_binary<String>(a))
 evaluation:
 +--------+-------------------+-------------+
@@ -1984,9 +2008,17 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 
 
-ast            : to_string(to_binary(a))
-raw expr       : to_string(to_binary(a::String NULL))
-checked expr   : to_string<Binary NULL>(to_binary<String NULL>(a))
+error: 
+  --> SQL:1:6
+  |
+1 | CAST(CAST(a AS BINARY) AS STRING)
+  |      ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`
+
+
+
+ast            : CAST(CAST(a AS BINARY NULL) AS STRING NULL)
+raw expr       : CAST(CAST(a::String NULL AS Binary NULL) AS String NULL)
+checked expr   : CAST(CAST(a AS Binary NULL) AS String NULL)
 evaluation:
 +--------+----------------------------+-----------------+
 |        | a                          | Output          |
@@ -4043,8 +4075,8 @@ output domain  : [[{0..=0} ∪ {NULL}]]
 output         : [[NULL], [NULL, NULL]]
 
 
-ast            : TRY_to_binary('Abc')
-raw expr       : TRY_to_binary('Abc')
+ast            : TRY_CAST('Abc' AS BINARY)
+raw expr       : TRY_CAST('Abc' AS Binary)
 checked expr   : try_to_binary<String>("Abc")
 optimized expr : 0x416263
 output type    : Binary NULL
@@ -4052,8 +4084,8 @@ output domain  : Undefined
 output         : 0x416263
 
 
-ast            : TRY_to_binary('Dobrý den')
-raw expr       : TRY_to_binary('Dobrý den')
+ast            : TRY_CAST('Dobrý den' AS BINARY)
+raw expr       : TRY_CAST('Dobrý den' AS Binary)
 checked expr   : try_to_binary<String>("Dobrý den")
 optimized expr : 0x446f6272c3bd2064656e
 output type    : Binary NULL
@@ -4061,8 +4093,8 @@ output domain  : Undefined
 output         : 0x446f6272c3bd2064656e
 
 
-ast            : TRY_to_binary('ß😀山')
-raw expr       : TRY_to_binary('ß😀山')
+ast            : TRY_CAST('ß😀山' AS BINARY)
+raw expr       : TRY_CAST('ß😀山' AS Binary)
 checked expr   : try_to_binary<String>("ß😀山")
 optimized expr : 0xc39ff09f9880e5b1b1
 output type    : Binary NULL
@@ -4070,8 +4102,8 @@ output domain  : Undefined
 output         : 0xc39ff09f9880e5b1b1
 
 
-ast            : TRY_to_binary(NULL)
-raw expr       : TRY_to_binary(NULL)
+ast            : TRY_CAST(NULL AS BINARY)
+raw expr       : TRY_CAST(NULL AS Binary)
 checked expr   : try_to_binary<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
 output type    : Binary NULL
@@ -4079,8 +4111,17 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : TRY_to_binary(a)
-raw expr       : TRY_to_binary(a::String)
+ast            : TRY_CAST(NULL AS BINARY NULL)
+raw expr       : TRY_CAST(NULL AS Binary NULL)
+checked expr   : TRY_CAST(NULL AS Binary NULL)
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(a AS BINARY)
+raw expr       : TRY_CAST(a::String AS Binary)
 checked expr   : try_to_binary<String>(a)
 evaluation:
 +--------+-------------------+------------------------+
@@ -4101,8 +4142,8 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : TRY_to_binary(a)
-raw expr       : TRY_to_binary(a::String NULL)
+ast            : TRY_CAST(a AS BINARY)
+raw expr       : TRY_CAST(a::String NULL AS Binary)
 checked expr   : try_to_binary<String NULL>(a)
 evaluation:
 +--------+----------------------------+------------------------+
@@ -4123,45 +4164,76 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : TRY_to_string(to_binary('Abc'))
-raw expr       : TRY_to_string(to_binary('Abc'))
-checked expr   : try_to_string<Binary>(to_binary<String>("Abc"))
+ast            : TRY_CAST(a AS BINARY NULL)
+raw expr       : TRY_CAST(a::String NULL AS Binary NULL)
+checked expr   : TRY_CAST(a AS Binary NULL)
+evaluation:
++--------+----------------------------+------------------------+
+|        | a                          | Output                 |
++--------+----------------------------+------------------------+
+| Type   | String NULL                | Binary NULL            |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
+| Row 0  | 'Abc'                      | 0x416263               |
+| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
+| Row 2  | NULL                       | NULL                   |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(TRY_CAST('Abc' AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST('Abc' AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String>("Abc"))
 optimized expr : "Abc"
 output type    : String NULL
 output domain  : {"Abc"..="Abc"}
 output         : 'Abc'
 
 
-ast            : TRY_to_string(to_binary('Dobrý den'))
-raw expr       : TRY_to_string(to_binary('Dobrý den'))
-checked expr   : try_to_string<Binary>(to_binary<String>("Dobrý den"))
+ast            : TRY_CAST(TRY_CAST('Dobrý den' AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST('Dobrý den' AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String>("Dobrý den"))
 optimized expr : "Dobrý den"
 output type    : String NULL
 output domain  : {"Dobrý den"..="Dobrý den"}
 output         : 'Dobrý den'
 
 
-ast            : TRY_to_string(to_binary('ß😀山'))
-raw expr       : TRY_to_string(to_binary('ß😀山'))
-checked expr   : try_to_string<Binary>(to_binary<String>("ß😀山"))
+ast            : TRY_CAST(TRY_CAST('ß😀山' AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST('ß😀山' AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String>("ß😀山"))
 optimized expr : "ß😀山"
 output type    : String NULL
 output domain  : {"ß😀山"..="ß😀山"}
 output         : 'ß😀山'
 
 
-ast            : TRY_to_string(to_binary(NULL))
-raw expr       : TRY_to_string(to_binary(NULL))
-checked expr   : try_to_string<Binary NULL>(to_binary<String NULL>(CAST(NULL AS String NULL)))
+ast            : TRY_CAST(TRY_CAST(NULL AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST(NULL AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String NULL>(CAST(NULL AS String NULL)))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : TRY_to_string(to_binary(a))
-raw expr       : TRY_to_string(to_binary(a::String))
-checked expr   : try_to_string<Binary>(to_binary<String>(a))
+ast            : TRY_CAST(TRY_CAST(NULL AS BINARY NULL) AS STRING NULL)
+raw expr       : TRY_CAST(TRY_CAST(NULL AS Binary NULL) AS String NULL)
+checked expr   : TRY_CAST(TRY_CAST(NULL AS Binary NULL) AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(TRY_CAST(a AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST(a::String AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String>(a))
 evaluation:
 +--------+-------------------+-----------------+
 |        | a                 | Output          |
@@ -4181,9 +4253,31 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : TRY_to_string(to_binary(a))
-raw expr       : TRY_to_string(to_binary(a::String NULL))
-checked expr   : try_to_string<Binary NULL>(to_binary<String NULL>(a))
+ast            : TRY_CAST(TRY_CAST(a AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST(a::String NULL AS Binary) AS String)
+checked expr   : try_to_string<Binary NULL>(try_to_binary<String NULL>(a))
+evaluation:
++--------+----------------------------+-----------------+
+|        | a                          | Output          |
++--------+----------------------------+-----------------+
+| Type   | String NULL                | String NULL     |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                      | 'Abc'           |
+| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
+| Row 2  | NULL                       | NULL            |
++--------+----------------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }, validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(TRY_CAST(a AS BINARY NULL) AS STRING NULL)
+raw expr       : TRY_CAST(TRY_CAST(a::String NULL AS Binary NULL) AS String NULL)
+checked expr   : TRY_CAST(TRY_CAST(a AS Binary NULL) AS String NULL)
 evaluation:
 +--------+----------------------------+-----------------+
 |        | a                          | Output          |
