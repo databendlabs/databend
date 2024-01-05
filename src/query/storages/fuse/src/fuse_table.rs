@@ -118,6 +118,37 @@ impl FuseTable {
         Ok(Self::do_create(table_info)?)
     }
 
+    pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
+        // check if table is AttachedReadOnly in a lighter way
+        let need_refresh_schema = if table_info.db_type == DatabaseType::NormalDB {
+            if table_info.meta.storage_params.is_some() {
+                Self::is_table_attached_read_only(&table_info.meta.options)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if need_refresh_schema {
+            let table = Self::do_create(table_info.as_ref().clone())?;
+            let snapshot = table.read_table_snapshot().await?;
+            let schema = snapshot
+                .ok_or_else(|| {
+                    ErrorCode::ShareStorageError(
+                        "Failed to load snapshot of read_only attach table".to_string(),
+                    )
+                })?
+                .schema
+                .clone();
+            let mut table_info = table_info.as_ref().clone();
+            table_info.meta.schema = Arc::new(schema);
+            Ok(Arc::new(table_info))
+        } else {
+            Ok(table_info)
+        }
+    }
+
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();

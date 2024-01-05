@@ -65,7 +65,6 @@ impl DefaultDatabase {
         })
     }
 }
-
 #[async_trait::async_trait]
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
@@ -77,7 +76,7 @@ impl Database for DefaultDatabase {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let storage = self.ctx.storage_factory.clone();
+        let storage = &self.ctx.storage_factory;
         storage.get_table(table_info)
     }
 
@@ -93,7 +92,14 @@ impl Database for DefaultDatabase {
                 table_name,
             ))
             .await?;
-        self.get_table_by_info(table_info.as_ref())
+
+        // TODO timeout
+        let table_info_refreshed = self
+            .ctx
+            .storage_factory
+            .refresh_table_info(table_info)
+            .await?;
+        self.get_table_by_info(table_info_refreshed.as_ref())
     }
 
     #[async_backtrace::framed]
@@ -104,7 +110,17 @@ impl Database for DefaultDatabase {
             .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?;
 
-        self.load_tables(table_infos)
+        let mut refreshed = Vec::with_capacity(table_infos.len());
+        for table_info in table_infos {
+            refreshed.push(
+                self.ctx
+                    .storage_factory
+                    .refresh_table_info(table_info)
+                    .await?,
+            );
+        }
+
+        self.load_tables(refreshed)
     }
 
     #[async_backtrace::framed]

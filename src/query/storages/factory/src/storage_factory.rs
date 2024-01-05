@@ -45,6 +45,19 @@ where
     }
 }
 
+use std::future::Future;
+#[async_trait::async_trait]
+impl<F, Fut> TableInfoRefresher for F
+where
+    F: Fn(Arc<TableInfo>) -> Fut,
+    Fut: Future<Output = Result<Arc<TableInfo>>> + Send,
+    F: Send + Sync,
+{
+    async fn refresh(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
+        self(table_info).await
+    }
+}
+
 pub trait StorageDescriptor: Send + Sync {
     fn description(&self) -> StorageDescription;
 }
@@ -59,9 +72,15 @@ where
     }
 }
 
+#[async_trait::async_trait]
+pub trait TableInfoRefresher: Send + Sync {
+    async fn refresh(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>>;
+}
+
 pub struct Storage {
     creator: Arc<dyn StorageCreator>,
     descriptor: Arc<dyn StorageDescriptor>,
+    table_info_refresher: Option<Arc<dyn TableInfoRefresher>>,
 }
 
 #[derive(Default)]
@@ -78,6 +97,7 @@ impl StorageFactory {
             creators.insert("MEMORY".to_string(), Storage {
                 creator: Arc::new(MemoryTable::try_create),
                 descriptor: Arc::new(MemoryTable::description),
+                table_info_refresher: None,
             });
         }
 
@@ -85,42 +105,49 @@ impl StorageFactory {
         creators.insert("NULL".to_string(), Storage {
             creator: Arc::new(NullTable::try_create),
             descriptor: Arc::new(NullTable::description),
+            table_info_refresher: None,
         });
 
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Storage {
             creator: Arc::new(FuseTable::try_create),
             descriptor: Arc::new(FuseTable::description),
+            table_info_refresher: Some(Arc::new(FuseTable::refresh_schema)),
         });
 
         // Register VIEW table engine
         creators.insert("VIEW".to_string(), Storage {
             creator: Arc::new(ViewTable::try_create),
             descriptor: Arc::new(ViewTable::description),
+            table_info_refresher: None,
         });
 
         // Register RANDOM table engine
         creators.insert("RANDOM".to_string(), Storage {
             creator: Arc::new(RandomTable::try_create),
             descriptor: Arc::new(RandomTable::description),
+            table_info_refresher: None,
         });
 
         // Register STREAM table engine
         creators.insert("STREAM".to_string(), Storage {
             creator: Arc::new(StreamTable::try_create),
             descriptor: Arc::new(StreamTable::description),
+            table_info_refresher: None,
         });
 
         // Register ICEBERG table engine
         creators.insert("ICEBERG".to_string(), Storage {
             creator: Arc::new(IcebergTable::try_create),
             descriptor: Arc::new(IcebergTable::description),
+            table_info_refresher: None,
         });
 
         // Register DELTA table engine
         creators.insert("DELTA".to_string(), Storage {
             creator: Arc::new(DeltaTable::try_create),
             descriptor: Arc::new(DeltaTable::description),
+            table_info_refresher: None,
         });
 
         StorageFactory { storages: creators }
@@ -134,6 +161,18 @@ impl StorageFactory {
 
         let table: Arc<dyn Table> = factory.creator.try_create(table_info.clone())?.into();
         Ok(table)
+    }
+
+    pub async fn refresh_table_info(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
+        let engine = table_info.engine().to_uppercase();
+        let factory = self.storages.get(&engine).ok_or_else(|| {
+            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
+        })?;
+
+        match factory.table_info_refresher.as_ref() {
+            None => Ok(table_info),
+            Some(refresher) => refresher.refresh(table_info).await,
+        }
     }
 
     pub fn get_storage_descriptors(&self) -> Vec<StorageDescription> {

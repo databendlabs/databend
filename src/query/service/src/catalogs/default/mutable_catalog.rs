@@ -349,6 +349,7 @@ impl Catalog for MutableCatalog {
         &self,
         table_id: MetaId,
     ) -> databend_common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+        // TODO
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
         Ok(res)
     }
@@ -404,6 +405,8 @@ impl Catalog for MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
+
+        // TODO
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();
