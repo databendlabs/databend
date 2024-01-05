@@ -2943,6 +2943,7 @@ dependencies = [
  "databend-common-tracing",
  "derive_more",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "minitrace",

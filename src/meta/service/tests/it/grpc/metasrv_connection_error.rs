@@ -151,7 +151,6 @@ fn make_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, MetaClientEr
         "xxx",
         None,
         Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
         None,
     )?;
 

@@ -34,6 +34,7 @@ use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
+use crate::tests::service::make_grpc_client;
 
 #[test(harness = meta_service_test_harness)]
 #[minitrace::trace]
@@ -65,6 +66,52 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
     let client = tcs[1].grpc_client().await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
+
+    Ok(())
+}
+
+/// When invoke kv_read_v1() on a follower, the leader endpoint is responded in the response header.
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
+async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<()> {
+    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+
+    let addresses = tcs
+        .iter()
+        .map(|tc| tc.config.grpc_api_address.clone())
+        .collect::<Vec<_>>();
+
+    let a0 = || addresses[0].clone();
+    let a1 = || addresses[1].clone();
+    let a2 = || addresses[2].clone();
+
+    let client = make_grpc_client(vec![a1(), a2(), a0()])?;
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(
+            a1(),
+            eclient.target_endpoint(),
+            "Endpoints.index is 0 initially, so the target endpoint is a1"
+        );
+    }
+
+    // Make client again, still connect to a1.
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(a1(), eclient.target_endpoint(),);
+    }
+
+    let _strm = client
+        .request(Streamed(MGetKVReq {
+            keys: vec![s("a"), s("b")],
+        }))
+        .await?;
+
+    // Current leader endpoint updated, will connect to a0.
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(a0(), eclient.target_endpoint(),);
+    }
 
     Ok(())
 }

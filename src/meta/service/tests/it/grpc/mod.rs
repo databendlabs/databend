@@ -24,4 +24,5 @@ pub mod metasrv_grpc_schema_api;
 pub mod metasrv_grpc_schema_api_follower_follower;
 pub mod metasrv_grpc_schema_api_leader_follower;
 pub mod metasrv_grpc_tls;
+pub mod metasrv_grpc_transaction;
 pub mod metasrv_grpc_watch;
