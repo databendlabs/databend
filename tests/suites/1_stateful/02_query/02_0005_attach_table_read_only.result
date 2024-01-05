@@ -13,7 +13,7 @@ count() of test attach only table
 1
 alter table modify column
 expects column number as varchar
-number	VARCHAR	YES	NULL
+number	VARCHAR	YES	NULL	
 expects own row
 0
 delete not allowed
