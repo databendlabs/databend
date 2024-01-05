@@ -5,6 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # base table
 echo "drop table if exists base" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists attach_read_only" | $BENDSQL_CLIENT_CONNECT
 echo "create table base as select * from numbers(100)" | $BENDSQL_CLIENT_CONNECT
 
 storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_options_in_show_create_table=0;show create table base" | grep -i snapshot_location | awk -F'SNAPSHOT_LOCATION='"'"'|_ss' '{print $2}')
@@ -40,7 +41,21 @@ echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
 echo "expects own row"
 echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
 
+echo "alter table add column"
+echo "alter table base add column c1 varchar NOT NULL DEFAULT 'c1';" | $BENDSQL_CLIENT_CONNECT
+echo "alter table base add column c2 varchar NOT NULL DEFAULT 'c2';" | $BENDSQL_CLIENT_CONNECT
+echo "expects 3 columns: number, c1, c2"
+echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
+echo "expects one row, 3 columns"
+echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
 
+
+echo "alter table drop column"
+echo "alter table base drop column c1;" | $BENDSQL_CLIENT_CONNECT
+echo "expects new columns: number, c2"
+echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
+echo "expects one row, 2 columns"
+echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
 
 # 4. READ_ONLY attach table is not allowed to be mutated
 
@@ -98,5 +113,5 @@ echo "show create attach table"
 # e.g. s3://testbucket/admin/data/1/401/ to s3://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/
 echo "show create table attach_read_only" | $BENDSQL_CLIENT_CONNECT | sed -E 's/[0-9]+/PLACE_HOLDER/g'
 
-echo "drop table if exists base" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists attach_read_only" | $BENDSQL_CLIENT_CONNECT
+#echo "drop table if exists base" | $BENDSQL_CLIENT_CONNECT
+#echo "drop table if exists attach_read_only" | $BENDSQL_CLIENT_CONNECT
