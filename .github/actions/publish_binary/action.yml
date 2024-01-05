@@ -49,8 +49,3 @@ runs:
       shell: bash
       run: |
         aws s3 cp dist/${{ steps.package.outputs.file }} s3://repo/bendsql/${{ inputs.version }}/${{ steps.package.outputs.file }} --no-progress
-        gh api '/repos/datafuselabs/bendsql/tags' > tags.json
-        aws s3 cp tags.json s3://repo/bendsql/tags.json
-        gh api '/repos/datafuselabs/bendsql/releases' > releases.json
-        cat releases.json
-        aws s3 cp releases.json s3://repo/bendsql/releases.json

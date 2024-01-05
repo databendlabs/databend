@@ -78,6 +78,25 @@ jobs:
         target: ${{ matrix.target }}
         version: ${{ github.ref_name }}
 
+  update_repo:
+    needs: [build_linux, build_other]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Update Release and Tags
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto
+        AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      run: |
+        gh api '/repos/datafuselabs/bendsql/tags' > tags.json
+        aws s3 cp tags.json s3://repo/bendsql/tags.json
+        gh api '/repos/datafuselabs/bendsql/releases' > releases.json
+        aws s3 cp releases.json s3://repo/bendsql/releases.json
+
   distribution:
     needs: build_linux
     runs-on: ubuntu-latest
