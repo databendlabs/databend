@@ -690,24 +690,44 @@ fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
             true, true, false,
         ]),
     )]);
-    run_ast(file, format!("{prefix}CAST({prefix}CAST('Abc' AS BINARY) AS STING)"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST('Abc' AS BINARY) AS STING)"),
+        &[],
+    );
     run_ast(
         file,
         format!("{prefix}CAST({prefix}CAST('Dobrý den' AS BINARY) AS STING)"),
         &[],
     );
-    run_ast(file, format!("{prefix}CAST({prefix}CAST('ß😀山' AS BINARY) AS STING)"), &[]);
-    run_ast(file, format!("{prefix}CAST({prefix}CAST(NULL AS BINARY) AS STING)"), &[]);
-    run_ast(file, format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STING)"), &[(
-        "a",
-        StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
-    )]);
-    run_ast(file, format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STING)"), &[(
-        "a",
-        StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
-            true, true, false,
-        ]),
-    )]);
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST('ß😀山' AS BINARY) AS STING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(NULL AS BINARY) AS STING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STING)"),
+        &[(
+            "a",
+            StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
+        )],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STING)"),
+        &[(
+            "a",
+            StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
+                true, true, false,
+            ]),
+        )],
+    );
 }
 
 fn gen_bitmap_data() -> Column {
