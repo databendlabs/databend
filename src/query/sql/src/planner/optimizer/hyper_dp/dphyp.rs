@@ -389,7 +389,7 @@ impl DPhpy {
         // The Greedy Operator Ordering starts with a single relation and iteratively adds the relation that minimizes the cost of the join.
         // the algorithm terminates when all relations have been added, the cost of a join is the sum of the cardinalities of the node involved
         // in the tree, the algorithm is not guaranteed to find the optimal join tree, it is guaranteed to find it in polynomial time.
-        // Create join releations list, all relations have been inserted into dp_table in func `join_reorder`.
+        // Create join relations list, all relations have been inserted into dp_table in func `join_reorder`.
         let mut join_relations = (0..self.join_relations.len())
             .map(|idx| self.relation_set_tree.get_relation_set_by_index(idx))
             .collect::<Result<Vec<_>>>()?;
@@ -409,7 +409,7 @@ impl DPhpy {
                         .query_graph
                         .is_connected(left_relation, right_relation)?;
                     if !join_conditions.is_empty() {
-                        // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the 
+                        // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the
                         // minimum cost pair in `dp_table`.
                         let cost =
                             self.emit_csg_cmp(left_relation, right_relation, join_conditions)?;
