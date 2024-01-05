@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow_format::flight::data::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::base::tokio::time::Instant;
+use databend_common_base::future::TimingFutureExt;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -38,7 +38,11 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
@@ -62,6 +66,7 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -102,29 +107,37 @@ impl MetaServiceImpl {
         let req: MetaGrpcReq = request.try_into()?;
         info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
-        let t0 = Instant::now();
-
         let m = &self.meta_node;
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
-                let res = m.upsert_kv(a.clone()).await;
+                let res = m
+                    .upsert_kv(a.clone())
+                    .info_elapsed(format!("UpsertKV: {:?}", a))
+                    .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::GetKV(a) => {
-                let res = m.get_kv(&a.key).await;
+                let res = m
+                    .get_kv(&a.key)
+                    .info_elapsed(format!("GetKV: {:?}", a))
+                    .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::MGetKV(a) => {
-                let res = m.mget_kv(&a.keys).await;
+                let res = m
+                    .mget_kv(&a.keys)
+                    .info_elapsed(format!("MGetKV: {:?}", a))
+                    .await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::ListKV(a) => {
-                let res = m.prefix_list_kv(&a.prefix).await;
+                let res = m
+                    .prefix_list_kv(&a.prefix)
+                    .info_elapsed(format!("ListKV: {:?}", a))
+                    .await;
                 RaftReply::from(res)
             }
         };
-        let elapsed = t0.elapsed();
-        info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
 
         network_metrics::incr_request_result(reply.error.is_empty());
 
@@ -135,55 +148,65 @@ impl MetaServiceImpl {
     async fn handle_kv_read_v1(
         &self,
         request: Request<RaftRequest>,
-    ) -> Result<BoxStream<StreamItem>, Status> {
+    ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
 
         info!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
-        let req = ForwardRequest {
-            forward_to_leader: 1,
-            body: req,
-        };
-
-        let t0 = Instant::now();
+        let req = ForwardRequest::new(1, req);
 
         let res = self
             .meta_node
             .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
+            .info_elapsed(format!("ReadRequest: {:?}", req))
             .await
             .map_err(GrpcHelper::internal_err);
-
-        let elapsed = t0.elapsed();
-        info!("Handled(elapsed: {:?}) ReadRequest: {:?}", elapsed, req);
 
         network_metrics::incr_request_result(res.is_ok());
         res
     }
 
     #[minitrace::trace]
-    async fn handle_txn(&self, request: Request<TxnRequest>) -> Result<TxnReply, Status> {
-        let request = request.into_inner();
+    async fn handle_txn(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<(Option<Endpoint>, TxnReply), Status> {
+        let txn = request.into_inner();
 
-        info!("{}: Receive txn_request: {}", func_name!(), request);
+        info!("{}: Received TxnRequest: {}", func_name!(), txn);
 
-        let ret = self.meta_node.transaction(request).await;
+        let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
 
-        let body = match ret {
-            Ok(resp) => TxnReply {
-                success: resp.success,
-                error: "".to_string(),
-                responses: resp.responses,
-            },
-            Err(err) => TxnReply {
-                success: false,
-                error: serde_json::to_string(&err).expect("fail to serialize"),
-                responses: vec![],
-            },
+        let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
+
+        let forward_res = self
+            .meta_node
+            .handle_forwardable_request(forward_req)
+            .info_elapsed(format!("TxnRequest: {:?}", txn))
+            .await;
+
+        let (endpoint, txn_reply) = match forward_res {
+            Ok((endpoint, forward_resp)) => {
+                let applied_state: AppliedState =
+                    forward_resp.try_into().expect("expect AppliedState");
+
+                let txn_reply: TxnReply = applied_state.try_into().expect("expect TxnReply");
+
+                (endpoint, txn_reply)
+            }
+            Err(err) => {
+                let txn_reply = TxnReply {
+                    success: false,
+                    error: serde_json::to_string(&err).expect("fail to serialize"),
+                    responses: vec![],
+                };
+                (None, txn_reply)
+            }
         };
 
-        network_metrics::incr_request_result(body.error.is_empty());
+        network_metrics::incr_request_result(txn_reply.error.is_empty());
 
-        Ok(body)
+        Ok((endpoint, txn_reply))
     }
 }
 
@@ -278,9 +301,12 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
-        let strm = self.handle_kv_read_v1(request).in_span(root).await?;
+        let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
 
-        Ok(Response::new(strm))
+        let mut resp = Response::new(strm);
+        GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+
+        Ok(resp)
     }
 
     async fn transaction(
@@ -293,11 +319,14 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
-        let reply = self.handle_txn(request).in_span(root).await?;
+        let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-        Ok(Response::new(reply))
+        let mut resp = Response::new(reply);
+        GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+
+        Ok(resp)
     }
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;

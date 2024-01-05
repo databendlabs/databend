@@ -15,6 +15,9 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(lazy_cell)]
 
+extern crate core;
+
+pub mod endpoints;
 pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;

@@ -207,15 +207,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client = MetaGrpcClient::try_create(
-            vec![addr.to_string()],
-            "root",
-            "xxx",
-            None,
-            None,
-            Duration::from_secs(10),
-            None,
-        )?;
+        let client =
+            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);
@@ -227,15 +220,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 async fn show_status(conf: &Config) -> anyhow::Result<()> {
     let addr = &conf.grpc_api_address;
 
-    let client = MetaGrpcClient::try_create(
-        vec![addr.to_string()],
-        "root",
-        "xxx",
-        None,
-        None,
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
     let res = client.get_cluster_status().await?;
     println!("BinaryVersion: {}", res.binary_version);

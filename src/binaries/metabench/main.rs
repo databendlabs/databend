@@ -121,15 +121,8 @@ async fn main() {
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
         let handle = tokio::spawn(async move {
-            let client = MetaGrpcClient::try_create(
-                vec![addr.to_string()],
-                "root",
-                "xxx",
-                None,
-                None,
-                Duration::from_secs(10),
-                None,
-            );
+            let client =
+                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
 
             let client = match client {
                 Ok(client) => client,
