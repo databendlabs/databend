@@ -467,7 +467,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("unknown user 'test'@'%'")
+                .contains("User 'test'@'%' not found")
         );
     }
 
@@ -489,7 +489,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("unknown user 'test'@'%'")
+                .contains("User 'test'@'%' not found")
         );
     }
 
