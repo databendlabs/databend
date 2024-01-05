@@ -133,8 +133,7 @@ impl Table for ResultScan {
             let mut reader = Cursor::new(self.block_raw_data.clone());
             let meta = read_metadata(&mut reader)?;
             let arrow_schema = infer_schema(&meta)?;
-            let table_schema = TableSchema::from(&arrow_schema);
-            let schema = DataSchema::from(&table_schema);
+            let schema = DataSchema::try_from(&arrow_schema).unwrap();
 
             // Read the parquet file into one block.
             let chunks_iter =

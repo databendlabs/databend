@@ -479,6 +479,15 @@ query T
 select unnest(parse_json('"a"'))
 ----
 
+statement error 1065
+select unnest(max(11))
+
+statement error 1065
+select unnest(min(11),max(12))
+
+statement error 1065
+select unnest(first_value('aa') OVER (PARTITION BY 'bb'))
+
 statement ok
 set max_block_size = 65535;
 

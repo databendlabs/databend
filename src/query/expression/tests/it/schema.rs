@@ -27,11 +27,11 @@ use databend_common_expression::TableSchema;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_from_arrow_field_to_table_data_type() -> Result<()> {
+fn test_from_arrow_field_to_table_field() -> Result<()> {
     let extension_data_type =
         ArrowDataType::Extension("a".to_string(), Box::new(ArrowDataType::Int8), None);
     let arrow_field = ArrowField::new("".to_string(), extension_data_type, false);
-    let _: TableDataType = (&arrow_field).into();
+    let _: TableField = (&arrow_field).try_into().unwrap();
     Ok(())
 }
 

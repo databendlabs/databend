@@ -27,7 +27,7 @@ use crate::DataSchemaRef;
 
 /// ! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
-    let block: DataBlock = DataBlock::concat(results)?;
+    let block = DataBlock::concat(results)?;
     Ok(block.to_string())
 }
 

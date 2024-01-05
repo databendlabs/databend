@@ -40,6 +40,7 @@ use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::MergeInto;
 use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
@@ -151,6 +152,17 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::SelectLeaf;
 
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        if !plan.change_join_order {
+            self.state = State::SelectLeaf;
+        }
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_update_source(
