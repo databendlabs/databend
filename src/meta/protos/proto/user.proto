@@ -133,7 +133,7 @@ message UserInfo {
   UserQuota quota = 5;
   UserOption option = 6;
   repeated AuthInfo history_auth_infos = 7;
-  repeated string password_fail_ons = 8;
+  repeated string password_fails = 8;
   optional string password_update_on = 9;
   optional string lockout_time = 10;
 }
