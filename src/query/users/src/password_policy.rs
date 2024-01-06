@@ -395,7 +395,7 @@ impl UserApiProvider {
         if let Some(name) = user_info.option.password_policy() {
             if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
                 // Check the number of login password fails
-                if !user_info.password_fail_ons.is_empty() && password_policy.max_retries > 0 {
+                if !user_info.password_fails.is_empty() && password_policy.max_retries > 0 {
                     let check_time = now
                         .checked_sub_signed(Duration::minutes(
                             password_policy.lockout_time_mins as i64,
@@ -404,7 +404,7 @@ impl UserApiProvider {
 
                     // Only the most recent login fails are considered, outdated fails can be ignored
                     let failed_retries = user_info
-                        .password_fail_ons
+                        .password_fails
                         .iter()
                         .filter(|t| t.cmp(&&check_time) == Ordering::Greater)
                         .count();

@@ -75,7 +75,7 @@ fn test_decode_v71_user() -> anyhow::Result<()> {
             AuthInfo::create2(&None, &Some("1234".to_string())).unwrap(),
             AuthInfo::create2(&None, &Some("abcd".to_string())).unwrap(),
         ],
-        password_fail_ons: vec![
+        password_fails: vec![
             Utc.with_ymd_and_hms(2023, 12, 25, 1, 0, 0).unwrap(),
             Utc.with_ymd_and_hms(2023, 12, 25, 1, 2, 3).unwrap(),
         ],
