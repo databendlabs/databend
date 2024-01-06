@@ -102,7 +102,7 @@ impl UdfApi for UdfMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' not found.",
+                "UDF '{}' does not exist.",
                 info.name.clone()
             ))),
         }
@@ -115,8 +115,8 @@ impl UdfApi for UdfMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' not found.", udf_name)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::with_meta(
@@ -125,7 +125,7 @@ impl UdfApi for UdfMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUDFFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' not found.",
+                "UDF '{}' does not exist.",
                 udf_name
             ))),
         }
@@ -164,7 +164,7 @@ impl UdfApi for UdfMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' not found.",
+                "UDF '{}' does not exist.",
                 udf_name
             )))
         }

@@ -73,7 +73,7 @@ impl RoleMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownRole(format!(
-                "Role '{}' not found.",
+                "Role '{}' does not exist.",
                 role_info.name
             ))),
         }
@@ -141,12 +141,12 @@ impl RoleApi for RoleMgr {
         let key = self.make_role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' not found.", role)))?;
+            res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownRole(format!(
-                "Role '{}' not found.",
+                "Role '{}' does not exist.",
                 role
             ))),
         }
@@ -271,7 +271,7 @@ impl RoleApi for RoleMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownRole(format!(
-                "Role '{}' not found.",
+                "Role '{}' does not exist.",
                 role
             )))
         }

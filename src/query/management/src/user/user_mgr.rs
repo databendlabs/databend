@@ -70,7 +70,7 @@ impl UserMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUser(format!(
-                "User '{}' update failed: User not found or invalid request.",
+                "User '{}' update failed: User does not exist or invalid request.",
                 user_info.name
             ))),
         }
@@ -108,8 +108,8 @@ impl UserApi for UserMgr {
         let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUser(format!("User {} not found.", user_key)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownUser(format!("User {} does not exist.", user_key)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -117,7 +117,7 @@ impl UserApi for UserMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownUser(format!(
-                "User {} not found.",
+                "User {} does not exist.",
                 user_key
             ))),
         }

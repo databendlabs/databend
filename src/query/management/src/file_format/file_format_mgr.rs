@@ -98,7 +98,7 @@ impl FileFormatApi for FileFormatMgr {
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownFileFormat(format!("File format '{}' not found.", name))
+            ErrorCode::UnknownFileFormat(format!("File format '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -107,7 +107,7 @@ impl FileFormatApi for FileFormatMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalFileFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownFileFormat(format!(
-                "File format '{}' not found.",
+                "File format '{}' does not exist.",
                 name
             ))),
         }
@@ -142,7 +142,7 @@ impl FileFormatApi for FileFormatMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownFileFormat(format!(
-                "File format '{}' not found.",
+                "File format '{}' does not exist.",
                 name
             )))
         }

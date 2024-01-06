@@ -111,7 +111,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         match upsert_kv.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownPasswordPolicy(format!(
-                "Password policy '{}' not found.",
+                "Password policy '{}' does not exist.",
                 password_policy.name
             ))),
         }
@@ -141,7 +141,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         let key = self.make_password_policy_key(name)?;
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownPasswordPolicy(format!("Password policy '{}' not found.", name))
+            ErrorCode::UnknownPasswordPolicy(format!("Password policy '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -150,7 +150,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalPasswordPolicy, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownPasswordPolicy(format!(
-                "Password policy '{}' not found.",
+                "Password policy '{}' does not exist.",
                 name
             ))),
         }

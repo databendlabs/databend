@@ -129,7 +129,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Network policy '{}' not found.",
+                "Network policy '{}' does not exist.",
                 name
             )))
         }
@@ -141,7 +141,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         let key = self.make_network_policy_key(name)?;
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownNetworkPolicy(format!("Network policy '{}' not found.", name))
+            ErrorCode::UnknownNetworkPolicy(format!("Network policy '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -150,7 +150,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalNetworkPolicy, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Network policy '{}' not found.",
+                "Network policy '{}' does not exist.",
                 name
             ))),
         }

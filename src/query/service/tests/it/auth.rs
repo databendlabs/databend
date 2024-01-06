@@ -263,7 +263,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("User 'test'@'%' not found")
+                .contains("User 'test'@'%' does not exist")
         );
     }
 
@@ -285,7 +285,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("User 'test'@'%' not found")
+                .contains("User 'test'@'%' does not exist")
         );
     }
 
@@ -467,7 +467,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("User 'test'@'%' not found")
+                .contains("User 'test'@'%' does not exist")
         );
     }
 
@@ -489,7 +489,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             res.err()
                 .unwrap()
                 .message()
-                .contains("User 'test'@'%' not found")
+                .contains("User 'test'@'%' does not exist")
         );
     }
 

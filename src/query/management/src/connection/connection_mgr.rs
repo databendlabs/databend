@@ -94,7 +94,7 @@ impl ConnectionApi for ConnectionMgr {
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownConnection(format!("Connection '{}' not found.", name))
+            ErrorCode::UnknownConnection(format!("Connection '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -103,7 +103,7 @@ impl ConnectionApi for ConnectionMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalConnection, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownConnection(format!(
-                "Connection '{}' not found.",
+                "Connection '{}' does not exist.",
                 name
             ))),
         }
@@ -138,7 +138,7 @@ impl ConnectionApi for ConnectionMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownConnection(format!(
-                "Connection '{}' not found.",
+                "Connection '{}' does not exist.",
                 name
             )))
         }

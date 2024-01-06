@@ -99,8 +99,8 @@ impl StageApi for StageMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' not found.", name)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -108,7 +108,7 @@ impl StageApi for StageMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownStage(format!(
-                "Stage '{}' not found.",
+                "Stage '{}' does not exist.",
                 name
             ))),
         }
@@ -198,7 +198,7 @@ impl StageApi for StageMgr {
                     )
                 } else {
                     return Err(ErrorCode::UnknownStage(format!(
-                        "Stage '{}' not found.",
+                        "Stage '{}' does not exist.",
                         name
                     )));
                 };
