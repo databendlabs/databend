@@ -611,6 +611,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Refresh aggregating index after new data written",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
