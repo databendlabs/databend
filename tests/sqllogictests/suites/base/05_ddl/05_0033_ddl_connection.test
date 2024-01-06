@@ -1,7 +1,7 @@
 statement ok
 DROP CONNECTION IF EXISTS test_conn
 
-statement error 2510.*Unknown connection test_conn
+statement error 2510.*Connection 'test_conn' does not exist.
 DROP CONNECTION test_conn
 
 statement error (?s)1005.*unexpected end of line
@@ -22,7 +22,7 @@ CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazon
 statement ok
 CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com'
 
-statement error 2512.*connection already exists
+statement error 2512.*Connection 'test_conn' already exists.
 CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com'
 
 query TTT
@@ -41,7 +41,7 @@ DROP CONNECTION test_conn
 statement ok
 DROP CONNECTION IF EXISTS test_conn
 
-statement error 2510.*Unknown connection test_conn
+statement error 2510.*Connection 'test_conn' does not exist.
 DESC CONNECTION test_conn
 
 query TTT
