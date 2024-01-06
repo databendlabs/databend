@@ -408,7 +408,6 @@ impl Binder {
             field_index_map,
             merge_type,
             distributed: false,
-            change_join_order: false,
         })
     }
 

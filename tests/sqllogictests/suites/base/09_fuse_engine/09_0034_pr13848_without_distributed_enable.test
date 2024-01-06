@@ -3,10 +3,10 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
-create table merge_target_0(a int,b string) cluster by(a,b);
+create table merge_target_0(a int,b string);
 
 statement ok
-create table merge_source_0(a int,b string) cluster by(a,b);
+create table merge_source_0(a int,b string);
 
 statement ok
 insert into merge_target_0 values(1,'a1'),(2,'b1');
@@ -87,7 +87,7 @@ select * from merge_target_0 order by a,b;
 
 ### test copy into table unsupport
 statement ok
-create table copy_table_test0(a int,b string) cluster by(a,b);
+create table copy_table_test0(a int,b string);
 
 statement ok
 create stage parquet_table0 FILE_FORMAT = (TYPE = PARQUET);

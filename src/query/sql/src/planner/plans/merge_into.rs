@@ -67,7 +67,6 @@ pub struct MergeInto {
     pub field_index_map: HashMap<FieldIndex, String>,
     pub merge_type: MergeIntoType,
     pub distributed: bool,
-    pub change_join_order: bool,
 }
 
 impl std::fmt::Debug for MergeInto {

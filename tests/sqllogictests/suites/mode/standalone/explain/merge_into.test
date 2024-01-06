@@ -26,33 +26,6 @@ target_table: default.default.salaries2
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(employees2.employee_id (#0), salaries2.employee_id (#3))]
-    ├── non-equi conditions: []
-    ├── EvalScalar
-    │   ├── scalars: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
-    │   └── LogicalGet
-    │       ├── table: default.default.employees2
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.salaries2
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
-statement ok
-INSERT INTO salaries2 VALUES(1, 50000.00),(2, 60000.00);
-
-query T
-explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON salaries2.employee_id = employees2.employee_id WHEN MATCHED AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees2.employee_id, 55000.00);
-----
-MergeInto:
-target_table: default.default.salaries2
-├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
-├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
-├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
 └── HashJoin: RIGHT OUTER
     ├── equi conditions: [eq(salaries2.employee_id (#3), employees2.employee_id (#0))]
     ├── non-equi conditions: []

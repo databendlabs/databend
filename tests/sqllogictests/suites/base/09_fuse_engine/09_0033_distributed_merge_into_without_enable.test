@@ -10,7 +10,7 @@ statement ok
 drop table if exists distributed_source_test;
 
 statement ok
-create table distributed_target_test(a int,b string) cluster by(a,b);
+create table distributed_target_test(a int,b string);
 
 ## multi blocks
 statement ok
@@ -42,7 +42,7 @@ select * from distributed_target_test order by a;
 8 x
 
 statement ok
-create table distributed_source_test(a int,b string,is_databend_deleted bool) cluster by(a,b);
+create table distributed_source_test(a int,b string,is_databend_deleted bool);
 
 statement ok
 insert into distributed_source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
@@ -82,13 +82,13 @@ statement ok
 drop table if exists corner_target_table;
 
 statement ok
-create table corner_target_table(a int,b string,c string) cluster by(a,b);
+create table corner_target_table(a int,b string,c string);
 
 statement ok
 drop table if exists corner_source_table;
 
 statement ok
-create table corner_source_table(a int,b string,c string) cluster by(a,b);
+create table corner_source_table(a int,b string,c string);
 
 ## add block1
 statement ok
@@ -164,7 +164,7 @@ statement ok
 merge into distributed_test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_store) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert *;
 
 statement ok
-create table orders2(a int,b string,c string) cluster by(a,b);
+create table orders2(a int,b string,c string);
 
 statement ok
 insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');

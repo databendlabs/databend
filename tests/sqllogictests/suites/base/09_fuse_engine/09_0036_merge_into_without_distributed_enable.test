@@ -8,10 +8,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int,b string, c string) cluster by(a,b);
+create table t1(a int,b string, c string);
 
 statement ok
-create table t2(a int,b string, c string) cluster by(a,b);
+create table t2(a int,b string, c string);
 
 statement ok
 insert into t1 values(1,'b1','c1'),(2,'b2','c2');
@@ -276,7 +276,7 @@ statement ok
 drop table if exists target_table;
 
 statement ok
-create table target_table(a int,b string,c string) cluster by(a,b);
+create table target_table(a int,b string,c string);
 
 statement ok
 insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
@@ -288,7 +288,7 @@ select * from target_table order by a,b,c;
 2 a_2 b_2
 
 statement ok
-create table test_stage(a int,b string,c string) cluster by(a,b);
+create table test_stage(a int,b string,c string);
 
 statement ok
 insert into test_stage values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
@@ -468,10 +468,10 @@ select * from t1 order by a,b,c;
 1 a1 b1
 
 statement ok
-CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
+CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255));
 
 statement ok
-CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2)) cluster by(employee_id,salary);
+CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2));
 
 statement ok
 INSERT INTO employees VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', 'Finance'),(4, 'David', 'HR');
@@ -494,10 +494,10 @@ select * from salaries order by employee_id;
 
 ## null cast bug fix
 statement ok
-create table t1_target(a int not null) cluster by(a);
+create table t1_target(a int not null);
 
 statement ok
-create table t2_source(a int not null) cluster by(a);
+create table t2_source(a int not null);
 
 statement ok
 insert into t1_target values(1);
@@ -559,13 +559,13 @@ statement ok
 drop table if exists source_test;
 
 statement ok
-create table target_test(a int,b string) cluster by(a,b);
+create table target_test(a int,b string);
 
 statement ok
 insert into target_test values(1,'a'),(2,'b'),(3,'c');
 
 statement ok
-create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
+create table source_test(a int,b string,delete_flag bool);
 
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
@@ -609,10 +609,10 @@ merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5,
 
 ## test update list #13297
 statement ok
-create table t11(a int,b string, c string) cluster by(a,b);
+create table t11(a int,b string, c string);
 
 statement ok
-create table t12(a int,b string, c string) cluster by(a,b);
+create table t12(a int,b string, c string);
 
 statement ok
 insert into t11 values(1,'b1','c1'),(2,'b2','c2');
@@ -628,7 +628,7 @@ merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched
 
 ## test issue #13287
 statement ok
-create table tt1 (a int, b int) cluster by(a,b);
+create table tt1 (a int, b int);
 
 statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
@@ -645,7 +645,7 @@ select count(*) from tt1;
 
 ## test issue #13367
 statement ok
-create table tt2(a bool, b variant, c map(string, string)) cluster by(a);
+create table tt2(a bool, b variant, c map(string, string));
 
 statement ok
 insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
@@ -669,10 +669,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int) cluster by(a);
+create table t1(a int);
 
 statement ok
-create table t2(a int) cluster by(a);
+create table t2(a int);
 
 statement ok
 insert into t1 values(1);
@@ -697,10 +697,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(b int) cluster by(b);
+create table t1(b int);
 
 statement ok
-create table t2(a int) cluster by(a);
+create table t2(a int);
 
 statement ok
 insert into t1 values(1);
@@ -719,10 +719,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int,b string,c bool) cluster by(a,b);
+create table t1(a int,b string,c bool);
 
 statement ok
-create table t2(a int,b string,c bool) cluster by(a,b);
+create table t2(a int,b string,c bool);
 
 statement ok
 insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
@@ -783,7 +783,7 @@ statement ok
 drop table if exists tt1;
 
 statement ok
-create table tt1(a bool, b int) cluster by(a,b);
+create table tt1(a bool, b int);
 
 statement ok
 insert into tt1 values (true, 1), (false, 2);
@@ -806,10 +806,10 @@ statement ok
 drop table if exists t12;
 
 statement ok
-create table t12 (a int, b int) cluster by(a,b);
+create table t12 (a int, b int);
 
 statement ok
-create table t11 (a int, b int) cluster by(a,b);
+create table t11 (a int, b int);
 
 statement ok
 insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
@@ -1006,7 +1006,7 @@ FROM orders;
 64.16764110 6.416764110000 1.97683658 19.29134884
 
 statement ok
-create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json) cluster by(c1,c2);
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json);
 
 statement ok
 create table tmp_01 like tb_01;
@@ -1026,10 +1026,10 @@ select id,c1,to_date(c2),c3 from tb_01;
 
 ## test #issue13932
 statement ok
-create table null_target(a int not null,b text) cluster by(a,b);
+create table null_target(a int not null,b text);
 
 statement ok
-create table null_source(a int not null,b text) cluster by(a,b);
+create table null_source(a int not null,b text);
 
 statement ok
 insert into null_target values(1,'a1');

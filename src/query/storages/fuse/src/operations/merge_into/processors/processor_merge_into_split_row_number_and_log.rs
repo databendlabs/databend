@@ -27,7 +27,6 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
-use crate::operations::merge_into::processors::RowIdKind;
 
 pub struct RowNumberAndLogSplitProcessor {
     input_port: Arc<InputPort>,
@@ -68,8 +67,6 @@ impl RowNumberAndLogSplitProcessor {
     }
 }
 
-// we will also use RowNumberAndLogSplitProcessor to
-// split rowids and logs although it's named with 'RowNumber'
 impl Processor for RowNumberAndLogSplitProcessor {
     fn name(&self) -> String {
         "RowNumberAndLogSplit".to_owned()
@@ -134,12 +131,9 @@ impl Processor for RowNumberAndLogSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            // all matched or logs
             if data_block.get_meta().is_some() {
-                // distributed mode: source as build side
-                if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some()
-                    // distributed mode: target as build side
-                    || RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).is_some()
-                {
+                if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
                     self.output_data_row_number = Some(data_block)
                 } else {
                     // mutation logs

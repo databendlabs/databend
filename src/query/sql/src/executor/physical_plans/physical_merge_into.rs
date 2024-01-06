@@ -51,7 +51,6 @@ pub struct MergeInto {
     pub output_schema: DataSchemaRef,
     pub distributed: bool,
     pub merge_type: MergeIntoType,
-    pub change_join_order: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -63,6 +62,4 @@ pub struct MergeIntoAppendNotMatched {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub input_schema: DataSchemaRef,
     pub merge_type: MergeIntoType,
-    pub change_join_order: bool,
-    pub segments: Vec<(usize, Location)>,
 }

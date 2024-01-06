@@ -19,7 +19,7 @@ pub use mutator::MatchedAggregator;
 pub use processors::MatchedSplitProcessor;
 pub use processors::MergeIntoNotMatchedProcessor;
 pub use processors::MergeIntoSplitProcessor;
-pub use processors::MixRowIdKindAndLog;
+pub use processors::MixRowNumberKindAndLog;
 pub use processors::RowNumberAndLogSplitProcessor;
 pub use processors::SourceFullMatched;
 pub use processors::TransformAddRowNumberColumnProcessor;

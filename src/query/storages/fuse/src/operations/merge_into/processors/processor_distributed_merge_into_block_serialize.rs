@@ -30,7 +30,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
-use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
+use super::processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
 use super::RowIdKind;
 use crate::operations::common::MutationLogs;
 
@@ -42,7 +42,7 @@ pub struct TransformDistributedMergeIntoBlockSerialize;
 
 /// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockSerialize {
-    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
+    fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
             input,
             output,
@@ -79,7 +79,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 vec![entry],
                 1,
-                Some(Box::new(MixRowIdKindAndLog {
+                Some(Box::new(MixRowNumberKindAndLog {
                     log: Some(log),
                     kind: 0,
                 })),
@@ -90,7 +90,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
                 data.num_rows(),
-                Some(Box::new(MixRowIdKindAndLog {
+                Some(Box::new(MixRowNumberKindAndLog {
                     log: None,
                     kind: match row_id_kind {
                         RowIdKind::Update => 1,
