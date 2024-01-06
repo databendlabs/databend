@@ -317,8 +317,26 @@ impl ModifyTableColumnInterpreter {
                         }
                     }
 
-                    old_field.data_type == new_field.data_type
-                        || is_string_to_binary(&old_field.data_type, &new_field.data_type)
+                    let TableField {
+                        name: old_name,
+                        default_expr: old_default_expr,
+                        data_type: old_data_type,
+                        column_id: old_column_id,
+                        computed_expr: old_computed_expr,
+                    } = old_field;
+                    let TableField {
+                        name: new_name,
+                        default_expr: new_default_expr,
+                        data_type: new_data_type,
+                        column_id: new_column_id,
+                        computed_expr: new_computed_expr,
+                    } = new_field;
+                    old_name == new_name
+                        && old_default_expr == new_default_expr
+                        && old_column_id == new_column_id
+                        && old_computed_expr == new_computed_expr
+                        && (old_data_type == new_data_type
+                            || is_string_to_binary(&old_field.data_type, &new_field.data_type))
                 });
         if is_alter_column_string_to_binary {
             table_info.meta.schema = new_schema.into();
