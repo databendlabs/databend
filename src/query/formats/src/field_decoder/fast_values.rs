@@ -140,6 +140,7 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),

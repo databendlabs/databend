@@ -130,6 +130,7 @@ impl SeparatedTextDecoder {
                 *len += 1;
                 Ok(())
             }
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => {
                 c.data.extend_from_slice(data);
                 c.commit_row();
