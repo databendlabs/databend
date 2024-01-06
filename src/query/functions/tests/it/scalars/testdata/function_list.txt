@@ -1897,8 +1897,10 @@ Functions overloads:
 2 length(Array(Nothing) NULL) :: UInt8 NULL
 3 length(Array(T0)) :: UInt64
 4 length(Array(T0) NULL) :: UInt64 NULL
-5 length(String) :: UInt64
-6 length(String NULL) :: UInt64 NULL
+5 length(Binary) :: UInt64
+6 length(Binary NULL) :: UInt64 NULL
+7 length(String) :: UInt64
+8 length(String NULL) :: UInt64 NULL
 0 like(Variant, String) :: Boolean
 1 like(Variant NULL, String NULL) :: Boolean NULL
 2 like(String, String) :: Boolean
