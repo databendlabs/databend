@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -29,37 +31,36 @@ pub fn register(registry: &mut FunctionRegistry) {
         eval_binary_to_string,
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
-        "to_binary",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, BinaryType>(|arg, output, _| {
-            output.put_slice(arg);
-            output.commit_row();
-        }),
-    );
-
     registry.register_combine_nullable_1_arg::<BinaryType, StringType, _, _>(
         "try_to_string",
         |_, _| FunctionDomain::Full,
         error_to_null(eval_binary_to_string),
     );
 
+    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "to_binary",
+        |_, _| FunctionDomain::Full,
+        |val, _| match val {
+            ValueRef::Scalar(val) => Value::Scalar(val.to_vec()),
+            ValueRef::Column(col) => Value::Column(col),
+        },
+    );
+
     registry.register_combine_nullable_1_arg::<StringType, BinaryType, _, _>(
         "try_to_binary",
         |_, _| FunctionDomain::Full,
-        error_to_null(eval_string_to_binary),
+        |val, _| match val {
+            ValueRef::Scalar(val) => Value::Scalar(Some(val.to_vec())),
+            ValueRef::Column(col) => Value::Column(NullableColumn {
+                validity: Bitmap::new_constant(true, col.len()),
+                column: col,
+            }),
+        },
     );
 }
 
 fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_with_builder_1_arg::<BinaryType, StringType>(|val, output, _| {
-        output.put_slice(val);
-        output.commit_row();
-    })(val, ctx)
-}
-
-fn eval_string_to_binary(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
-    vectorize_with_builder_1_arg::<StringType, BinaryType>(|val, output, _| {
         output.put_slice(val);
         output.commit_row();
     })(val, ctx)
