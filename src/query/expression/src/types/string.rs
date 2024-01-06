@@ -105,12 +105,18 @@ impl ValueType for StringType {
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.index(index)
+        // todo!("new string")
+        let x = col.index(index)?;
+        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
+        Some(x)
     }
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        // todo!("new string")
+        let x = col.index_unchecked(index);
+        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
+        x
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {

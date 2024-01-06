@@ -331,7 +331,9 @@ fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
             | NumberDataType::Float32
             | NumberDataType::Float64 => compare_equal(&constant_datum, column_stat),
         },
-        DataType::Boolean | DataType::String => compare_equal(&constant_datum, column_stat),
+        DataType::Boolean | DataType::Binary | DataType::String => {
+            compare_equal(&constant_datum, column_stat)
+        }
         _ => {
             if column_stat.ndv == 0.0 {
                 0.0

@@ -2677,6 +2677,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "simdutf8",
  "terminal_size",
  "tonic 0.10.2",
  "typetag",

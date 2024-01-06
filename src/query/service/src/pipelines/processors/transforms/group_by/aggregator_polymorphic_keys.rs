@@ -426,7 +426,7 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -469,7 +469,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -516,7 +516,7 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
         DictionarySerializedKeysColumnIter::create(
             self.dict_keys,
-            column.as_string().ok_or_else(|| {
+            column.as_binary().ok_or_else(|| {
                 ErrorCode::IllegalDataType(
                     "Illegal data type for SerializedKeysColumnIter".to_string(),
                 )

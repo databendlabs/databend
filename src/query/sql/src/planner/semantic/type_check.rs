@@ -1760,6 +1760,7 @@ impl<'a> TypeChecker<'a> {
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Null => DataType::Null,
+            DataType::Binary => DataType::Binary,
             DataType::String => DataType::String,
             _ => {
                 return Err(ErrorCode::BadDataValueType(format!(

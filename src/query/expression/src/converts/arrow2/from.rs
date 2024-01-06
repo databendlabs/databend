@@ -113,11 +113,10 @@ fn arrow_type_to_table_type(ty: &ArrowDataType, is_nullable: bool) -> Result<Tab
             arrow_type_to_table_type(&f.data_type, f.is_nullable)?
         )),
 
-        ArrowDataType::Binary
-        | ArrowDataType::LargeBinary
-        | ArrowDataType::FixedSizeBinary(_)
-        | ArrowDataType::Utf8
-        | ArrowDataType::LargeUtf8 => TableDataType::String,
+        ArrowDataType::Binary | ArrowDataType::LargeBinary | ArrowDataType::FixedSizeBinary(_) =>
+            TableDataType::Binary,
+
+        ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => TableDataType::String,
 
         ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
         ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,

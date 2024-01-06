@@ -124,7 +124,7 @@ pub fn try_rewrite(
                             &index_selection,
                             &query_info.format_scalar(&agg.scalar),
                         ) {
-                            rewritten.column.data_type = Box::new(DataType::String);
+                            rewritten.column.data_type = Box::new(DataType::Binary);
                             new_selection.push(ScalarItem {
                                 index: agg.index,
                                 scalar: rewritten.into(),
@@ -244,8 +244,8 @@ pub fn try_rewrite(
                         // If the item is an aggregation function,
                         // the actual data in the index is the temp state of the function.
                         // (E.g. `sum` function will store serialized `sum_state` in index data.)
-                        // So the data type will be `String`.
-                        return Ok(TableField::new(&idx.to_string(), TableDataType::String));
+                        // So the data type will be `Binary`.
+                        return Ok(TableField::new(&idx.to_string(), TableDataType::Binary));
                     }
                 }
 

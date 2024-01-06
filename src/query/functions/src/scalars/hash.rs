@@ -357,7 +357,7 @@ impl DFHash for Scalar {
                     DFHash::hash(v, state);
                 }
             }),
-            Scalar::String(vals) | Scalar::Variant(vals) => {
+            Scalar::Binary(vals) | Scalar::String(vals) | Scalar::Variant(vals) => {
                 for v in vals {
                     DFHash::hash(v, state);
                 }

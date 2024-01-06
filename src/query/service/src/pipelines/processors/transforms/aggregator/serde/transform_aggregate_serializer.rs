@@ -296,7 +296,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
         let mut columns = Vec::with_capacity(state_builders.len() + 1);
 
         for builder in state_builders.into_iter() {
-            columns.push(Column::String(builder.build()));
+            columns.push(Column::Binary(builder.build()));
         }
 
         let bucket = self.payload.bucket;
