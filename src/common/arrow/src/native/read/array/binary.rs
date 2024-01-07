@@ -316,7 +316,7 @@ fn try_new_binary_array<O: Offset>(
                     format!(
                         "Encountered invalid utf8 data for string type, \
                         if you were reading column with string type from a table, \
-                        it's recommanded to alter the column type to `BINARY`.\n\
+                        it's recommended to alter the column type to `BINARY`.\n\
                         Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`",
                     ),
                     Box::new(err),

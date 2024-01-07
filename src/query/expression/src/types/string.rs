@@ -547,7 +547,7 @@ impl CheckUTF8 for &[u8] {
             ErrorCode::InvalidUtf8String(format!(
                 "Encountered invalid utf8 data for string type, \
                 if you were reading column with string type from a table, \
-                it's recommanded to alter the column type to `BINARY`.\n\
+                it's recommended to alter the column type to `BINARY`.\n\
                 Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`\n\
                 Invalid utf8 data: `0x{}`",
                 hex::encode(self)
