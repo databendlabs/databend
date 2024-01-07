@@ -94,8 +94,9 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// ```
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
-    minor: 1,
-    patch: 32,
+    minor: 2,
+    // [1.2.163, 1.2.226) are removed from release download, due to some known bugs found in these versions.
+    patch: 226,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };
