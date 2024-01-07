@@ -116,7 +116,7 @@ impl ReclusterMutator {
             max_threads,
         ) * self.max_tasks;
 
-        let arrow_schema = self.schema.to_arrow();
+        let arrow_schema = self.schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
         let mut remained_blocks = Vec::new();

@@ -122,7 +122,7 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));

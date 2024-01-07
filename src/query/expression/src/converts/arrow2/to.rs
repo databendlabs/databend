@@ -45,7 +45,7 @@ impl From<&TableSchema> for ArrowSchema {
             .iter()
             .map(ArrowField::from)
             .collect::<Vec<_>>();
-        ArrowSchema::from(fields)
+        ArrowSchema::from(fields).with_metadata(schema.metadata.clone())
     }
 }
 
@@ -56,7 +56,7 @@ impl From<&DataSchema> for ArrowSchema {
             .iter()
             .map(ArrowField::from)
             .collect::<Vec<_>>();
-        ArrowSchema::from(fields)
+        ArrowSchema::from(fields).with_metadata(schema.metadata.clone())
     }
 }
 
@@ -303,6 +303,9 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 // todo!("new string")
+                for x in col.iter() {
+                    simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
+                }
                 Box::new(
                     databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
                         arrow_type,

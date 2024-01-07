@@ -308,6 +308,7 @@ fn try_new_binary_array<O: Offset>(
     validity: Option<Bitmap>,
 ) -> Result<Box<dyn Array>> {
     if matches!(data_type, DataType::Utf8 | DataType::LargeUtf8) {
+        // todo!("new string")
         let array = Utf8Array::<O>::try_new(data_type, offsets, values, validity)?;
         Ok(Box::new(array) as Box<dyn Array>)
     } else {

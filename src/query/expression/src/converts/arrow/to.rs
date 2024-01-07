@@ -33,15 +33,15 @@ use crate::TableField;
 use crate::TableSchema;
 
 impl From<&DataSchema> for ArrowSchema {
-    fn from(value: &DataSchema) -> Self {
-        let fields = value
+    fn from(schema: &DataSchema) -> Self {
+        let fields = schema
             .fields
             .iter()
             .map(|f| arrow_field_from_arrow2_field(Arrow2Field::from(f)))
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
-            metadata: Default::default(),
+            metadata: schema.metadata.clone().into_iter().collect(),
         }
     }
 }
@@ -55,7 +55,7 @@ impl From<&TableSchema> for ArrowSchema {
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
-            metadata: Default::default(),
+            metadata: schema.metadata.clone().into_iter().collect(),
         }
     }
 }

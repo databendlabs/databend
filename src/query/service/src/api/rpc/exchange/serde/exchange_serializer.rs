@@ -19,6 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::flight::default_ipc_fields;
 use databend_common_arrow::arrow::io::flight::serialize_batch;
 use databend_common_arrow::arrow::io::flight::WriteOptions;
@@ -108,7 +109,7 @@ impl TransformExchangeSerializer {
         params: &MergeExchangeParams,
         compression: Option<FlightCompression>,
     ) -> Result<ProcessorPtr> {
-        let arrow_schema = params.schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
@@ -161,7 +162,7 @@ impl TransformScatterExchangeSerializer {
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
-        let arrow_schema = params.schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,

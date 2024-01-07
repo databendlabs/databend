@@ -60,7 +60,7 @@ pub fn serialize_block(
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = schema.to_arrow();
+            let arrow_schema = schema.as_ref().into();
             let leaf_column_ids = schema.to_leaf_column_ids();
 
             let mut default_compress_ratio = Some(2.10f64);
@@ -78,7 +78,6 @@ pub fn serialize_block(
                     forbidden_compressions: vec![],
                 },
             );
-
             let batch = ArrowChunk::try_from(block)?;
 
             writer.start()?;

@@ -63,7 +63,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        let arrow_schema = Arc::new(schema.to_arrow());
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let ipc_schema = IpcSchema {
             fields: ipc_fields,
@@ -75,7 +75,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
             output,
             TransformDeserializer::<Method, V> {
                 ipc_schema,
-                arrow_schema,
+                arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
                 _phantom: Default::default(),
             },
