@@ -25,6 +25,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
+use crate::types::string::CheckUTF8;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -300,21 +301,23 @@ impl Column {
                 )
             }
             Column::String(col) => {
+                #[cfg(debug_assertions)]
+                col.check_utf8().unwrap();
+
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
-                // todo!("new string")
-                for x in col.iter() {
-                    simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
-                }
-                Box::new(
-                    databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
+
+                unsafe {
+                    Box::new(
+                        databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new_unchecked(
+                            arrow_type,
+                            OffsetsBuffer::new_unchecked(offsets),
+                            col.data().clone(),
+                            None,
+                        )
+                        .unwrap(),
                     )
-                    .unwrap(),
-                )
+                }
             }
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(

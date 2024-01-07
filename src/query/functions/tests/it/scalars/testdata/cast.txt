@@ -1994,7 +1994,7 @@ evaluation:
 |        | a                 | Output      |
 +--------+-------------------+-------------+
 | Type   | String            | String      |
-| Domain | {"Abc"..="ß😀山"} | {""..}      |
+| Domain | {"Abc"..="ß😀山"} | Unknown     |
 | Row 0  | 'Abc'             | 'Abc'       |
 | Row 1  | 'Dobrý den'       | 'Dobrý den' |
 | Row 2  | 'ß😀山'           | 'ß😀山'     |
@@ -2020,15 +2020,15 @@ ast            : CAST(CAST(a AS BINARY NULL) AS STRING NULL)
 raw expr       : CAST(CAST(a::String NULL AS Binary NULL) AS String NULL)
 checked expr   : CAST(CAST(a AS Binary NULL) AS String NULL)
 evaluation:
-+--------+----------------------------+-----------------+
-|        | a                          | Output          |
-+--------+----------------------------+-----------------+
-| Type   | String NULL                | String NULL     |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 'Abc'                      | 'Abc'           |
-| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
-| Row 2  | NULL                       | NULL            |
-+--------+----------------------------+-----------------+
++--------+----------------------------+-------------+
+|        | a                          | Output      |
++--------+----------------------------+-------------+
+| Type   | String NULL                | String NULL |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Unknown     |
+| Row 0  | 'Abc'                      | 'Abc'       |
+| Row 1  | 'Dobrý den'                | 'Dobrý den' |
+| Row 2  | NULL                       | NULL        |
++--------+----------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |

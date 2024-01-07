@@ -105,17 +105,21 @@ impl ValueType for StringType {
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        // todo!("new string")
         let x = col.index(index)?;
-        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
+
+        #[cfg(debug_assertions)]
+        x.check_utf8().unwrap();
+
         Some(x)
     }
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        // todo!("new string")
         let x = col.index_unchecked(index);
-        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
+
+        #[cfg(debug_assertions)]
+        x.check_utf8().unwrap();
+
         x
     }
 
@@ -530,5 +534,34 @@ impl StringDomain {
                 max: other.max.clone().unwrap_or_else(|| max_value.clone()),
             },
         )
+    }
+}
+
+pub trait CheckUTF8 {
+    fn check_utf8(&self) -> Result<()>;
+}
+
+impl CheckUTF8 for &[u8] {
+    fn check_utf8(&self) -> Result<()> {
+        simdutf8::basic::from_utf8(self).map_err(|_| {
+            ErrorCode::InvalidUtf8String(format!(
+                "Encountered invalid utf8 data for string type, \
+                if you were reading column with string type from a table, \
+                it's recommanded to alter the column type to `BINARY`.\n\
+                Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`\n\
+                Invalid utf8 data: `0x{}`",
+                hex::encode(self)
+            ))
+        })?;
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for StringColumn {
+    fn check_utf8(&self) -> Result<()> {
+        for val in self.iter() {
+            val.check_utf8()?;
+        }
+        Ok(())
     }
 }

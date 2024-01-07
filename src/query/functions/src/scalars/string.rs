@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use base64::engine::general_purpose;
-use base64::prelude::*;
 use bstr::ByteSlice;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::types::decimal::Decimal128Type;
@@ -349,34 +347,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "to_base64",
-        |_, _| FunctionDomain::Full,
-        vectorize_string_to_string(
-            |col| col.data().len() * 4 / 3 + col.len() * 4,
-            |val, output, _| {
-                base64::write::EncoderWriter::new(&mut output.data, &general_purpose::STANDARD)
-                    .write_all(val)
-                    .unwrap();
-                output.commit_row();
-            },
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "from_base64",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.data().len() * 4 / 3 + col.len() * 4,
-            |val, output, ctx| {
-                if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-                output.commit_row();
-            },
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "quote",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
@@ -554,21 +524,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "hex",
-        |_, _| FunctionDomain::Full,
-        vectorize_string_to_string(
-            |col| col.data().len() * 2,
-            |val, output, _| {
-                let old_len = output.data.len();
-                let extra_len = val.len() * 2;
-                output.data.resize(old_len + extra_len, 0);
-                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
-                output.commit_row();
-            },
-        ),
-    );
-
     // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
     // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -612,23 +567,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
                 } else {
                     (0..times).for_each(|_| output.put_slice(a));
-                }
-                output.commit_row();
-            },
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "unhex",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.data().len() / 2,
-            |val, output, ctx| {
-                let old_len = output.data.len();
-                let extra_len = val.len() / 2;
-                output.data.resize(old_len + extra_len, 0);
-                if let Err(err) = hex::decode_to_slice(val, &mut output.data[old_len..]) {
-                    ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
             },

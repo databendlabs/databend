@@ -28,6 +28,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
+use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -421,10 +422,7 @@ impl Column {
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
                     let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
-                    // todo!("new string")
-                    for x in column.iter() {
-                        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
-                    }
+                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::LargeBinary) => {
@@ -438,10 +436,7 @@ impl Column {
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                     let column = StringColumn::new(arrow_col.values().clone(), offsets);
-                    // todo!("new string")
-                    for x in column.iter() {
-                        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
-                    }
+                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::FixedSizeBinary(size)) => {
@@ -455,10 +450,7 @@ impl Column {
                         .map(|x| x * (*size) as u64)
                         .collect::<Vec<_>>();
                     let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
-                    // todo!("new string")
-                    for x in column.iter() {
-                        simdutf8::basic::from_utf8(x).unwrap_or_else(|_| panic!("{x:?}"));
-                    }
+                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::Utf8) => {

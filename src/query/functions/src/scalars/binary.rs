@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -46,7 +49,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BinaryType, StringType, _, _>(
         "to_string",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         eval_binary_to_string,
     );
 
@@ -76,11 +79,151 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         },
     );
+
+    registry.register_passthrough_nullable_1_arg::<BinaryType, StringType, _, _>(
+        "to_hex",
+        |_, _| FunctionDomain::Full,
+        vectorize_binary_to_string(
+            |col| col.data().len() * 2,
+            |val, output, _| {
+                let old_len = output.data.len();
+                let extra_len = val.len() * 2;
+                output.data.resize(old_len + extra_len, 0);
+                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "from_hex",
+        |_, _| FunctionDomain::MayThrow,
+        eval_unhex,
+    );
+
+    registry.register_combine_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "try_from_hex",
+        |_, _| FunctionDomain::Full,
+        error_to_null(eval_unhex),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<BinaryType, StringType, _, _>(
+        "to_base64",
+        |_, _| FunctionDomain::Full,
+        vectorize_binary_to_string(
+            |col| col.data().len() * 4 / 3 + col.len() * 4,
+            |val, output, _| {
+                base64::write::EncoderWriter::new(
+                    &mut output.data,
+                    &base64::engine::general_purpose::STANDARD,
+                )
+                .write_all(val)
+                .unwrap();
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "from_base64",
+        |_, _| FunctionDomain::MayThrow,
+        eval_from_base64,
+    );
+
+    registry.register_combine_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "try_from_base64",
+        |_, _| FunctionDomain::Full,
+        error_to_null(eval_from_base64),
+    );
 }
 
 fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
-    vectorize_with_builder_1_arg::<BinaryType, StringType>(|val, output, _| {
-        output.put_slice(val);
-        output.commit_row();
-    })(val, ctx)
+    vectorize_binary_to_string(
+        |col| col.data().len(),
+        |val, output, ctx| {
+            if simdutf8::basic::from_utf8(val).is_ok() {
+                output.put_slice(val);
+            } else {
+                ctx.set_error(output.len(), "invalid utf8 sequence");
+            }
+            output.commit_row();
+        },
+    )(val, ctx)
+}
+
+fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
+    vectorize_string_to_binary(
+        |col| col.data().len() / 2,
+        |val, output, ctx| {
+            let old_len = output.data.len();
+            let extra_len = val.len() / 2;
+            output.data.resize(old_len + extra_len, 0);
+            if let Err(err) = hex::decode_to_slice(val, &mut output.data[old_len..]) {
+                ctx.set_error(output.len(), err.to_string());
+            }
+            output.commit_row();
+        },
+    )(val, ctx)
+}
+
+fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
+    vectorize_string_to_binary(
+        |col| col.data().len() * 4 / 3 + col.len() * 4,
+        |val, output, ctx| {
+            if let Err(err) = base64::Engine::decode_vec(
+                &base64::engine::general_purpose::STANDARD,
+                val,
+                &mut output.data,
+            ) {
+                ctx.set_error(output.len(), err.to_string());
+            }
+            output.commit_row();
+        },
+    )(val, ctx)
+}
+
+/// Binary to String scalar function with estimated output column capacity.
+pub fn vectorize_binary_to_string(
+    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
+) -> impl Fn(ValueRef<BinaryType>, &mut EvalContext) -> Value<StringType> + Copy {
+    move |arg1, ctx| match arg1 {
+        ValueRef::Scalar(val) => {
+            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            func(val, &mut builder, ctx);
+            Value::Scalar(builder.build_scalar())
+        }
+        ValueRef::Column(col) => {
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for val in col.iter() {
+                func(val, &mut builder, ctx);
+            }
+
+            Value::Column(builder.build())
+        }
+    }
+}
+
+/// String to Binary scalar function with estimated output column capacity.
+pub fn vectorize_string_to_binary(
+    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
+) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Value<BinaryType> + Copy {
+    move |arg1, ctx| match arg1 {
+        ValueRef::Scalar(val) => {
+            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            func(val, &mut builder, ctx);
+            Value::Scalar(builder.build_scalar())
+        }
+        ValueRef::Column(col) => {
+            let data_capacity = estimate_bytes(&col);
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            for val in col.iter() {
+                func(val, &mut builder, ctx);
+            }
+
+            Value::Column(builder.build())
+        }
+    }
 }
