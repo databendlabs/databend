@@ -94,8 +94,8 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// ```
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
-    minor: 1,
-    patch: 32,
+    minor: 2,
+    patch: 163,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };
