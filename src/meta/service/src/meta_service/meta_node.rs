@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -50,7 +49,6 @@ use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::ForwardToLeader;
 use databend_common_meta_types::GrpcConfig;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::MembershipNode;
@@ -975,40 +973,6 @@ impl MetaNode {
             })
             .collect();
         endpoints
-    }
-
-    #[minitrace::trace]
-    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaAPIError>
-    where
-        Request: Into<ForwardRequestBody> + Debug,
-        ForwardResponse: TryInto<Reply>,
-        <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
-    {
-        let res = self
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: req.into(),
-            })
-            .await;
-
-        match res {
-            Err(e) => {
-                server_metrics::incr_read_failed();
-                Err(e)
-            }
-            Ok(res) => {
-                let res: Reply = res.try_into().map_err(|e| {
-                    server_metrics::incr_read_failed();
-                    let invalid_reply = InvalidReply::new(
-                        format!("expect reply type to be {}", std::any::type_name::<Reply>(),),
-                        &AnyError::error(e),
-                    );
-                    MetaNetworkError::from(invalid_reply)
-                })?;
-
-                Ok(res)
-            }
-        }
     }
 
     #[minitrace::trace]

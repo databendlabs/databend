@@ -3194,6 +3194,8 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 to_base64(String) :: String
 1 to_base64(String NULL) :: String NULL
+0 to_binary(String) :: Binary
+1 to_binary(String NULL) :: Binary NULL
 0 to_bitmap(String) :: Bitmap
 1 to_bitmap(String NULL) :: Bitmap NULL
 2 to_bitmap(UInt64) :: Bitmap
@@ -3495,8 +3497,10 @@ Functions overloads:
 28 to_string(Date NULL) :: String NULL
 29 to_string(Timestamp) :: String
 30 to_string(Timestamp NULL) :: String NULL
-31 to_string(Bitmap) :: String
-32 to_string(Bitmap NULL) :: String NULL
+31 to_string(Binary) :: String
+32 to_string(Binary NULL) :: String NULL
+33 to_string(Bitmap) :: String
+34 to_string(Bitmap NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -3704,6 +3708,8 @@ Functions overloads:
 1 try_parse_json(Variant NULL) :: Variant NULL
 2 try_parse_json(String) :: Variant NULL
 3 try_parse_json(String NULL) :: Variant NULL
+0 try_to_binary(String) :: Binary NULL
+1 try_to_binary(String NULL) :: Binary NULL
 0 try_to_boolean(Variant) :: Boolean NULL
 1 try_to_boolean(Variant NULL) :: Boolean NULL
 2 try_to_boolean(String) :: Boolean NULL
@@ -3926,6 +3932,8 @@ Functions overloads:
 25 try_to_string(Date NULL) :: String NULL
 26 try_to_string(Timestamp) :: String NULL
 27 try_to_string(Timestamp NULL) :: String NULL
+28 try_to_string(Binary) :: String NULL
+29 try_to_string(Binary NULL) :: String NULL
 0 try_to_timestamp(Variant) :: Timestamp NULL
 1 try_to_timestamp(Variant NULL) :: Timestamp NULL
 2 try_to_timestamp(String) :: Timestamp NULL

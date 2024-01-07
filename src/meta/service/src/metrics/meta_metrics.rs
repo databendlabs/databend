@@ -185,6 +185,15 @@ pub mod server_metrics {
         SERVER_METRICS.proposals_failed.inc();
     }
 
+    /// Accumulate the number of succeeded and failed read requests.
+    pub fn incr_read_result<T, E>(r: &Result<T, E>) {
+        if r.is_ok() {
+            // TODO: success is not collected.
+        } else {
+            incr_read_failed();
+        }
+    }
+
     pub fn incr_read_failed() {
         SERVER_METRICS.read_failed.inc();
     }
