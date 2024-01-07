@@ -2699,6 +2699,7 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "hex",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
  "lexical-core",
  "match-template",

@@ -155,6 +155,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::EmptyMap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
+                DataType::Binary => Ok(ColumnType::MYSQL_TYPE_BLOB),
                 DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Number(num_ty) => match num_ty {
                     NumberDataType::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),

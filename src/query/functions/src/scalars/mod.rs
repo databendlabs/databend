@@ -17,6 +17,7 @@ use databend_common_expression::FunctionRegistry;
 mod arithmetic;
 mod arithmetic_modulo;
 mod array;
+mod binary;
 mod bitmap;
 mod boolean;
 mod comparison;
@@ -50,6 +51,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     datetime::register(registry);
     math::register(registry);
     map::register(registry);
+    binary::register(registry);
     string::register(registry);
     string_multi_args::register(registry);
     tuple::register(registry);
