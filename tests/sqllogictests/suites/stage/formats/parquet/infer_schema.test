@@ -2,7 +2,7 @@ query
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
 id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+t TUPLE(A INT32, B BINARY) 0 1
 
 query 
 select * from infer_schema(location => '@data/parquet/complex.parquet')

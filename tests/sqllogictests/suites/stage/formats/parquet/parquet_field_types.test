@@ -48,7 +48,7 @@ select id, t:a, t from @data/parquet/tuple.parquet where id > 2
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where t:b < 'c'
+select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
 ----
 1 1 (1,'a')
 2 3 (3,'b')
