@@ -16,6 +16,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::EvalContext;
