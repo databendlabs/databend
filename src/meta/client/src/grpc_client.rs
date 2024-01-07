@@ -43,7 +43,6 @@ use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_api::reply::reply_to_api_result;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -478,27 +477,6 @@ impl MetaGrpcClient {
 
                 let start = Instant::now();
                 let resp = match req {
-                    message::Request::Get(r) => {
-                        let resp = self
-                            .kv_api(r)
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                            .await;
-                        message::Response::Get(resp)
-                    }
-                    message::Request::StreamGet(r) => {
-                        let strm = self
-                            .kv_read_v1(MetaGrpcReadReq::GetKV(r.into_inner()))
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_read_v1(GetKV)"))
-                            .await;
-                        message::Response::StreamGet(strm)
-                    }
-                    message::Request::MGet(r) => {
-                        let resp = self
-                            .kv_api(r)
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                            .await;
-                        message::Response::MGet(resp)
-                    }
                     message::Request::StreamMGet(r) => {
                         let strm = self
                             .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
@@ -508,13 +486,6 @@ impl MetaGrpcClient {
                             )
                             .await;
                         message::Response::StreamMGet(strm)
-                    }
-                    message::Request::List(r) => {
-                        let resp = self
-                            .kv_api(r)
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                            .await;
-                        message::Response::List(resp)
                     }
                     message::Request::StreamList(r) => {
                         let strm = self
@@ -994,7 +965,17 @@ impl MetaGrpcClient {
             );
 
             if let Err(ref e) = result {
+                warn!(
+                    req = as_debug!(&raft_req),
+                    error = as_debug!(&e);
+                    "MetaGrpcClient::kv_api error");
+
                 if status_is_retryable(e) {
+                    warn!(
+                        req = as_debug!(&raft_req),
+                        error = as_debug!(&e);
+                        "MetaGrpcClient::kv_api error is retryable");
+
                     self.mark_current_endpoint_unhealthy();
                     failures.push(e.clone());
                     continue;
@@ -1036,53 +1017,6 @@ impl MetaGrpcClient {
                 .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
 
-            // TODO: remove this fallback when MIN_METASRV_SEMVER is bumped to at least 1.2.163
-
-            // 1.2.163
-            // in 1.2.163, kv_read_v1() API is added
-            let kv_read_v1_ver = 1002163;
-            if client.server_protocol_version() < kv_read_v1_ver {
-                if let MetaGrpcReadReq::ListKV(list_req) = &grpc_req {
-                    // Fallback to call non-stream API
-
-                    debug!(
-                        "meta-service version({} < 0.2.163) is too old, fallback to call non-stream API",
-                        client.server_protocol_version()
-                    );
-
-                    let grpc_req = MetaGrpcReq::ListKV(list_req.clone());
-                    let raft_req: RaftRequest = grpc_req.into();
-
-                    let req = traced_req(raft_req.clone());
-
-                    let result = client
-                        .kv_api(req)
-                        .timed_ge(threshold(), info_spent("client::kv_read_v1"))
-                        .await;
-
-                    debug!(
-                        result = as_debug!(&result);
-                        "MetaGrpcClient::kv_read_v1 result, {}-th try", i
-                    );
-
-                    if let Err(ref e) = result {
-                        if status_is_retryable(e) {
-                            self.mark_current_endpoint_unhealthy();
-                            failures.push(e.clone());
-                            continue;
-                        }
-                    }
-
-                    let raft_reply = result?.into_inner();
-                    let list_reply: ListKVReply = reply_to_api_result(raft_reply)?;
-                    let strm = futures::stream::iter(
-                        list_reply.into_iter().map(|x| Ok(pb::StreamItem::from(x))),
-                    );
-
-                    return Ok(strm.boxed());
-                }
-            }
-
             let raft_req: RaftRequest = grpc_req.clone().into();
             let req = traced_req(raft_req.clone());
 
@@ -1097,7 +1031,18 @@ impl MetaGrpcClient {
             );
 
             if let Err(ref e) = result {
+                warn!(
+                    req = as_debug!(&grpc_req),
+                    error = as_debug!(&e);
+                    "MetaGrpcClient::kv_read_v1 error"
+                );
+
                 if status_is_retryable(e) {
+                    warn!(
+                        req = as_debug!(&grpc_req),
+                        error = as_debug!(&e);
+                        "MetaGrpcClient::kv_read_v1 error is retryable");
+
                     self.mark_current_endpoint_unhealthy();
                     failures.push(e.clone());
                     continue;
