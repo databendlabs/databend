@@ -267,10 +267,10 @@ insert into t values(1, '2022-02-03 03:02:00Z.123')
 statement error 1006
 insert into t values(1, '2022-02-03 03:02:00Z+08:00')
 
-statement error 1006
+statement ok
 insert into t values(1, '2022-02-03 03:02:00+0800')
 
-statement error 1006
+statement ok
 insert into t values(1, '2022-02-03T03:02:00+0800')
 
 statement ok
