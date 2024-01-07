@@ -72,6 +72,8 @@ impl VisitorMut for AggregatingIndexRewriter {
                 self.has_agg_function = true;
                 if name.name.eq_ignore_ascii_case("avg") {
                     self.extract_avg(args);
+                } else if name.name.eq_ignore_ascii_case("count") {
+                    self.extract_count(args);
                 } else {
                     let agg = format!(
                         "{}({})",
@@ -190,6 +192,15 @@ impl AggregatingIndexRewriter {
         self.extracted_aggs.insert(sum);
         self.extracted_aggs.insert(count);
         self.extracted_aggs.insert(count_without_column);
+    }
+
+    pub fn extract_count(&mut self, args: &[Expr]) {
+        let count_without_column = "COUNT()".to_string();
+        self.extracted_aggs.insert(count_without_column);
+        if !args.is_empty() {
+            let count = format!("COUNT({})", args[0]);
+            self.extracted_aggs.insert(count);
+        }
     }
 }
 
