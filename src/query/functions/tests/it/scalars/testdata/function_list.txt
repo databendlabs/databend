@@ -1128,8 +1128,10 @@ Functions overloads:
 337 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
 338 city64withseed(Float64, Float64) :: UInt64
 339 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
-0 concat FACTORY
-1 concat FACTORY
+0 concat(Variant, Variant) :: Variant
+1 concat(Variant NULL, Variant NULL) :: Variant NULL
+2 concat FACTORY
+3 concat FACTORY
 0 concat_ws FACTORY
 1 concat_ws FACTORY
 0 contains(Array(UInt8), UInt8) :: Boolean

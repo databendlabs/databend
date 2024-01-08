@@ -90,8 +90,8 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     Ok(res)
 }
 
-pub fn next_port() -> u32 {
-    29000u32 + (GlobalSequence::next() as u32)
+pub fn next_port() -> u16 {
+    29000u16 + (GlobalSequence::next() as u16)
 }
 
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
