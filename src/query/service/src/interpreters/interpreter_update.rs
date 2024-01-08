@@ -48,10 +48,9 @@ use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
-use crate::interpreters::hook::hook_refresh;
-use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
@@ -111,15 +110,18 @@ impl Interpreter for UpdateInterpreter {
             build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
-            // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
             {
-                let refresh_desc = RefreshDesc {
-                    catalog: catalog_name.to_string(),
-                    database: db_name.to_string(),
-                    table: tbl_name.to_string(),
-                };
-
-                hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    catalog_name.to_string(),
+                    db_name.to_string(),
+                    tbl_name.to_string(),
+                    "update".to_string(),
+                    true,
+                );
+                hook_operator
+                    .execute_refresh(&mut build_res.main_pipeline)
+                    .await;
             }
         }
 

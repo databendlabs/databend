@@ -595,6 +595,7 @@ impl PartialOrd for Scalar {
             (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
             (Scalar::Decimal(d1), Scalar::Decimal(d2)) => d1.partial_cmp(d2),
             (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
+            (Scalar::Binary(s1), Scalar::Binary(s2)) => s1.partial_cmp(s2),
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
@@ -631,6 +632,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
             (ScalarRef::Decimal(d1), ScalarRef::Decimal(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
+            (ScalarRef::Binary(s1), ScalarRef::Binary(s2)) => s1.partial_cmp(s2),
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
@@ -711,6 +713,7 @@ impl PartialOrd for Column {
             (Column::Number(col1), Column::Number(col2)) => col1.partial_cmp(col2),
             (Column::Decimal(col1), Column::Decimal(col2)) => col1.partial_cmp(col2),
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Binary(col1), Column::Binary(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::String(col1), Column::String(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
                 col1.iter().partial_cmp(col2.iter())

@@ -57,6 +57,8 @@ mock! {
             key: &[String],
         ) -> Result<MGetKVReply,MetaError>;
 
+        async fn get_kv_stream(&self, key: &[String]) -> Result<KVStream<MetaError>, MetaError>;
+
         async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
         async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;

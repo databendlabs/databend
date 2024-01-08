@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::Streamed;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
@@ -46,7 +45,6 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     let client = tc.grpc_client().await?;
 
     initialize_kvs(&client, now_sec).await?;
-    test_streamed_get(&client, now_sec).await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
 
@@ -65,7 +63,6 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
     initialize_kvs(&client, now_sec).await?;
 
     let client = tcs[1].grpc_client().await?;
-    test_streamed_get(&client, now_sec).await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
 
@@ -90,27 +87,6 @@ async fn initialize_kvs(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Res
         client.upsert_kv(update).await?;
     }
 
-    Ok(())
-}
-
-/// Test streamed mget on a grpc meta-service client
-async fn test_streamed_get(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Result<()> {
-    info!("--- test streamed get");
-
-    let strm = client.request(Streamed(GetKVReq { key: s("a") })).await?;
-
-    let got = strm.map_err(|e| e.to_string()).collect::<Vec<_>>().await;
-    assert_eq!(
-        vec![Ok(pb::StreamItem::new(
-            s("a"),
-            Some(pb::SeqV::with_meta(
-                1,
-                Some(KvMeta::new_expire(now_sec + 10)),
-                b("a")
-            ))
-        )),],
-        got
-    );
     Ok(())
 }
 

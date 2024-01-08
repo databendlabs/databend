@@ -85,8 +85,8 @@ impl StageApi for StageMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
-            ErrorCode::StageAlreadyExists(format!("Stage already exists, seq [{}]", v.seq))
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
+            ErrorCode::StageAlreadyExists(format!("Stage '{}' already exists.", info.stage_name))
         })?;
 
         Ok(res_seq)
@@ -99,15 +99,18 @@ impl StageApi for StageMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownStage(format!(
+                "Stage '{}' does not exist.",
+                name
+            ))),
         }
     }
 
@@ -181,10 +184,10 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            if let Some(seq_v) = self.kv_api.get_kv(&file_key).await? {
-                return Err(ErrorCode::StageFileAlreadyExists(format!(
-                    "Stage file already exists, seq [{}]",
-                    seq_v.seq
+            if let Some(_v) = self.kv_api.get_kv(&file_key).await? {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    name,
                 )));
             }
             let (stage_seq, mut old_stage): (_, StageInfo) =
@@ -194,7 +197,10 @@ impl StageApi for StageMgr {
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
                     )
                 } else {
-                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
+                    return Err(ErrorCode::UnknownStage(format!(
+                        "Stage '{}' does not exist.",
+                        name
+                    )));
                 };
             old_stage.number_of_files += 1;
 

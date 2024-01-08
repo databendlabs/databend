@@ -7,3 +7,63 @@ create table it(a int not null, b string not null)
 query TIITI
 copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
 ----
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1(a int64 not null)
+
+query TIITI
+copy into t1 from @data/csv/float.csv file_format = (type = CSV)
+----
+csv/float.csv 4 0 NULL NULL
+
+query I
+select * from t1
+----
+100
+201
+300
+36981140216868864
+
+statement ok
+truncate table t1
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+query TIITI
+copy into t1 from @data/csv/float.csv file_format = (type = CSV)
+----
+csv/float.csv 4 0 NULL NULL
+
+query I
+select * from t1
+----
+100
+200
+300
+36981140216868864
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t2(a float64 not null)
+
+query TIITI
+copy into t2 from @data/csv/float.csv file_format = (type = CSV)
+----
+csv/float.csv 4 0 NULL NULL
+
+query T
+select * from t2
+----
+100.2345
+200.789
+300.0
+3.698114021686886e16

@@ -52,7 +52,7 @@ pub struct UserInfo {
     // The time of the most recent failed login with wrong passwords,
     // used to detect whether the number of failed logins exceeds the limit,
     // if so, the login will be locked for a while.
-    pub password_fail_ons: Vec<DateTime<Utc>>,
+    pub password_fails: Vec<DateTime<Utc>>,
 
     // The time of the last password change,
     // used to check if the minimum allowed time has been exceeded when changing the password,
@@ -78,7 +78,7 @@ impl UserInfo {
             quota,
             option,
             history_auth_infos: Vec::new(),
-            password_fail_ons: Vec::new(),
+            password_fails: Vec::new(),
             password_update_on: None,
             lockout_time: None,
         }
@@ -123,15 +123,15 @@ impl UserInfo {
     }
 
     pub fn update_login_fail_history(&mut self) {
-        self.password_fail_ons.push(Utc::now());
+        self.password_fails.push(Utc::now());
         // Maximum 10 failed login password records
-        if self.password_fail_ons.len() > 10 {
-            self.password_fail_ons.remove(0);
+        if self.password_fails.len() > 10 {
+            self.password_fails.remove(0);
         }
     }
 
     pub fn clear_login_fail_history(&mut self) {
-        self.password_fail_ons = Vec::new();
+        self.password_fails = Vec::new();
         self.lockout_time = None;
     }
 
