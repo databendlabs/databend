@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
+use databend_common_expression::legacy::values::LegacyScalar;
 use databend_common_expression::ColumnId;
-use databend_common_expression::Scalar;
 
 use crate::meta::MinMax;
 
@@ -74,8 +74,8 @@ impl From<Statistics> for crate::meta::Statistics {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ColumnStatistics {
-    pub min: Scalar,
-    pub max: Scalar,
+    pub min: LegacyScalar,
+    pub max: LegacyScalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
@@ -85,8 +85,8 @@ pub struct ColumnStatistics {
 impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
         Self {
-            min: value.min,
-            max: value.max,
+            min: value.min.into(),
+            max: value.max.into(),
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,
@@ -97,7 +97,7 @@ impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
 impl From<ColumnStatistics> for crate::meta::v5::ColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
         Self {
-            minmax: MinMax::new(value.min, value.max),
+            minmax: MinMax::new(value.min.into(), value.max.into()),
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,

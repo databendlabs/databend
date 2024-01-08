@@ -164,7 +164,12 @@ fn test_serialize_bincode_enum() {
         Float(f32),
     }
 
-    let value = vec![Scalar::Null, Scalar::String(vec![1, 2, 3])];
+    let value = vec![
+        Scalar::Null,
+        Scalar::Float(2.3f32),
+        Scalar::Float(3.2f32),
+        Scalar::String(vec![1, 2, 3]),
+    ];
     let mut buffer = Cursor::new(Vec::new());
     bincode_serialize_into_buf_with_config(&mut buffer, &value, BincodeConfig::Standard).unwrap();
     let slice = buffer.get_ref().as_slice();
@@ -177,8 +182,7 @@ fn test_serialize_bincode_enum() {
 
     assert!(format!("{:?}", deserialized) == format!("{:?}", deserialized2));
 
-    let deserialized3: Vec<Scalar3> =
-        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard).unwrap();
-
-    assert!(format!("{:?}", deserialized) != format!("{:?}", deserialized3));
+    let deserialized3: Result<Vec<Scalar3>> =
+        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard);
+    assert!(deserialized3.is_err());
 }

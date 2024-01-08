@@ -48,6 +48,7 @@ mod expression;
 pub mod filter;
 mod function;
 mod kernels;
+pub mod legacy;
 mod property;
 mod register;
 pub mod row;
