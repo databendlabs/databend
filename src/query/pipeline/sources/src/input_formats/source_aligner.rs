@@ -111,8 +111,10 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                 let eof = read_batch.is_none();
                 let row_batches = state.align(read_batch)?;
                 for b in row_batches.into_iter() {
-                    process_values.rows += b.rows();
-                    self.row_batches.push_back(b);
+                    if b.rows() > 0 || b.size() > 0 {
+                        process_values.rows += b.rows();
+                        self.row_batches.push_back(b);
+                    }
                 }
                 if eof {
                     assert!(self.is_flushing_split);
