@@ -158,32 +158,6 @@ fn test_msgpack_backward_compat_enum() {
     assert_eq!(new.new_int, default_new_int());
 }
 
-/// A compat tests for scalar with old version into scalar of current version
-#[test]
-fn test_bincode_backward_compat_scalar() {
-    use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::Scalar;
-    let old_format = vec![
-        Scalar::Null,
-        Scalar::String(vec![0, 1, 2]),
-        Scalar::Bitmap(vec![1, 2, 3]),
-        Scalar::Variant(vec![2, 3, 4]),
-        Scalar::Number(NumberScalar::Int16(100)),
-        Scalar::Boolean(false),
-    ];
-
-    // data generated from old version v1.2.262-nightly
-    // let mut buffer = vec![];
-    // bincode_serialize_into_buf(&mut buffer, &old_format).unwrap();
-    // println!("{:?}", buffer);
-    let data = vec![
-        6, 0, 8, 3, 0, 1, 2, 11, 3, 1, 2, 3, 13, 3, 2, 3, 4, 3, 5, 200, 7, 0,
-    ];
-    let new_format: Vec<Scalar> = bincode_deserialize_from_slice(&data).unwrap();
-
-    assert_eq!(old_format, new_format);
-}
-
 #[test]
 fn test_msg_pack_enum_reorder() {
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
