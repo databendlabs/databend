@@ -106,10 +106,22 @@ async fn test_fast_values_decoder_multi() -> Result<()> {
                 "+----------+----------+----------+\n| Column 0 | Column 1 | Column 2 |\n+----------+----------+----------+\n| 1        | 2        | 3        |\n| 1        | 1        | 1        |\n| 1        | 1        | 1        |\n+----------+----------+----------+",
             ),
         },
+        Test {
+            data: "(1.2, -2.9, 3.55), (3.12e2, 3.45e+3, -1.9e-3);",
+            column_types: vec![
+                DataType::Number(NumberDataType::Int16),
+                DataType::Number(NumberDataType::Int16),
+                DataType::Number(NumberDataType::Int16),
+            ],
+            output: Ok(
+                "+----------+----------+----------+\n| Column 0 | Column 1 | Column 2 |\n+----------+----------+----------+\n| 1        | -3       | 4        |\n| 312      | 3450     | 0        |\n+----------+----------+----------+",
+            ),
+        },
     ];
 
     for tt in tests {
-        let field_decoder = FastFieldDecoderValues::create_for_insert(FormatSettings::default());
+        let field_decoder =
+            FastFieldDecoderValues::create_for_insert(FormatSettings::default(), true);
         let mut values_decoder = FastValuesDecoder::new(tt.data, &field_decoder);
         let fallback = DummyFastValuesDecodeFallback {};
         let mut columns = tt

@@ -58,13 +58,15 @@ use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use num_traits::NumCast;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
 
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
-    pub common_settings: InputCommonSettings,
+    common_settings: InputCommonSettings,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -74,7 +76,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings) -> Self {
+    pub fn create_for_insert(format: FormatSettings, rounding_mode: bool) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -88,6 +90,7 @@ impl FastFieldDecoderValues {
                 timezone: format.timezone,
                 disable_variant_check: false,
             },
+            rounding_mode,
         }
     }
 
@@ -194,9 +197,26 @@ impl FastFieldDecoderValues {
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
-        let v: T::Native = reader.read_int_text()?;
+        let val: Result<T::Native> = reader.read_int_text();
+        let v = match val {
+            Ok(v) => v,
+            Err(_) => {
+                // cast float value to integer value
+                let val: f64 = reader.read_float_text()?;
+                let new_val: Option<T::Native> = if self.rounding_mode {
+                    num_traits::cast::cast(val.round())
+                } else {
+                    num_traits::cast::cast(val)
+                };
+                if let Some(v) = new_val {
+                    v
+                } else {
+                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                }
+            }
+        };
         column.push(v.into());
         Ok(())
     }
