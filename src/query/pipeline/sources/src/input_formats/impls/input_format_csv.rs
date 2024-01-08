@@ -124,9 +124,14 @@ impl InputFormatTextBase for InputFormatCSV {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
         let csv_params = CsvFileFormatParams::downcast_unchecked(params);
-        Arc::new(SeparatedTextDecoder::create_csv(csv_params, options))
+        Arc::new(SeparatedTextDecoder::create_csv(
+            csv_params,
+            options,
+            rounding_mode,
+        ))
     }
 
     fn try_create_align_state(

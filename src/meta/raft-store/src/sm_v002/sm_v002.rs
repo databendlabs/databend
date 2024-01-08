@@ -18,9 +18,7 @@ use std::io;
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
 use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
@@ -80,26 +78,18 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         unreachable!("write operation SM2KVApi::upsert_kv is disabled")
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        let got = self.sm.get_maybe_expired_kv(key).await?;
-
-        let local_now_ms = SeqV::<()>::now_ms();
-        let got = Self::non_expired(got, local_now_ms);
-        Ok(got)
-    }
-
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = SeqV::<()>::now_ms();
 
-        let mut values = Vec::with_capacity(keys.len());
+        let mut items = Vec::with_capacity(keys.len());
 
         for k in keys {
             let got = self.sm.get_maybe_expired_kv(k.as_str()).await?;
             let v = Self::non_expired(got, local_now_ms);
-            values.push(v);
+            items.push(Ok(StreamItem::from((k.clone(), v))));
         }
 
-        Ok(values)
+        Ok(futures::stream::iter(items).boxed())
     }
 
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {

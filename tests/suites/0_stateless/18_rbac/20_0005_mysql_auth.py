@@ -25,10 +25,10 @@ try:
     cursor.execute(
         "create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');"
     )
+    cursor.execute("create password policy pp1 PASSWORD_MAX_RETRIES=2;")
     cursor.execute(
-        "create password policy pp1 PASSWORD_MAX_RETRIES=2;"
+        "create user u1 identified by 'abcDEF123' with set password policy='pp1';"
     )
-    cursor.execute("create user u1 identified by 'abcDEF123' with set password policy='pp1';")
     cursor.execute(
         "create user u2 identified by 'abc123' with set network policy='p1';"
     )
@@ -40,7 +40,11 @@ except mysql.connector.errors.OperationalError:
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abcDEF123", port="3307", connection_timeout=3
+        host="127.0.0.1",
+        user="u1",
+        passwd="abcDEF123",
+        port="3307",
+        connection_timeout=3,
     )
 except mysql.connector.errors.OperationalError:
     print("u1 is timeout")
@@ -48,7 +52,11 @@ except mysql.connector.errors.OperationalError:
 # try with wrong password first time
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abcDEF1231", port="3307", connection_timeout=3
+        host="127.0.0.1",
+        user="u1",
+        passwd="abcDEF1231",
+        port="3307",
+        connection_timeout=3,
     )
 except mysql.connector.errors.OperationalError:
     print("u1 wrong password 1 is timeout")
@@ -58,7 +66,11 @@ except mysql.connector.errors.ProgrammingError:
 # try with wrong password second time
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abcDEF1232", port="3307", connection_timeout=3
+        host="127.0.0.1",
+        user="u1",
+        passwd="abcDEF1232",
+        port="3307",
+        connection_timeout=3,
     )
 except mysql.connector.errors.OperationalError:
     print("u1 wrong password 2 is timeout")
@@ -68,7 +80,11 @@ except mysql.connector.errors.ProgrammingError:
 # locked for the wrong passwords twice in a row
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abcDEF123", port="3307", connection_timeout=3
+        host="127.0.0.1",
+        user="u1",
+        passwd="abcDEF123",
+        port="3307",
+        connection_timeout=3,
     )
 except mysql.connector.errors.OperationalError:
     print("u1 correct password is timeout")

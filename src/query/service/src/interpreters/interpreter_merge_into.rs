@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use std::u64::MAX;
 
 use databend_common_catalog::table::TableExt;
@@ -58,11 +57,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
-use crate::interpreters::hook::hook_compact;
-use crate::interpreters::hook::hook_refresh;
-use crate::interpreters::hook::CompactHookTraceCtx;
-use crate::interpreters::hook::CompactTargetTableDescription;
-use crate::interpreters::hook::RefreshDesc;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -92,7 +87,6 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let start = Instant::now();
         let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
@@ -104,38 +98,17 @@ impl Interpreter for MergeIntoInterpreter {
         // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
         // build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        // Compact if 'enable_compact_after_write' is on.
+        // Execute hook.
         {
-            let compact_target = CompactTargetTableDescription {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
-            };
-
-            let compact_hook_trace_ctx = CompactHookTraceCtx {
-                start,
-                operation_name: "merge_into".to_owned(),
-            };
-
-            hook_compact(
+            let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                compact_target,
-                compact_hook_trace_ctx,
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                "merge_into".to_owned(),
                 true,
-            )
-            .await;
-        }
-
-        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
-        {
-            let refresh_desc = RefreshDesc {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
-            };
-
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
         }
 
         Ok(build_res)

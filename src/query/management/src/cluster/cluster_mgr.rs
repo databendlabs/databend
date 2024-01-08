@@ -90,10 +90,10 @@ impl ClusterApi for ClusterMgr {
             .metastore
             .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
-        let res_seq = upsert_node.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_node.await?.added_seq_or_else(|_v| {
             ErrorCode::ClusterNodeAlreadyExists(format!(
-                "Cluster ID already exists, seq [{}]",
-                v.seq
+                "Node with ID '{}' already exists in the cluster.",
+                node.id
             ))
         })?;
 
@@ -131,7 +131,7 @@ impl ClusterApi for ClusterMgr {
                 result: None,
             } => Ok(()),
             UpsertKVReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
-                "unknown node {:?}",
+                "Node with ID '{}' does not exist in the cluster.",
                 node_id
             ))),
         }

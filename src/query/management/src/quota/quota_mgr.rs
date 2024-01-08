@@ -58,7 +58,7 @@ impl QuotaApi for QuotaMgr {
         match res {
             Some(seq_value) => match seq.match_seq(&seq_value) {
                 Ok(_) => Ok(seq_value.into_seqv()?),
-                Err(_) => Err(ErrorCode::TenantQuotaUnknown("seq not match")),
+                Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
             },
             None => Ok(SeqV::new(0, TenantQuota::default())),
         }
@@ -79,9 +79,7 @@ impl QuotaApi for QuotaMgr {
 
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::TenantQuotaUnknown(
-                "quota not found, or seq not match",
-            )),
+            None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
         }
     }
 }

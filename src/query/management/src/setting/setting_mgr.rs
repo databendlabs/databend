@@ -84,13 +84,14 @@ impl SettingApi for SettingMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {}", name)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownVariable(format!("Setting '{}' does not exist.", name))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown setting {}",
+                "Setting '{}' does not exist.",
                 name
             ))),
         }
