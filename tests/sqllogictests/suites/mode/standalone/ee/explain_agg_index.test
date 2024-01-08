@@ -366,6 +366,123 @@ statement ok
 DROP AGGREGATING INDEX idx1
 
 statement ok
+CREATE AGGREGATING INDEX idx1 as SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name
+
+query T
+EXPLAIN SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name ORDER BY station_name
+----
+EvalScalar
+├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+    ├── sort keys: [station_name ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── group by: [station_name]
+        ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), #_group_by_key]
+            ├── group by: [station_name]
+            ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_index_db.onebrc
+                ├── output columns: [station_name (#0), measurement (#1)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                ├── aggregating index: [SELECT station_name, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc GROUP BY station_name]
+                ├── rewritten query: [selection: [index_col_0 (#0), index_col_4 (#4), index_col_5 (#5), index_col_2 (#2), index_col_3 (#3)]]
+                └── estimated rows: 0.00
+
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
+CREATE AGGREGATING INDEX idx1 as SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name
+
+query T
+EXPLAIN SELECT * FROM (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name) ORDER BY station_name
+----
+Sort
+├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── sort keys: [station_name ASC NULLS LAST]
+├── estimated rows: 0.00
+└── EvalScalar
+    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── group by: [station_name]
+        ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), #_group_by_key]
+            ├── group by: [station_name]
+            ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_index_db.onebrc
+                ├── output columns: [station_name (#0), measurement (#1)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                ├── aggregating index: [SELECT station_name, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc GROUP BY station_name]
+                ├── rewritten query: [selection: [index_col_0 (#0), index_col_4 (#4), index_col_5 (#5), index_col_2 (#2), index_col_3 (#3)]]
+                └── estimated rows: 0.00
+
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
+CREATE AGGREGATING INDEX idx1 as SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name
+
+query T
+EXPLAIN WITH aggi AS (SELECT station_name, MIN(measurement) AS min_measurement, AVG(measurement) AS mean_measurement, MAX(measurement) AS max_measurement FROM onebrc GROUP BY station_name) SELECT * FROM aggi ORDER BY station_name
+----
+Sort
+├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+├── sort keys: [station_name ASC NULLS LAST]
+├── estimated rows: 0.00
+└── EvalScalar
+    ├── output columns: [MIN(measurement) (#5), MAX(measurement) (#8), onebrc.station_name (#0), mean_measurement (#9)]
+    ├── expressions: [sum(measurement) (#6) / CAST(if(CAST(count(measurement) (#7) = 0 AS Boolean NULL), 1, count(measurement) (#7)) AS UInt64 NULL)]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), onebrc.station_name (#0)]
+        ├── group by: [station_name]
+        ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── output columns: [MIN(measurement) (#5), sum(measurement) (#6), count(measurement) (#7), MAX(measurement) (#8), #_group_by_key]
+            ├── group by: [station_name]
+            ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_index_db.onebrc
+                ├── output columns: [station_name (#0), measurement (#1)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                ├── aggregating index: [SELECT station_name, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc GROUP BY station_name]
+                ├── rewritten query: [selection: [index_col_0 (#0), index_col_4 (#4), index_col_5 (#5), index_col_2 (#2), index_col_3 (#3)]]
+                └── estimated rows: 0.00
+
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
 CREATE AGGREGATING INDEX idx1 AS SELECT count(measurement), sum(measurement) from onebrc
 
 query T
@@ -477,7 +594,6 @@ EvalScalar
 statement ok
 truncate table t1
 
-# Should not be rewritten
 query T
 EXPLAIN SELECT b, a + 1 as x from t1 order by x
 ----
@@ -497,6 +613,8 @@ Sort
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
+        ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+        ├── rewritten query: [selection: [index_col_0 (#0)]]
         └── estimated rows: 0.00
 
 statement ok
