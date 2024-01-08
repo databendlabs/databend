@@ -124,7 +124,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
                     for c in *s {
-                        write!(f, "{c:02X}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }
@@ -162,7 +162,13 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, ")")
             }
-            ScalarRef::Variant(s) => write!(f, "0x{s:02X}"),
+            ScalarRef::Variant(s) => {
+                write!(f, "0x")?;
+                for c in *s {
+                    write!(f, "{c:02x}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -201,7 +207,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::Binary(s) => {
                 for c in *s {
-                    write!(f, "{:02X}", c)?;
+                    write!(f, "{c:02X}")?;
                 }
                 Ok(())
             }
@@ -209,7 +215,7 @@ impl<'a> Display for ScalarRef<'a> {
                 Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
                     for c in *s {
-                        write!(f, "{:02X}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }

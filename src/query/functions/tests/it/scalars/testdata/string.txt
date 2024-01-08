@@ -395,28 +395,28 @@ output         : ''
 ast            : reverse('你好')
 raw expr       : reverse('你好')
 checked expr   : reverse<String>("你好")
-optimized expr : 0xbda5e5a0bde4
+optimized expr : BDA5E5A0BDE4
 output type    : String
 output domain  : {"��堽�"..="��堽�"}
-output         : 0xbda5e5a0bde4
+output         : BDA5E5A0BDE4
 
 
 ast            : reverse('ß😀山')
 raw expr       : reverse('ß😀山')
 checked expr   : reverse<String>("ß😀山")
-optimized expr : 0xb1b1e580989ff09fc3
+optimized expr : B1B1E580989FF09FC3
 output type    : String
 output domain  : {"��倘���"..="��倘���"}
-output         : 0xb1b1e580989ff09fc3
+output         : B1B1E580989FF09FC3
 
 
 ast            : reverse('Dobrý den')
 raw expr       : reverse('Dobrý den')
 checked expr   : reverse<String>("Dobrý den")
-optimized expr : 0x6e656420bdc372626f44
+optimized expr : 6E656420BDC372626F44
 output type    : String
 output domain  : {"ned ��rboD"..="ned ��rboD"}
-output         : 0x6e656420bdc372626f44
+output         : 6E656420BDC372626F44
 
 
 ast            : reverse(Null)
