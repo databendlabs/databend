@@ -180,6 +180,7 @@ impl Table for Parquet2Table {
     }
 }
 
+#[allow(dead_code)]
 fn lower_field_name(field: &mut ArrowField) {
     field.name = field.name.to_lowercase();
     match &mut field.data_type {
@@ -197,10 +198,11 @@ fn lower_field_name(field: &mut ArrowField) {
     }
 }
 
-pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
-    schema.fields.iter_mut().for_each(|f| {
-        lower_field_name(f);
-    });
+pub(crate) fn arrow_to_table_schema(schema: ArrowSchema) -> TableSchema {
+    // temporarily commented out
+    // schema.fields.iter_mut().for_each(|f| {
+    //    lower_field_name(f);
+    //});
     TableSchema::try_from(&schema).unwrap()
 }
 

@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
+#[allow(dead_code)]
 pub(crate) fn lower_field_name(field: &ArrowField) -> ArrowField {
     let name = field.name().to_lowercase();
     let field = field.clone().with_name(name);
@@ -44,11 +45,13 @@ pub(crate) fn lower_field_name(field: &ArrowField) -> ArrowField {
 }
 
 pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
-    let fields = schema
-        .fields
-        .iter()
-        .map(|f| Arc::new(lower_field_name(f)))
-        .collect::<Vec<_>>();
+    // temporarily commented out
+    // let fields = schema
+    //    .fields
+    //    .iter()
+    //    .map(|f| Arc::new(lower_field_name(f)))
+    //    .collect::<Vec<_>>();
+    let fields = schema.fields.clone();
     let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
