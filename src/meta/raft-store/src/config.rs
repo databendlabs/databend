@@ -56,7 +56,7 @@ pub struct RaftConfig {
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
-    pub raft_api_port: u32,
+    pub raft_api_port: u16,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     pub raft_dir: String,
