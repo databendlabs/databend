@@ -26,7 +26,7 @@ Error: APIError: ResponseError with 1065: error:
   |        ^^^^^^^^^^^^ no overload satisfies `to_base64(UInt8)`
 
 has tried possible overloads:
-  to_base64(Binary) :: Binary            : unable to unify `UInt8` with `Binary`
+  to_base64(Binary) :: String            : unable to unify `UInt8` with `Binary`
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
