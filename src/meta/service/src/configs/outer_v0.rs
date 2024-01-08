@@ -281,7 +281,7 @@ pub struct ConfigViaEnv {
     pub config_id: String,
     pub kvsrv_listen_host: String,
     pub kvsrv_advertise_host: String,
-    pub kvsrv_api_port: u32,
+    pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
     pub kvsrv_snapshot_logs_since_last: u64,
@@ -436,7 +436,7 @@ pub struct RaftConfig {
 
     /// The listening port for metadata communication.
     #[clap(long, default_value = "28004")]
-    pub raft_api_port: u32,
+    pub raft_api_port: u16,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long, default_value = "./.databend/meta")]

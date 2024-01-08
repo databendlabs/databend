@@ -324,10 +324,7 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
         }
         let url = Url::parse(&format!("http://{}", addrs[0]))?;
         let endpoint = match (url.host_str(), url.port()) {
-            (Some(addr), Some(port)) => Endpoint {
-                addr: addr.to_string(),
-                port: port as u32,
-            },
+            (Some(addr), Some(port)) => Endpoint::new(addr, port),
             _ => {
                 return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
             }
