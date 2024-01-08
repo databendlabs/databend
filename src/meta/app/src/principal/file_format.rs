@@ -39,6 +39,7 @@ const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
+const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -200,6 +201,12 @@ impl FileFormatParams {
                 let escape = ast.take_string(OPT_ESCAPE, default.escape);
                 let quote = ast.take_string(OPT_QUOTE, default.quote);
                 let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let empty_field_as = ast
+                    .options
+                    .remove(OPT_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
                 let error_on_column_count_mismatch = ast.take_bool(
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
@@ -214,6 +221,7 @@ impl FileFormatParams {
                     escape,
                     quote,
                     error_on_column_count_mismatch,
+                    empty_field_as,
                 })
             }
             StageFileFormatType::Tsv => {
@@ -309,6 +317,7 @@ pub struct CsvFileFormatParams {
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    pub empty_field_as: EmptyFieldAs,
 }
 
 impl Default for CsvFileFormatParams {
@@ -323,6 +332,7 @@ impl Default for CsvFileFormatParams {
             escape: "".to_string(),
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            empty_field_as: Default::default(),
         }
     }
 }
@@ -407,6 +417,39 @@ pub enum NullAs {
     /// defined when creating table
     FieldDefault,
     TypeDefault,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum EmptyFieldAs {
+    #[default]
+    FieldDefault,
+    Null,
+    String,
+}
+
+impl FromStr for EmptyFieldAs {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "string" => Ok(Self::String),
+            "null" => Ok(Self::Null),
+            "field_default" => Ok(Self::FieldDefault),
+            _ => Err(ErrorCode::InvalidArgument(format!(
+                "invalid value ({s}) for empty_field_as, available values field_default|null|string."
+            ))),
+        }
+    }
+}
+
+impl Display for EmptyFieldAs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FieldDefault => write!(f, "field_default"),
+            Self::Null => write!(f, "null"),
+            Self::String => write!(f, "string"),
+        }
+    }
 }
 
 impl NullAs {
