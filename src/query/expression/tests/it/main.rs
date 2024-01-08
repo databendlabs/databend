@@ -24,13 +24,13 @@ use databend_common_expression::DataBlock;
 
 extern crate core;
 
+mod bincode;
 mod block;
 mod column;
 mod common;
 mod decimal;
 mod group_by;
 mod kernel;
-mod legacy;
 mod row;
 mod schema;
 mod serde;

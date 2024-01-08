@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::legacy::values::LegacyScalar;
+use databend_common_expression::converts::bincode::LegacyScalar;
 use databend_common_expression::ColumnId;
 
 use crate::meta::MinMax;

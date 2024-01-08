@@ -14,4 +14,5 @@
 
 pub mod arrow;
 pub mod arrow2;
+pub mod bincode;
 pub mod datavalues;
