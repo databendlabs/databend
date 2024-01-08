@@ -85,7 +85,7 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-01-02: since 1.2.279:
 ///   Meta client: remove `Compatible` for KVAppError and MetaAPIError, added in `2023-02-16: since 0.9.41`
 ///
-/// - 2024-01-07: since TODO
+/// - 2024-01-07: since 1.2.287:
 ///   client: remove calling RPC kv_api() with MetaGrpcReq::GetKV/MGetKV/ListKV, kv_api only accept Upsert;
 ///   client: remove using MetaGrpcReq::GetKV/MGetKV/ListKV;
 ///   client: remove falling back kv_read_v1(Streamed(List)) to kv_api(List), added in `2023-10-20: since 1.2.176`;
