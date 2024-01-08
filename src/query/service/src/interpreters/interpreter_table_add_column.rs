@@ -178,10 +178,10 @@ pub(crate) async fn generate_new_snapshot(
                 new_snapshot_location.clone(),
             );
         } else {
-            info!("none snapshot, skip generate new snapshot");
+            info!("Snapshot not found, no need to generate new snapshot");
         }
     } else {
-        info!("none fuse table, skip generate new snapshot");
+        info!("Not a fuse table, no need to generate new snapshot");
     }
     Ok(())
 }

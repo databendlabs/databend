@@ -190,9 +190,9 @@ impl StorageFactory {
 
     fn get_storage_factory(&self, table_info: &TableInfo) -> Result<Ref<String, Storage>> {
         let engine = table_info.engine().to_uppercase();
-        Ok(self.storages.get(&engine).ok_or_else(|| {
+        self.storages.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
-        })?)
+        })
     }
 
     pub fn get_storage_descriptors(&self) -> Vec<StorageDescription> {
