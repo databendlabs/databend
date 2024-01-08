@@ -135,3 +135,50 @@ fn test_serialize_standard_deserialize_legacy() {
         bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Legacy);
     assert!(result.is_err());
 }
+
+#[test]
+fn test22() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar {
+        Null,
+        Int(i8),
+        String(Vec<u8>),
+        Float(f32),
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar2 {
+        Null,
+        Int(i8),
+        String(Vec<u8>),
+        Float(f32),
+        Binary(Vec<u8>),
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar3 {
+        Null,
+        Int(i8),
+        Binary(Vec<u8>),
+        String(Vec<u8>),
+        Float(f32),
+    }
+
+    let value = vec![Scalar::Null, Scalar::String(vec![1, 2, 3])];
+    let mut buffer = Cursor::new(Vec::new());
+    bincode_serialize_into_buf_with_config(&mut buffer, &value, BincodeConfig::Standard).unwrap();
+    let slice = buffer.get_ref().as_slice();
+
+    let deserialized: Vec<Scalar> =
+        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard).unwrap();
+
+    let deserialized2: Vec<Scalar2> =
+        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard).unwrap();
+
+    assert!(format!("{:?}", deserialized) == format!("{:?}", deserialized2));
+
+    let deserialized3: Vec<Scalar3> =
+        bincode_deserialize_from_slice_with_config(slice, BincodeConfig::Standard).unwrap();
+
+    assert!(format!("{:?}", deserialized) != format!("{:?}", deserialized3));
+}
