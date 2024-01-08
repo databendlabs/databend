@@ -16,6 +16,8 @@ use databend_common_expression::legacy::values::LegacyColumn;
 use databend_common_expression::legacy::values::LegacyScalar;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 
 use crate::rand_block_for_all_types;
 
@@ -41,11 +43,26 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
             let convert_back_column: Column = legacy_column.into();
             assert_eq!(column, convert_back_column);
 
+            let mut v3_scalars = vec![];
+
             for row in 0..rows {
                 let scalar = entry.value.index(row).unwrap().to_owned();
                 let legacy_scalar: LegacyScalar = scalar.clone().into();
+                v3_scalars.push(legacy_scalar.clone());
+
                 let convert_back_scalar: Scalar = legacy_scalar.into();
                 assert_eq!(scalar, convert_back_scalar);
+            }
+
+            let mut data = vec![];
+            bincode_serialize_into_buf(&mut data, &v3_scalars).unwrap();
+            let new_scalars: Vec<LegacyScalar> = bincode_deserialize_from_slice(&data).unwrap();
+
+            for (a, b) in v3_scalars.into_iter().zip(new_scalars.into_iter()) {
+                let a: Scalar = a.into();
+                let b: Scalar = b.into();
+
+                assert_eq!(a, b);
             }
         }
     }
