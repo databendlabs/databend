@@ -98,6 +98,7 @@ pub enum ValueRef<'a, T: ValueType> {
 }
 
 /// Note: Don't change the order, because we have bincode meta in old version
+/// See: test_bincode_backward_compat_scalar
 #[derive(
     Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]
