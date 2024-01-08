@@ -55,19 +55,10 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
         return;
     }
 
-    let refresh_virtual_column = ctx
-        .get_settings()
-        .get_enable_refresh_virtual_column_after_write()
-        .unwrap_or(false);
-
     pipeline.set_on_finished(move |err| {
         if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
-            match GlobalIORuntime::instance().block_on(execute_refresh_job(
-                ctx,
-                desc,
-                refresh_virtual_column,
-            )) {
+            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
                     info!("execute refresh job successfully.");
                 }
@@ -80,11 +71,7 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
     });
 }
 
-async fn execute_refresh_job(
-    ctx: Arc<QueryContext>,
-    desc: RefreshDesc,
-    refresh_virtual_column: bool,
-) -> Result<()> {
+async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table_id = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?
@@ -92,10 +79,21 @@ async fn execute_refresh_job(
 
     let mut plans = Vec::new();
 
-    let agg_index_plans = generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
-    plans.extend_from_slice(&agg_index_plans);
+    // Generate sync aggregating indexes.
+    if ctx
+        .get_settings()
+        .get_enable_refresh_aggregating_index_after_write()?
+    {
+        let agg_index_plans =
+            generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
+        plans.extend_from_slice(&agg_index_plans);
+    }
 
-    if refresh_virtual_column {
+    // Generate virtual columns.
+    if ctx
+        .get_settings()
+        .get_enable_refresh_virtual_column_after_write()?
+    {
         let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
         if let Some(virtual_column_plan) = virtual_column_plan {
             plans.push(virtual_column_plan);

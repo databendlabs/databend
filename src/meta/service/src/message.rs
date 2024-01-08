@@ -92,6 +92,13 @@ pub struct ForwardRequest<T> {
 }
 
 impl<T> ForwardRequest<T> {
+    pub fn new(forward_to_leader: u64, body: T) -> Self {
+        Self {
+            forward_to_leader,
+            body,
+        }
+    }
+
     pub fn decr_forward(&mut self) {
         self.forward_to_leader -= 1;
     }

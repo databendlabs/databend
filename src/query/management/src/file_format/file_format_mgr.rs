@@ -76,10 +76,10 @@ impl FileFormatApi for FileFormatMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
             ErrorCode::FileFormatAlreadyExists(format!(
-                "file_format already exists, seq [{}]",
-                v.seq
+                "File format '{}' already exists.",
+                info.name
             ))
         })?;
 
@@ -97,8 +97,9 @@ impl FileFormatApi for FileFormatMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .ok_or_else(|| ErrorCode::UnknownFileFormat(format!("Unknown file_format {}", name)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownFileFormat(format!("File format '{}' does not exist.", name))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -106,7 +107,7 @@ impl FileFormatApi for FileFormatMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalFileFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownFileFormat(format!(
-                "Unknown file_format {}",
+                "File format '{}' does not exist.",
                 name
             ))),
         }
@@ -141,7 +142,7 @@ impl FileFormatApi for FileFormatMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownFileFormat(format!(
-                "Unknown FileFormat {}",
+                "File format '{}' does not exist.",
                 name
             )))
         }

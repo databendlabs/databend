@@ -16,11 +16,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use databend_common_base::base::tokio::sync::oneshot::Sender;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -75,18 +71,6 @@ impl<T> Streamed<T> {
 /// Meta-client handle-to-worker request body
 #[derive(Debug, Clone, derive_more::From)]
 pub enum Request {
-    /// Get KV
-    Get(GetKVReq),
-
-    /// Get multiple KV
-    MGet(MGetKVReq),
-
-    /// List KVs by key prefix
-    List(ListKVReq),
-
-    /// Get KV, returning a stream
-    StreamGet(Streamed<GetKVReq>),
-
     /// Get multiple KV, returning a stream.
     StreamMGet(Streamed<MGetKVReq>),
 
@@ -121,10 +105,6 @@ pub enum Request {
 impl Request {
     pub fn name(&self) -> &'static str {
         match self {
-            Request::Get(_) => "Get",
-            Request::MGet(_) => "MGet",
-            Request::List(_) => "List",
-            Request::StreamGet(_) => "StreamGet",
             Request::StreamMGet(_) => "StreamMGet",
             Request::StreamList(_) => "StreamList",
             Request::Upsert(_) => "Upsert",
@@ -142,10 +122,6 @@ impl Request {
 /// Meta-client worker-to-handle response body
 #[derive(derive_more::TryInto)]
 pub enum Response {
-    Get(Result<GetKVReply, MetaError>),
-    MGet(Result<MGetKVReply, MetaError>),
-    List(Result<ListKVReply, MetaError>),
-    StreamGet(Result<BoxStream<StreamItem>, MetaError>),
     StreamMGet(Result<BoxStream<StreamItem>, MetaError>),
     StreamList(Result<BoxStream<StreamItem>, MetaError>),
     Upsert(Result<UpsertKVReply, MetaError>),
@@ -161,18 +137,6 @@ pub enum Response {
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Response::Get(x) => {
-                write!(f, "Get({:?})", x)
-            }
-            Response::MGet(x) => {
-                write!(f, "MGet({:?})", x)
-            }
-            Response::List(x) => {
-                write!(f, "List({:?})", x)
-            }
-            Response::StreamGet(x) => {
-                write!(f, "StreamGet({:?})", x.as_ref().map(|_s| "<stream>"))
-            }
             Response::StreamMGet(x) => {
                 write!(f, "StreamMGet({:?})", x.as_ref().map(|_s| "<stream>"))
             }
@@ -210,22 +174,6 @@ impl fmt::Debug for Response {
 impl Response {
     pub fn err(&self) -> Option<&(dyn std::error::Error + 'static)> {
         let e = match self {
-            Response::Get(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::MGet(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::List(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::StreamGet(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
             Response::StreamMGet(res) => res
                 .as_ref()
                 .err()

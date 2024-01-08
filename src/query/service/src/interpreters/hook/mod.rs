@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_hook;
-mod refresh_hook;
+pub(crate) mod compact_hook;
+pub(crate) mod refresh_hook;
 
-pub use compact_hook::*;
-pub use refresh_hook::hook_refresh;
-pub use refresh_hook::RefreshDesc;
+#[allow(clippy::module_inception)]
+mod hook;
+
+pub use hook::HookOperator;
