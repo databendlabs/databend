@@ -46,6 +46,10 @@ where
 }
 
 use std::future::Future;
+use std::time::Duration;
+
+use dashmap::mapref::one::Ref;
+
 #[async_trait::async_trait]
 impl<F, Fut> TableInfoRefresher for F
 where
@@ -86,6 +90,7 @@ pub struct Storage {
 #[derive(Default)]
 pub struct StorageFactory {
     storages: DashMap<String, Storage>,
+    schema_refreshing_timeout: Duration,
 }
 
 impl StorageFactory {
@@ -150,29 +155,44 @@ impl StorageFactory {
             table_info_refresher: None,
         });
 
-        StorageFactory { storages: creators }
+        StorageFactory {
+            storages: creators,
+            schema_refreshing_timeout: Duration::from_millis(1000),
+        }
     }
 
     pub fn get_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = table_info.engine().to_uppercase();
-        let factory = self.storages.get(&engine).ok_or_else(|| {
-            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
-        })?;
-
+        let factory = self.get_storage_factory(table_info)?;
         let table: Arc<dyn Table> = factory.creator.try_create(table_info.clone())?.into();
         Ok(table)
     }
 
     pub async fn refresh_table_info(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
-        let engine = table_info.engine().to_uppercase();
-        let factory = self.storages.get(&engine).ok_or_else(|| {
-            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
-        })?;
-
+        let factory = self.get_storage_factory(table_info.as_ref())?;
         match factory.table_info_refresher.as_ref() {
             None => Ok(table_info),
-            Some(refresher) => refresher.refresh(table_info).await,
+            Some(refresher) => {
+                let table_description = table_info.desc.clone();
+                tokio::time::timeout(
+                    self.schema_refreshing_timeout,
+                    refresher.refresh(table_info),
+                )
+                .await
+                .map_err(|elapsed| {
+                    ErrorCode::StorageOther(format!(
+                        "failed to refresh table meta {} in time. Elapsed: {}",
+                        table_description, elapsed
+                    ))
+                })?
+            }
         }
+    }
+
+    fn get_storage_factory(&self, table_info: &TableInfo) -> Result<Ref<String, Storage>> {
+        let engine = table_info.engine().to_uppercase();
+        Ok(self.storages.get(&engine).ok_or_else(|| {
+            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
+        })?)
     }
 
     pub fn get_storage_descriptors(&self) -> Vec<StorageDescription> {

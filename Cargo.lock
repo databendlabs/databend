@@ -3465,6 +3465,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
+ "tokio",
 ]
 
 [[package]]
