@@ -147,7 +147,6 @@ pub(crate) async fn generate_new_snapshot(
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
 ) -> Result<()> {
-    // generate new snapshot
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
             let mut new_snapshot = TableSnapshot::from_previous(snapshot.as_ref());
@@ -173,6 +172,7 @@ pub(crate) async fn generate_new_snapshot(
                 new_snapshot_location.clone(),
             )
             .await;
+
             new_table_meta.options.insert(
                 OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
                 new_snapshot_location.clone(),
