@@ -52,7 +52,7 @@ fn traverse_column(
     let array = columns
         .get(idx)
         .ok_or_else(|| error_cannot_traverse_path(path, schema))?;
-    Ok(Column::from_arrow_rs(array.clone(), field)?)
+    Column::from_arrow_rs(array.clone(), field.data_type())
 }
 
 fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema) -> ErrorCode {

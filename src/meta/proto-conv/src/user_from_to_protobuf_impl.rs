@@ -338,8 +338,8 @@ impl FromToProto for mt::principal::UserInfo {
                 .iter()
                 .map(|a| mt::principal::AuthInfo::from_pb(a.clone()))
                 .collect::<Result<Vec<mt::principal::AuthInfo>, Incompatible>>()?,
-            password_fail_ons: p
-                .password_fail_ons
+            password_fails: p
+                .password_fails
                 .iter()
                 .map(|t| DateTime::<Utc>::from_pb(t.clone()))
                 .collect::<Result<Vec<DateTime<Utc>>, Incompatible>>()?,
@@ -369,8 +369,8 @@ impl FromToProto for mt::principal::UserInfo {
                 .iter()
                 .map(mt::principal::AuthInfo::to_pb)
                 .collect::<Result<Vec<pb::AuthInfo>, Incompatible>>()?,
-            password_fail_ons: self
-                .password_fail_ons
+            password_fails: self
+                .password_fails
                 .iter()
                 .map(|t| t.to_pb())
                 .collect::<Result<Vec<String>, Incompatible>>()?,

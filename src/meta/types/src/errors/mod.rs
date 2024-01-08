@@ -147,3 +147,7 @@ pub mod meta_network_errors;
 pub mod meta_raft_errors;
 pub mod meta_startup_errors;
 pub mod rpc_errors;
+
+mod incomplete_stream;
+
+pub use incomplete_stream::IncompleteStream;

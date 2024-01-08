@@ -75,7 +75,7 @@ impl Interpreter for CreateUserInterpreter {
             quota: UserQuota::no_limit(),
             option: plan.user_option,
             history_auth_infos: vec![plan.auth_info.clone()],
-            password_fail_ons: Vec::new(),
+            password_fails: Vec::new(),
             password_update_on: plan.password_update_on,
             lockout_time: None,
         };

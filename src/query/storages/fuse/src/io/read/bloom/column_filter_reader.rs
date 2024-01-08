@@ -162,7 +162,7 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             let col = Column::from_arrow(
                 array.as_ref(),
                 &databend_common_expression::types::DataType::String,
-            );
+            )?;
 
             let filter_bytes = col
                 .as_string()

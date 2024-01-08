@@ -110,7 +110,8 @@ members = [
 [workspace.dependencies]
 # databend maintains
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "582c139" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a0669bf" }
+
 opendal = { version = "0.44", features = [
     "layers-minitrace",
     "layers-prometheus-client",

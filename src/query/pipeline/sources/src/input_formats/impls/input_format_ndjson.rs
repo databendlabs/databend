@@ -175,8 +175,9 @@ impl InputFormatTextBase for InputFormatNDJson {
     fn create_field_decoder(
         _params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldJsonAstDecoder::create(options))
+        Arc::new(FieldJsonAstDecoder::create(options, rounding_mode))
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {

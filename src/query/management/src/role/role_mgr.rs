@@ -73,7 +73,7 @@ impl RoleMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownRole(format!(
-                "unknown role, or seq not match {}",
+                "Role '{}' does not exist.",
                 role_info.name
             ))),
         }
@@ -128,8 +128,8 @@ impl RoleApi for RoleMgr {
             None,
         ));
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
-            ErrorCode::UserAlreadyExists(format!("Role already exists, seq [{}]", v.seq))
+        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
+            ErrorCode::UserAlreadyExists(format!("Role '{}' already exists.", role_info.name))
         })?;
 
         Ok(res_seq)
@@ -141,11 +141,14 @@ impl RoleApi for RoleMgr {
         let key = self.make_role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role)))?;
+            res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownRole(format!("unknown role {}", role))),
+            Err(_) => Err(ErrorCode::UnknownRole(format!(
+                "Role '{}' does not exist.",
+                role
+            ))),
         }
     }
 
@@ -267,7 +270,10 @@ impl RoleApi for RoleMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownRole(format!("unknown role {}", role)))
+            Err(ErrorCode::UnknownRole(format!(
+                "Role '{}' does not exist.",
+                role
+            )))
         }
     }
 }

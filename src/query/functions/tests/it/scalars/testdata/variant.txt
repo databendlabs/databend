@@ -4290,3 +4290,102 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : parse_json('[1,2,3]') || NULL
+raw expr       : concat(parse_json('[1,2,3]'), NULL)
+checked expr   : concat<Variant NULL, Variant NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') || parse_json('10')
+raw expr       : concat(parse_json('[1,2,3]'), parse_json('10'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("10"))
+optimized expr : 0x8000000420000002200000022000000220000002500150025003500a
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3,10]
+
+
+ast            : parse_json('"asd"') || parse_json('[1,2,3]')
+raw expr       : concat(parse_json('"asd"'), parse_json('[1,2,3]'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("[1,2,3]"))
+optimized expr : 0x8000000410000003200000022000000220000002617364500150025003
+output type    : Variant
+output domain  : Undefined
+output         : ["asd",1,2,3]
+
+
+ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"')
+raw expr       : concat(parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]'), parse_json('"asd"'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]"), parse_json<String>("\"asd\""))
+optimized expr : 0x800000042000000250000039200000021000000350014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003617364
+output type    : Variant
+output domain  : Undefined
+output         : [1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]
+
+
+ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]')
+raw expr       : concat(parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]'), parse_json('[10,20,30]'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]"), parse_json<String>("[10,20,30]"))
+optimized expr : 0x8000000620000002500000392000000220000002200000022000000250014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003500a5014501e
+output type    : Variant
+output domain  : Undefined
+output         : [1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]
+
+
+ast            : parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]')
+raw expr       : concat(parse_json('[1,[1,2,3],3]'), parse_json('[[10,20,30]]'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("[1,[1,2,3],3]"), parse_json<String>("[[10,20,30]]"))
+optimized expr : 0x8000000420000002500000162000000250000016500180000003200000022000000220000002500150025003500380000003200000022000000220000002500a5014501e
+output type    : Variant
+output domain  : Undefined
+output         : [1,[1,2,3],3,[10,20,30]]
+
+
+ast            : parse_json('{"a":1,"b":2}') || parse_json('true')
+raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('true'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("true"))
+optimized expr : 0x800000025000001a400000004000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : [{"a":1,"b":2},true]
+
+
+ast            : parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}')
+raw expr       : concat(parse_json('[1,2,3]'), parse_json('{"a":1,"b":2}'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : 0x800000042000000220000002200000025000001a5001500250034000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3,{"a":1,"b":2}]
+
+
+ast            : parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]')
+raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('[1,2,3]'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("[1,2,3]"))
+optimized expr : 0x800000045000001a2000000220000002200000024000000210000001100000012000000220000002616250015002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [{"a":1,"b":2},1,2,3]
+
+
+ast            : parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}')
+raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('{"c":3,"d":4}'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"c\":3,\"d\":4}"))
+optimized expr : 0x400000041000000110000001100000011000000120000002200000022000000220000002616263645001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : {"a":1,"b":2,"c":3,"d":4}
+
+
+ast            : parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')
+raw expr       : concat(parse_json('{"a":1,"b":2,"d":10}'), parse_json('{"a":3,"b":4}'))
+checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2,\"d\":10}"), parse_json<String>("{\"a\":3,\"b\":4}"))
+optimized expr : 0x4000000310000001100000011000000120000002200000022000000261626450035004500a
+output type    : Variant
+output domain  : Undefined
+output         : {"a":3,"b":4,"d":10}
+
+

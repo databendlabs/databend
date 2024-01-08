@@ -79,10 +79,10 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(&key, match_seq, value, None));
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
             ErrorCode::NetworkPolicyAlreadyExists(format!(
-                "NetworkPolicy already exists, seq [{}]",
-                v.seq
+                "Network policy '{}' already exists.",
+                network_policy.name
             ))
         })?;
 
@@ -111,8 +111,8 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         match upsert_kv.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Unknown NetworkPolicy, or seq not match {}",
-                network_policy.name.clone()
+                "Network policy '{}' cannot be updated as it may not exist or the request is invalid.",
+                network_policy.name
             ))),
         }
     }
@@ -129,7 +129,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Unknown NetworkPolicy {}",
+                "Network policy '{}' does not exist.",
                 name
             )))
         }
@@ -141,7 +141,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
         let key = self.make_network_policy_key(name)?;
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownNetworkPolicy(format!("Unknown NetworkPolicy {}", name))
+            ErrorCode::UnknownNetworkPolicy(format!("Network policy '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -150,7 +150,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalNetworkPolicy, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Unknown NetworkPolicy {}",
+                "Network policy '{}' does not exist.",
                 name
             ))),
         }

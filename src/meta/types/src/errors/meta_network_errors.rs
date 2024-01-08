@@ -20,6 +20,8 @@ use serde::Serialize;
 use thiserror::Error;
 use tonic::Code;
 
+use crate::errors;
+
 // represent network related errors
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaNetworkError {
@@ -138,6 +140,12 @@ impl InvalidReply {
     }
 }
 
+impl From<errors::IncompleteStream> for InvalidReply {
+    fn from(e: errors::IncompleteStream) -> Self {
+        Self::new("Invalid reply", &e)
+    }
+}
+
 impl From<std::net::AddrParseError> for MetaNetworkError {
     fn from(error: std::net::AddrParseError) -> Self {
         MetaNetworkError::BadAddressFormat(AnyError::new(&error))
@@ -174,5 +182,11 @@ impl From<tonic::Status> for MetaNetworkError {
 impl From<tonic::transport::Error> for MetaNetworkError {
     fn from(err: tonic::transport::Error) -> Self {
         MetaNetworkError::ConnectionError(ConnectionError::new(err, ""))
+    }
+}
+
+impl From<errors::IncompleteStream> for MetaNetworkError {
+    fn from(e: errors::IncompleteStream) -> Self {
+        MetaNetworkError::InvalidReply(InvalidReply::from(e))
     }
 }

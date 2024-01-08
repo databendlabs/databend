@@ -68,7 +68,7 @@ fn test_user_info() -> mt::principal::UserInfo {
         },
         option,
         history_auth_infos: vec![],
-        password_fail_ons: vec![],
+        password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
     }

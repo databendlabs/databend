@@ -344,6 +344,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder>;
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
@@ -577,8 +578,17 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
                 )
             })
             .collect();
-        let field_decoder =
-            T::create_field_decoder(&ctx.file_format_params, &ctx.file_format_options_ext);
+
+        let numeric_cast_option = ctx
+            .settings
+            .get_numeric_cast_option()
+            .unwrap_or("rounding".to_string());
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let field_decoder = T::create_field_decoder(
+            &ctx.file_format_params,
+            &ctx.file_format_options_ext,
+            rounding_mode,
+        );
         let projection = ctx.projection.clone();
 
         BlockBuilder {
