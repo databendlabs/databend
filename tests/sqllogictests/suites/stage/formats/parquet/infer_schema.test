@@ -49,7 +49,7 @@ query
 select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
 id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+t TUPLE(A INT32, B BINARY) 0 1
 
 statement ok
 drop CONNECTION IF EXISTS my_conn
@@ -61,4 +61,4 @@ query
 select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
 ----
 id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+t TUPLE(A INT32, B BINARY) 0 1
