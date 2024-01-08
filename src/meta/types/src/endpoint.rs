@@ -20,11 +20,11 @@ use serde::Serialize;
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Endpoint {
     pub addr: String,
-    pub port: u32,
+    pub port: u16,
 }
 
 impl Endpoint {
-    pub fn new(addr: impl ToString, port: u32) -> Self {
+    pub fn new(addr: impl ToString, port: u16) -> Self {
         Self {
             addr: addr.to_string(),
             port,
