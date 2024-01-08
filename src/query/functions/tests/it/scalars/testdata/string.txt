@@ -1919,7 +1919,7 @@ error:
 
 ast            : hex(a)
 raw expr       : hex(a::Int8)
-checked expr   : hex<Int64>(to_int64<Int8>(a))
+checked expr   : to_hex<Int64>(to_int64<Int8>(a))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -1941,7 +1941,7 @@ evaluation (internal):
 
 ast            : hex(a2)
 raw expr       : hex(a2::UInt8 NULL)
-checked expr   : hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : to_hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -1963,7 +1963,7 @@ evaluation (internal):
 
 ast            : hex(b)
 raw expr       : hex(b::Int16)
-checked expr   : hex<Int64>(to_int64<Int16>(b))
+checked expr   : to_hex<Int64>(to_int64<Int16>(b))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1985,7 +1985,7 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(c::UInt32)
-checked expr   : hex<Int64>(to_int64<UInt32>(c))
+checked expr   : to_hex<Int64>(to_int64<UInt32>(c))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2009,12 +2009,38 @@ error:
   --> SQL:1:1
   |
 1 | hex(d)
-  | ^^^^^^ no overload satisfies `hex(Float64)`
+  | ^^^^^^ no overload satisfies `to_hex(Float64)`
 
 has tried possible overloads:
-  hex(Int64) :: String            : unable to unify `Float64` with `Int64`
-  hex(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
+  to_hex(String) :: String            : unable to unify `Float64` with `String`
+  to_hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
+  to_hex(Int64) :: String             : unable to unify `Float64` with `Int64`
+  to_hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
+  to_hex(Binary) :: String            : unable to unify `Float64` with `Binary`
+  to_hex(Binary NULL) :: String NULL  : unable to unify `Float64` with `Binary`
 
+
+
+ast            : hex(e)
+raw expr       : hex(e::String)
+checked expr   : to_hex<String>(e)
+evaluation:
++--------+-----------------+--------------------+
+|        | e               | Output             |
++--------+-----------------+--------------------+
+| Type   | String          | String             |
+| Domain | {"abc"..="def"} | {""..}             |
+| Row 0  | 'abc'           | '616263'           |
+| Row 1  | 'def'           | '646566'           |
+| Row 2  | 'databend'      | '6461746162656e64' |
++--------+-----------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| e      | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
+| Output | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
++--------+------------------------------------------------------------------------------------------------------------+
 
 
 ast            : lpad('hi', 2, '?')

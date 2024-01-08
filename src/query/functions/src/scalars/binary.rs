@@ -29,6 +29,9 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("to_hex", &["hex"]);
+    registry.register_aliases("from_hex", &["unhex"]);
+
     registry.register_passthrough_nullable_1_arg::<BinaryType, NumberType<u64>, _, _>(
         "length",
         |_, _| FunctionDomain::Full,

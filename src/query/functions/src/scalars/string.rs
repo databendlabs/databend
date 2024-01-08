@@ -524,6 +524,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "to_hex",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len() * 2,
+            |val, output, _| {
+                let old_len = output.data.len();
+                let extra_len = val.len() * 2;
+                output.data.resize(old_len + extra_len, 0);
+                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
+                output.commit_row();
+            },
+        ),
+    );
+
     // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
     // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -543,7 +558,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-        "hex",
+        "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             write!(output.data, "{val:x}").unwrap();

@@ -2086,9 +2086,9 @@ dependencies = [
 
 [[package]]
 name = "csv"
-version = "1.2.2"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626ae34994d3d8d668f4269922248239db4ae42d538b14c398b74a52208e8086"
+checksum = "ac574ff4d437a7b5ad237ef331c17ccca63c46479e5b5453eb8e10bb99a759fe"
 dependencies = [
  "csv-core",
  "itoa",
@@ -2098,9 +2098,9 @@ dependencies = [
 
 [[package]]
 name = "csv-core"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
+checksum = "5efa2b3d7902f4b634a20cae3c9c4e6209dc4779feb6863329607560143efa70"
 dependencies = [
  "memchr",
 ]
@@ -2323,11 +2323,32 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.9.5"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af35e29bef4d4f89028a6b1251c5674df66a77f70cb6996c6e48bdfe5407c59"
+checksum = "fc8cf22482f03d8465a05e598a9077b650e5180dfedf7002fb425255a3b2139e"
 dependencies = [
- "http",
+ "async-trait",
+ "log",
+ "once_cell",
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-retry",
+ "tokio-stream",
+ "tokio-util",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "databend-client"
+version = "0.12.2"
+source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
+dependencies = [
+ "async-trait",
+ "log",
  "once_cell",
  "percent-encoding",
  "reqwest",
@@ -3918,18 +3939,20 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.9.5"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "279f4710b5f2823947816c6f69d5fb28cfa666cdb2b0d5df987ba40e6a921790"
+checksum = "1b60004ae1a4603920cb1518a4c146e8f1012051ae8133cbcaf4d14592565dd7"
 dependencies = [
  "arrow",
  "async-trait",
  "chrono",
- "databend-client",
+ "csv",
+ "databend-client 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
  "glob",
+ "log",
  "percent-encoding",
  "serde_json",
  "tokio",
@@ -3939,9 +3962,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.9.5"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b29e376c68885384a683728534946db643bc5928af6f359844cd89a3d81581f"
+checksum = "70d293af56a52a39905cd442d144daa675b2a3a6e23b12523d311e729c55e898"
 dependencies = [
  "quote",
  "syn 2.0.46",
@@ -4317,15 +4340,15 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1fa89f7e5ec45d5c3acef5b6f2ddab438f310f94fc09c42d333cce5cb44d68b"
+version = "0.12.2"
+source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
 dependencies = [
  "arrow",
  "chrono",
- "databend-client",
+ "databend-client 0.12.2 (git+https://github.com/andylokandy/bendsql?rev=cfd19a3)",
  "glob",
- "itertools 0.11.0",
+ "hex",
+ "itertools 0.12.0",
  "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "roaring",
  "serde",
@@ -4361,7 +4384,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-tz",
  "clap 4.4.2",
- "databend-client",
+ "databend-client 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
@@ -5304,9 +5327,9 @@ checksum = "ee1b05cbd864bcaecbd3455d6d967862d446e4ebfc3c2e5e5b9841e53cba6673"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
 ]
@@ -7526,9 +7549,9 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
+checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
@@ -7721,6 +7744,15 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
 dependencies = [
  "either",
 ]
@@ -9581,9 +9613,9 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "pest"
@@ -13130,12 +13162,12 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "143b538f18257fac9cad154828a57c6bf5157e1aa604d4816b5995bf6de87ae5"
+checksum = "31e6302e3bb753d46e83516cae55ae196fc0c309407cf11ab35cc51a4c2a4633"
 dependencies = [
  "form_urlencoded",
- "idna 0.4.0",
+ "idna 0.5.0",
  "percent-encoding",
  "serde",
 ]
@@ -13160,9 +13192,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.4.1"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
+checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
  "getrandom 0.2.11",
  "serde",
@@ -13877,8 +13909,3 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "databend-sql"
-version = "0.12.2"
-source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"

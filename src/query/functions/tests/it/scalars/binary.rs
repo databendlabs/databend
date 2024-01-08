@@ -32,7 +32,7 @@ fn test_binary() {
 
     for is_try in [false, true] {
         test_from_base64(file, is_try);
-        test_from_unhex(file, is_try);
+        test_from_hex(file, is_try);
     }
 }
 
@@ -48,14 +48,14 @@ fn test_length(file: &mut impl Write) {
 }
 
 fn test_to_hex(file: &mut impl Write) {
-    run_ast(file, "to_hex('abc')", &[]);
-    run_ast(file, "to_hex(a)", &[(
+    run_ast(file, "to_hex(to_binary('abc'))", &[]);
+    run_ast(file, "to_hex(to_binary(a))", &[(
         "a",
         StringType::from_data(vec!["abc", "def", "databend"]),
     )]);
 }
 
-fn test_from_unhex(file: &mut impl Write, is_try: bool) {
+fn test_from_hex(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
     run_ast(

@@ -86,8 +86,8 @@ evaluation (internal):
 +--------+---------------------------------------------------------------+
 
 
-ast            : to_hex('abc')
-raw expr       : to_hex('abc')
+ast            : to_hex(to_binary('abc'))
+raw expr       : to_hex(to_binary('abc'))
 checked expr   : to_hex<Binary>(to_binary<String>("abc"))
 optimized expr : "616263"
 output type    : String
@@ -95,8 +95,8 @@ output domain  : {"616263"..="616263"}
 output         : '616263'
 
 
-ast            : to_hex(a)
-raw expr       : to_hex(a::String)
+ast            : to_hex(to_binary(a))
+raw expr       : to_hex(to_binary(a::String))
 checked expr   : to_hex<Binary>(to_binary<String>(a))
 evaluation:
 +--------+-----------------+--------------------+

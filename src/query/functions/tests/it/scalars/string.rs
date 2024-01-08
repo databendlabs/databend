@@ -416,12 +416,14 @@ fn test_hex(file: &mut impl Write) {
         ("b", Int16Type::from_data(vec![2i16, 4, 6])),
         ("c", UInt32Type::from_data(vec![10u32, 20, 30])),
         ("d", Float64Type::from_data(vec![10f64, -20f64, 30f64])),
+        ("e", StringType::from_data(vec!["abc", "def", "databend"])),
     ];
     run_ast(file, "hex(a)", columns);
     run_ast(file, "hex(a2)", columns);
     run_ast(file, "hex(b)", columns);
     run_ast(file, "hex(c)", columns);
     run_ast(file, "hex(d)", columns);
+    run_ast(file, "hex(e)", columns);
 }
 
 fn test_pad(file: &mut impl Write) {

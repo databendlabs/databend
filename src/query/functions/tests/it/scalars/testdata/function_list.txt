@@ -10,6 +10,7 @@ ceiling -> ceil
 character_length -> char_length
 current_timestamp -> now
 date_format -> to_string
+hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
@@ -37,6 +38,7 @@ try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
 ucase -> upper
+unhex -> from_hex
 uuid -> gen_random_uuid
 
 Functions overloads:
@@ -1835,8 +1837,6 @@ Functions overloads:
 1 h3_to_string(UInt64 NULL) :: String NULL
 0 h3_unidirectional_edge_is_valid(UInt64) :: Boolean
 1 h3_unidirectional_edge_is_valid(UInt64 NULL) :: Boolean NULL
-0 hex(Int64) :: String
-1 hex(Int64 NULL) :: String NULL
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
@@ -3300,8 +3300,12 @@ Functions overloads:
 23 to_float64(Float32 NULL) :: Float64 NULL
 24 to_float64(Boolean) :: Float64
 25 to_float64(Boolean NULL) :: Float64 NULL
-0 to_hex(Binary) :: String
-1 to_hex(Binary NULL) :: String NULL
+0 to_hex(String) :: String
+1 to_hex(String NULL) :: String NULL
+2 to_hex(Int64) :: String
+3 to_hex(Int64 NULL) :: String NULL
+4 to_hex(Binary) :: String
+5 to_hex(Binary NULL) :: String NULL
 0 to_hour(Timestamp) :: UInt8
 1 to_hour(Timestamp NULL) :: UInt8 NULL
 0 to_int16(Variant) :: Int16
