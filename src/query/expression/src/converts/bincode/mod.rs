@@ -84,9 +84,9 @@ pub struct LegacyNullableColumn {
     pub validity: Bitmap,
 }
 
-impl Into<Scalar> for LegacyScalar {
-    fn into(self) -> Scalar {
-        match self {
+impl From<LegacyScalar> for Scalar {
+    fn from(value: LegacyScalar) -> Self {
+        match value {
             LegacyScalar::Null => Scalar::Null,
             LegacyScalar::EmptyArray => Scalar::EmptyArray,
             LegacyScalar::EmptyMap => Scalar::EmptyMap,
@@ -105,9 +105,9 @@ impl Into<Scalar> for LegacyScalar {
     }
 }
 
-impl Into<Column> for LegacyColumn {
-    fn into(self) -> Column {
-        match self {
+impl From<LegacyColumn> for Column {
+    fn from(value: LegacyColumn) -> Self {
+        match value {
             LegacyColumn::Null { len } => Column::Null { len },
             LegacyColumn::EmptyArray { len } => Column::EmptyArray { len },
             LegacyColumn::EmptyMap { len } => Column::EmptyMap { len },
