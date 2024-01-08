@@ -250,7 +250,7 @@ impl MetaNodeBuilder {
 
         info!("about to start raft grpc on endpoint {}", endpoint);
 
-        MetaNode::start_grpc(mn.clone(), &endpoint.addr, endpoint.port).await?;
+        MetaNode::start_grpc(mn.clone(), endpoint.addr(), endpoint.port()).await?;
 
         Ok(mn)
     }
@@ -318,7 +318,7 @@ impl MetaNode {
     pub async fn start_grpc(
         mn: Arc<MetaNode>,
         host: &str,
-        port: u32,
+        port: u16,
     ) -> Result<(), MetaNetworkError> {
         let mut rx = mn.running_rx.clone();
 
