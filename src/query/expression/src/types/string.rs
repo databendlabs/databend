@@ -549,8 +549,8 @@ impl CheckUTF8 for &[u8] {
                 if you were reading column with string type from a table, \
                 it's recommended to alter the column type to `BINARY`.\n\
                 Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`\n\
-                Invalid utf8 data: `0x{}`",
-                hex::encode(self)
+                Invalid utf8 data: `{}`",
+                hex::encode_upper(self)
             ))
         })?;
         Ok(())

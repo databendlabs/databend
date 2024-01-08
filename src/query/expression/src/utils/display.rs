@@ -115,18 +115,16 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::Binary(s) => {
-                write!(f, "0x")?;
                 for c in *s {
-                    write!(f, "{:02x}", c)?;
+                    write!(f, "{:02X}", c)?;
                 }
                 Ok(())
             }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{c:02X}", c)?;
                     }
                     Ok(())
                 }
@@ -164,7 +162,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, ")")
             }
-            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
+            ScalarRef::Variant(s) => write!(f, "0x{s:02X}"),
         }
     }
 }
@@ -202,18 +200,16 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::Binary(s) => {
-                write!(f, "0x")?;
                 for c in *s {
-                    write!(f, "{:02x}", c)?;
+                    write!(f, "{:02X}", c)?;
                 }
                 Ok(())
             }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{:02X}", c)?;
                     }
                     Ok(())
                 }

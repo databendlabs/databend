@@ -2323,11 +2323,11 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.12.2"
-source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5af35e29bef4d4f89028a6b1251c5674df66a77f70cb6996c6e48bdfe5407c59"
 dependencies = [
- "async-trait",
- "log",
+ "http",
  "once_cell",
  "percent-encoding",
  "reqwest",
@@ -3918,19 +3918,18 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.12.2"
-source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "279f4710b5f2823947816c6f69d5fb28cfa666cdb2b0d5df987ba40e6a921790"
 dependencies = [
  "arrow",
  "async-trait",
  "chrono",
- "csv",
  "databend-client",
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
  "glob",
- "log",
  "percent-encoding",
  "serde_json",
  "tokio",
@@ -3940,8 +3939,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.12.2"
-source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b29e376c68885384a683728534946db643bc5928af6f359844cd89a3d81581f"
 dependencies = [
  "quote",
  "syn 2.0.46",
@@ -4317,15 +4317,15 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.12.2"
-source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1fa89f7e5ec45d5c3acef5b6f2ddab438f310f94fc09c42d333cce5cb44d68b"
 dependencies = [
  "arrow",
  "chrono",
  "databend-client",
  "glob",
- "hex",
- "itertools 0.12.0",
+ "itertools 0.11.0",
  "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "roaring",
  "serde",
@@ -7721,15 +7721,6 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
 dependencies = [
  "either",
 ]

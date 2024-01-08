@@ -78,6 +78,7 @@ pub fn serialize_block(
                     forbidden_compressions: vec![],
                 },
             );
+
             let batch = ArrowChunk::try_from(block)?;
 
             writer.start()?;
