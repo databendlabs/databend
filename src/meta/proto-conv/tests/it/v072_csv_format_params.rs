@@ -14,6 +14,7 @@
 
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use minitrace::func_name;
 
@@ -29,10 +30,11 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v59 = vec![
-        18, 35, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 3, 110, 97, 110, 50, 1, 92, 58,
-        1, 39, 66, 2, 92, 78, 72, 1, 160, 6, 59, 168, 6, 24,
+fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
+    let file_format_params_v72 = vec![
+        18, 48, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 6, 109, 121, 95, 110, 97, 110,
+        50, 1, 124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 115, 116, 114, 105, 110,
+        103, 160, 6, 72, 168, 6, 24,
     ];
     let want = || {
         mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
@@ -40,15 +42,15 @@ fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
             headers: 1,
             field_delimiter: "fd".to_string(),
             record_delimiter: "rd".to_string(),
-            null_display: "\\N".to_string(),
-            nan_display: "nan".to_string(),
-            escape: "\\".to_string(),
+            null_display: "Null".to_string(),
+            nan_display: "my_nan".to_string(),
+            escape: "|".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: false,
-            empty_field_as: Default::default(),
+            empty_field_as: EmptyFieldAs::String,
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v59.as_slice(), 0, want())?;
+    common::test_load_old(func_name!(), file_format_params_v72.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }

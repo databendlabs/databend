@@ -107,6 +107,7 @@ message CsvFileFormatParams {
   // corresponding to `!error_on_column_count_mismatch`
   // for we can not set default value in proto3
   bool allow_column_count_mismatch = 9;
+  optional string empty_field_as = 10;
 }
 
 message TsvFileFormatParams {

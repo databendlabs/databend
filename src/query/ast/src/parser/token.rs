@@ -498,6 +498,8 @@ pub enum TokenKind {
     EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
+    #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
+    EMPTY_FIELD_AS,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
