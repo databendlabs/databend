@@ -137,7 +137,7 @@ fn test_serialize_standard_deserialize_legacy() {
 }
 
 #[test]
-fn test22() {
+fn test_serialize_bincode_enum() {
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     enum Scalar {
         Null,
