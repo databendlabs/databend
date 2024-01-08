@@ -87,7 +87,7 @@ impl FieldJsonAstDecoder {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
-            ColumnBuilder::Binary(_c) => todo!("new string"),
+            ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value),
             ColumnBuilder::Map(c) => self.read_map(c, value),

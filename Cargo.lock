@@ -13877,3 +13877,8 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "databend-sql"
+version = "0.12.2"
+source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"

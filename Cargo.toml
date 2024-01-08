@@ -257,3 +257,4 @@ metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ec
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
 micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
+databend-sql = { git = "https://github.com/andylokandy/bendsql", rev = "cfd19a3" }
