@@ -2324,27 +2324,6 @@ dependencies = [
 [[package]]
 name = "databend-client"
 version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc8cf22482f03d8465a05e598a9077b650e5180dfedf7002fb425255a3b2139e"
-dependencies = [
- "async-trait",
- "log",
- "once_cell",
- "percent-encoding",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-retry",
- "tokio-stream",
- "tokio-util",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "databend-client"
-version = "0.12.2"
 source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
 dependencies = [
  "async-trait",
@@ -3940,14 +3919,13 @@ dependencies = [
 [[package]]
 name = "databend-driver"
 version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b60004ae1a4603920cb1518a4c146e8f1012051ae8133cbcaf4d14592565dd7"
+source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
 dependencies = [
  "arrow",
  "async-trait",
  "chrono",
  "csv",
- "databend-client 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "databend-client",
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
@@ -3963,8 +3941,7 @@ dependencies = [
 [[package]]
 name = "databend-driver-macros"
 version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70d293af56a52a39905cd442d144daa675b2a3a6e23b12523d311e729c55e898"
+source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f641a54a0a9ebc68dfb047a2b5f8"
 dependencies = [
  "quote",
  "syn 2.0.46",
@@ -4345,7 +4322,7 @@ source = "git+https://github.com/andylokandy/bendsql?rev=cfd19a3#cfd19a3f74a1f64
 dependencies = [
  "arrow",
  "chrono",
- "databend-client 0.12.2 (git+https://github.com/andylokandy/bendsql?rev=cfd19a3)",
+ "databend-client",
  "glob",
  "hex",
  "itertools 0.12.0",
@@ -4384,7 +4361,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-tz",
  "clap 4.4.2",
- "databend-client 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "databend-client",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
