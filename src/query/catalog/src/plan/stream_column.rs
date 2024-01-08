@@ -42,6 +42,7 @@ use databend_common_expression::Value;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
+use databend_common_expression::ROW_VERSION_COLUMN_ID;
 
 use crate::plan::PartInfo;
 use crate::plan::PartInfoPtr;
@@ -144,6 +145,7 @@ pub enum StreamColumnType {
     OriginVersion,
     OriginBlockId,
     OriginRowNum,
+    RowVersion,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -162,7 +164,6 @@ impl StreamColumn {
 
     pub fn table_field(&self) -> TableField {
         TableField::new_from_column_id(&self.column_name, self.table_data_type(), self.column_id())
-            .with_default_expr(Some("Null".to_string()))
     }
 
     pub fn column_type(&self) -> &StreamColumnType {
@@ -183,6 +184,7 @@ impl StreamColumn {
             StreamColumnType::OriginRowNum => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
+            StreamColumnType::RowVersion => TableDataType::Number(NumberDataType::UInt64),
         }
     }
 
@@ -200,12 +202,13 @@ impl StreamColumn {
             StreamColumnType::OriginVersion => ORIGIN_VERSION_COLUMN_ID,
             StreamColumnType::OriginBlockId => ORIGIN_BLOCK_ID_COLUMN_ID,
             StreamColumnType::OriginRowNum => ORIGIN_BLOCK_ROW_NUM_COLUMN_ID,
+            StreamColumnType::RowVersion => ROW_VERSION_COLUMN_ID,
         }
     }
 
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
-            StreamColumnType::OriginVersion => unreachable!(),
+            StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
             StreamColumnType::OriginBlockId => BlockEntry::new(
                 DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
                     DecimalSize {
