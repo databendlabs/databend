@@ -313,12 +313,11 @@ fn try_new_binary_array<O: Offset>(
         let array =
             Utf8Array::<O>::try_new(data_type, offsets, values, validity).map_err(|err| {
                 Error::External(
-                    format!(
-                        "Encountered invalid utf8 data for string type, \
+                    "Encountered invalid utf8 data for string type, \
                         if you were reading column with string type from a table, \
                         it's recommended to alter the column type to `BINARY`.\n\
-                        Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`",
-                    ),
+                        Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`"
+                        .to_string(),
                     Box::new(err),
                 )
             })?;
