@@ -24,7 +24,7 @@ use crate::HashJoinHashtableLike;
 // This hashtable is only used for target build merge into (both standalone and distributed mode).
 // Advantages:
 //      1. Reduces redundant I/O operations, enhancing performance.
-//      2. Lowers the maintenance overhead of deduplicating row_id.
+//      2. Lowers the maintenance overhead of deduplicating row_id.(But in distributed design, we also need to give rowid)
 //      3. Allows the scheduling of the subsequent mutation pipeline to be entirely allocated to not matched append operations.
 // Disadvantages:
 //      1. This solution is likely to be a one-time approach (especially if there are not matched insert operations involved),
@@ -36,6 +36,7 @@ pub struct HashJoinBlockInfoHashTable<K: Keyable, A: Allocator + Clone = MmapAll
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) phantom: PhantomData<K>,
+    pub(crate) is_distributed: bool,
 }
 
 impl<K, A> HashJoinHashtableLike for HashJoinBlockInfoHashTable<K, A>

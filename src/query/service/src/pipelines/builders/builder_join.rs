@@ -197,7 +197,7 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         };
-        // for merge into
+        // for distributed merge into when source as build side.
         if hash_join_plan.need_hold_hash_table {
             self.join_state = Some(build_state.clone())
         }

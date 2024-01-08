@@ -273,6 +273,7 @@ impl HashJoinProbeState {
         } else {
             input_num_rows as u64
         };
+        // We use the information from the probed data to predict the matching state of this probe.
         let prefer_early_filtering =
             (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
 

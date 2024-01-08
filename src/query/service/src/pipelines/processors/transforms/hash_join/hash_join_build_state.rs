@@ -211,7 +211,7 @@ impl HashJoinBuildState {
             vec![]
         };
 
-        let block_mark_scan_map = if self.hash_join_state.need_outer_scan() {
+        let block_mark_scan_map = if self.hash_join_state.need_mark_scan() {
             vec![MARKER_KIND_FALSE; data_block.num_rows()]
         } else {
             vec![]

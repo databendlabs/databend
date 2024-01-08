@@ -522,6 +522,13 @@ pub trait HashJoinHashtableLike {
 
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
+    /// 1. `key` is the serialize build key from one row
+    /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
+    /// we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
+    /// for key
+    /// 3. `vec_ptr` is RowPtr Array, we use this one to record the matched row in chunks
+    /// 4. `occupied` is the length for vec_ptr
+    /// 5. `capacity` is the capacity of vec_ptr
     fn next_probe(
         &self,
         key: &Self::Key,

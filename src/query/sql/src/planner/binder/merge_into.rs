@@ -73,8 +73,6 @@ pub enum MergeIntoType {
 //      right outer
 // 3. matched only:
 //      inner join
-// we will import optimizer for these join type in the future.
-
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]

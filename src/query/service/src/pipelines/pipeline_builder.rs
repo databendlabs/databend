@@ -43,7 +43,7 @@ pub struct PipelineBuilder {
 
     pub pipelines: Vec<Pipeline>,
 
-    // probe data_fields for merge into
+    // probe data_fields for distributed merge into when source build
     pub probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
