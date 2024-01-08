@@ -250,7 +250,7 @@ impl MetaNodeBuilder {
 
         info!("about to start raft grpc on endpoint {}", endpoint);
 
-        MetaNode::start_grpc(mn.clone(), &endpoint.addr, endpoint.port).await?;
+        MetaNode::start_grpc(mn.clone(), endpoint.addr(), endpoint.port()).await?;
 
         Ok(mn)
     }

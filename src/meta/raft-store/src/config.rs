@@ -164,35 +164,23 @@ impl RaftConfig {
     }
 
     pub fn raft_api_listen_host_endpoint(&self) -> Endpoint {
-        Endpoint {
-            addr: self.raft_listen_host.clone(),
-            port: self.raft_api_port,
-        }
+        Endpoint::new(&self.raft_listen_host, self.raft_api_port)
     }
 
     pub fn raft_api_advertise_host_endpoint(&self) -> Endpoint {
-        Endpoint {
-            addr: self.raft_advertise_host.clone(),
-            port: self.raft_api_port,
-        }
+        Endpoint::new(&self.raft_advertise_host, self.raft_api_port)
     }
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<Endpoint> {
         let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
         match ipv4_addr {
-            Ok(addr) => Ok(Endpoint {
-                addr: addr.to_string(),
-                port: self.raft_api_port,
-            }),
+            Ok(addr) => Ok(Endpoint::new(addr, self.raft_api_port)),
             Err(_) => {
                 let _ip_addrs = DNSResolver::instance()?
                     .resolve(self.raft_advertise_host.clone())
                     .await?;
-                Ok(Endpoint {
-                    addr: _ip_addrs[0].to_string(),
-                    port: self.raft_api_port,
-                })
+                Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
             }
         }
     }

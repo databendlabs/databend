@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::fmt;
+use std::net::SocketAddrV4;
 
+use anyerror::AnyError;
 use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Endpoint {
-    pub addr: String,
-    pub port: u16,
+    addr: String,
+    port: u16,
 }
 
 impl Endpoint {
@@ -30,10 +32,42 @@ impl Endpoint {
             port,
         }
     }
+
+    pub fn addr(&self) -> &str {
+        &self.addr
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Parse `1.2.3.4:5555` into `Endpoint`.
+    pub fn parse(address: &str) -> Result<Self, AnyError> {
+        match address.parse::<SocketAddrV4>() {
+            Ok(a) => Ok(Self::new(a.ip().to_string(), a.port())),
+            Err(e) => Err(AnyError::error(format!("Failed to parse address: {}", e))),
+        }
+    }
 }
 
 impl fmt::Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.addr, self.port)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Endpoint;
+
+    #[test]
+    fn test_endpoint_parse() -> anyhow::Result<()> {
+        assert!(Endpoint::parse("1.2.3.4").is_err());
+        assert!(Endpoint::parse("1.2.3.4:88888").is_err());
+
+        assert_eq!("1.2.3.4", Endpoint::parse("1.2.3.4:1234")?.addr());
+        assert_eq!(1234, Endpoint::parse("1.2.3.4:1234")?.port());
+
+        Ok(())
     }
 }
