@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::legacy::values::LegacyColumn;
-use databend_common_expression::legacy::values::LegacyScalar;
+use databend_common_expression::converts::bincode::LegacyColumn;
+use databend_common_expression::converts::bincode::LegacyScalar;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
