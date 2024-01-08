@@ -75,7 +75,8 @@ impl<'a> BlockWriter<'a> {
         };
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let (file_size, col_metas) = serialize_block(&write_settings, schema, block, &mut buf)?;
+        let col_metas = serialize_block(&write_settings, schema, block, &mut buf)?;
+        let file_size = buf.len() as u64;
 
         data_accessor.write(&location.0, buf).await?;
 
@@ -120,12 +121,16 @@ impl<'a> BlockWriter<'a> {
             let filter_schema = bloom_index.filter_schema;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
-            let (size, meta) = blocks_to_parquet(
+            let meta = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
-            )?;
+                true,
+            )?
+            .as_parquet2()
+            .unwrap();
+            let size = data.len() as u64;
             data_accessor.write(&location.0, data).await?;
             Ok((size, Some(location), Some(meta)))
         } else {

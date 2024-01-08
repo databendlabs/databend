@@ -23,13 +23,20 @@ use crate::DataSchema;
 
 impl DataBlock {
     pub fn to_record_batch(self, data_schema: &DataSchema) -> Result<RecordBatch, ArrowError> {
+        let schema = Arc::new(data_schema.into());
+        self.to_record_batch_with_arrow_schema(schema)
+    }
+
+    pub fn to_record_batch_with_arrow_schema(
+        self,
+        arrow_schema: arrow_schema::SchemaRef,
+    ) -> Result<RecordBatch, ArrowError> {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for entry in self.convert_to_full().columns() {
             let column = entry.value.to_owned().into_column().unwrap();
             arrays.push(column.into_arrow_rs()?)
         }
-        let schema = Arc::new(data_schema.into());
-        RecordBatch::try_new(schema, arrays)
+        RecordBatch::try_new(arrow_schema, arrays)
     }
 
     pub fn from_record_batch(

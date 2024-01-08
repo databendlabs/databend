@@ -765,8 +765,8 @@ impl CompactSegmentTestFixture {
                     };
 
                     let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                    let (file_size, col_metas) =
-                        serialize_block(&write_settings, &schema, block, &mut buf)?;
+                    let col_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
+                    let file_size = buf.len() as u64;
 
                     data_accessor.write(&location.0, buf).await?;
 

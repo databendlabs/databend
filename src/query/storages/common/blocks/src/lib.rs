@@ -14,6 +14,39 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod block;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::table::TableCompression;
 
-pub use block::blocks_to_parquet;
+mod parquet2;
+mod parquet_rs;
+
+pub enum ParquetFileMeta {
+    Parquet2(parquet_format_safe::FileMetaData),
+    ParquetRs(::parquet_rs::format::FileMetaData),
+}
+
+impl ParquetFileMeta {
+    pub fn as_parquet2(self) -> Option<parquet_format_safe::FileMetaData> {
+        match self {
+            ParquetFileMeta::Parquet2(meta) => Some(meta),
+            ParquetFileMeta::ParquetRs(_) => None,
+        }
+    }
+}
+
+pub fn blocks_to_parquet(
+    schema: &TableSchema,
+    blocks: Vec<DataBlock>,
+    write_buffer: &mut Vec<u8>,
+    compression: TableCompression,
+    use_parquet2: bool,
+) -> Result<ParquetFileMeta> {
+    match use_parquet2 {
+        true => parquet2::blocks_to_parquet(schema, blocks, write_buffer, compression)
+            .map(|(_, meta)| ParquetFileMeta::Parquet2(meta)),
+        false => parquet_rs::blocks_to_parquet(schema, blocks, write_buffer, compression)
+            .map(ParquetFileMeta::ParquetRs),
+    }
+}

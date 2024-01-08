@@ -50,14 +50,19 @@ pub fn serialize_block(
     schema: &TableSchemaRef,
     block: DataBlock,
     buf: &mut Vec<u8>,
-) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_parquet_metas(&result.1, &schema)?;
-            Ok((result.0, meta))
+            let result = blocks_to_parquet(
+                &schema,
+                vec![block],
+                buf,
+                write_settings.table_compression,
+                false,
+            )?;
+            let meta = util::column_parquet_metas(&result, &schema)?;
+            Ok(meta)
         }
         FuseStorageFormat::Native => {
             let arrow_schema = schema.to_arrow();
@@ -92,7 +97,7 @@ pub fn serialize_block(
                 metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
             }
 
-            Ok((writer.total_size() as u64, metas))
+            Ok(metas)
         }
     }
 }
@@ -132,15 +137,17 @@ impl BloomIndexState {
             let column_distinct_count = bloom_index.column_distinct_count;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
-            let (size, _) = blocks_to_parquet(
+            let _ = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
+                false,
             )?;
+            let data_size = data.len() as u64;
             Ok(Some(Self {
                 data,
-                size,
+                size: data_size,
                 location,
                 column_distinct_count,
             }))
@@ -191,13 +198,13 @@ impl BlockBuilder {
             gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let (file_size, col_metas) = serialize_block(
+        let col_metas = serialize_block(
             &self.write_settings,
             &self.source_schema,
             data_block,
             &mut buffer,
         )?;
-
+        let file_size = buffer.len() as u64;
         let block_meta = BlockMeta {
             row_count,
             block_size,

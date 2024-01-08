@@ -3511,6 +3511,7 @@ dependencies = [
  "metrics",
  "minitrace",
  "opendal",
+ "parquet",
  "parquet-format-safe",
  "rand 0.8.5",
  "serde",
@@ -4384,11 +4385,14 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "databend-common-arrow",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "parquet",
+ "parquet-format-safe",
 ]
 
 [[package]]

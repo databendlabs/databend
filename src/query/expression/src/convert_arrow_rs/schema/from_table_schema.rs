@@ -19,6 +19,7 @@ use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::FieldRef;
 use arrow_schema::Fields;
+use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
 
 use crate::types::DecimalDataType;
@@ -26,6 +27,7 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::TableDataType;
 use crate::TableField;
+use crate::TableSchema;
 use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
@@ -118,5 +120,17 @@ impl From<&TableDataType> for ArrowDataType {
             TableDataType::Bitmap => ArrowDataType::LargeBinary,
             TableDataType::Variant => ArrowDataType::LargeBinary,
         }
+    }
+}
+
+impl From<&TableSchema> for Schema {
+    fn from(value: &TableSchema) -> Self {
+        let fields = Fields::from_iter(value.fields.iter().map(|f| Arc::new(f.into())));
+        let metadata = value
+            .metadata
+            .iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
+        Schema::new_with_metadata(fields, metadata)
     }
 }
