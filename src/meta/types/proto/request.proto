@@ -26,8 +26,10 @@ message SeqV {
   optional KVMeta meta = 3;
 }
 
-// Get request and response
-message TxnGetRequest { string key = 1; }
+// Request to get the seq and value by key
+message TxnGetRequest {
+  string key = 1;
+}
 
 message TxnGetResponse {
   string key = 1;
@@ -41,10 +43,10 @@ message TxnPutRequest {
 
   bytes value = 2;
 
-  // if or not return the prev value
+  // Whether or not to return the prev value
   bool prev_value = 3;
 
-  // expire time
+  // Absolute expire time
   optional uint64 expire_at = 4;
 
   // Time to last in milliseconds.
