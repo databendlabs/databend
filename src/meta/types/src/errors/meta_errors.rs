@@ -17,6 +17,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::errors;
 use crate::InvalidReply;
 use crate::MetaAPIError;
 use crate::MetaClientError;
@@ -61,5 +62,13 @@ impl From<InvalidReply> for MetaError {
     fn from(e: InvalidReply) -> Self {
         let api_err = MetaAPIError::from(e);
         Self::APIError(api_err)
+    }
+}
+
+impl From<errors::IncompleteStream> for MetaError {
+    fn from(e: errors::IncompleteStream) -> Self {
+        let net_err = MetaNetworkError::from(e);
+        let client_err = MetaClientError::from(net_err);
+        Self::ClientError(client_err)
     }
 }

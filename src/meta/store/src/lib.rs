@@ -22,9 +22,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
 use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -88,35 +86,28 @@ impl MetaStore {
 impl kvapi::KVApi for MetaStore {
     type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         match self {
-            MetaStore::L(x) => x.get_kv(key).await,
-            MetaStore::R(x) => x.get_kv(key).await,
+            MetaStore::L(x) => x.get_kv_stream(keys).await,
+            MetaStore::R(x) => x.get_kv_stream(keys).await,
         }
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, MetaError> {
-        match self {
-            MetaStore::L(x) => x.mget_kv(key).await,
-            MetaStore::R(x) => x.mget_kv(key).await,
-        }
-    }
-
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         match self {
             MetaStore::L(x) => x.list_kv(prefix).await,
             MetaStore::R(x) => x.list_kv(prefix).await,
         }
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         match self {
             MetaStore::L(x) => x.transaction(txn).await,
             MetaStore::R(x) => x.transaction(txn).await,

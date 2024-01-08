@@ -1,4 +1,7 @@
 statement ok
+unset enable_query_result_cache;
+
+statement ok
 drop table if exists tt all
 
 statement ok
@@ -8,7 +11,6 @@ query T
 select to_timestamp(1630320462000000)
 ----
 2021-08-30 10:47:42.000000
-
 
 query T
 select to_timestamp('2000-01-01 00:00:00')
@@ -33,6 +35,35 @@ query T
 select to_timestamp('2000-01-01 12:00:00+08:00')
 ----
 2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+08')
+----
+2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00-08')
+----
+2000-01-02 04:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+0811')
+----
+2000-01-01 11:49:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00-0811')
+----
+2000-01-02 04:11:00.000000
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00-08112')
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00-081')
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00+08:')
 
 statement ok
 set timezone = 'UTC'

@@ -532,7 +532,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
             DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
         }
-        databend_common_ast::ast::TypeName::Binary => DataType::String,
+        databend_common_ast::ast::TypeName::Binary => DataType::Binary,
         databend_common_ast::ast::TypeName::String => DataType::String,
         databend_common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         databend_common_ast::ast::TypeName::Date => DataType::Date,

@@ -363,9 +363,10 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 for x in self.0 {
                     value = unsafe { _mm_crc32_u64(value, x) };
                 }
+                value = unsafe { _mm_crc32_u64(value, self.1.get()) };
                 value
             } else {
-                 use std::hash::Hasher;
+                use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {

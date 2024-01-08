@@ -218,7 +218,7 @@ service MetaService {
   // General KV API for get, mget, list, and upsert;
   // It is introduced to replace `WriteMsg` and `ReadMsg`.
   //
-  // Since: 0.8.35; 2022-09-14
+  // 2022-09-14: since: 0.8.35
   rpc KvApi(RaftRequest) returns (RaftReply);
 
   // Handle application read request.
@@ -228,6 +228,8 @@ service MetaService {
   // It returns a stream of `StreamItem`.
   // - For single-reply request, the stream contains only one item, e.g. `Get`.
   // - For multi-reply request, the stream contains multiple items, e.g. `MGet` and `List`.
+  //
+  // 2023-10-17: since 1.2.163
   rpc KvReadV1(RaftRequest) returns (stream StreamItem);
 
   // Export all meta data.

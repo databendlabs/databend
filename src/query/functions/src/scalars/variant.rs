@@ -66,6 +66,7 @@ use jsonb::as_i64;
 use jsonb::as_str;
 use jsonb::build_array;
 use jsonb::build_object;
+use jsonb::concat;
 use jsonb::contains;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
@@ -1103,6 +1104,25 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             output.commit_row();
         }),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "concat",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                if let Err(err) = concat(left, right, &mut output.data) {
+                    ctx.set_error(output.len(), err.to_string());
+                };
+                output.commit_row();
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg(

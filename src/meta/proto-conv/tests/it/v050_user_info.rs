@@ -68,7 +68,7 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
             .with_default_role(Some("role1".into()))
             .with_network_policy(Some("mypolicy".to_string())),
         history_auth_infos: vec![],
-        password_fail_ons: vec![],
+        password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
     };

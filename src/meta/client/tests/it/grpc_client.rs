@@ -23,10 +23,11 @@ use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
+use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::UpsertKV;
 use futures::StreamExt;
 use log::info;
 use tonic::codegen::BoxStream;
@@ -45,12 +46,15 @@ async fn test_grpc_client_timeout() -> anyhow::Result<()> {
     let timeout = Duration::from_secs(3);
     let client = new_client(&srv_addr, Some(timeout))?;
 
-    let res = client.request(GetKVReq::new("foo")).await;
+    let res = client.request(UpsertKV::insert("foo", b"foo")).await;
 
-    let err = res.unwrap_err();
-    let got = err.to_string();
-    let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
-    assert_eq!(expect, got);
+    if let Err(err) = res {
+        let got = err.to_string();
+        let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
+        assert_eq!(expect, got);
+    } else {
+        panic!("expect error, but got ok");
+    }
 
     Ok(())
 }
@@ -117,7 +121,7 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
     // Send a Get request and return the first item.
     async fn send_req(client: &Arc<ClientHandle>) -> Result<StreamItem, MetaError> {
         let res: Result<BoxStream<StreamItem>, MetaError> =
-            client.request(Streamed(GetKVReq::new("foo"))).await;
+            client.request(Streamed(MGetKVReq::new(["foo"]))).await;
 
         let mut strm = res?;
         let first = strm.next().await.unwrap();
