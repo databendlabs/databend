@@ -103,6 +103,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
+/// Note: Don't change the order, because we have bincode meta in old version
 #[derive(
     Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]
@@ -115,13 +116,13 @@ pub enum Scalar {
     Timestamp(i64),
     Date(i32),
     Boolean(bool),
-    Binary(Vec<u8>),
     String(Vec<u8>),
     Array(Column),
     Map(Column),
     Bitmap(Vec<u8>),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
+    Binary(Vec<u8>),
 }
 
 #[derive(Clone, Default, Eq, EnumAsInner)]
@@ -133,7 +134,6 @@ pub enum ScalarRef<'a> {
     Number(NumberScalar),
     Decimal(DecimalScalar),
     Boolean(bool),
-    Binary(&'a [u8]),
     String(&'a [u8]),
     Timestamp(i64),
     Date(i32),
@@ -142,8 +142,10 @@ pub enum ScalarRef<'a> {
     Bitmap(&'a [u8]),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
+    Binary(&'a [u8]),
 }
 
+/// Note: Don't change the order, because we have bincode meta in old version
 #[derive(Clone, EnumAsInner)]
 pub enum Column {
     Null { len: usize },
@@ -152,7 +154,6 @@ pub enum Column {
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
-    Binary(StringColumn),
     String(StringColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
@@ -162,6 +163,7 @@ pub enum Column {
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
+    Binary(StringColumn),
 }
 
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
