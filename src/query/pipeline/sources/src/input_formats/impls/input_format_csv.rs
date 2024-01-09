@@ -383,9 +383,11 @@ impl AligningStateTextBased for CsvReaderState {
         let mut file_status = FileStatus::default();
         let mut buf_out = vec![0u8; buf_in.len()];
         while self.common.rows_to_skip > 0 {
-            let (_, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
+            let (res, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
             buf_in = &buf_in[n_in..];
-            self.common.rows_to_skip -= 1;
+            if matches!(res, ReadRecordOutput::Record { .. }) {
+                self.common.rows_to_skip -= 1;
+            }
         }
 
         let mut buf_out_pos = 0usize;
