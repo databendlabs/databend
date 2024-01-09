@@ -33,6 +33,7 @@ use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::InstallSnapshotResponse;
@@ -54,7 +55,6 @@ use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;

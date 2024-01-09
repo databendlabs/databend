@@ -1112,10 +1112,10 @@ impl MetaNode {
         debug!("{} req: {:?}", func_name!(), req);
 
         let res = self
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::Write(req.clone()),
-            })
+            .handle_forwardable_request(ForwardRequest::new(
+                1,
+                ForwardRequestBody::Write(req.clone()),
+            ))
             .await?;
 
         let res: AppliedState = res.try_into().expect("expect AppliedState");

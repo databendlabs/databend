@@ -16,9 +16,15 @@
 
 use std::error::Error;
 
-use databend_common_meta_types::protobuf::RaftReply;
-use databend_common_meta_types::protobuf::RaftRequest;
-use databend_common_meta_types::RaftError;
+use log::error;
+use tonic::metadata::MetadataValue;
+
+use crate::protobuf::RaftReply;
+use crate::protobuf::RaftRequest;
+use crate::Endpoint;
+use crate::RaftError;
+
+const HEADER_LEADER: &str = "x-databend-meta-leader-endpoint";
 
 pub struct GrpcHelper;
 
@@ -27,6 +33,47 @@ impl GrpcHelper {
     pub fn traced_req<T>(t: T) -> tonic::Request<T> {
         let req = tonic::Request::new(t);
         databend_common_tracing::inject_span_to_tonic_request(req)
+    }
+
+    /// Add leader endpoint to the reply to inform the client to contact the leader directly.
+    pub fn add_response_meta_leader<T>(
+        reply: &mut tonic::Response<T>,
+        endpoint: Option<&Endpoint>,
+    ) {
+        if let Some(endpoint) = endpoint {
+            let metadata = reply.metadata_mut();
+            metadata.insert_bin(
+                HEADER_LEADER,
+                MetadataValue::from_bytes(endpoint.to_string().as_bytes()),
+            );
+        }
+    }
+
+    /// Retrieve leader endpoint from the reply.
+    pub fn get_response_meta_leader<T>(reply: &tonic::Response<T>) -> Option<Endpoint> {
+        let metadata = reply.metadata();
+
+        let Some(values) = metadata.get(HEADER_LEADER) else {
+            return None;
+        };
+
+        match values.to_str() {
+            Ok(value) => {
+                let endpoint = Endpoint::parse(value);
+
+                match endpoint {
+                    Ok(endpoint) => Some(endpoint),
+                    Err(e) => {
+                        error!("invalid response leader endpoint: {}, error: {}", value, e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                error!("invalid response leader endpoint, error: {}", e);
+                None
+            }
+        }
     }
 
     pub fn encode_raft_request<T>(v: &T) -> Result<RaftRequest, serde_json::Error>

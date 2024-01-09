@@ -2621,8 +2621,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "databend-common-arrow",
- "databend-common-meta-stoerr",
- "databend-common-meta-types",
  "http",
  "opendal",
  "parquet",
@@ -3078,6 +3076,7 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "databend-common-exception",
  "prost 0.12.1",
  "serde",
  "serde_json",
@@ -3106,8 +3105,11 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-building",
+ "databend-common-exception",
  "databend-common-meta-stoerr",
+ "databend-common-tracing",
  "derive_more",
+ "log",
  "num-derive",
  "num-traits",
  "openraft 0.9.0",

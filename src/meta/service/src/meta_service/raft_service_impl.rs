@@ -25,6 +25,7 @@ use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::Vote;
@@ -36,7 +37,6 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;

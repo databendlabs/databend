@@ -15,7 +15,10 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::str::FromStr;
+
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
 use num::FromPrimitive;
@@ -422,6 +425,16 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
         } else {
             p.null_display
         };
+
+        let empty_field_as = p
+            .empty_field_as
+            .map(|s| {
+                EmptyFieldAs::from_str(&s).map_err(|e| Incompatible {
+                    reason: format!("{:?}", e),
+                })
+            })
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             compression,
             headers: p.headers,
@@ -432,6 +445,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             nan_display: p.nan_display,
             null_display,
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
+            empty_field_as,
         })
     }
 
@@ -449,6 +463,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             nan_display: self.nan_display.clone(),
             null_display: self.null_display.clone(),
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
+            empty_field_as: Some(self.empty_field_as.to_string()),
         })
     }
 }
