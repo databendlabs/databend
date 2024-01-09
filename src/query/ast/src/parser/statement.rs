@@ -129,9 +129,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             _,
             sql,
         )| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .unwrap();
+            let sql = format!("{}", sql.stmt);
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
