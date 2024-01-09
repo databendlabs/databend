@@ -22,9 +22,14 @@ pub enum MergeIntoJoinType {
     NormalJoin,
 }
 
+// for now, we just support MergeIntoJoinType::Left to use MergeIntoBlockInfoHashTable in two situations:
+// 1. distributed broadcast join and target table as build side.
+// 2. in standalone mode and target table as build side.
+// we will support Inner next, so the merge_into_join_type is only Left for current implementation in fact.
 pub struct MergeIntoJoin {
-    merge_into_join_type: MergeIntoJoinType,
-    is_distributed: bool,
+    pub merge_into_join_type: MergeIntoJoinType,
+    pub is_distributed: bool,
+    pub target_tbl_idx: usize,
 }
 
 impl Default for MergeIntoJoin {
@@ -32,6 +37,7 @@ impl Default for MergeIntoJoin {
         Self {
             merge_into_join_type: MergeIntoJoinType::NormalJoin,
             is_distributed: Default::default(),
+            target_tbl_idx: Default::default(),
         }
     }
 }

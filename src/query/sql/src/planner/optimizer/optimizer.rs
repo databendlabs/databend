@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +28,7 @@ use super::cost::CostContext;
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
+use crate::binder::MergeIntoType;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
@@ -322,6 +325,14 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         false
     };
 
+    // we just support left join to use MergeIntoBlockInfoHashTable
+    if change_join_order && matches!(plan.merge_type, MergeIntoType::FullOperation) {
+        opt_ctx.table_ctx.set_merge_into_join_type(MergeIntoJoin {
+            merge_into_join_type: MergeIntoJoinType::Left,
+            is_distributed: false,
+            target_tbl_idx: plan.target_table_idx,
+        })
+    }
     // try to optimize distributed join, only if
     // - distributed optimization is enabled
     // - no local table scan
@@ -349,7 +360,13 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             || change_join_order
         {
             // we need to judge whether it'a broadcast join to support runtime filter.
-            merge_into_join_sexpr = try_to_change_as_broadcast_join(merge_into_join_sexpr)?;
+            merge_into_join_sexpr = try_to_change_as_broadcast_join(
+                merge_into_join_sexpr,
+                change_join_order,
+                opt_ctx.table_ctx.clone(),
+                plan.merge_type.clone(),
+                plan.target_table_idx,
+            )?;
             (merge_into_join_sexpr.clone(), false)
         } else {
             (
@@ -373,7 +390,13 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     }
 }
 
-fn try_to_change_as_broadcast_join(merge_into_join_sexpr: SExpr) -> Result<SExpr> {
+fn try_to_change_as_broadcast_join(
+    merge_into_join_sexpr: SExpr,
+    change_join_order: bool,
+    table_ctx: Arc<dyn TableContext>,
+    merge_into_type: MergeIntoType,
+    target_tbl_idx: usize,
+) -> Result<SExpr> {
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
         if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
@@ -382,6 +405,15 @@ fn try_to_change_as_broadcast_join(merge_into_join_sexpr: SExpr) -> Result<SExpr
             let join_s_expr = merge_into_join_sexpr
                 .child(0)?
                 .replace_plan(Arc::new(RelOperator::Join(join)));
+            // for now, when we use target table as build side and it's a broadcast join,
+            // we will use merge_into_block_info_hashtable to reduce i/o operations.
+            if change_join_order && matches!(merge_into_type, MergeIntoType::FullOperation) {
+                table_ctx.set_merge_into_join_type(MergeIntoJoin {
+                    merge_into_join_type: MergeIntoJoinType::Left,
+                    is_distributed: true,
+                    target_tbl_idx,
+                })
+            }
             return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
         }
     }

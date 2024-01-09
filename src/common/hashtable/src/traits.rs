@@ -514,7 +514,7 @@ pub trait HashJoinHashtableLike {
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
     // 1. same with `early_filtering_probe_with_selection`, but we don't use selection to preserve the
     // unfiltered indexes, we just set the filtered hashes as zero.
-    // 2. return the unfilterd counts.
+    // 2. return the unfiltered counts.
     fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
@@ -522,7 +522,7 @@ pub trait HashJoinHashtableLike {
     // 1. `hashes` is the hash value of probe block's rows. we will use this one to
     // do early filtering. if we can't early filter one row(at idx), we will assign pointer in
     // the bucket to hashes[idx] to reuse the memory.
-    // 2. `selection` is used to preserved the indexes which can't be early_filterd.
+    // 2. `selection` is used to preserved the indexes which can't be early_filtered.
     // 3. return the count of preserved the indexes in `selection`
     fn early_filtering_probe_with_selection(
         &self,
@@ -543,7 +543,7 @@ pub trait HashJoinHashtableLike {
     /// 4. `occupied` is the length for vec_ptr
     /// 5. `capacity` is the capacity of vec_ptr
     /// 6. return macthed rows count and next ptr which need to test in the future.
-    /// if the capacity is enougth, the next ptr is zero, otherwise next ptr is valid.
+    /// if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
     fn next_probe(
         &self,
         key: &Self::Key,

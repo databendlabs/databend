@@ -30,6 +30,7 @@ use crate::RowPtr;
 use crate::StringRawEntry;
 use crate::STRING_EARLY_SIZE;
 
+#[allow(unused)]
 pub struct HashJoinBlockInfoStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,

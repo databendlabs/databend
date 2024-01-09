@@ -187,13 +187,15 @@ pub mod sse {
 }
 
 // for merge into:
-// we use BlockInfoIndex to maintain an index
-// for the block info in chunks.
+// we use BlockInfoIndex to maintain an index for the block info in chunks.
 pub struct BlockInfoIndex {
     // the intervals will be like below:
     // (0,10)(11,29),(30,38). it's ordered.
+    #[allow(dead_code)]
     intervals: Vec<Interval>,
+    #[allow(dead_code)]
     prefixs: Vec<u64>,
+    #[allow(dead_code)]
     length: usize,
 }
 
@@ -210,7 +212,9 @@ pub type Interval = (u32, u32);
 /// segment2_block0 |
 ///
 /// .........
+
 impl BlockInfoIndex {
+    #[allow(dead_code)]
     pub fn new_with_capacity(capacity: usize) -> Self {
         BlockInfoIndex {
             intervals: Vec::with_capacity(capacity),
@@ -221,7 +225,8 @@ impl BlockInfoIndex {
 
     /// 1.interval stands for the (start,end) in chunks for one block.
     /// 2.prefix is the segment_id_block_id composition.
-    /// we can promise the orderd insert from outside.
+    /// we can promise the ordered insert from outside.
+    #[allow(dead_code)]
     pub fn insert_block_offsets(&mut self, interval: Interval, prefix: u64) {
         self.intervals.push(interval);
         self.prefixs.push(prefix);
@@ -233,6 +238,7 @@ impl BlockInfoIndex {
     /// intervals: (0,10)(11,22),(23,40)(41,55)
     /// interval: (8,27)
     /// we will give (8,10),(23,27), we don't give the (11,12),because it's updated all.
+    #[allow(dead_code)]
     pub fn get_block_info(&self, interval: Interval) -> Vec<(Interval, u64)> {
         let mut res = Vec::<(Interval, u64)>::with_capacity(2);
         let left_idx = self.search_idx(interval.0);
@@ -250,6 +256,7 @@ impl BlockInfoIndex {
 
     /// search idx help us to find out the intervals idx which contain offset.
     /// It must contain offset.
+    #[allow(dead_code)]
     fn search_idx(&self, offset: u32) -> usize {
         let mut l = 0;
         let mut r = self.length - 1;
@@ -280,11 +287,11 @@ impl Default for BlockInfoIndex {
 fn test_block_info_index() {
     // let's build [0,10][11,20][21,30],[31,40],and then find [10,37].
     // we should get [10,10],[31,37]
-    let intevals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 40)];
+    let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 40)];
     let find_interval: Interval = (10, 37);
     let mut block_info_index = BlockInfoIndex::new_with_capacity(10);
-    for (idx, interval) in intevals.iter().enumerate() {
-        block_info_index.insert_block_offsets(interval.clone(), idx as u64)
+    for (idx, interval) in intervals.iter().enumerate() {
+        block_info_index.insert_block_offsets(*interval, idx as u64)
     }
     let result = block_info_index.get_block_info(find_interval);
     assert_eq!(result[0].0, (10, 10));

@@ -42,7 +42,7 @@ pub struct BuildBlockGenerationState {
     // we converted all chunks into ColumnVec for every column.
     pub(crate) build_columns: Vec<ColumnVec>,
     pub(crate) build_columns_data_type: Vec<DataType>,
-    // after projectd by build_projection, whether we still have data.
+    // after projected by build_projection, whether we still have data.
     pub(crate) is_build_projected: bool,
 }
 

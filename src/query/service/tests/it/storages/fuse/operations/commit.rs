@@ -701,7 +701,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_merge_into_join_type(&self, join: MergeIntoJoin) {
+    fn set_merge_into_join_type(&self, _join: MergeIntoJoin) {
         todo!()
     }
 

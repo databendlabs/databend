@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -25,6 +24,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -749,6 +749,10 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
+    fn set_merge_into_join_type(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
     fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
