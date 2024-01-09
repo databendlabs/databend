@@ -216,10 +216,15 @@ pub fn try_rewrite(
             }
             (Some((qe, qr, qo)), None) => {
                 if !qe.is_empty() {
-                    continue;
+                    let preds = qe
+                        .iter()
+                        .flat_map(|(left, right)| [(*left).clone(), (*right).clone()])
+                        .collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if !qo.is_empty() {
-                    continue;
+                    let preds = qo.iter().map(|p| (*p).clone()).collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if let Some(preds) = check_predicates_range(
                     qr,
