@@ -52,10 +52,13 @@ pub struct DPhpy {
     relation_set_tree: RelationSetTree,
     // non-equi conditions
     filters: HashSet<Filter>,
+    // Is cluster
+    is_cluster: bool,
 }
 
 impl DPhpy {
     pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+        let is_cluster = !ctx.get_cluster().is_empty();
         Self {
             ctx,
             metadata,
@@ -65,6 +68,7 @@ impl DPhpy {
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
+            is_cluster,
         }
     }
 
@@ -509,9 +513,13 @@ impl DPhpy {
             }
         };
         if join_node.join_type == JoinType::Inner {
-            let cost = join_node.cardinality(&self.join_relations)?
+            let mut cost = join_node.cardinality(&self.join_relations)?
                 + join_node.children[0].cost
                 + join_node.children[1].cost;
+            if self.is_cluster {
+                // Network cost.
+                cost += join_node.children[1].cost * 5.0;
+            }
             join_node.set_cost(cost);
         }
 

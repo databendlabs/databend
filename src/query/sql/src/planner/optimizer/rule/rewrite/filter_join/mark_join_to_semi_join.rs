@@ -61,8 +61,7 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
     }
 
     join.join_type = match join.join_type {
-        JoinType::LeftMark => JoinType::RightSemi,
-        JoinType::RightMark => JoinType::Inner,
+        JoinType::LeftMark | JoinType::RightMark => JoinType::Inner,
         _ => unreachable!(),
     };
 
