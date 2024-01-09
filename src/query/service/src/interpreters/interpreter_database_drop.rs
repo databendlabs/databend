@@ -56,9 +56,8 @@ impl Interpreter for DropDatabaseInterpreter {
                 catalog_name: self.plan.catalog.clone(),
                 db_id: db.get_db_info().ident.db_id,
             };
-            let role = role_api.get_ownership(&owner_object).await?.map(|o| o.role);
 
-            role_api.revoke_ownership(&owner_object, role).await?;
+            role_api.revoke_ownership(&owner_object).await?;
         }
 
         // actual drop database

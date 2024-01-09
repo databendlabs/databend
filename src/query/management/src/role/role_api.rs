@@ -61,7 +61,7 @@ pub trait RoleApi: Sync + Send {
     /// 2. kv api delete old owner object key.
     ///
     /// Note: if role is `account_admin` or None no need to revoke
-    async fn revoke_ownership(&self, object: &OwnershipObject, role: Option<String>) -> Result<()>;
+    async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<()>;
 
     /// Move ownership contains three steps:
     /// 1. revoke ownership on obj from old role,

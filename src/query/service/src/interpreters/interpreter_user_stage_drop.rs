@@ -76,9 +76,8 @@ impl Interpreter for DropUserStageInterpreter {
             let owner_object = OwnershipObject::Stage {
                 name: self.plan.name.clone(),
             };
-            let role = role_api.get_ownership(&owner_object).await?.map(|o| o.role);
 
-            role_api.revoke_ownership(&owner_object, role).await?;
+            role_api.revoke_ownership(&owner_object).await?;
 
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;

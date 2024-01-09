@@ -115,9 +115,8 @@ impl Interpreter for DropTableInterpreter {
             db_id: db.get_db_info().ident.db_id,
             table_id: tbl.get_table_info().ident.table_id,
         };
-        let role = role_api.get_ownership(&owner_object).await?.map(|o| o.role);
 
-        role_api.revoke_ownership(&owner_object, role).await?;
+        role_api.revoke_ownership(&owner_object).await?;
 
         // if `plan.all`, truncate, then purge the historical data
         if self.plan.all {

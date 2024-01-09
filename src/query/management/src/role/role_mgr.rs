@@ -381,9 +381,9 @@ impl RoleApi for RoleMgr {
     async fn revoke_ownership(
         &self,
         object: &OwnershipObject,
-        role: Option<String>,
     ) -> databend_common_exception::Result<()> {
         let seq = MatchSeq::Exact(0);
+        let role = self.get_ownership(&object).await?.map(|o| o.role);
         let owner_key = self.make_object_owner_key(object);
 
         if let Some(role) = role {
