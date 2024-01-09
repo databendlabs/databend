@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+databend-common-exception = { path = "../../common/exception" }
 databend-common-meta-stoerr = { path = "../stoerr" }
 
 openraft = { workspace = true }
