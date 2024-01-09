@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -94,19 +95,6 @@ impl DataBlock {
         }
         let schema = Arc::new(ArrowSchema::new(arrow_fields));
         Ok(RecordBatch::try_new(schema, arrays)?)
-    }
-
-    pub fn to_record_batch_with_arrow_schema(
-        self,
-        arrow_schema: Arc<ArrowSchema>,
-    ) -> Result<RecordBatch> {
-        let mut arrays = Vec::with_capacity(self.columns().len());
-        for entry in self.convert_to_full().columns().iter() {
-            let column = entry.value.to_owned().into_column().unwrap();
-            let array = column.into_arrow_rs()?;
-            arrays.push(array);
-        }
-        Ok(RecordBatch::try_new(arrow_schema, arrays)?)
     }
 }
 

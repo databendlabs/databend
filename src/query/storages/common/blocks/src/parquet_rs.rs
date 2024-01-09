@@ -34,6 +34,7 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<FileMetaData> {
+    assert!(blocks.len() > 0);
     let compression = to_parquet_rs_compression(compression);
     let props = WriterProperties::builder()
         .set_compression(compression)
@@ -44,10 +45,13 @@ pub fn blocks_to_parquet(
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .build();
-    let arrow_schema = Arc::new(Schema::from(schema));
-    let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema.clone(), Some(props))?;
-    for block in blocks {
-        let batch = block.to_record_batch_with_arrow_schema(arrow_schema.clone())?;
+    let batches = blocks
+        .into_iter()
+        .map(|block| block.to_record_batch(&schema.into()))
+        .collect::<Result<Vec<_>>>()?;
+    let arrow_schema = batches[0].schema();
+    let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
+    for batch in batches {
         writer.write(&batch)?;
     }
     let file_meta = writer.close()?;
