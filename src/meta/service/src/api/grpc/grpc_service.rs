@@ -38,6 +38,7 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
@@ -60,7 +61,6 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
