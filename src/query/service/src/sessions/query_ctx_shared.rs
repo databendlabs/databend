@@ -24,6 +24,7 @@ use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
@@ -113,6 +114,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+
+    pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 }
 
 impl QueryContextShared {
@@ -158,6 +161,7 @@ impl QueryContextShared {
             group_by_spill_progress: Arc::new(Progress::create()),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            merge_into_join: Default::default(),
         }))
     }
 

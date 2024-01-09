@@ -35,8 +35,9 @@ pub struct HashJoinBlockInfoHashTable<K: Keyable, A: Allocator + Clone = MmapAll
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
-    pub(crate) phantom: PhantomData<K>,
     pub(crate) is_distributed: bool,
+    pub(crate) matched: Box<[u64]>,
+    pub(crate) phantom: PhantomData<K>,
 }
 
 impl<K, A> HashJoinHashtableLike for HashJoinBlockInfoHashTable<K, A>

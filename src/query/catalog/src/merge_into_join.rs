@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+pub enum MergeIntoJoinType {
+    Left,
+    Right,
+    Inner,
+    LeftAnti,
+    RightAnti,
+    // it means this join is not a merge into join
+    NormalJoin,
+}
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock;
-pub mod plan;
-pub mod query_kind;
-pub mod statistics;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+pub struct MergeIntoJoin {
+    merge_into_join_type: MergeIntoJoinType,
+    is_distributed: bool,
+}
 
-pub mod merge_into_join;
-pub mod runtime_filter_info;
-pub mod table;
+impl Default for MergeIntoJoin {
+    fn default() -> Self {
+        Self {
+            merge_into_join_type: MergeIntoJoinType::NormalJoin,
+            is_distributed: Default::default(),
+        }
+    }
+}

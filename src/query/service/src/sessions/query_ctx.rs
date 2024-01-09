@@ -36,6 +36,7 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -908,6 +909,11 @@ impl TableContext for QueryContext {
         }
 
         queries_profile
+    }
+
+    fn set_merge_into_join_type(&self, join: MergeIntoJoin) {
+        let mut merge_into_join = self.shared.merge_into_join.write();
+        *merge_into_join = join;
     }
 
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
