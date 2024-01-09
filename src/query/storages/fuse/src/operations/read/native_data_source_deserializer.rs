@@ -25,6 +25,7 @@ use databend_common_arrow::native::read::ArrayIter;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -61,16 +62,19 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
+use databend_storages_common_pruner::gen_row_prefix;
 use xorf::BinaryFuse16;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
+use super::util::need_reserve_block_info;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
+use crate::operations::read::util::add_row_prefix_meta;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 /// A helper struct to store the intermediate state while reading a native partition.
@@ -235,6 +239,9 @@ pub struct NativeDeserializeDataTransform {
     /// Record how many sets of pages have been skipped.
     /// It's used for metrics.
     skipped_pages: usize,
+
+    // for merge_into target build.
+    need_reserve_block_info: bool,
 }
 
 impl NativeDeserializeDataTransform {
@@ -250,7 +257,7 @@ impl NativeDeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-
+        let need_reserve_block_info = need_reserve_block_info(ctx.clone(), plan.table_index);
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let mut prewhere_columns: Vec<usize> =
@@ -381,6 +388,7 @@ impl NativeDeserializeDataTransform {
                 base_block_ids: plan.base_block_ids.clone(),
                 bloom_runtime_filter: None,
                 read_state: ReadPartState::new(),
+                need_reserve_block_info,
             },
         )))
     }
@@ -946,7 +954,9 @@ impl NativeDeserializeDataTransform {
             // All columns are default values, not need to read.
             let part = self.parts.front().unwrap();
             let fuse_part = FusePartInfo::from_part(part)?;
-            let block = self.build_default_block(fuse_part)?;
+            let mut block = self.build_default_block(fuse_part)?;
+            // for merge into target build
+            block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
             self.add_output_block(block);
             self.finish_partition();
             return Ok(());
@@ -968,6 +978,7 @@ impl NativeDeserializeDataTransform {
         // Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
         // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
+        let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
         if self.block_reader.query_internal_columns() {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
@@ -980,7 +991,6 @@ impl NativeDeserializeDataTransform {
                 (offset..offset + origin_num_rows).collect()
             };
 
-            let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
             block = fill_internal_column_meta(
                 block,
                 fuse_part,
@@ -989,12 +999,15 @@ impl NativeDeserializeDataTransform {
             )?;
         }
 
+        // we will do recluster for stream here.
         if self.block_reader.update_stream_columns() {
             let inner_meta = block.take_meta();
-            let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
             let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
             block = block.add_meta(Some(Box::new(meta)))?;
         }
+
+        // for merge into target build
+        block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
 
         self.read_state.offset += origin_num_rows;
 
@@ -1088,6 +1101,9 @@ impl Processor for NativeDeserializeDataTransform {
                             self.base_block_ids.clone(),
                         )?;
                     }
+                    data_block =
+                        add_row_prefix_meta(self.need_reserve_block_info, fuse_part, data_block)?;
+
                     self.finish_partition();
                     self.add_output_block(data_block);
                     return Ok(());

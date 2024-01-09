@@ -911,7 +911,7 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
-    fn set_merge_into_join_type(&self, join: MergeIntoJoin) {
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
         let mut merge_into_join = self.shared.merge_into_join.write();
         *merge_into_join = join;
     }
@@ -933,6 +933,15 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let merge_into_join = self.shared.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
+            is_distributed: merge_into_join.is_distributed,
+            target_tbl_idx: merge_into_join.target_tbl_idx,
         }
     }
 

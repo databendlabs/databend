@@ -749,7 +749,11 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
-    fn set_merge_into_join_type(&self, _join: MergeIntoJoin) {
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
         todo!()
     }
 

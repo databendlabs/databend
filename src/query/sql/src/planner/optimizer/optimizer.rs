@@ -325,9 +325,17 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         false
     };
 
-    // we just support left join to use MergeIntoBlockInfoHashTable
-    if change_join_order && matches!(plan.merge_type, MergeIntoType::FullOperation) {
-        opt_ctx.table_ctx.set_merge_into_join_type(MergeIntoJoin {
+    // we just support left join to use MergeIntoBlockInfoHashTable, we
+    // don't support spill for now.
+    if change_join_order
+        && matches!(plan.merge_type, MergeIntoType::FullOperation)
+        && opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_join_spilling_threshold()?
+            == 0
+    {
+        opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
             target_tbl_idx: plan.target_table_idx,
@@ -408,7 +416,7 @@ fn try_to_change_as_broadcast_join(
             // for now, when we use target table as build side and it's a broadcast join,
             // we will use merge_into_block_info_hashtable to reduce i/o operations.
             if change_join_order && matches!(merge_into_type, MergeIntoType::FullOperation) {
-                table_ctx.set_merge_into_join_type(MergeIntoJoin {
+                table_ctx.set_merge_into_join(MergeIntoJoin {
                     merge_into_join_type: MergeIntoJoinType::Left,
                     is_distributed: true,
                     target_tbl_idx,

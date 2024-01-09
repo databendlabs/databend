@@ -33,6 +33,7 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::util::need_reserve_block_info;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -75,6 +76,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
+        let need_reserve_block_info = need_reserve_block_info(ctx.clone(), table_index);
         if BLOCKING_IO {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
                 func_ctx,
@@ -176,7 +178,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &None
                 };
 
-                let source = self.block_reader.sync_read_columns_data_by_merge_io(
+                let mut source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
                     &part,
                     ignore_column_ids,
@@ -242,7 +244,6 @@ impl Processor for ReadParquetDataSource<false> {
                     .ctx
                     .get_min_max_runtime_filter_with_id(self.table_index),
             );
-
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(
@@ -298,7 +299,7 @@ impl Processor for ReadParquetDataSource<false> {
                             &None
                         };
 
-                        let source = block_reader
+                        let mut source = block_reader
                             .read_columns_data_by_merge_io(
                                 &settings,
                                 &part.location,

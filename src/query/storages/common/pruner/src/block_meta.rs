@@ -56,3 +56,25 @@ impl BlockMetaIndex {
         })
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RowPrefix {
+    // segment_idx_block_id
+    pub prefix: u64,
+    pub inner: Option<BlockMetaInfoPtr>,
+}
+
+#[typetag::serde(name = "row_prefix")]
+impl BlockMetaInfo for RowPrefix {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        RowPrefix::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+pub fn gen_row_prefix(inner: Option<BlockMetaInfoPtr>, prefix: u64) -> RowPrefix {
+    RowPrefix { prefix, inner }
+}

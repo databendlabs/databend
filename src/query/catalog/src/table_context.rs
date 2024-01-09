@@ -244,7 +244,9 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
-    fn set_merge_into_join_type(&self, join: MergeIntoJoin);
+    fn set_merge_into_join(&self, join: MergeIntoJoin);
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin;
 
     fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 
