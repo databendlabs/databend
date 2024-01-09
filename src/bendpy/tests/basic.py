@@ -39,7 +39,7 @@ class TestBasic:
         self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
         self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
         df = self.ctx.sql("select sum(a) x, max(b) y, max(d) z from aa where c").to_pandas()
-        assert df.values.tolist() == [[90.0, b'9', 9.0]]
+        assert df.values.tolist() == [[90.0, '9', 9.0]]
 
         df = self.ctx.sql("select sum(a) x, max(b) y, max(d) z from aa where c").to_polars()
-        assert df.to_pandas().values.tolist() == [[90.0, b'9', 9.0]]
+        assert df.to_pandas().values.tolist() == [[90.0, '9', 9.0]]
