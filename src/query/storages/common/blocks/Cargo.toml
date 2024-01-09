@@ -12,7 +12,6 @@ doctest = false
 test = false
 
 [dependencies]
-arrow-schema = { workspace = true }
 databend-common-arrow = { path = "../../../../common/arrow" }
 databend-common-config = { path = "../../../config" }
 databend-common-exception = { path = "../../../../common/exception" }

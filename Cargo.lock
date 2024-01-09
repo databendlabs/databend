@@ -4387,7 +4387,6 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
- "arrow-schema",
  "databend-common-arrow",
  "databend-common-config",
  "databend-common-exception",
