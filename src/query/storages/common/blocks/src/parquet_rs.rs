@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use arrow_schema::Schema;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
@@ -34,7 +31,7 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<FileMetaData> {
-    assert!(blocks.len() > 0);
+    assert!(!blocks.is_empty());
     let compression = to_parquet_rs_compression(compression);
     let props = WriterProperties::builder()
         .set_compression(compression)
