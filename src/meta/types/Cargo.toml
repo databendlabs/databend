@@ -13,11 +13,13 @@ test = true
 [dependencies]
 databend-common-exception = { path = "../../common/exception" }
 databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-tracing = { path = "../../common/tracing" }
 
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
 derive_more = { workspace = true }
+log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 prost = { workspace = true }
