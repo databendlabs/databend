@@ -38,7 +38,7 @@ echo "alter table modify column"
 echo "alter table base modify column number varchar;" | $BENDSQL_CLIENT_CONNECT
 echo "expects column number as varchar"
 echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
-echo "expects own row"
+echo "expects one row"
 echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
 
 echo "alter table add column"

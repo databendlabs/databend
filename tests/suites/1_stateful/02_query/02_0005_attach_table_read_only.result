@@ -14,7 +14,7 @@ count() of test attach only table
 alter table modify column
 expects column number as varchar
 number	VARCHAR	YES	NULL	
-expects own row
+expects one row
 0
 alter table add column
 expects 3 columns: number, c1, c2

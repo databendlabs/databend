@@ -79,8 +79,8 @@ where
     }
 }
 
-// Table engines that need to refresh schema should implement this trait.
-// For example, FUSE table engine that attaches to a remote storage may
+// Table engines that need to refresh schema should provide implementation of this
+// trait. For example, FUSE table engine that attaches to a remote storage may
 // need to refresh schema to get the latest schema.
 #[async_trait::async_trait]
 pub trait TableInfoRefresher: Send + Sync {
