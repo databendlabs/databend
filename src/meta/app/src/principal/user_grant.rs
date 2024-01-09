@@ -269,7 +269,7 @@ impl UserGrantSet {
                     let mut e = e.clone();
                     e.privileges = e
                         .privileges
-                        .into_iter()
+                        .iter()
                         .filter(|p| !privileges.contains(*p))
                         .collect();
                     e
