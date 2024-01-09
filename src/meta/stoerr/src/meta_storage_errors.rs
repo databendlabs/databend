@@ -16,6 +16,7 @@ use std::fmt;
 use std::io;
 
 use anyerror::AnyError;
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
@@ -99,5 +100,11 @@ impl From<UnabortableTransactionError> for MetaStorageError {
 impl From<MetaStorageError> for io::Error {
     fn from(e: MetaStorageError) -> Self {
         io::Error::new(io::ErrorKind::InvalidData, e)
+    }
+}
+
+impl From<MetaStorageError> for ErrorCode {
+    fn from(e: MetaStorageError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
     }
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_meta_stoerr::MetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
@@ -70,5 +71,11 @@ impl From<errors::IncompleteStream> for MetaError {
         let net_err = MetaNetworkError::from(e);
         let client_err = MetaClientError::from(net_err);
         Self::ClientError(client_err)
+    }
+}
+
+impl From<MetaError> for ErrorCode {
+    fn from(e: MetaError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
     }
 }
