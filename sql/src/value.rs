@@ -66,6 +66,7 @@ pub enum Value {
     EmptyArray,
     EmptyMap,
     Boolean(bool),
+    Binary(Vec<u8>),
     String(String),
     Number(NumberValue),
     /// Microseconds from 1970-01-01 00:00:00 UTC
@@ -85,6 +86,7 @@ impl Value {
             Self::EmptyArray => DataType::EmptyArray,
             Self::EmptyMap => DataType::EmptyMap,
             Self::Boolean(_) => DataType::Boolean,
+            Self::Binary(_) => DataType::Binary,
             Self::String(_) => DataType::String,
             Self::Number(n) => match n {
                 NumberValue::Int8(_) => DataType::Number(NumberDataType::Int8),
@@ -137,6 +139,7 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::EmptyArray => Ok(Self::EmptyArray),
             DataType::EmptyMap => Ok(Self::EmptyMap),
             DataType::Boolean => Ok(Self::Boolean(v == "1")),
+            DataType::Binary => Ok(Self::Binary(hex::decode(v)?)),
             DataType::String => Ok(Self::String(v.to_string())),
 
             DataType::Number(NumberDataType::Int8) => {
@@ -601,6 +604,7 @@ fn encode_value(f: &mut std::fmt::Formatter<'_>, val: &Value, raw: bool) -> std:
         Value::EmptyMap => write!(f, "{{}}"),
         Value::Boolean(b) => write!(f, "{}", b),
         Value::Number(n) => write!(f, "{}", n),
+        Value::Binary(s) => write!(f, "{}", hex::encode(s)),
         Value::String(s) | Value::Bitmap(s) | Value::Variant(s) => {
             if raw {
                 write!(f, "{}", s)

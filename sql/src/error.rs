@@ -169,6 +169,12 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<hex::FromHexError> for Error {
+    fn from(e: hex::FromHexError) -> Self {
+        Error::Parsing(e.to_string())
+    }
+}
+
 impl From<databend_client::error::Error> for Error {
     fn from(e: databend_client::error::Error) -> Self {
         Error::Api(e)

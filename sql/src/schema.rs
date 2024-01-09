@@ -74,6 +74,7 @@ pub enum DataType {
     EmptyArray,
     EmptyMap,
     Boolean,
+    Binary,
     String,
     Number(NumberDataType),
     Decimal(DecimalDataType),
@@ -105,6 +106,7 @@ impl std::fmt::Display for DataType {
             DataType::EmptyArray => write!(f, "EmptyArray"),
             DataType::EmptyMap => write!(f, "EmptyMap"),
             DataType::Boolean => write!(f, "Boolean"),
+            DataType::Binary => write!(f, "Binary"),
             DataType::String => write!(f, "String"),
             DataType::Number(n) => match n {
                 NumberDataType::UInt8 => write!(f, "UInt8"),
@@ -169,6 +171,7 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
         let dt = match desc.name {
             "Null" | "NULL" => DataType::Null,
             "Boolean" => DataType::Boolean,
+            "Binary" => DataType::Binary,
             "String" => DataType::String,
             "Int8" => DataType::Number(NumberDataType::Int8),
             "Int16" => DataType::Number(NumberDataType::Int16),
@@ -307,11 +310,10 @@ impl TryFrom<&Arc<ArrowField>> for Field {
                 ArrowDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
                 ArrowDataType::Float32 => DataType::Number(NumberDataType::Float32),
                 ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
-                ArrowDataType::Utf8
-                | ArrowDataType::Binary
-                | ArrowDataType::LargeUtf8
+                ArrowDataType::Binary
                 | ArrowDataType::LargeBinary
-                | ArrowDataType::FixedSizeBinary(_) => DataType::String,
+                | ArrowDataType::FixedSizeBinary(_) => DataType::Binary,
+                ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
                 ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
                 ArrowDataType::Date32 => DataType::Date,
                 ArrowDataType::Decimal128(p, s) => {

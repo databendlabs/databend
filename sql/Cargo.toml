@@ -36,3 +36,4 @@ tonic = { version = "0.10", default-features = false, features = [
     "tls-webpki-roots",
     "prost",
 ], optional = true }
+hex = "0.4.3"
