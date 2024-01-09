@@ -36,6 +36,7 @@ impl IntoPy<PyObject> for Value {
                 dict.into_py(py)
             }
             databend_driver::Value::Boolean(b) => b.into_py(py),
+            databend_driver::Value::Binary(b) => b.into_py(py),
             databend_driver::Value::String(s) => s.into_py(py),
             databend_driver::Value::Number(n) => {
                 let v = NumberValue(n);

@@ -70,6 +70,7 @@ impl ToNapiValue for Value {
             databend_driver::Value::EmptyArray => String::to_napi_value(env, "[]".to_string()),
             databend_driver::Value::EmptyMap => String::to_napi_value(env, "{}".to_string()),
             databend_driver::Value::Boolean(b) => bool::to_napi_value(env, b),
+            databend_driver::Value::Binary(b) => Buffer::to_napi_value(env, b.into()),
             databend_driver::Value::String(s) => String::to_napi_value(env, s),
             databend_driver::Value::Number(n) => NumberValue::to_napi_value(env, NumberValue(n)),
             databend_driver::Value::Timestamp(_) => {
