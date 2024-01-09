@@ -22,6 +22,7 @@ use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::traits::HashJoinHashtableLike;
 use super::traits::Keyable;
+use crate::utils::Interval;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
@@ -349,5 +350,15 @@ where
         } else {
             (0, 0)
         }
+    }
+
+    // for merge into block info hash table
+    fn gather_partial_modified_block(&self) -> (Interval, u64) {
+        unreachable!()
+    }
+
+    // for merge into block info hash table
+    fn reduce_false_matched_for_conjuct(&mut self) {
+        unreachable!()
     }
 }

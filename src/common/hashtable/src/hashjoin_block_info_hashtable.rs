@@ -26,6 +26,8 @@ use crate::hashjoin_hashtable::early_filtering;
 use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
+use crate::utils::BlockInfoIndex;
+use crate::utils::Interval;
 use crate::HashJoinHashtableLike;
 use crate::RawEntry;
 use crate::RowPtr;
@@ -45,7 +47,9 @@ pub struct HashJoinBlockInfoHashTable<K: Keyable, A: Allocator + Clone = MmapAll
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) is_distributed: bool,
+    // matched[idx] means
     pub(crate) matched: Box<[u64]>,
+    pub(crate) block_info_index: BlockInfoIndex,
     pub(crate) phantom: PhantomData<K>,
 }
 
@@ -60,7 +64,11 @@ unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync
 }
 
 impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A> {
-    pub fn with_build_row_num(row_num: usize) -> Self {
+    pub fn with_build_row_num(
+        row_num: usize,
+        is_distributed: bool,
+        block_info_index: BlockInfoIndex,
+    ) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
             pointers: unsafe {
@@ -69,8 +77,9 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
             phantom: PhantomData,
-            is_distributed: false,
+            is_distributed,
             matched: unsafe { Box::new_zeroed_slice_in(row_num, Default::default()).assume_init() },
+            block_info_index,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -298,5 +307,15 @@ where
         } else {
             (0, 0)
         }
+    }
+
+    // for merge into block info hash table
+    fn gather_partial_modified_block(&self) -> (Interval, u64) {
+        unreachable!()
+    }
+
+    // for merge into block info hash table
+    fn reduce_false_matched_for_conjuct(&mut self) {
+        unreachable!()
     }
 }

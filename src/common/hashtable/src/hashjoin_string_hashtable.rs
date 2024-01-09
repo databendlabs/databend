@@ -26,6 +26,7 @@ use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
 use crate::traits::hash_join_fast_string_hash;
+use crate::utils::Interval;
 use crate::RowPtr;
 
 pub const STRING_EARLY_SIZE: usize = 4;
@@ -300,5 +301,15 @@ where A: Allocator + Clone + 'static
         } else {
             (0, 0)
         }
+    }
+
+    // for merge into block info hash table
+    fn gather_partial_modified_block(&self) -> (Interval, u64) {
+        unreachable!()
+    }
+
+    // for merge into block info hash table
+    fn reduce_false_matched_for_conjuct(&mut self) {
+        unreachable!()
     }
 }

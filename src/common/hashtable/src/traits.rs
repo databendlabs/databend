@@ -25,6 +25,7 @@ use ethnum::i256;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
+use crate::utils::Interval;
 use crate::RowPtr;
 
 /// # Safety
@@ -552,4 +553,10 @@ pub trait HashJoinHashtableLike {
         occupied: usize,
         capacity: usize,
     ) -> (usize, u64);
+
+    // for merge into block info hash table
+    fn gather_partial_modified_block(&self) -> (Interval, u64);
+
+    // for merge into block info hash table
+    fn reduce_false_matched_for_conjuct(&mut self);
 }

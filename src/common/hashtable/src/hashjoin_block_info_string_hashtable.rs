@@ -25,11 +25,22 @@ use crate::hashjoin_hashtable::early_filtering;
 use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
+use crate::utils::BlockInfoIndex;
+use crate::utils::Interval;
 use crate::HashJoinHashtableLike;
 use crate::RowPtr;
 use crate::StringRawEntry;
 use crate::STRING_EARLY_SIZE;
 
+// This hashtable is only used for target build merge into (both standalone and distributed mode).
+// Advantages:
+//      1. Reduces redundant I/O operations, enhancing performance.
+//      2. Lowers the maintenance overhead of deduplicating row_id.(But in distributed design, we also need to give rowid)
+//      3. Allows the scheduling of the subsequent mutation pipeline to be entirely allocated to not matched append operations.
+// Disadvantages:
+//      1. This solution is likely to be a one-time approach (especially if there are not matched insert operations involved),
+// potentially leading to the target table being unsuitable for use as a build table in the future.
+//      2. Requires a significant amount of memory to be efficient and currently does not support spill operations.
 #[allow(unused)]
 pub struct HashJoinBlockInfoStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
@@ -37,6 +48,7 @@ pub struct HashJoinBlockInfoStringHashTable<A: Allocator + Clone = MmapAllocator
     pub(crate) hash_shift: usize,
     pub(crate) is_distributed: bool,
     pub(crate) matched: Box<[u64]>,
+    pub(crate) block_info_index: BlockInfoIndex,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinBlockInfoStringHashTable<A> {}
@@ -44,7 +56,11 @@ unsafe impl<A: Allocator + Clone + Send> Send for HashJoinBlockInfoStringHashTab
 unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinBlockInfoStringHashTable<A> {}
 
 impl<A: Allocator + Clone + Default> HashJoinBlockInfoStringHashTable<A> {
-    pub fn with_build_row_num(row_num: usize) -> Self {
+    pub fn with_build_row_num(
+        row_num: usize,
+        is_distributed: bool,
+        block_info_index: BlockInfoIndex,
+    ) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
             pointers: unsafe {
@@ -52,8 +68,9 @@ impl<A: Allocator + Clone + Default> HashJoinBlockInfoStringHashTable<A> {
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
-            is_distributed: false,
+            is_distributed,
             matched: unsafe { Box::new_zeroed_slice_in(row_num, Default::default()).assume_init() },
+            block_info_index,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -298,5 +315,15 @@ where A: Allocator + Clone + 'static
         } else {
             (0, 0)
         }
+    }
+
+    // for merge into block info hash table
+    fn gather_partial_modified_block(&self) -> (Interval, u64) {
+        unreachable!()
+    }
+
+    // for merge into block info hash table
+    fn reduce_false_matched_for_conjuct(&mut self) {
+        unreachable!()
     }
 }
