@@ -25,7 +25,6 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -47,7 +46,7 @@ static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 static BUILTIN_ROLE_PUBLIC: &str = "public";
 
-static TXN_MAX_RETRY_TIMES: u32 = 10;
+static TXN_MAX_RETRY_TIMES: u32 = 5;
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
@@ -221,133 +220,61 @@ impl RoleApi for RoleMgr {
     async fn grant_ownership(
         &self,
         object: &OwnershipObject,
-        role: &str,
+        new_role: &str,
     ) -> databend_common_exception::Result<()> {
+        let old_role = self.get_ownership(object).await?.map(|o| o.role);
         let grant_object = convert_to_grant_obj(object);
         let owner_key = self.make_object_owner_key(object);
 
         let owner_value = serde_json::to_vec(&OwnershipInfo {
             object: object.clone(),
-            role: role.to_string(),
+            role: new_role.to_string(),
         })?;
 
-        if role != BUILTIN_ROLE_ACCOUNT_ADMIN && role != BUILTIN_ROLE_PUBLIC {
-            let new_key = self.make_role_key(role);
+        let mut condition = vec![];
+        let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
+
+        if let Some(old_role) = old_role {
+            // BUILTIN role or Dropped role may get err, no need to revoke
+            if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
+                let old_key = self.make_role_key(&old_role);
+                let old_seq = seqv.seq;
+                let mut old_role_info = seqv.data;
+                old_role_info.grants.revoke_privileges(
+                    &grant_object,
+                    make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
+                );
+                condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
+            }
+        }
+
+        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN && new_role != BUILTIN_ROLE_PUBLIC {
+            let new_key = self.make_role_key(new_role);
             let SeqV {
                 seq: new_seq,
                 data: mut new_role_info,
                 ..
-            } = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await?;
+            } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
             new_role_info.grants.grant_privileges(
                 &grant_object,
                 make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
             );
-
-            let mut retry = 0;
-
-            while retry < TXN_MAX_RETRY_TIMES {
-                retry += 1;
-                let txn_req = TxnRequest {
-                    condition: vec![txn_cond_seq(&new_key, Eq, new_seq)],
-                    if_then: vec![
-                        txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?),
-                        txn_op_put(&owner_key, owner_value.clone()),
-                    ],
-                    else_then: vec![],
-                };
-
-                let tx_reply = self.kv_api.transaction(txn_req).await?;
-                let (succ, _) = txn_reply_to_api_result(tx_reply)?;
-
-                if succ {
-                    return Ok(());
-                }
-            }
-
-            Err(ErrorCode::TxnRetryMaxTimes(
-                TxnRetryMaxTimes::new("grant_ownership", TXN_MAX_RETRY_TIMES).to_string(),
-            ))
-        } else {
-            let match_seq = MatchSeq::GE(0);
-
-            let kv_api = self.kv_api.clone();
-            kv_api
-                .upsert_kv(UpsertKVReq::new(
-                    &owner_key,
-                    match_seq,
-                    Operation::Update(owner_value),
-                    None,
-                ))
-                .await?;
-
-            Ok(())
+            condition.push(txn_cond_seq(&new_key, Eq, new_seq));
+            if_then.push(txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?));
         }
-    }
-
-    #[async_backtrace::framed]
-    #[minitrace::trace]
-    async fn transfer_ownership(
-        &self,
-        old_role: &str,
-        new_role: &str,
-        grant_object: &GrantObject,
-        owner_object: &OwnershipObject,
-        privileges: &UserPrivilegeSet,
-    ) -> databend_common_exception::Result<()> {
-        let owner_key = self.make_object_owner_key(owner_object);
-        let owner_value = serde_json::to_vec(&OwnershipInfo {
-            object: owner_object.clone(),
-            role: new_role.to_string(),
-        })?;
-
-        let new_key = self.make_role_key(new_role);
-        let SeqV {
-            seq: new_seq,
-            data: mut new_role_info,
-            ..
-        } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
-        new_role_info
-            .grants
-            .grant_privileges(grant_object, *privileges);
 
         let mut retry = 0;
 
-        let mut condition = vec![txn_cond_seq(&new_key, Eq, new_seq)];
-        let mut if_then = vec![
-            txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?),
-            txn_op_put(&owner_key, owner_value.clone()),
-        ];
+        let txn_req = TxnRequest {
+            condition: condition.clone(),
+            if_then: if_then.clone(),
+            else_then: vec![],
+        };
 
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-
-            let txn_req =
-                if old_role == BUILTIN_ROLE_ACCOUNT_ADMIN || old_role == BUILTIN_ROLE_PUBLIC {
-                    TxnRequest {
-                        condition: condition.clone(),
-                        if_then: if_then.clone(),
-                        else_then: vec![],
-                    }
-                } else {
-                    let old_key = self.make_role_key(old_role);
-
-                    if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
-                        let old_seq = seqv.seq;
-                        let mut old_role_info = seqv.data;
-                        old_role_info
-                            .grants
-                            .revoke_privileges(grant_object, *privileges);
-                        condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                        if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
-                    }
-                    TxnRequest {
-                        condition: condition.clone(),
-                        if_then: if_then.clone(),
-                        else_then: vec![],
-                    }
-                };
-
-            let tx_reply = self.kv_api.transaction(txn_req).await?;
+            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 
             if succ {
@@ -356,7 +283,7 @@ impl RoleApi for RoleMgr {
         }
 
         Err(ErrorCode::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("transfer_ownership", TXN_MAX_RETRY_TIMES).to_string(),
+            TxnRetryMaxTimes::new("grant_ownership", TXN_MAX_RETRY_TIMES).to_string(),
         ))
     }
 
@@ -382,58 +309,48 @@ impl RoleApi for RoleMgr {
         &self,
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<()> {
-        let seq = MatchSeq::Exact(0);
-        let role = self.get_ownership(&object).await?.map(|o| o.role);
+        let role = self.get_ownership(object).await?.map(|o| o.role);
         let owner_key = self.make_object_owner_key(object);
 
+        let mut if_then = vec![txn_op_del(&owner_key)];
+        let mut condition = vec![];
+
         if let Some(role) = role {
-            if role == BUILTIN_ROLE_ACCOUNT_ADMIN || role == BUILTIN_ROLE_PUBLIC {
-                self.kv_api
-                    .upsert_kv(UpsertKVReq::new(&owner_key, seq, Operation::Delete, None))
-                    .await?;
-                Ok(())
-            } else {
-                let grant_object = convert_to_grant_obj(object);
+            if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
                 let old_key = self.make_role_key(&role);
-                let mut if_then = vec![txn_op_del(&owner_key)];
-                let mut condition = vec![];
-                if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
-                    let old_seq = seqv.seq;
-                    let mut old_role_info = seqv.data;
-                    old_role_info.grants.revoke_privileges(
-                        &grant_object,
-                        make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
-                    );
-                    condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
-                }
-                let mut retry = 0;
-                while retry < TXN_MAX_RETRY_TIMES {
-                    retry += 1;
-                    let txn_req = TxnRequest {
-                        condition: condition.clone(),
-                        if_then: if_then.clone(),
-                        else_then: vec![],
-                    };
-
-                    let tx_reply = self.kv_api.transaction(txn_req).await?;
-                    let (succ, _) = txn_reply_to_api_result(tx_reply)?;
-
-                    if succ {
-                        return Ok(());
-                    }
-                }
-
-                Err(ErrorCode::TxnRetryMaxTimes(
-                    TxnRetryMaxTimes::new("revoke_ownership", TXN_MAX_RETRY_TIMES).to_string(),
-                ))
+                let grant_object = convert_to_grant_obj(object);
+                let old_seq = seqv.seq;
+                let mut old_role_info = seqv.data;
+                old_role_info.grants.revoke_privileges(
+                    &grant_object,
+                    make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
+                );
+                condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
             }
-        } else {
-            self.kv_api
-                .upsert_kv(UpsertKVReq::new(&owner_key, seq, Operation::Delete, None))
-                .await?;
-            Ok(())
         }
+
+        let txn_req = TxnRequest {
+            condition: condition.clone(),
+            if_then: if_then.clone(),
+            else_then: vec![],
+        };
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+
+            if succ {
+                return Ok(());
+            }
+        }
+
+        Err(ErrorCode::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("revoke_ownership", TXN_MAX_RETRY_TIMES).to_string(),
+        ))
     }
 
     #[async_backtrace::framed]

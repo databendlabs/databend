@@ -18,8 +18,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_sql::plans::RevokePrivilegePlan;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
 
 use crate::interpreters::common::validate_grant_object_exists;
@@ -68,11 +66,6 @@ impl Interpreter for RevokePrivilegeInterpreter {
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                if role == BUILTIN_ROLE_ACCOUNT_ADMIN || role == BUILTIN_ROLE_PUBLIC {
-                    return Err(databend_common_exception::ErrorCode::PermissionDenied(
-                        "cannot revoke privileges from buildin roles",
-                    ));
-                }
                 user_mgr
                     .revoke_privileges_from_role(&tenant, &role, plan.on, plan.priv_types)
                     .await?;

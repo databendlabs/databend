@@ -24,9 +24,8 @@ use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
 use databend_common_sql::plans::GrantPrivilegePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
+use log::error;
 use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
@@ -114,22 +113,11 @@ impl GrantPrivilegeInterpreter {
         ctx: &Arc<QueryContext>,
         tenant: &str,
         owner_object: &OwnershipObject,
-        grant_object: &GrantObject,
-        priv_set: &UserPrivilegeSet,
-        current_role: &str,
         new_role: &str,
     ) -> Result<()> {
         let user_mgr = UserApiProvider::instance();
         let session = ctx.get_current_session();
         let available_roles = session.get_all_available_roles().await?;
-
-        info!(
-            "{}: grant ownership on {:?} from role {} to {}",
-            ctx.get_id(),
-            owner_object,
-            current_role,
-            new_role,
-        );
 
         // the new owner must be one of the available roles
         if !available_roles.iter().any(|r| r.name == new_role) {
@@ -138,40 +126,37 @@ impl GrantPrivilegeInterpreter {
             ));
         }
 
+        let mut log_msg = format!(
+            "{}: grant ownership on {:?}  to {}",
+            ctx.get_id(),
+            owner_object,
+            new_role
+        );
+
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
         let owner = user_mgr.get_ownership(tenant, owner_object).await?;
         if let Some(owner) = owner {
-            let old_role = owner.role;
-            let can_grant_ownership = available_roles.iter().any(|r| r.name == old_role);
+            let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
+            log_msg = format!(
+                "{}: grant ownership on {:?} from role {} to {}",
+                ctx.get_id(),
+                owner_object,
+                owner.role,
+                new_role
+            );
             if !can_grant_ownership {
+                error!("{}", log_msg);
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; only owner can grant ownership",
                 ));
             }
-            info!(
-                "{}: grant ownership on {:?} from role {} to {}",
-                ctx.get_id(),
-                owner_object,
-                old_role,
-                new_role,
-            );
-            if old_role == BUILTIN_ROLE_ACCOUNT_ADMIN {
-                user_mgr
-                    .grant_ownership_to_role(tenant, owner_object, new_role)
-                    .await?;
-            } else {
-                user_mgr
-                    .transfer_ownership_to_role(
-                        tenant,
-                        &old_role,
-                        new_role,
-                        grant_object,
-                        owner_object,
-                        priv_set,
-                    )
-                    .await?;
-            }
         }
+
+        info!("{}", log_msg);
+        user_mgr
+            .grant_ownership_to_role(tenant, owner_object, new_role)
+            .await?;
+
         Ok(())
     }
 }
@@ -205,33 +190,17 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                if role == BUILTIN_ROLE_ACCOUNT_ADMIN || role == BUILTIN_ROLE_PUBLIC {
-                    return Err(databend_common_exception::ErrorCode::PermissionDenied(
-                        "cannot grant privileges to buildin roles",
-                    ));
-                }
                 if plan.priv_types.has_privilege(Ownership) {
                     let owner_object = self
                         .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;
-                    match self.ctx.get_current_role() {
-                        Some(current_role) => {
-                            self.grant_ownership(
-                                &self.ctx,
-                                &tenant,
-                                &owner_object,
-                                &plan.on,
-                                &plan.priv_types,
-                                &current_role.name,
-                                &role,
-                            )
+                    if self.ctx.get_current_role().is_some() {
+                        self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
                             .await?;
-                        }
-                        None => {
-                            return Err(databend_common_exception::ErrorCode::UnknownRole(
-                                "No current role, cannot grant ownership",
-                            ));
-                        }
+                    } else {
+                        return Err(databend_common_exception::ErrorCode::UnknownRole(
+                            "No current role, cannot grant ownership",
+                        ));
                     }
                 } else {
                     user_mgr

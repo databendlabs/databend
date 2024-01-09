@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -51,7 +49,12 @@ pub trait RoleApi: Sync + Send {
     /// 1. grant ownership privilege obj to role,
     /// 2. kv api upsert new owner object key.
     ///
-    /// Note: if role is `account_admin` no need to grant
+    /// or:
+    ///
+    /// 1. revoke ownership on obj from old role,
+    /// 2. grant ownership on obj to new role,
+    /// 3. kv api upsert new owner object key.
+    /// Note: if role/old_role is `account_admin` or `public` no need to revoke/grant ownership privilege
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(&self, object: &OwnershipObject, role: &str) -> Result<()>;
 
@@ -62,21 +65,6 @@ pub trait RoleApi: Sync + Send {
     ///
     /// Note: if role is `account_admin` or None no need to revoke
     async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<()>;
-
-    /// Move ownership contains three steps:
-    /// 1. revoke ownership on obj from old role,
-    /// 2. grant ownership on obj to new role,
-    /// 3. kv api upsert new owner object key.
-    /// Note: if old role is `account_admin` no need to revoke ownership
-    #[allow(clippy::ptr_arg)]
-    async fn transfer_ownership(
-        &self,
-        old_role: &str,
-        new_role: &str,
-        grant_object: &GrantObject,
-        owner_object: &OwnershipObject,
-        privileges: &UserPrivilegeSet,
-    ) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
     async fn get_ownership(&self, object: &OwnershipObject) -> Result<Option<OwnershipInfo>>;
