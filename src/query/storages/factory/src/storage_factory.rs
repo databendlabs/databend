@@ -31,6 +31,9 @@ use databend_common_storages_view::view_table::ViewTable;
 use crate::fuse::FuseTable;
 use crate::Table;
 
+// default schema refreshing timeout is 5 seconds.
+const DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS: Duration = Duration::from_secs(5);
+
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, table_info: TableInfo) -> Result<Box<dyn Table>>;
 }
@@ -76,6 +79,9 @@ where
     }
 }
 
+// Table engines that need to refresh schema should implement this trait.
+// For example, FUSE table engine that attaches to a remote storage may
+// need to refresh schema to get the latest schema.
 #[async_trait::async_trait]
 pub trait TableInfoRefresher: Send + Sync {
     async fn refresh(&self, table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>>;
@@ -157,7 +163,7 @@ impl StorageFactory {
 
         StorageFactory {
             storages: creators,
-            schema_refreshing_timeout: Duration::from_millis(1000),
+            schema_refreshing_timeout: DEFAULT_SCHEMA_REFRESHING_TIMEOUT_MS,
         }
     }
 
