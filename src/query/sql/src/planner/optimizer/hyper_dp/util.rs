@@ -18,7 +18,7 @@ use crate::IndexType;
 
 // Union two nodes vector
 pub fn union(left: &[IndexType], right: &[IndexType]) -> Vec<IndexType> {
-    let mut result: Vec<usize> = Vec::new();
+    let mut result: Vec<usize> = Vec::with_capacity(left.len() + right.len());
     let mut i = 0;
     let mut j = 0;
     while i < left.len() && j < right.len() {
