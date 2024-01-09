@@ -25,15 +25,10 @@ use crate::FusePartInfo;
 
 pub(crate) fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> bool {
     let merge_into_join = ctx.get_merge_into_join();
-    if matches!(
+    matches!(
         merge_into_join.merge_into_join_type,
         MergeIntoJoinType::Left
     ) && merge_into_join.target_tbl_idx == table_idx
-    {
-        true
-    } else {
-        false
-    }
 }
 
 // for merge into target build, in this situation, we don't need rowid
