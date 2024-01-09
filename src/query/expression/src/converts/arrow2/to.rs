@@ -302,7 +302,7 @@ impl Column {
             }
             Column::String(col) => {
                 // todo!("new string")
-                // always check utf8 until we can garantee the correctness of data in string column
+                // always check utf8 until we can guarantee the correctness of data in string column
                 // #[cfg(debug_assertions)]
                 col.check_utf8().unwrap();
 
