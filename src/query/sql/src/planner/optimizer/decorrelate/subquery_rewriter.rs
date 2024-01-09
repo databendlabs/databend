@@ -501,6 +501,7 @@ impl SubqueryRewriter {
                             output_column.data_type,
                             Visibility::Visible,
                         )
+                        .table_index(output_column.table_index)
                         .build(),
                     }),
                     &subquery.data_type,

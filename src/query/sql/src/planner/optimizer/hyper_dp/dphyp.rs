@@ -628,13 +628,10 @@ impl DPhpy {
             }
         };
         if join_node.join_type == JoinType::Inner {
-            let mut cost = join_node.cardinality(&self.join_relations)?
+            let cost = join_node.cardinality(&self.join_relations)?
                 + join_node.children[0].cost
+                + join_node.children[1].cardinality.unwrap() * 5.0
                 + join_node.children[1].cost;
-            if self.is_cluster {
-                // Network cost.
-                cost += join_node.children[1].cost * 5.0;
-            }
             join_node.set_cost(cost);
         }
 
