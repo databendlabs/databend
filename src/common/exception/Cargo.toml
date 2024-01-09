@@ -12,8 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 databend-common-arrow = { path = "../arrow" }
-databend-common-meta-stoerr = { path = "../../meta/stoerr" }
-databend-common-meta-types = { path = "../../meta/types" }
 
 # GitHub dependencies
 # TODO: Use the version from crates.io once
