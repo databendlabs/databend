@@ -207,7 +207,13 @@ fn test_user_grant_set() -> Result<()> {
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
+    grants.revoke_privileges(
+        &GrantObject::Global,
+        make_bitflags!(UserPrivilegeType::{Insert}).into(),
+    );
+
     assert_eq!(2, grants.entries().len());
+
     assert!(grants.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
         vec![UserPrivilegeType::Create]
