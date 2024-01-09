@@ -25,6 +25,7 @@ extern crate core;
 mod container;
 mod dictionary_string_hashtable;
 mod hashjoin_block_info_hashtable;
+mod hashjoin_block_info_string_hashtable;
 mod hashjoin_hashtable;
 mod hashjoin_string_hashtable;
 mod hashtable;
@@ -112,4 +113,7 @@ pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
 pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub type BlockInfoStringJoinHashMap =
+    hashjoin_block_info_string_hashtable::HashJoinBlockInfoStringHashTable;
+pub type BlockInfoJoinHashMap<K> = hashjoin_block_info_hashtable::HashJoinBlockInfoHashTable<K>;
 pub use traits::HashJoinHashtableLike;

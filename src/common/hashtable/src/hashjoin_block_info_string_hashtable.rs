@@ -13,53 +13,36 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
-use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::mem_allocator::MmapAllocator;
 
-use super::traits::Keyable;
+use crate::hash_join_fast_string_hash;
 use crate::hashjoin_hashtable::combine_header;
 use crate::hashjoin_hashtable::early_filtering;
 use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
 use crate::HashJoinHashtableLike;
-use crate::RawEntry;
 use crate::RowPtr;
+use crate::StringRawEntry;
+use crate::STRING_EARLY_SIZE;
 
-// This hashtable is only used for target build merge into (both standalone and distributed mode).
-// Advantages:
-//      1. Reduces redundant I/O operations, enhancing performance.
-//      2. Lowers the maintenance overhead of deduplicating row_id.(But in distributed design, we also need to give rowid)
-//      3. Allows the scheduling of the subsequent mutation pipeline to be entirely allocated to not matched append operations.
-// Disadvantages:
-//      1. This solution is likely to be a one-time approach (especially if there are not matched insert operations involved),
-// potentially leading to the target table being unsuitable for use as a build table in the future.
-//      2. Requires a significant amount of memory to be efficient and currently does not support spill operations.
-#[allow(unused)]
-pub struct HashJoinBlockInfoHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
+pub struct HashJoinBlockInfoStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) is_distributed: bool,
     pub(crate) matched: Box<[u64]>,
-    pub(crate) phantom: PhantomData<K>,
 }
 
-unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send
-    for HashJoinBlockInfoHashTable<K, A>
-{
-}
+unsafe impl<A: Allocator + Clone + Send> Send for HashJoinBlockInfoStringHashTable<A> {}
 
-unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync
-    for HashJoinBlockInfoHashTable<K, A>
-{
-}
+unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinBlockInfoStringHashTable<A> {}
 
-impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A> {
+impl<A: Allocator + Clone + Default> HashJoinBlockInfoStringHashTable<A> {
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -68,7 +51,6 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
-            phantom: PhantomData,
             is_distributed: false,
             matched: unsafe { Box::new_zeroed_slice_in(row_num, Default::default()).assume_init() },
         };
@@ -78,8 +60,8 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A
         hashtable
     }
 
-    pub fn insert(&mut self, key: K, entry_ptr: *mut RawEntry<K>) {
-        let hash = key.hash();
+    pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
+        let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
         // # Safety
@@ -103,12 +85,10 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinBlockInfoHashTable<K, A
     }
 }
 
-impl<K, A> HashJoinHashtableLike for HashJoinBlockInfoHashTable<K, A>
-where
-    K: Keyable,
-    A: Allocator + Clone + 'static,
+impl<A> HashJoinHashtableLike for HashJoinBlockInfoStringHashTable<A>
+where A: Allocator + Clone + 'static
 {
-    type Key = K;
+    type Key = [u8];
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
@@ -126,22 +106,19 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                valids
-                    .iter()
-                    .zip(hashes.iter_mut())
-                    .for_each(|(valid, hash)| {
-                        if valid {
-                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                            if header != 0 {
-                                *hash = remove_header_tag(header);
-                                count += 1;
-                            } else {
-                                *hash = 0;
-                            }
+                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
+                    if unsafe { valids.get_bit_unchecked(idx) } {
+                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                        if header != 0 {
+                            *hash = remove_header_tag(header);
+                            count += 1;
                         } else {
                             *hash = 0;
                         }
-                    });
+                    } else {
+                        *hash = 0;
+                    };
+                });
             }
             None => {
                 hashes.iter_mut().for_each(|hash| {
@@ -174,22 +151,19 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                valids
-                    .iter()
-                    .zip(hashes.iter_mut())
-                    .for_each(|(valid, hash)| {
-                        if valid {
-                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                            if header != 0 && early_filtering(header, *hash) {
-                                *hash = remove_header_tag(header);
-                                count += 1;
-                            } else {
-                                *hash = 0;
-                            }
+                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
+                    if unsafe { valids.get_bit_unchecked(idx) } {
+                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                        if header != 0 && early_filtering(header, *hash) {
+                            *hash = remove_header_tag(header);
+                            count += 1;
                         } else {
                             *hash = 0;
                         }
-                    });
+                    } else {
+                        *hash = 0;
+                    };
+                });
             }
             None => {
                 hashes.iter_mut().for_each(|hash| {
@@ -224,18 +198,16 @@ where
         let mut count = 0;
         match valids {
             Some(valids) => {
-                valids.iter().zip(hashes.iter_mut().enumerate()).for_each(
-                    |(valid, (idx, hash))| {
-                        if valid {
-                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                            if header != 0 && early_filtering(header, *hash) {
-                                *hash = remove_header_tag(header);
-                                unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                                count += 1;
-                            }
+                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
+                    if unsafe { valids.get_bit_unchecked(idx) } {
+                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                        if header != 0 && early_filtering(header, *hash) {
+                            *hash = remove_header_tag(header);
+                            unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
+                            count += 1;
                         }
-                    },
-                );
+                    }
+                });
             }
             None => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
@@ -256,9 +228,24 @@ where
             if ptr == 0 {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
-            if key == &raw_entry.key {
-                return true;
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
+            let min_len = std::cmp::min(
+                STRING_EARLY_SIZE,
+                std::cmp::min(key.len(), raw_entry.length as usize),
+            );
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
+            {
+                let key_ref = unsafe {
+                    std::slice::from_raw_parts(
+                        raw_entry.key as *const u8,
+                        raw_entry.length as usize,
+                    )
+                };
+                if key == key_ref {
+                    return true;
+                }
             }
             ptr = raw_entry.next;
         }
@@ -278,18 +265,30 @@ where
             if ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
-            if key == &raw_entry.key {
-                // # Safety
-                // occupied is less than the capacity of vec_ptr.
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        &raw_entry.row_ptr as *const RowPtr,
-                        vec_ptr.add(occupied),
-                        1,
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
+            let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
+            {
+                let key_ref = unsafe {
+                    std::slice::from_raw_parts(
+                        raw_entry.key as *const u8,
+                        raw_entry.length as usize,
                     )
                 };
-                occupied += 1;
+                if key == key_ref {
+                    // # Safety
+                    // occupied is less than the capacity of vec_ptr.
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            &raw_entry.row_ptr as *const RowPtr,
+                            vec_ptr.add(occupied),
+                            1,
+                        )
+                    };
+                    occupied += 1;
+                }
             }
             ptr = raw_entry.next;
         }
