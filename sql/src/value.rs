@@ -604,7 +604,7 @@ fn encode_value(f: &mut std::fmt::Formatter<'_>, val: &Value, raw: bool) -> std:
         Value::EmptyMap => write!(f, "{{}}"),
         Value::Boolean(b) => write!(f, "{}", b),
         Value::Number(n) => write!(f, "{}", n),
-        Value::Binary(s) => write!(f, "{}", hex::encode(s)),
+        Value::Binary(s) => write!(f, "{}", hex::encode_upper(s)),
         Value::String(s) | Value::Bitmap(s) | Value::Variant(s) => {
             if raw {
                 write!(f, "{}", s)
