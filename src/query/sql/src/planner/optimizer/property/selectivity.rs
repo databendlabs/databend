@@ -37,7 +37,7 @@ use crate::IndexType;
 /// that we cannot estimate the selectivity for it.
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
-pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 25000f64;
+pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {

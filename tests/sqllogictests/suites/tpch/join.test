@@ -2,7 +2,7 @@ statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok
-use tpch;
+use tpch_test;
 
 query I
 select

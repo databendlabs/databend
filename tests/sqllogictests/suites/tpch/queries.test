@@ -5,7 +5,7 @@ statement ok
 set enable_runtime_filter = 1;
 
 statement ok
-use tpch;
+use tpch_test;
 
 statement ok
 analyze table customer
