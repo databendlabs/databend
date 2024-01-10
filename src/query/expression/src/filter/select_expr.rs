@@ -128,10 +128,11 @@ pub fn build_select_expr(expr: &Expr) -> SelectExprBuildResult {
                     )
                 }
                 "is_true" => build_select_expr(&args[0]),
-                _ => {
-                    let can_reorder = can_reorder(func_name);
-                    SelectExprBuildResult::new(SelectExpr::Others(expr.clone()), false, can_reorder)
-                }
+                _ => SelectExprBuildResult::new(
+                    SelectExpr::Others(expr.clone()),
+                    false,
+                    can_reorder(func_name),
+                ),
             }
         }
         Expr::ColumnRef { id, data_type, .. } if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
@@ -149,6 +150,9 @@ pub fn build_select_expr(expr: &Expr) -> SelectExprBuildResult {
                 false,
                 true,
             )
+        }
+        Expr::Cast { is_try, .. } if *is_try => {
+            SelectExprBuildResult::new(SelectExpr::Others(expr.clone()), false, true)
         }
         _ => SelectExprBuildResult::new(SelectExpr::Others(expr.clone()), false, false),
     }
