@@ -720,9 +720,9 @@ fn evaluate_by_ndv(
     } else {
         left_cardinality * right_cardinality / max_ndv
     };
-    // If max_ndv is equal to left_cardinality or right_cardinality, res / 2.0
+    // If max_ndv is equal to left_cardinality or right_cardinality, we will multiply a factor 0.9
     if max_ndv == left_cardinality || max_ndv == right_cardinality {
-        res * 0.8
+        res * 0.9
     } else {
         res
     }

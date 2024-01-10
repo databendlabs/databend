@@ -141,10 +141,8 @@ impl HashJoinBuildState {
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
-        if matches!(
-            hash_join_state.hash_join_desc.join_type,
-            JoinType::Inner | JoinType::RightSingle
-        ) && ctx.get_settings().get_join_spilling_threshold()? == 0
+        if hash_join_state.hash_join_desc.join_type == JoinType::Inner
+            && ctx.get_settings().get_join_spilling_threshold()? == 0
         {
             let is_cluster = !ctx.get_cluster().is_empty();
             // For cluster, only support runtime filter for broadcast join.
