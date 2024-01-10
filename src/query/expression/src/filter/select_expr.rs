@@ -55,7 +55,11 @@ impl SelectExprBuildResult {
     }
 }
 
+// If a function may be use for filter short-circuiting, we can not perform filter reorder,
+// for example, for predicates `a != 0 and 3 / a > 1`，if we swap `a != 0` and `3 / a > 1`,
+// there will be a divide by zero error.
 fn can_reorder(func_name: &str) -> bool {
+    // There may be other functions that can be used for filter short-circuiting.
     if matches!(func_name, "cast" | "div" | "divide" | "modulo") || func_name.starts_with("to_") {
         return false;
     }
