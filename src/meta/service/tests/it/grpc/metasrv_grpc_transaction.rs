@@ -38,14 +38,13 @@ async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<
     let client = make_grpc_client(vec![a1(), a2(), a0()])?;
     {
         let eclient = client.make_established_client().await?;
-        assert_eq!(
-            a1(),
-            eclient.target_endpoint(),
-            "Endpoints.index is 0 initially, so the target endpoint is a1"
-        );
+        assert_eq!(a0(), eclient.target_endpoint(),);
+
+        // Start using a1(), a follower, for next RPC
+        eclient.endpoints().lock().choose_next();
     }
 
-    // Make client again, still connect to a1.
+    // Make client again, connect to a1.
     {
         let eclient = client.make_established_client().await?;
         assert_eq!(a1(), eclient.target_endpoint(),);

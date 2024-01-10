@@ -131,6 +131,10 @@ impl EstablishedClient {
         &self.target_endpoint
     }
 
+    pub fn endpoints(&self) -> &Arc<Mutex<Endpoints>> {
+        &self.endpoints
+    }
+
     pub fn server_protocol_version(&self) -> u64 {
         self.server_protocol_version
     }
