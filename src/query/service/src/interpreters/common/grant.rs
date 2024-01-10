@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_users::UserApiProvider;
 
 use crate::sessions::QueryContext;
@@ -103,4 +105,66 @@ pub async fn validate_grant_object_exists(
     }
 
     Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn convert_to_ownerobject(
+    ctx: &Arc<QueryContext>,
+    tenant: &str,
+    object: &GrantObject,
+    catalog_name: Option<String>,
+) -> Result<OwnershipObject> {
+    match object {
+        GrantObject::Database(_, db_name) => {
+            let catalog_name = catalog_name.unwrap();
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let db_id = catalog
+                .get_database(tenant, db_name)
+                .await?
+                .get_db_info()
+                .ident
+                .db_id;
+            Ok(OwnershipObject::Database {
+                catalog_name,
+                db_id,
+            })
+        }
+        GrantObject::Table(_, db_name, table_name) => {
+            let catalog_name = catalog_name.unwrap();
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let db_id = catalog
+                .get_database(tenant, db_name)
+                .await?
+                .get_db_info()
+                .ident
+                .db_id;
+            let table_id = catalog
+                .get_table(tenant, db_name.as_str(), table_name)
+                .await?
+                .get_id();
+            Ok(OwnershipObject::Table {
+                catalog_name,
+                db_id,
+                table_id,
+            })
+        }
+        GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table {
+            catalog_name: catalog_name.unwrap(),
+            db_id: *db_id,
+            table_id: *table_id,
+        }),
+        GrantObject::DatabaseById(_, db_id) => Ok(OwnershipObject::Database {
+            catalog_name: catalog_name.unwrap(),
+            db_id: *db_id,
+        }),
+        GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
+            name: name.to_string(),
+        }),
+        GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
+            name: name.to_string(),
+        }),
+        GrantObject::Global => Err(ErrorCode::IllegalGrant(
+            "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
+        )),
+    }
 }

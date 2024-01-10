@@ -163,6 +163,20 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_ownerships(&self, tenant: &str) -> Result<Vec<OwnershipInfo>> {
+        let mut ownership = self
+            .get_role_api_client(tenant)?
+            .get_ownerships()
+            .await
+            .map_err(|e| e.add_message_back("(while get ownerships)."))?
+            .into_iter()
+            .map(|o| o.data)
+            .collect::<Vec<_>>();
+        ownership.sort_by(|a, b| a.role.cmp(&b.role));
+        Ok(ownership)
+    }
+
+    #[async_backtrace::framed]
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
@@ -240,9 +254,17 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while revoke role from role)"))
     }
 
-    // Drop a role by name
+    // Drop a no ownership privilege role by name
     #[async_backtrace::framed]
     pub async fn drop_role(&self, tenant: &str, role: String, if_exists: bool) -> Result<()> {
+        let ownerships = self.get_ownerships(tenant).await?;
+        if ownerships.iter().any(|ownership| ownership.role == role) {
+            return Err(ErrorCode::RoleCanNotDrop(format!(
+                "Role '{}' has ownership. Please verify the owner object by `show grants for role '{}'` , and grant them to other role",
+                role, role
+            )));
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {

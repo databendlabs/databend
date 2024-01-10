@@ -5,7 +5,28 @@ statement ok
 DROP ROLE IF EXISTS `test-b`
 
 statement ok
+DROP ROLE IF EXISTS `test-c`
+
+statement ok
 CREATE ROLE `test-b`
+
+statement ok
+CREATE ROLE `test-c`
+
+statement ok
+drop database if exists db;
+
+statement ok
+create database db;
+
+statement ok
+grant ownership on db.* to role 'test-b'
+
+statement error 2205
+drop role 'test-b'
+
+statement ok
+grant ownership on db.* to role 'test-c'
 
 onlyif mysql
 statement ok
@@ -32,3 +53,8 @@ DROP ROLE `test-b`
 statement ok
 DROP ROLE IF EXISTS `test-b`
 
+statement ok
+drop database if exists db;
+
+statement ok
+DROP ROLE IF EXISTS `test-c`

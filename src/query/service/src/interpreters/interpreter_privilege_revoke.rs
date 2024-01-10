@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_sql::plans::RevokePrivilegePlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -69,6 +70,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
                 user_mgr
                     .revoke_privileges_from_role(&tenant, &role, plan.on, plan.priv_types)
                     .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
         }
 

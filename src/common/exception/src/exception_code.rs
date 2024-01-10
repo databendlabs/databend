@@ -220,6 +220,7 @@ build_exceptions! {
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
+    RoleCanNotDrop(2205),
     InvalidRole(2206),
     UnknownNetworkPolicy(2207),
     NetworkPolicyAlreadyExists(2208),

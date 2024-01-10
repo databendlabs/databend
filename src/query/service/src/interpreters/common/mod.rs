@@ -20,6 +20,7 @@ mod table;
 mod task;
 mod util;
 
+pub use grant::convert_to_ownerobject;
 pub use grant::validate_grant_object_exists;
 pub use query_log::InterpreterQueryLog;
 pub use stream::build_update_stream_meta_seq;

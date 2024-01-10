@@ -71,11 +71,15 @@ echo 'select * from @hello' | $TEST_USER_CONNECT
 echo "select * from d_0002.t" | $TEST_USER_CONNECT
 
 ## cleanup
+echo "drop table d_0002.t" | $BENDSQL_CLIENT_CONNECT
+echo "drop table d_0002.t1" | $BENDSQL_CLIENT_CONNECT
+echo "drop table d_0002.t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop database d_0002;" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage hello;" | $BENDSQL_CLIENT_CONNECT
 echo "drop function a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user '${TEST_USER_NAME}'" | $BENDSQL_CLIENT_CONNECT
 echo "drop user 'owner1'" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role 'r_0002_1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role 'r_0002_1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role 'r_0002'" | $BENDSQL_CLIENT_CONNECT
 echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT
@@ -127,7 +131,8 @@ echo "revoke create on *.* from a;" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from db_a;" | $USER_A_CONNECT
 echo "show tables from db_a;" | $USER_B_CONNECT
 
+echo "drop table db_a.t1;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database db_a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database db_a;" | $BENDSQL_CLIENT_CONNECT

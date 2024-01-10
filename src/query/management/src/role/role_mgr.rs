@@ -185,6 +185,23 @@ impl RoleApi for RoleMgr {
         Ok(r)
     }
 
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+        let owner_prefix = self.object_owner_prefix.clone();
+        let values = self.kv_api.prefix_list_kv(owner_prefix.as_str()).await?;
+
+        let mut r = vec![];
+        for (_key, val) in values {
+            let u = serde_json::from_slice::<OwnershipInfo>(&val.data)
+                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+
+            r.push(SeqV::new(val.seq, u));
+        }
+
+        Ok(r)
+    }
+
     /// General role update.
     ///
     /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
