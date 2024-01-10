@@ -715,10 +715,16 @@ fn evaluate_by_ndv(
     *new_ndv = Some(left_stat.ndv.min(right_stat.ndv));
 
     let max_ndv = f64::max(left_stat.ndv, right_stat.ndv);
-    if max_ndv == 0.0 {
+    let res = if max_ndv == 0.0 {
         0.0
     } else {
         left_cardinality * right_cardinality / max_ndv
+    };
+    // If max_ndv is equal to left_cardinality or right_cardinality, res / 2.0
+    if max_ndv == left_cardinality || max_ndv == right_cardinality {
+        res / 2.0
+    } else {
+        res
     }
 }
 

@@ -74,9 +74,8 @@ fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
     let build_card = build_group.stat_info.cardinality;
     let probe_card = probe_group.stat_info.cardinality;
 
-    let mut cost = build_card * COST_FACTOR_HASH_TABLE_PER_ROW
-        + probe_card * COST_FACTOR_COMPUTE_PER_ROW
-        + build_card * 10.0;
+    let mut cost =
+        build_card * COST_FACTOR_HASH_TABLE_PER_ROW + probe_card * COST_FACTOR_COMPUTE_PER_ROW;
 
     if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
         // Due to implementation reasons, right semi join is more expensive than left semi join
