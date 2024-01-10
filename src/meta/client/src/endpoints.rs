@@ -22,9 +22,6 @@ pub struct Status {}
 
 #[derive(Debug, Clone)]
 pub struct Endpoints {
-    /// The index of the next node to send a request to, if leader fails.
-    index: usize,
-
     /// The current leader.
     ///
     /// All requests should be sent to the leader in order to minimize latency by avoiding forwarding between meta-service nodes.
@@ -39,7 +36,6 @@ impl Endpoints {
     pub fn new<S>(nodes: impl IntoIterator<Item = S>) -> Self
     where S: ToString {
         Self {
-            index: 0,
             current: None,
             nodes: nodes
                 .into_iter()
@@ -52,13 +48,17 @@ impl Endpoints {
     ///
     /// This is used when the `current` node fails.
     pub fn choose_next(&mut self) -> &str {
-        self.index += 1;
+        if let Some(ref c) = self.current {
+            let index = self.nodes.keys().position(|x| x == c).unwrap();
 
-        self.current = self
-            .nodes
-            .keys()
-            .nth(self.index % self.nodes.len())
-            .map(|x| x.to_string());
+            self.current = self
+                .nodes
+                .keys()
+                .nth((index + 1) % self.nodes.len())
+                .map(|x| x.to_string());
+        } else {
+            self.current = self.nodes.keys().next().map(|x| x.to_string());
+        }
 
         self.current.as_deref().unwrap()
     }
@@ -106,6 +106,7 @@ impl Endpoints {
             .into_iter()
             .map(|x| (x.to_string(), Status::default()))
             .collect();
+
         if let Some(c) = self.current.as_deref() {
             if !self.nodes.contains_key(c) {
                 self.current = None;
@@ -121,11 +122,7 @@ impl Endpoints {
 impl fmt::Display for Endpoints {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let keys = self.nodes.keys().map(|x| x.as_str()).join(", ");
-        write!(
-            f,
-            "current:{:?}, index:{}, all:[{}]",
-            self.current, self.index, keys
-        )
+        write!(f, "current:{:?}, all:[{}]", self.current, keys)
     }
 }
 
@@ -136,26 +133,26 @@ mod tests {
     #[test]
     fn test_endpoints_new() -> anyhow::Result<()> {
         let es = Endpoints::new(["a", "b"]);
-        assert_eq!("current:None, index:0, all:[a, b]", es.to_string());
+        assert_eq!("current:None, all:[a, b]", es.to_string());
         Ok(())
     }
 
     #[test]
     fn test_endpoints_choose_next() -> anyhow::Result<()> {
         let mut es = Endpoints::new(["a", "b"]);
-        assert_eq!("b", es.choose_next());
         assert_eq!("a", es.choose_next());
         assert_eq!("b", es.choose_next());
         assert_eq!("a", es.choose_next());
+        assert_eq!("b", es.choose_next());
 
         // Update nodes does not reset the index.
         es.replace_nodes(["c", "d"]);
-        assert_eq!("d", es.choose_next());
+        assert_eq!("c", es.choose_next());
 
         // Reduce nodes list size is ok.
         let mut es = Endpoints::new(["a", "b", "c"]);
+        assert_eq!("a", es.choose_next());
         assert_eq!("b", es.choose_next());
-        assert_eq!("c", es.choose_next());
         es.replace_nodes(["d"]);
         assert_eq!("d", es.choose_next());
         Ok(())
@@ -164,19 +161,19 @@ mod tests {
     #[test]
     fn test_endpoints_current_or_next() -> anyhow::Result<()> {
         let mut es = Endpoints::new(["a", "b"]);
-        assert_eq!("b", es.current_or_next());
-        assert_eq!("b", es.current_or_next());
-        assert_eq!("a", es.choose_next());
         assert_eq!("a", es.current_or_next());
+        assert_eq!("a", es.current_or_next());
+        assert_eq!("b", es.choose_next());
+        assert_eq!("b", es.current_or_next());
 
         // Update nodes does not reset the index, but it will reset the current node.
         es.replace_nodes(["c", "d"]);
-        assert_eq!("d", es.choose_next());
+        assert_eq!("c", es.choose_next());
 
         // Reduce nodes list size is ok.
         let mut es = Endpoints::new(["a", "b", "c"]);
+        assert_eq!("a", es.choose_next());
         assert_eq!("b", es.choose_next());
-        assert_eq!("c", es.choose_next());
         es.replace_nodes(["d"]);
         assert_eq!("d", es.current_or_next());
         Ok(())
@@ -186,8 +183,8 @@ mod tests {
     fn test_endpoints_current() -> anyhow::Result<()> {
         let mut es = Endpoints::new(["a", "b"]);
         assert_eq!(None, es.current());
-        assert_eq!("b", es.choose_next());
-        assert_eq!(Some("b"), es.current());
+        assert_eq!("a", es.choose_next());
+        assert_eq!(Some("a"), es.current());
 
         // Updating nodes will reset the current node.
         es.replace_nodes(["c", "d"]);
