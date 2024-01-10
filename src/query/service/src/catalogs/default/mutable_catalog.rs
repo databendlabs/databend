@@ -404,6 +404,7 @@ impl Catalog for MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
+
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();
