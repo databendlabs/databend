@@ -340,6 +340,7 @@ fn push(
     distinct_count: &mut dyn MutableArray,
     null_count: &mut dyn MutableArray,
 ) -> Result<()> {
+    dbg!(&stats);
     match min.data_type().to_logical_type() {
         List(_) | LargeList(_) => {
             let min = min
@@ -574,6 +575,7 @@ pub fn deserialize(field: &Field, row_groups: &[RowGroupMetaData]) -> Result<Sta
     // transpose
     row_groups.iter().try_for_each(|group| {
         let columns = get_field_columns(group.columns(), field.name.as_ref());
+        dbg!(&columns);
         let mut stats = columns
             .into_iter()
             .map(|column| {
@@ -583,6 +585,7 @@ pub fn deserialize(field: &Field, row_groups: &[RowGroupMetaData]) -> Result<Sta
                 ))
             })
             .collect::<Result<VecDeque<(Option<_>, ParquetPrimitiveType)>>>()?;
+        dbg!(&stats);
         push(
             &mut stats,
             statistics.min_value.as_mut(),
