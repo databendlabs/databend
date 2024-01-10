@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -19,6 +20,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
+use log::info;
 use pin_project_lite::pin_project;
 use tokio::time::Instant;
 
@@ -108,6 +110,19 @@ pub trait TimingFutureExt {
             if total >= threshold {
                 f(total, busy)
             }
+        })
+    }
+
+    /// Log elapsed time(total and busy) in info level when the future is ready.
+    fn info_elapsed<'a>(
+        self,
+        ctx: impl fmt::Display + 'a,
+    ) -> TimingFuture<'a, Self, impl Fn(Duration, Duration)>
+    where
+        Self: Future + Sized,
+    {
+        self.timed::<'a>(move |total, busy| {
+            info!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
         })
     }
 }

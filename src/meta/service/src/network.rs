@@ -188,7 +188,7 @@ impl NetworkConnection {
 
         let endpoint = self
             .sto
-            .get_node_endpoint(&target)
+            .get_node_raft_endpoint(&target)
             .await
             .map_err(|e| Unreachable::new(&e))?;
 
