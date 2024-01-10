@@ -15,6 +15,7 @@
 //! Helper functions for handling grpc.
 
 use std::error::Error;
+use std::str::FromStr;
 
 use log::error;
 use tonic::metadata::MetadataValue;
@@ -24,7 +25,8 @@ use crate::protobuf::RaftRequest;
 use crate::Endpoint;
 use crate::RaftError;
 
-const HEADER_LEADER: &str = "x-databend-meta-leader-endpoint";
+const HEADER_LEADER: &str = "x-databend-meta-leader-grpc-endpoint";
+// const HEADER_LEADER_BIN: &str = "x-databend-meta-leader-grpc-endpoint-bin";
 
 pub struct GrpcHelper;
 
@@ -42,10 +44,44 @@ impl GrpcHelper {
     ) {
         if let Some(endpoint) = endpoint {
             let metadata = reply.metadata_mut();
-            metadata.insert_bin(
-                HEADER_LEADER,
-                MetadataValue::from_bytes(endpoint.to_string().as_bytes()),
-            );
+
+            match MetadataValue::from_str(&endpoint.to_string()) {
+                Ok(v) => {
+                    metadata.insert(HEADER_LEADER, v);
+                }
+                Err(err) => {
+                    error!(
+                        "fail to add response meta leader endpoint({:?}), error: {}",
+                        endpoint, err
+                    )
+                }
+            }
+
+            // // Binary format. Not used.
+            // metadata.insert_bin(
+            //     HEADER_LEADER_BIN,
+            //     MetadataValue::from_bytes(endpoint.to_string().as_bytes()),
+            // );
+            // === loading:
+            // let Some(values) = metadata.get_bin(HEADER_LEADER_BIN) else {
+            //     return None;
+            // };
+            //
+            // let value = match values.to_bytes() {
+            //     Ok(value) => value,
+            //     Err(e) => {
+            //         error!("invalid response leader endpoint, error: {}", e);
+            //         return None;
+            //     }
+            // };
+            //
+            // let s = match String::from_utf8(value.to_vec()) {
+            //     Ok(s) => s,
+            //     Err(err) => {
+            //         error!("invalid response leader endpoint, error: {}", err);
+            //         return None;
+            //     }
+            // };
         }
     }
 
@@ -53,24 +89,27 @@ impl GrpcHelper {
     pub fn get_response_meta_leader<T>(reply: &tonic::Response<T>) -> Option<Endpoint> {
         let metadata = reply.metadata();
 
-        let Some(values) = metadata.get(HEADER_LEADER) else {
+        let Some(meta_leader) = metadata.get(HEADER_LEADER) else {
             return None;
         };
 
-        match values.to_str() {
-            Ok(value) => {
-                let endpoint = Endpoint::parse(value);
-
-                match endpoint {
-                    Ok(endpoint) => Some(endpoint),
-                    Err(e) => {
-                        error!("invalid response leader endpoint: {}, error: {}", value, e);
-                        None
-                    }
-                }
+        let s = match meta_leader.to_str() {
+            Ok(x) => x,
+            Err(err) => {
+                error!(
+                    "invalid response meta leader endpoint({:?}), error: {}",
+                    meta_leader, err
+                );
+                return None;
             }
+        };
+
+        let endpoint = Endpoint::parse(s);
+
+        match endpoint {
+            Ok(endpoint) => Some(endpoint),
             Err(e) => {
-                error!("invalid response leader endpoint, error: {}", e);
+                error!("invalid response leader endpoint: {}, error: {}", s, e);
                 None
             }
         }

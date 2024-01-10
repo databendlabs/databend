@@ -73,11 +73,11 @@ impl Interpreter for DropUserStageInterpreter {
             // we should do `drop ownership` after actually drop stage,
             // drop the ownership
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
-            role_api
-                .revoke_ownership(&OwnershipObject::Stage {
-                    name: self.plan.name.clone(),
-                })
-                .await?;
+            let owner_object = OwnershipObject::Stage {
+                name: self.plan.name.clone(),
+            };
+
+            role_api.revoke_ownership(&owner_object).await?;
 
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;

@@ -965,6 +965,101 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select sum(a), to_string(b) as bs from t group by bs",
             is_index_scan: true,
         },
+        // query: sort-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select to_string(c + 1) as s from t order by s",
+            index: "select c + 1 from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select b, c from t",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select avg(a + 1) from t group by b order by b",
+            index: "select a + 1, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 and b < 5 order by b",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a, b from t where b > 1",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t where c > 1 group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t where b > 0 group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs order by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 

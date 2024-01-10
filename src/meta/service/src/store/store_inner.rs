@@ -541,7 +541,7 @@ impl StoreInner {
         ns
     }
 
-    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
+    pub async fn get_node_raft_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
         let endpoint = self
             .get_node(node_id)
             .await

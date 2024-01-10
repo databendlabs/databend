@@ -1,12 +1,12 @@
 checking that there should are 3 snapshots before purge
 true
 alter table add a column
-checking that after purge (by snapshot id) there should be 2 snapshots left
+checking that after purge (by snapshot id) there should be 3 snapshots left
 true
 checking that after purge (by snapshot id) there should be 4 rows left
 true
 alter table drop a column
-checking that after purge (by snapshot id) there should be 2 snapshots left
+checking that after purge (by snapshot id) there should be 4 snapshots left
 true
 checking that after purge (by snapshot id) there should be 4 rows left
 true

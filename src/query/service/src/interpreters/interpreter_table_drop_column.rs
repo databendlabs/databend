@@ -29,6 +29,7 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_add_column::generate_new_snapshot;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -112,6 +113,8 @@ impl Interpreter for DropTableColumnInterpreter {
 
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
+
+        generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
 
         let req = UpdateTableMetaReq {
             table_id,
