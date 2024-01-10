@@ -340,6 +340,11 @@ fn push(
     distinct_count: &mut dyn MutableArray,
     null_count: &mut dyn MutableArray,
 ) -> Result<()> {
+    dbg!(
+        &stats,
+        min.data_type().to_logical_type(),
+        max.data_type().to_logical_type()
+    );
     match min.data_type().to_logical_type() {
         List(_) | LargeList(_) => {
             let min = min
