@@ -389,7 +389,7 @@ impl DefaultSettings {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["before_partial", "before_merge", "no_shuffle"])),
+                    range: Some(SettingRange::String(vec!["before_partial", "before_merge"])),
                 }),
                 ("efficiently_memory_group_by", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

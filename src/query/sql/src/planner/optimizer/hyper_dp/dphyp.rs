@@ -52,8 +52,6 @@ pub struct DPhpy {
     relation_set_tree: RelationSetTree,
     // non-equi conditions
     filters: HashSet<Filter>,
-    // Is cluster
-    is_cluster: bool,
 }
 
 impl DPhpy {
@@ -68,7 +66,6 @@ impl DPhpy {
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
-            is_cluster,
         }
     }
 
