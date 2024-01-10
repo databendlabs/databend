@@ -334,6 +334,7 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx,
                     block_idx,
+                    inner: None,
                 },
             }));
         }
@@ -370,6 +371,7 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
+                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };

@@ -21,9 +21,7 @@ mod page_pruner;
 mod range_pruner;
 mod topn_pruner;
 
-pub use block_meta::gen_row_prefix;
 pub use block_meta::BlockMetaIndex;
-pub use block_meta::RowPrefix;
 pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;

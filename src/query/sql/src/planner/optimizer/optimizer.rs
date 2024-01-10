@@ -326,7 +326,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     };
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
-    // don't support spill for now.
+    // don't support spill for now, and we need the macthed cluases' count
+    // is one
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -334,6 +335,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             .get_settings()
             .get_join_spilling_threshold()?
             == 0
+        && plan.matched_evaluators.len() == 1
     {
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
@@ -374,6 +376,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 opt_ctx.table_ctx.clone(),
                 plan.merge_type.clone(),
                 plan.target_table_idx,
+                plan.matched_evaluators.len() == 1,
             )?;
             (merge_into_join_sexpr.clone(), false)
         } else {
@@ -404,6 +407,7 @@ fn try_to_change_as_broadcast_join(
     table_ctx: Arc<dyn TableContext>,
     merge_into_type: MergeIntoType,
     target_tbl_idx: usize,
+    only_one_matched_clause: bool,
 ) -> Result<SExpr> {
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
@@ -415,7 +419,10 @@ fn try_to_change_as_broadcast_join(
                 .replace_plan(Arc::new(RelOperator::Join(join)));
             // for now, when we use target table as build side and it's a broadcast join,
             // we will use merge_into_block_info_hashtable to reduce i/o operations.
-            if change_join_order && matches!(merge_into_type, MergeIntoType::FullOperation) {
+            if change_join_order
+                && matches!(merge_into_type, MergeIntoType::FullOperation)
+                && only_one_matched_clause
+            {
                 table_ctx.set_merge_into_join(MergeIntoJoin {
                     merge_into_join_type: MergeIntoJoinType::Left,
                     is_distributed: true,

@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnVec;
@@ -53,6 +55,8 @@ use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::DUMMY_TABLE_INDEX;
+use databend_common_storages_fuse::operations::BlockMetaIndex;
 use ethnum::U256;
 use itertools::Itertools;
 use log::info;
@@ -60,6 +64,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
+use super::MatchedPtr;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
@@ -156,6 +161,7 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
+
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -181,13 +187,38 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
+
         let input_rows = input.num_rows();
-        buffer.push(input);
+        buffer.push(input.clone());
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
+
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let start_offset = build_state.generation_state.build_num_rows + old_size;
+        let end_offset = start_offset + input_rows - 1;
+        // merge into target table as build side.
+        if self.hash_join_state.block_info_index.is_some() {
+            assert!(input.get_meta().is_some());
+            let block_meta_index =
+                BlockMetaIndex::downcast_ref_from(input.get_meta().unwrap()).unwrap();
+            let row_prefix = compute_row_id_prefix(
+                block_meta_index.segment_idx as u64,
+                block_meta_index.block_idx as u64,
+            );
+            let block_info_index = unsafe {
+                &mut *self
+                    .hash_join_state
+                    .block_info_index
+                    .as_ref()
+                    .unwrap()
+                    .get()
+            };
+            block_info_index
+                .insert_block_offsets((start_offset as u32, end_offset as u32), row_prefix);
+        }
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
@@ -226,6 +257,10 @@ impl HashJoinBuildState {
             }
             if self.hash_join_state.need_mark_scan() {
                 build_state.mark_scan_map.push(block_mark_scan_map);
+            }
+            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
+                let chunk_offsets = unsafe { &mut *self.hash_join_state.chunk_offsets.get() };
+                chunk_offsets.push(build_state.generation_state.build_num_rows as u64);
             }
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
@@ -386,6 +421,16 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
+            // generate macthed offsets memory.
+            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
+                let matched = unsafe { &mut *self.hash_join_state.matched.get() };
+                let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+                let atomic_pointer = unsafe { &mut *self.hash_join_state.atomic_pointer.get() };
+                *matched = vec![0; build_state.generation_state.build_num_rows];
+                let pointer =
+                    unsafe { std::mem::transmute::<*mut u8, *mut AtomicU8>(matched.as_mut_ptr()) };
+                *atomic_pointer = MatchedPtr(pointer);
+            }
         }
         Ok(())
     }

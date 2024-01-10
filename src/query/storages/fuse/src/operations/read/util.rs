@@ -15,20 +15,22 @@
 use std::sync::Arc;
 
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
-use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_storages_common_pruner::gen_row_prefix;
 
+use crate::operations::BlockMetaIndex;
 use crate::FusePartInfo;
 
-pub(crate) fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> bool {
+pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
-    matches!(
-        merge_into_join.merge_into_join_type,
-        MergeIntoJoinType::Left
-    ) && merge_into_join.target_tbl_idx == table_idx
+    (
+        matches!(
+            merge_into_join.merge_into_join_type,
+            MergeIntoJoinType::Left
+        ) && merge_into_join.target_tbl_idx == table_idx,
+        merge_into_join.is_distributed,
+    )
 }
 
 // for merge into target build, in this situation, we don't need rowid
@@ -39,14 +41,14 @@ pub(crate) fn add_row_prefix_meta(
 ) -> Result<DataBlock> {
     if need_reserve_block_info && fuse_part.block_meta_index.is_some() {
         let block_meta_index = fuse_part.block_meta_index.as_ref().unwrap();
-        let prefix = compute_row_id_prefix(
-            block_meta_index.segment_idx as u64,
-            block_meta_index.block_id as u64,
-        );
         // in fact, inner_meta is none for now, for merge into target build, we don't need
         // to get row_id.
         let inner_meta = block.take_meta();
-        block.add_meta(Some(Box::new(gen_row_prefix(inner_meta, prefix))))
+        block.add_meta(Some(Box::new(BlockMetaIndex {
+            segment_idx: block_meta_index.segment_idx,
+            block_idx: block_meta_index.block_id,
+            inner: inner_meta,
+        })))
     } else {
         Ok(block)
     }

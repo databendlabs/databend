@@ -27,6 +27,8 @@ use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::IndexType;
+use databend_common_sql::DUMMY_TABLE_INDEX;
+use databend_common_storages_fuse::operations::need_reserve_block_info;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -125,12 +127,33 @@ impl PipelineBuilder {
 
     pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
         let id = join.probe.get_table_index();
-        let state = self.build_join_state(join, id)?;
+        // for merge into target table as build side.
+        let (build_table_index, is_distributed_merge_into) =
+            if matches!(&*join.build, PhysicalPlan::TableScan(_)) {
+                let (need_block_info, is_distributed) =
+                    need_reserve_block_info(self.ctx.clone(), join.build.get_table_index());
+                if need_block_info {
+                    (join.build.get_table_index(), is_distributed)
+                } else {
+                    (DUMMY_TABLE_INDEX, false)
+                }
+            } else {
+                (DUMMY_TABLE_INDEX, false)
+            };
+
+        let state =
+            self.build_join_state(join, id, build_table_index, is_distributed_merge_into)?;
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
     }
 
-    fn build_join_state(&mut self, join: &HashJoin, id: IndexType) -> Result<Arc<HashJoinState>> {
+    fn build_join_state(
+        &mut self,
+        join: &HashJoin,
+        id: IndexType,
+        merge_into_target_table_index: IndexType,
+        is_distributed_merge_into: bool,
+    ) -> Result<Arc<HashJoinState>> {
         HashJoinState::try_create(
             self.ctx.clone(),
             join.build.output_schema()?,
@@ -138,6 +161,8 @@ impl PipelineBuilder {
             HashJoinDesc::create(join)?,
             &join.probe_to_build,
             id,
+            merge_into_target_table_index,
+            is_distributed_merge_into,
         )
     }
 

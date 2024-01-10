@@ -16,6 +16,7 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleString;
+use databend_common_hashtable::BlockInfoIndex;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::StringHashJoinHashMap;
@@ -71,6 +73,11 @@ pub enum HashJoinHashTable {
     KeysU128(FixedKeyHashJoinHashTable<u128>),
     KeysU256(FixedKeyHashJoinHashTable<U256>),
 }
+
+pub struct MatchedPtr(pub *mut AtomicU8);
+
+unsafe impl Send for MatchedPtr {}
+unsafe impl Sync for MatchedPtr {}
 
 /// Define some shared states for hash join build and probe.
 /// It will like a bridge to connect build and probe.
@@ -121,6 +128,21 @@ pub struct HashJoinState {
 
     /// If the join node generate runtime filters, the scan node will use it to do prune.
     pub(crate) table_index: IndexType,
+    /// If we use target table as build side for merge into, we use this to track target table
+    /// and extract partial modified blocks from hashtable
+    pub(crate) merge_into_target_table_index: IndexType,
+    pub(crate) is_distributed_merge_into: bool,
+
+    /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
+    /// When merge into target table as build side, we should preseve block info index.
+    pub(crate) block_info_index: Option<SyncUnsafeCell<BlockInfoIndex>>,
+    /// we use matched to tag the matched offset in chunks.
+    pub(crate) matched: SyncUnsafeCell<Vec<u8>>,
+    /// the matched will be modified concurrently, so we use
+    /// atomic_pointers to pointer to matched
+    pub(crate) atomic_pointer: SyncUnsafeCell<MatchedPtr>,
+    /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
+    pub(crate) chunk_offsets: SyncUnsafeCell<Vec<u64>>,
 }
 
 impl HashJoinState {
@@ -131,6 +153,8 @@ impl HashJoinState {
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
         table_index: IndexType,
+        merge_into_target_table_index: IndexType,
+        is_distributed_merge_into: bool,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -166,6 +190,12 @@ impl HashJoinState {
             partition_id: AtomicI8::new(-2),
             enable_spill,
             table_index,
+            merge_into_target_table_index,
+            is_distributed_merge_into,
+            block_info_index: None,
+            matched: SyncUnsafeCell::new(Vec::new()),
+            atomic_pointer: SyncUnsafeCell::new(MatchedPtr(std::ptr::null_mut())),
+            chunk_offsets: SyncUnsafeCell::new(Vec::with_capacity(100)),
         }))
     }
 

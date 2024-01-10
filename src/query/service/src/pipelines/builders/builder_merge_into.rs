@@ -375,6 +375,7 @@ impl PipelineBuilder {
     }
 
     // build merge into pipeline.
+    // the block rows is limitd by join (65536 rows), but we don't promise the block size.
     pub(crate) fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
         let MergeInto {
             input,

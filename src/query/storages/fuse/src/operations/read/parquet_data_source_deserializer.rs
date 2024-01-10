@@ -109,7 +109,7 @@ impl DeserializeDataTransform {
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
-        let need_reserve_block_info = need_reserve_block_info(ctx.clone(), plan.table_index);
+        let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,

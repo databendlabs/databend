@@ -255,7 +255,7 @@ impl NativeDeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let need_reserve_block_info = need_reserve_block_info(ctx.clone(), plan.table_index);
+        let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let mut prewhere_columns: Vec<usize> =

@@ -14,6 +14,7 @@
 
 use std::sync::atomic::Ordering;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -24,6 +25,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
+use databend_common_sql::DUMMY_TABLE_INDEX;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -372,6 +374,54 @@ impl HashJoinProbeState {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
+    fn check_and_set_matched(
+        &self,
+        build_indexes: &[RowPtr],
+        matched_idx: usize,
+        valids: &Bitmap,
+    ) -> Result<()> {
+        // merge into target table as build side.
+        if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
+            let chunk_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
+            let pointer = unsafe { &*self.hash_join_state.atomic_pointer.get() };
+            // add matched indexes.
+            for (idx, row_ptr) in build_indexes[0..matched_idx].iter().enumerate() {
+                unsafe {
+                    if !valids.get_bit_unchecked(idx) {
+                        continue;
+                    }
+                }
+                let offset = chunk_offsets[row_ptr.chunk_index as usize] as usize
+                    + row_ptr.row_index as usize;
+                let mut old_mactehd_counts =
+                    unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
+                let new_matched_count = old_mactehd_counts + 1;
+                if old_mactehd_counts > 0 {
+                    return Err(ErrorCode::UnresolvableConflict(
+                        "multi rows from source match one and the same row in the target_table multi times",
+                    ));
+                }
+                loop {
+                    let res = unsafe {
+                        (*pointer.0.add(offset)).compare_exchange_weak(
+                            old_mactehd_counts,
+                            new_matched_count,
+                            Ordering::SeqCst,
+                            Ordering::SeqCst,
+                        )
+                    };
+                    match res {
+                        Ok(_) => break,
+                        Err(x) => old_mactehd_counts = x,
+                    };
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
     fn process_left_or_full_join_block(
         &self,
         matched_idx: usize,
@@ -454,6 +504,7 @@ impl HashJoinProbeState {
                     };
                 }
             }
+            self.check_and_set_matched(build_indexes, matched_idx, &probe_state.true_validity)?;
             return Ok(());
         }
 
@@ -480,6 +531,7 @@ impl HashJoinProbeState {
                     };
                 }
             }
+            self.check_and_set_matched(build_indexes, matched_idx, &probe_state.true_validity)?;
         } else if all_false {
             let mut idx = 0;
             while idx < matched_idx {
@@ -510,6 +562,7 @@ impl HashJoinProbeState {
                 }
             } else {
                 let mut idx = 0;
+                self.check_and_set_matched(build_indexes, matched_idx, &validity);
                 while idx < matched_idx {
                     unsafe {
                         let valid = validity.get_bit_unchecked(idx);
