@@ -98,11 +98,6 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
-        if !order_by.is_empty() {
-            // Currently, we disable aggregating index scan if the query is a single-table query with order by.
-            self.ctx.set_can_scan_from_agg_index(false);
-        }
-
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                 warn!(

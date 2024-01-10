@@ -2621,8 +2621,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "databend-common-arrow",
- "databend-common-meta-stoerr",
- "databend-common-meta-types",
  "http",
  "opendal",
  "parquet",
@@ -2864,6 +2862,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-protos",
  "databend-common-storage",
+ "enumflags2",
  "minitrace",
  "mockall",
  "serde_json",
@@ -2946,6 +2945,7 @@ dependencies = [
  "databend-common-tracing",
  "derive_more",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "minitrace",
@@ -3078,6 +3078,7 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "databend-common-exception",
  "prost 0.12.1",
  "serde",
  "serde_json",
@@ -3106,8 +3107,11 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-building",
+ "databend-common-exception",
  "databend-common-meta-stoerr",
+ "databend-common-tracing",
  "derive_more",
+ "log",
  "num-derive",
  "num-traits",
  "openraft 0.9.0",
@@ -3453,6 +3457,7 @@ dependencies = [
 name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "dashmap",
  "databend-common-catalog",
  "databend-common-config",
@@ -3467,6 +3472,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
+ "tokio",
 ]
 
 [[package]]

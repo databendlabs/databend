@@ -19,7 +19,6 @@ use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -44,13 +43,8 @@ use crate::metrics::server_metrics;
 impl kvapi::KVApi for MetaNode {
     type Error = MetaAPIError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
-        let ent = LogEntry::new(Cmd::UpsertKV(UpsertKV {
-            key: act.key,
-            seq: act.seq,
-            value: act.value,
-            value_meta: act.value_meta,
-        }));
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
+        let ent = LogEntry::new(Cmd::UpsertKV(act));
         let rst = self.write(ent).await?;
 
         match rst {
@@ -67,13 +61,16 @@ impl kvapi::KVApi for MetaNode {
             keys: keys.to_vec(),
         };
 
-        let strm = self
+        let res = self
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::MGetKV(req)))
             .await;
 
-        server_metrics::incr_read_result(&strm);
+        server_metrics::incr_read_result(&res);
 
-        let strm = strm?.map_err(MetaAPIError::from);
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+        let strm = strm.map_err(MetaAPIError::from);
+
         Ok(strm.boxed())
     }
 
@@ -83,19 +80,23 @@ impl kvapi::KVApi for MetaNode {
             prefix: prefix.to_string(),
         };
 
-        let strm = self
+        let res = self
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::ListKV(req)))
             .await;
 
-        server_metrics::incr_read_result(&strm);
+        server_metrics::incr_read_result(&res);
 
-        let strm = strm?.map_err(MetaAPIError::from);
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+
+        let strm = strm.map_err(MetaAPIError::from);
         Ok(strm.boxed())
     }
 
     #[minitrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         info!("MetaNode::transaction(): {}", txn);
+
         let ent = LogEntry::new(Cmd::Transaction(txn));
         let rst = self.write(ent).await?;
 

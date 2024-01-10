@@ -267,7 +267,11 @@ impl UserGrantSet {
             .map(|e| {
                 if e.matches_entry(object) {
                     let mut e = e.clone();
-                    e.privileges ^= privileges;
+                    e.privileges = e
+                        .privileges
+                        .iter()
+                        .filter(|p| !privileges.contains(*p))
+                        .collect();
                     e
                 } else {
                     e.clone()

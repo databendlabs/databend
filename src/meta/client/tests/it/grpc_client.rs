@@ -163,15 +163,7 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
 }
 
 fn new_client(addr: impl ToString, timeout: Option<Duration>) -> anyhow::Result<Arc<ClientHandle>> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr.to_string()],
-        "",
-        "",
-        timeout,
-        None,
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client = MetaGrpcClient::try_create(vec![addr.to_string()], "", "", timeout, None, None)?;
 
     Ok(client)
 }

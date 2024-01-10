@@ -93,6 +93,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | QUOTE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
+                | EMPTY_FIELD_AS
                 | ESCAPE
                 | NULL_FIELD_AS
                 | MISSING_FIELD_AS
