@@ -630,7 +630,6 @@ impl DPhpy {
         if join_node.join_type == JoinType::Inner {
             let cost = join_node.cardinality(&self.join_relations)?
                 + join_node.children[0].cost
-                + join_node.children[1].cardinality.unwrap() * 5.0
                 + join_node.children[1].cost;
             join_node.set_cost(cost);
         }
