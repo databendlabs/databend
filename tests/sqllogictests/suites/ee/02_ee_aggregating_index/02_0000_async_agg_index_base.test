@@ -353,6 +353,49 @@ statement ok
 DROP TABLE t
 
 statement ok
+CREATE TABLE t(id int, user_id int, event_name varchar)
+
+statement ok
+INSERT INTO t (id, user_id, event_name)
+VALUES (1, 1, 'Login'),
+       (2, 2, 'Login'),
+       (3, 3, 'Login'),
+       (4, 1, 'Logout'),
+       (5, 2, 'Logout'),
+       (6, 4, 'Login'),
+       (7, 1, 'Login');
+
+statement ok
+CREATE ASYNC AGGREGATING INDEX testi AS select event_name, max(user_id), avg(id) from t group by event_name
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query TII rowsort
+select event_name, max(user_id), avg(id) from t group by event_name
+----
+Login 4 3.8
+Logout 2 4.5
+
+query TII rowsort
+select event_name, max(user_id), avg(id) from t where id > 1 group by event_name
+----
+Login 4 4.5
+Logout 2 4.5
+
+query TII
+select event_name, max(user_id), avg(id) from t where id > 1 group by event_name order by event_name desc
+----
+Logout 2 4.5
+Login 4 4.5
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
+statement ok
 use default
 
 statement ok
