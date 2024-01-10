@@ -201,7 +201,7 @@ impl Display for CopyIntoTableStmt {
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
-        write!(f, " ON_ERROR = '{}'", self.on_error)?;
+        write!(f, " ON_ERROR = {}", self.on_error)?;
 
         Ok(())
     }

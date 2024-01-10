@@ -24,6 +24,9 @@ use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -35,6 +38,22 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
+
+fn verify_task_sql(sql: &String) -> Result<()> {
+    let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
+        ErrorCode::SyntaxException(format!(
+            "syntax error for task formatted sql: {}, error: {:?}",
+            sql, e
+        ))
+    })?;
+    parse_sql(&tokens, Dialect::PostgreSQL).map_err(|e| {
+        ErrorCode::SyntaxException(format!(
+            "syntax error for task formatted sql: {}, error: {:?}",
+            sql, e
+        ))
+    })?;
+    Ok(())
+}
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
     if schedule_opts.is_none() {
@@ -83,7 +102,7 @@ impl Binder {
             ));
         }
         verify_scheduler_option(schedule_opts)?;
-
+        verify_task_sql(sql)?;
         let tenant = self.ctx.get_tenant();
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
@@ -130,6 +149,10 @@ impl Binder {
             if schedule.is_some() {
                 verify_scheduler_option(schedule)?;
             }
+        }
+
+        if let AlterTaskOptions::ModifyAs(sql) = options {
+            verify_task_sql(sql)?;
         }
 
         let tenant = self.ctx.get_tenant();
