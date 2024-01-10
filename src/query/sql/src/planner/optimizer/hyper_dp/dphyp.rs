@@ -55,8 +55,6 @@ pub struct DPhpy {
     filters: HashSet<Filter>,
     // The number of times emit_csg_cmp is called
     emit_count: usize,
-    // Is cluster
-    is_cluster: bool,
 }
 
 impl DPhpy {
@@ -71,7 +69,6 @@ impl DPhpy {
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
             emit_count: 0,
-            is_cluster,
         }
     }
 
