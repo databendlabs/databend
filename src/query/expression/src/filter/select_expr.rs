@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::types::DataType;
 use crate::Expr;
@@ -21,9 +22,9 @@ use crate::Scalar;
 #[derive(Clone, Debug)]
 pub enum SelectExpr {
     // And SelectExprs.
-    And(Vec<SelectExpr>),
+    And((Vec<SelectExpr>, FilterPermutation)),
     // Or SelectExprs.
-    Or(Vec<SelectExpr>),
+    Or((Vec<SelectExpr>, FilterPermutation)),
     // Compare operations: ((Equal | NotEqual | Gt | Lt | Gte | Lte), args, data type of args).
     Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
     // Other operations: for example, like, is_null, is_not_null, etc.
@@ -34,8 +35,35 @@ pub enum SelectExpr {
     BooleanScalar((Scalar, DataType)),
 }
 
+pub struct SelectExprBuildResult {
+    select_expr: SelectExpr,
+    has_or: bool,
+    can_reorder: bool,
+}
+
+impl SelectExprBuildResult {
+    fn new(select_expr: SelectExpr, has_or: bool, can_reorder: bool) -> Self {
+        Self {
+            select_expr,
+            has_or,
+            can_reorder,
+        }
+    }
+
+    pub fn into(self) -> (SelectExpr, bool) {
+        (self.select_expr, self.has_or)
+    }
+}
+
+fn can_reorder(func_name: &str) -> bool {
+    if matches!(func_name, "cast" | "div" | "divide" | "modulo") || func_name.starts_with("to_") {
+        return false;
+    }
+    true
+}
+
 // Build `SelectExpr` from `Expr`, return the `SelectExpr` and whether the `SelectExpr` contains `Or` operation.
-pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
+pub fn build_select_expr(expr: &Expr) -> SelectExprBuildResult {
     match expr {
         Expr::FunctionCall {
             function,
@@ -48,53 +76,76 @@ pub fn build_select_expr(expr: &Expr) -> (SelectExpr, bool) {
                 "and" | "and_filters" => {
                     let mut and_args = vec![];
                     let mut has_or = false;
+                    let mut can_reorder = true;
                     for arg in args {
                         // Recursively flatten the AND expressions.
-                        let (select_expr, exists_or) = build_select_expr(arg);
-                        has_or |= exists_or;
-                        if let SelectExpr::And(select_expr) = select_expr {
+                        let select_expr_build_result = build_select_expr(arg);
+                        has_or |= select_expr_build_result.has_or;
+                        can_reorder &= select_expr_build_result.can_reorder;
+                        if let SelectExpr::And((select_expr, _)) =
+                            select_expr_build_result.select_expr
+                        {
                             and_args.extend(select_expr);
                         } else {
-                            and_args.push(select_expr);
+                            and_args.push(select_expr_build_result.select_expr);
                         }
                     }
-                    (SelectExpr::And(and_args), has_or)
+                    let num_exprs = and_args.len();
+                    let select_expr =
+                        SelectExpr::And((and_args, FilterPermutation::new(num_exprs, can_reorder)));
+                    SelectExprBuildResult::new(select_expr, has_or, true)
                 }
                 "or" => {
                     let mut or_args = vec![];
+                    let mut can_reorder = true;
                     for arg in args {
                         // Recursively flatten the OR expressions.
-                        let (select_expr, _) = build_select_expr(arg);
-                        if let SelectExpr::Or(select_expr) = select_expr {
+                        let select_expr_build_result = build_select_expr(arg);
+                        can_reorder &= select_expr_build_result.can_reorder;
+                        if let SelectExpr::Or((select_expr, _)) =
+                            select_expr_build_result.select_expr
+                        {
                             or_args.extend(select_expr);
                         } else {
-                            or_args.push(select_expr);
+                            or_args.push(select_expr_build_result.select_expr);
                         }
                     }
-                    (SelectExpr::Or(or_args), true)
+                    let num_exprs = or_args.len();
+                    let select_expr =
+                        SelectExpr::Or((or_args, FilterPermutation::new(num_exprs, can_reorder)));
+                    SelectExprBuildResult::new(select_expr, true, true)
                 }
                 "eq" | "noteq" | "gt" | "lt" | "gte" | "lte" => {
                     let select_op = SelectOp::try_from_func_name(&function.signature.name).unwrap();
-                    (
+                    SelectExprBuildResult::new(
                         SelectExpr::Compare((select_op, args.clone(), generics.clone())),
                         false,
+                        true,
                     )
                 }
                 "is_true" => build_select_expr(&args[0]),
-                _ => (SelectExpr::Others(expr.clone()), false),
+                _ => {
+                    let can_reorder = can_reorder(func_name);
+                    SelectExprBuildResult::new(SelectExpr::Others(expr.clone()), false, can_reorder)
+                }
             }
         }
         Expr::ColumnRef { id, data_type, .. } if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
-            (SelectExpr::BooleanColumn((*id, data_type.clone())), false)
+            SelectExprBuildResult::new(
+                SelectExpr::BooleanColumn((*id, data_type.clone())),
+                false,
+                true,
+            )
         }
         Expr::Constant {
             scalar, data_type, ..
         } if matches!(data_type, &DataType::Boolean | &DataType::Nullable(box DataType::Boolean)) => {
-            (
+            SelectExprBuildResult::new(
                 SelectExpr::BooleanScalar((scalar.clone(), data_type.clone())),
                 false,
+                true,
             )
         }
-        _ => (SelectExpr::Others(expr.clone()), false),
+        _ => SelectExprBuildResult::new(SelectExpr::Others(expr.clone()), false, false),
     }
 }

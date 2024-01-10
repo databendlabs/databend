@@ -45,7 +45,7 @@ impl PipelineBuilder {
         assert_eq!(predicate.data_type(), &DataType::Boolean);
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
-        let (select_expr, has_or) = build_select_expr(&predicate);
+        let (select_expr, has_or) = build_select_expr(&predicate).into();
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformFilter::create(
                 input,
