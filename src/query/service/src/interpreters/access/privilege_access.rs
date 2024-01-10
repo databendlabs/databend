@@ -808,14 +808,12 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::GrantShareObject(_)
             | Plan::RevokeShareObject(_)
-            | Plan::AlterShareTenants(_)
             | Plan::ShowObjectGrantPrivileges(_)
             | Plan::ShowGrantTenantsOfShare(_)
             | Plan::ShowGrants(_)
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
-            | Plan::AlterUDF(_)
             | Plan::RevokeRole(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant])
                     .await?;
@@ -827,6 +825,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterUser(_)
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
+            | Plan::AlterUDF(_)
+            | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;
