@@ -327,7 +327,11 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
     // don't support spill for now, and we need the macthed cluases' count
-    // is one
+    // is one, just support merge into t using source when matched then
+    // update xx when not matched then insert xx.
+    let flag = plan.matched_evaluators.len() == 1
+        && plan.matched_evaluators[0].condition.is_none()
+        && plan.matched_evaluators[0].update.is_some();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -335,7 +339,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             .get_settings()
             .get_join_spilling_threshold()?
             == 0
-        && plan.matched_evaluators.len() == 1
+        && flag
     {
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
@@ -376,7 +380,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 opt_ctx.table_ctx.clone(),
                 plan.merge_type.clone(),
                 plan.target_table_idx,
-                plan.matched_evaluators.len() == 1,
+                flag,
             )?;
             (merge_into_join_sexpr.clone(), false)
         } else {

@@ -238,6 +238,14 @@ impl BlockInfoIndex {
     /// intervals: (0,10)(11,22),(23,40)(41,55)
     /// interval: (8,27)
     /// we will give (8,10),(23,27), we don't give the (11,12),because it's updated all.
+    /// case1: |-----|------|------|
+    ///            |-----------|
+    /// case2: |-----|------|------|
+    ///              |------|
+    /// case3: |-----|------|------|
+    ///                |--|
+    /// case4: |-----|------|------|
+    ///              |--------|           
     #[allow(dead_code)]
     pub fn get_block_info(&self, interval: Interval) -> Vec<(Interval, u64)> {
         let mut res = Vec::<(Interval, u64)>::with_capacity(2);
@@ -245,6 +253,15 @@ impl BlockInfoIndex {
         let right_idx = self.search_idx(interval.1);
         let left_interval = &self.intervals[left_idx];
         let right_interval = &self.intervals[right_idx];
+        // empty cases
+        if left_interval.0 == interval.0 && right_interval.1 == interval.1 {
+            return res;
+        }
+        // only one result
+        if self.prefixs[left_idx] == self.prefixs[right_idx] {
+            res.push(((interval.0, interval.1), self.prefixs[left_idx]));
+            return res;
+        }
         if left_interval.0 < interval.0 {
             res.push(((interval.0, left_interval.1), self.prefixs[left_idx]))
         }
@@ -294,8 +311,42 @@ fn test_block_info_index() {
         block_info_index.insert_block_offsets(*interval, idx as u64)
     }
     let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 2);
     assert_eq!(result[0].0, (10, 10));
     assert_eq!(result[0].1, 0);
     assert_eq!(result[1].0, (31, 37));
     assert_eq!(result[1].1, 3);
+
+    // we find [3,7], and should get [3,7]
+    let find_interval: Interval = (3, 7);
+    let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, (3, 7));
+    assert_eq!(result[0].1, 0);
+
+    // we find [11,20], and should get empty
+    let find_interval: Interval = (11, 20);
+    let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 0);
+
+    // we find [11,20], and should get empty
+    let find_interval: Interval = (11, 30);
+    let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 0);
+
+    // we find [8,13], and should get (8,10),(11,13)
+    let find_interval: Interval = (8, 13);
+    let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].0, (8, 10));
+    assert_eq!(result[0].1, 0);
+    assert_eq!(result[1].0, (11, 13));
+    assert_eq!(result[1].1, 1);
+
+    // we find [11,23], and should get (20,23)
+    let find_interval: Interval = (11, 23);
+    let result = block_info_index.get_block_info(find_interval);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, (21, 23));
+    assert_eq!(result[0].1, 2);
 }
