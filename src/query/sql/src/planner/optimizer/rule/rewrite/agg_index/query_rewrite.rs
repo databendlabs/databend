@@ -79,8 +79,6 @@ pub fn try_rewrite(
         {
             return Ok(None);
         }
-    } else {
-        debug_assert!(query_group_items.is_empty());
     }
 
     // Search all index plans, find the first matched index to rewrite the query.
