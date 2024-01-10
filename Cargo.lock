@@ -2621,8 +2621,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "databend-common-arrow",
- "databend-common-meta-stoerr",
- "databend-common-meta-types",
  "http",
  "opendal",
  "parquet",
@@ -2664,7 +2662,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "lexical-core",
  "log",
  "match-template",
@@ -2700,7 +2698,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "hex",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "lexical-core",
  "match-template",
  "micromarshal 0.4.0",
@@ -2745,7 +2743,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2863,6 +2861,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-protos",
  "databend-common-storage",
+ "enumflags2",
  "minitrace",
  "mockall",
  "serde_json",
@@ -2945,6 +2944,7 @@ dependencies = [
  "databend-common-tracing",
  "derive_more",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "minitrace",
@@ -3077,6 +3077,7 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "databend-common-exception",
  "prost 0.12.1",
  "serde",
  "serde_json",
@@ -3105,8 +3106,11 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-building",
+ "databend-common-exception",
  "databend-common-meta-stoerr",
+ "databend-common-tracing",
  "derive_more",
+ "log",
  "num-derive",
  "num-traits",
  "openraft 0.9.0",
@@ -3225,7 +3229,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-profile",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "match-template",
  "rand 0.8.5",
  "serde",
@@ -3366,7 +3370,7 @@ dependencies = [
  "globiter",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "log",
  "minitrace",
  "num-derive",
@@ -3452,6 +3456,7 @@ dependencies = [
 name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "dashmap",
  "databend-common-catalog",
  "databend-common-config",
@@ -3466,6 +3471,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
+ "tokio",
 ]
 
 [[package]]
@@ -3508,7 +3514,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "log",
  "metrics",
  "minitrace",
@@ -3828,7 +3834,7 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "log",
  "once_cell",
  "opendal",
@@ -4237,7 +4243,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "jwt-simple",
  "log",
  "lz4",
@@ -4373,7 +4379,7 @@ dependencies = [
  "databend-sql",
  "ethnum 1.5.0",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=582c139)",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -7777,7 +7783,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=582c139#582c139d884248bcb357e995d8ea4501fc264e60"
+source = "git+https://github.com/datafuselabs/jsonb?rev=a0669bf#a0669bfdc341db07df689c24a0ff1f0ea65236f9"
 dependencies = [
  "byteorder",
  "fast-float",

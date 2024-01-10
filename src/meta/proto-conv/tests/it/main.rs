@@ -75,3 +75,4 @@ mod v068_index_meta;
 mod v069_user_grant_id;
 mod v070_binary_type;
 mod v071_user_password;
+mod v072_csv_format_params;

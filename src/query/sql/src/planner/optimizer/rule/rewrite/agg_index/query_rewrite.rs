@@ -38,6 +38,7 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
 use crate::plans::VisitorMut;
 use crate::ColumnEntry;
@@ -67,7 +68,20 @@ pub fn try_rewrite(
         .collect::<HashMap<_, _>>();
 
     let query_predicates = query_info.predicates.map(distinguish_predicates);
+    let query_sort_items = query_info.formatted_sort_items();
     let query_group_items = query_info.formatted_group_items();
+
+    if query_info.aggregation.is_some() {
+        // if have agg funcs, check sort items are subset of group items.
+        if !query_sort_items
+            .iter()
+            .all(|item| query_group_items.contains(item))
+        {
+            return Ok(None);
+        }
+    } else {
+        debug_assert!(query_group_items.is_empty());
+    }
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, sql, plan) in index_plans.iter() {
@@ -78,6 +92,7 @@ pub fn try_rewrite(
 
         // 1. Check query output and try to rewrite it.
         let index_selection = index_info.formatted_selection()?;
+
         // group items should be in selection.
         if !query_group_items
             .iter()
@@ -201,10 +216,15 @@ pub fn try_rewrite(
             }
             (Some((qe, qr, qo)), None) => {
                 if !qe.is_empty() {
-                    continue;
+                    let preds = qe
+                        .iter()
+                        .flat_map(|(left, right)| [(*left).clone(), (*right).clone()])
+                        .collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if !qo.is_empty() {
-                    continue;
+                    let preds = qo.iter().map(|p| (*p).clone()).collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if let Some(preds) = check_predicates_range(
                     qr,
@@ -601,6 +621,7 @@ pub struct RewriteInfomartion<'a> {
     table_index: IndexType,
     pub selection: &'a EvalScalar,
     pub predicates: Option<&'a [ScalarExpr]>,
+    pub sort_items: Option<&'a [SortItem]>,
     pub aggregation: Option<AggregationInfo<'a>>,
 }
 
@@ -632,6 +653,18 @@ impl RewriteInfomartion<'_> {
             let mut cols = Vec::with_capacity(agg.group_items.len());
             for item in agg.group_items.iter() {
                 cols.push(self.format_scalar(&item.scalar));
+            }
+            cols.sort();
+            return cols;
+        }
+        vec![]
+    }
+
+    fn formatted_sort_items(&self) -> Vec<String> {
+        if let Some(sorts) = self.sort_items {
+            let mut cols = Vec::with_capacity(sorts.len());
+            for item in sorts {
+                cols.push(format_col_name(item.index));
             }
             cols.sort();
             return cols;
@@ -728,6 +761,7 @@ fn collect_information(s_expr: &SExpr) -> Result<RewriteInfomartion<'_>> {
             table_index: 0,
             selection: eval,
             predicates: None,
+            sort_items: None,
             aggregation: None,
         };
         collect_information_impl(s_expr.child(0)?, &mut info)?;
@@ -756,6 +790,10 @@ fn collect_information_impl<'a>(
             } else {
                 collect_information_impl(child, info)
             }
+        }
+        RelOperator::Sort(sort) => {
+            info.sort_items.replace(&sort.items);
+            collect_information_impl(s_expr.child(0)?, info)
         }
         RelOperator::Filter(filter) => {
             info.predicates.replace(&filter.predicates);

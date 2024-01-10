@@ -15,10 +15,18 @@
 //! Helper functions for handling grpc.
 
 use std::error::Error;
+use std::str::FromStr;
 
-use databend_common_meta_types::protobuf::RaftReply;
-use databend_common_meta_types::protobuf::RaftRequest;
-use databend_common_meta_types::RaftError;
+use log::error;
+use tonic::metadata::MetadataValue;
+
+use crate::protobuf::RaftReply;
+use crate::protobuf::RaftRequest;
+use crate::Endpoint;
+use crate::RaftError;
+
+const HEADER_LEADER: &str = "x-databend-meta-leader-grpc-endpoint";
+// const HEADER_LEADER_BIN: &str = "x-databend-meta-leader-grpc-endpoint-bin";
 
 pub struct GrpcHelper;
 
@@ -27,6 +35,84 @@ impl GrpcHelper {
     pub fn traced_req<T>(t: T) -> tonic::Request<T> {
         let req = tonic::Request::new(t);
         databend_common_tracing::inject_span_to_tonic_request(req)
+    }
+
+    /// Add leader endpoint to the reply to inform the client to contact the leader directly.
+    pub fn add_response_meta_leader<T>(
+        reply: &mut tonic::Response<T>,
+        endpoint: Option<&Endpoint>,
+    ) {
+        if let Some(endpoint) = endpoint {
+            let metadata = reply.metadata_mut();
+
+            match MetadataValue::from_str(&endpoint.to_string()) {
+                Ok(v) => {
+                    metadata.insert(HEADER_LEADER, v);
+                }
+                Err(err) => {
+                    error!(
+                        "fail to add response meta leader endpoint({:?}), error: {}",
+                        endpoint, err
+                    )
+                }
+            }
+
+            // // Binary format. Not used.
+            // metadata.insert_bin(
+            //     HEADER_LEADER_BIN,
+            //     MetadataValue::from_bytes(endpoint.to_string().as_bytes()),
+            // );
+            // === loading:
+            // let Some(values) = metadata.get_bin(HEADER_LEADER_BIN) else {
+            //     return None;
+            // };
+            //
+            // let value = match values.to_bytes() {
+            //     Ok(value) => value,
+            //     Err(e) => {
+            //         error!("invalid response leader endpoint, error: {}", e);
+            //         return None;
+            //     }
+            // };
+            //
+            // let s = match String::from_utf8(value.to_vec()) {
+            //     Ok(s) => s,
+            //     Err(err) => {
+            //         error!("invalid response leader endpoint, error: {}", err);
+            //         return None;
+            //     }
+            // };
+        }
+    }
+
+    /// Retrieve leader endpoint from the reply.
+    pub fn get_response_meta_leader<T>(reply: &tonic::Response<T>) -> Option<Endpoint> {
+        let metadata = reply.metadata();
+
+        let Some(meta_leader) = metadata.get(HEADER_LEADER) else {
+            return None;
+        };
+
+        let s = match meta_leader.to_str() {
+            Ok(x) => x,
+            Err(err) => {
+                error!(
+                    "invalid response meta leader endpoint({:?}), error: {}",
+                    meta_leader, err
+                );
+                return None;
+            }
+        };
+
+        let endpoint = Endpoint::parse(s);
+
+        match endpoint {
+            Ok(endpoint) => Some(endpoint),
+            Err(e) => {
+                error!("invalid response leader endpoint: {}, error: {}", s, e);
+                None
+            }
+        }
     }
 
     pub fn encode_raft_request<T>(v: &T) -> Result<RaftRequest, serde_json::Error>
