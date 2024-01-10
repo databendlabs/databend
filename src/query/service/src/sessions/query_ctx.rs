@@ -537,6 +537,10 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_effective_roles().await
+    }
+
     fn get_current_session_id(&self) -> String {
         self.get_current_session().get_id()
     }

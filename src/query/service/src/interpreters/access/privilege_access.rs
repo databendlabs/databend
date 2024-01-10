@@ -33,6 +33,7 @@ use databend_common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
+use crate::sessions::Session;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -220,6 +221,30 @@ impl PrivilegeAccess {
         Ok(())
     }
 
+    async fn has_ownership(
+        &self,
+        session: &Arc<Session>,
+        grant_object: &GrantObject,
+    ) -> Result<bool> {
+        let owner_object = self
+            .convert_to_owner_object(grant_object)
+            .await
+            .or_else(|e| match e.code() {
+                ErrorCode::UNKNOWN_DATABASE
+                | ErrorCode::UNKNOWN_TABLE
+                | ErrorCode::UNKNOWN_CATALOG => Ok(None),
+                _ => Err(e.add_message("error on validating access")),
+            })?;
+        if let Some(object) = &owner_object {
+            if let Ok(ok) = session.has_ownership(object).await {
+                if ok {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     async fn validate_access(
         &self,
         grant_object: &GrantObject,
@@ -266,22 +291,8 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        if verify_ownership {
-            let owner_object =
-                self.convert_to_owner_object(grant_object)
-                    .await
-                    .or_else(|e| match e.code() {
-                        ErrorCode::UNKNOWN_DATABASE
-                        | ErrorCode::UNKNOWN_TABLE
-                        | ErrorCode::UNKNOWN_CATALOG => Ok(None),
-                        _ => Err(e.add_message("error on validating access")),
-                    })?;
-            if let Some(object) = &owner_object {
-                let ok = session.has_ownership(object).await?;
-                if ok {
-                    return Ok(());
-                }
-            }
+        if verify_ownership && self.has_ownership(&session, grant_object).await? {
+            return Ok(());
         }
 
         // wrap an user-facing error message with table/db names on cases like TableByID / DatabaseByID
@@ -340,7 +351,7 @@ impl PrivilegeAccess {
         }
     }
 
-    async fn validate_access_stage(
+    async fn validate_stage_access(
         &self,
         stage_info: &StageInfo,
         privilege: UserPrivilegeType,
@@ -373,7 +384,7 @@ impl PrivilegeAccess {
         .await
     }
 
-    async fn check_udf_priv(&self, udf_names: HashSet<&String>) -> Result<()> {
+    async fn validate_udf_access(&self, udf_names: HashSet<&String>) -> Result<()> {
         for udf in udf_names {
             self.validate_access(&GrantObject::UDF(udf.clone()), vec![
                 UserPrivilegeType::Usage,
@@ -437,6 +448,10 @@ impl AccessChecker for PrivilegeAccess {
                         return Ok(());
                     }
                     Some(RewriteKind::ShowTables(catalog, database)) => {
+                        let session = self.ctx.get_current_session();
+                        if self.has_ownership(&session, &GrantObject::Database(catalog.clone(), database.clone())).await? {
+                            return Ok(());
+                        }
                         let (db_id, table_id) = match self.convert_to_id(&tenant, catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
@@ -446,12 +461,16 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User {} does not have the required privileges for database '{}'.",
+                                "Permission denied: User {} does not have the required privileges for database '{}'",
                                 identity, database
                             )))
                         };
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
+                        let session = self.ctx.get_current_session();
+                        if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await? {
+                            return Ok(());
+                        }
                         let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
@@ -461,12 +480,16 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User {} does not have the required privileges for database '{}'.",
+                                "Permission denied: User {} does not have the required privileges for database '{}'",
                                 identity, database
                             )))
                         };
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
+                        let session = self.ctx.get_current_session();
+                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? {
+                            return Ok(());
+                        }
                         let (db_id, table_id) = match self.convert_to_id(&tenant, catalog_name, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
@@ -476,7 +499,7 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User {} does not have the required privileges for table '{}.{}'.",
+                                "Permission denied: User {} does not have the required privileges for table '{}.{}'",
                                 identity, database, table
                             )))
                         };
@@ -487,7 +510,7 @@ impl AccessChecker for PrivilegeAccess {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
-                                self.check_udf_priv(udfs).await?;
+                                self.validate_udf_access(udfs).await?;
                             }
                         }
                         Err(err) => {
@@ -502,13 +525,13 @@ impl AccessChecker for PrivilegeAccess {
                     if enable_experimental_rbac_check && table.is_source_of_stage() {
                         match table.table().get_data_source_info() {
                             DataSourceInfo::StageSource(stage_info) => {
-                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::Parquet2Source(stage_info) => {
-                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::ParquetSource(stage_info) => {
-                                self.validate_access_stage(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
@@ -544,6 +567,10 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::UseDatabase(plan) => {
+                let session = self.ctx.get_current_session();
+                if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), plan.database.clone())).await? {
+                    return Ok(());
+                }
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
                 let (db_id, _) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None).await? {
@@ -556,7 +583,7 @@ impl AccessChecker for PrivilegeAccess {
                     Ok(())
                 } else {
                     Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: User {} does not have the required privileges for database '{}'.",
+                        "Permission denied: User {} does not have the required privileges for database '{}'",
                         identity, plan.database.clone()
                     )))
                 };
@@ -627,7 +654,7 @@ impl AccessChecker for PrivilegeAccess {
                 if enable_experimental_rbac_check {
                     if let Some(scalar) = &plan.push_downs {
                         let udf = get_udf_names(scalar)?;
-                        self.check_udf_priv(udf).await?;
+                        self.validate_udf_access(udf).await?;
                     }
                 }
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter]).await?
@@ -683,7 +710,7 @@ impl AccessChecker for PrivilegeAccess {
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
-                                self.check_udf_priv(udfs).await?;
+                                self.validate_udf_access(udfs).await?;
                             }
                         }
                         Err(err) => {
@@ -695,23 +722,23 @@ impl AccessChecker for PrivilegeAccess {
                     for matched_evaluator in matched_evaluators {
                         if let Some(condition) = &matched_evaluator.condition {
                             let udf = get_udf_names(condition)?;
-                            self.check_udf_priv(udf).await?;
+                            self.validate_udf_access(udf).await?;
                         }
                         if let Some(updates) = &matched_evaluator.update {
                             for scalar in updates.values() {
                                 let udf = get_udf_names(scalar)?;
-                                self.check_udf_priv(udf).await?;
+                                self.validate_udf_access(udf).await?;
                             }
                         }
                     }
                     for unmatched_evaluator in unmatched_evaluators {
                         if let Some(condition) = &unmatched_evaluator.condition {
                             let udf = get_udf_names(condition)?;
-                            self.check_udf_priv(udf).await?;
+                            self.validate_udf_access(udf).await?;
                         }
                         for value in &unmatched_evaluator.values {
                             let udf = get_udf_names(value)?;
-                            self.check_udf_priv(udf).await?;
+                            self.validate_udf_access(udf).await?;
                         }
                     }
                 }
@@ -721,13 +748,13 @@ impl AccessChecker for PrivilegeAccess {
                 if enable_experimental_rbac_check {
                     if let Some(selection) = &plan.selection {
                         let udf = get_udf_names(selection)?;
-                        self.check_udf_priv(udf).await?;
+                        self.validate_udf_access(udf).await?;
                     }
                     for subquery in &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
-                                    self.check_udf_priv(udfs).await?;
+                                    self.validate_udf_access(udfs).await?;
                                 }
                             }
                             Err(err) => {
@@ -742,17 +769,17 @@ impl AccessChecker for PrivilegeAccess {
                 if enable_experimental_rbac_check {
                     for scalar in plan.update_list.values() {
                         let udf = get_udf_names(scalar)?;
-                        self.check_udf_priv(udf).await?;
+                        self.validate_udf_access(udf).await?;
                     }
                     if let Some(selection) = &plan.selection {
                         let udf = get_udf_names(selection)?;
-                        self.check_udf_priv(udf).await?;
+                        self.validate_udf_access(udf).await?;
                     }
                     for subquery in &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
-                                    self.check_udf_priv(udfs).await?;
+                                    self.validate_udf_access(udfs).await?;
                                 }
                             }
                             Err(err) => {
@@ -832,19 +859,19 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                self.validate_access_stage(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
+                self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                 self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, vec![UserPrivilegeType::Insert]).await?;
                 if let Some(query) = &plan.query {
                     self.check(ctx, query).await?;
                 }
             }
             Plan::CopyIntoLocation(plan) => {
-                self.validate_access_stage(&plan.stage, UserPrivilegeType::Write).await?;
+                self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
             Plan::RemoveStage(plan) => {
-                self.validate_access_stage(&plan.stage, UserPrivilegeType::Write).await?;
+                self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
@@ -900,7 +927,7 @@ impl AccessChecker for PrivilegeAccess {
                     PresignAction::Upload => UserPrivilegeType::Write,
                     PresignAction::Download => UserPrivilegeType::Read,
                 };
-                self.validate_access_stage(&plan.stage, privilege).await?;
+                self.validate_stage_access(&plan.stage, privilege).await?;
             }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
