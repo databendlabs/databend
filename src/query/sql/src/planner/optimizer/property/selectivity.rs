@@ -37,7 +37,8 @@ use crate::IndexType;
 /// that we cannot estimate the selectivity for it.
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
-pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 25000f64;
+pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
+pub const SMALL_SELECTIVITY: f64 = 1f64 / 25000f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
@@ -122,7 +123,9 @@ impl<'a> SelectivityEstimator<'a> {
             {
                 stat
             } else {
-                return Ok(DEFAULT_SELECTIVITY);
+                // The column is derived column, give a small selectivity currently.
+                // Need to improve it later.
+                return Ok(SMALL_SELECTIVITY);
             };
             let const_datum = if let Some(datum) = Datum::from_scalar(constant.value.clone()) {
                 datum

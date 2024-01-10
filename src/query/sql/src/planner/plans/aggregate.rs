@@ -133,7 +133,6 @@ impl Operator for Aggregate {
                         "before_merge" => {
                             Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
                         }
-                        "no_shuffle" => Ok(Distribution::Any),
                         value => Err(ErrorCode::Internal(format!(
                             "Bad settings value group_by_shuffle_mode = {:?}",
                             value

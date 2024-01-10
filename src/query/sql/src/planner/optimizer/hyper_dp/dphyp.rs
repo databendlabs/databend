@@ -56,7 +56,6 @@ pub struct DPhpy {
 
 impl DPhpy {
     pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
-        let is_cluster = !ctx.get_cluster().is_empty();
         Self {
             ctx,
             metadata,
