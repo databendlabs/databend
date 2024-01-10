@@ -22,7 +22,6 @@ use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::traits::HashJoinHashtableLike;
 use super::traits::Keyable;
-use crate::utils::Interval;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RowPtr {

@@ -131,10 +131,12 @@ pub struct HashJoinState {
     /// If we use target table as build side for merge into, we use this to track target table
     /// and extract partial modified blocks from hashtable
     pub(crate) merge_into_target_table_index: IndexType,
+    /// for now we don't support distributed, we will support in the next pr.
+    #[allow(unused)]
     pub(crate) is_distributed_merge_into: bool,
 
     /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
-    /// When merge into target table as build side, we should preseve block info index.
+    /// When merge into target table as build side, we should preserve block info index.
     pub(crate) block_info_index: Option<SyncUnsafeCell<BlockInfoIndex>>,
     /// we use matched to tag the matched offset in chunks.
     pub(crate) matched: SyncUnsafeCell<Vec<u8>>,

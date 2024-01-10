@@ -326,7 +326,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     };
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
-    // don't support spill for now, and we need the macthed cluases' count
+    // don't support spill for now, and we need the macthed clauses' count
     // is one, just support merge into t using source when matched then
     // update xx when not matched then insert xx.
     let flag = plan.matched_evaluators.len() == 1
@@ -380,7 +380,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 opt_ctx.table_ctx.clone(),
                 plan.merge_type.clone(),
                 plan.target_table_idx,
-                flag,
+                false, // we will open it, but for now we don't support distributed
             )?;
             (merge_into_join_sexpr.clone(), false)
         } else {

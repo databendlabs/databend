@@ -158,7 +158,7 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        // The Block Size and Rows is promised by DataSouce by user.
+        // The Block Size and Rows is promised by DataSource by user.
         if segment_partition_num == 0 {
             let dummy_item = create_dummy_item();
             //                      ┌──────────────────────┐            ┌──────────────────┐

@@ -26,7 +26,6 @@ use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
 use crate::traits::hash_join_fast_string_hash;
-use crate::utils::Interval;
 use crate::RowPtr;
 
 pub const STRING_EARLY_SIZE: usize = 4;

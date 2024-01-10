@@ -186,16 +186,25 @@ pub mod sse {
     }
 }
 
+// This Index is only used for target build merge into (both standalone and distributed mode).
+// Advantages:
+//      1. Reduces redundant I/O operations, enhancing performance.
+//      2. Lowers the maintenance overhead of deduplicating row_id.(But in distributed design, we also need to give rowid)
+//      3. Allows the scheduling of the subsequent mutation pipeline to be entirely allocated to not matched append operations.
+// Disadvantages:
+//      1. This solution is likely to be a one-time approach (especially if there are not matched insert operations involved),
+// potentially leading to the target table being unsuitable for use as a build table in the future.
+//      2. Requires a significant amount of memory to be efficient and currently does not support spill operations.
+// for now we just support sql like below:
+// `merge into t using source on xxx when matched then update xxx when not macthed then insert xxx.
 // for merge into:
 // we use BlockInfoIndex to maintain an index for the block info in chunks.
+#[allow(dead_code)]
 pub struct BlockInfoIndex {
     // the intervals will be like below:
     // (0,10)(11,29),(30,38). it's ordered.
-    #[allow(dead_code)]
     intervals: Vec<Interval>,
-    #[allow(dead_code)]
     prefixs: Vec<u64>,
-    #[allow(dead_code)]
     length: usize,
 }
 
@@ -287,6 +296,34 @@ impl BlockInfoIndex {
         }
         l
     }
+
+    #[allow(dead_code)]
+    fn gather_all_partial_block_offsets(&self, hits: &[u8]) -> Vec<(Interval, u64)> {
+        let mut res = Vec::with_capacity(10);
+        let mut step = 0;
+        while step < hits.len() {
+            if hits[step] == 0 {
+                break;
+            }
+            step += 1;
+        }
+        if step == hits.len() {
+            return res;
+        }
+        let mut start = step;
+        let mut end = step;
+        while start < hits.len() {
+            while end < hits.len() && hits[end] == 0 {
+                end += 1;
+            }
+            res.extend(self.get_block_info((start as u32, (end - 1) as u32)));
+            while end < hits.len() && hits[end] == 1 {
+                end += 1;
+            }
+            start = end;
+        }
+        res
+    }
 }
 
 /// we think the build blocks count is about 1024 at most time.
@@ -302,9 +339,9 @@ impl Default for BlockInfoIndex {
 
 #[test]
 fn test_block_info_index() {
-    // let's build [0,10][11,20][21,30],[31,40],and then find [10,37].
+    // let's build [0,10][11,20][21,30],[31,39],and then find [10,37].
     // we should get [10,10],[31,37]
-    let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 40)];
+    let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 39)];
     let find_interval: Interval = (10, 37);
     let mut block_info_index = BlockInfoIndex::new_with_capacity(10);
     for (idx, interval) in intervals.iter().enumerate() {
@@ -349,4 +386,35 @@ fn test_block_info_index() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].0, (21, 23));
     assert_eq!(result[0].1, 2);
+
+    // test `gather_all_partial_block_offsets`
+    let mut hits = vec![0; 40];
+    // [0,9][28,39]
+    for item in hits.iter_mut().take(27 + 1).skip(10) {
+        *item = 1;
+    }
+    let result = block_info_index.gather_all_partial_block_offsets(&hits);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].0, (0, 9));
+    assert_eq!(result[0].1, 0);
+    assert_eq!(result[1].0, (28, 30));
+    assert_eq!(result[1].1, 2);
+
+    let mut hits = vec![0; 40];
+    // [0,9]
+    for item in hits.iter_mut().take(30 + 1).skip(10) {
+        *item = 1;
+    }
+    let result = block_info_index.gather_all_partial_block_offsets(&hits);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, (0, 9));
+    assert_eq!(result[0].1, 0);
+
+    let mut hits = vec![0; 40];
+    // [0,10]
+    for item in hits.iter_mut().take(30 + 1).skip(11) {
+        *item = 1;
+    }
+    let result = block_info_index.gather_all_partial_block_offsets(&hits);
+    assert_eq!(result.len(), 0);
 }

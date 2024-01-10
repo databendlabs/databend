@@ -562,7 +562,7 @@ impl HashJoinProbeState {
                 }
             } else {
                 let mut idx = 0;
-                self.check_and_set_matched(build_indexes, matched_idx, &validity);
+                self.check_and_set_matched(build_indexes, matched_idx, &validity)?;
                 while idx < matched_idx {
                     unsafe {
                         let valid = validity.get_bit_unchecked(idx);
