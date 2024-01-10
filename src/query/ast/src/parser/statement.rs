@@ -130,6 +130,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             sql,
         )| {
             let sql = format!("{}", sql.stmt);
+
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
