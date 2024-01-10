@@ -139,6 +139,9 @@ struct Args {
     #[clap(short = 'n', long, help = "Force non-interactive mode")]
     non_interactive: bool,
 
+    #[clap(long, help = "Check for server status and exit")]
+    check: bool,
+
     #[clap(long, require_equals = true, help = "Query to execute")]
     query: Option<String>,
 
@@ -280,7 +283,7 @@ pub async fn main() -> Result<()> {
 
     let mut settings = Settings::default();
     let is_terminal = stdin().is_terminal();
-    let is_repl = is_terminal && !args.non_interactive && args.query.is_none();
+    let is_repl = is_terminal && !args.non_interactive && !args.check && args.query.is_none();
     if is_repl {
         settings.display_pretty_sql = true;
         settings.show_progress = true;
@@ -318,6 +321,11 @@ pub async fn main() -> Result<()> {
 
     let _guards = trace::init_logging(&log_dir, &args.log_level, is_repl).await?;
     info!("-> bendsql version: {}", VERSION.as_str());
+
+    if args.check {
+        session.check().await?;
+        return Ok(());
+    }
 
     if is_repl {
         session.handle_repl().await;

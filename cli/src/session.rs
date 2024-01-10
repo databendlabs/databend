@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use chrono::NaiveDateTime;
 use databend_driver::ServerStats;
 use databend_driver::{Client, Connection};
 use rustyline::config::Builder;
@@ -113,6 +114,88 @@ impl Session {
             }
             format!("{} ", prompt.trim_end())
         }
+    }
+
+    pub async fn check(&mut self) -> Result<()> {
+        // bendsql version
+        {
+            println!("BendSQL {}", VERSION.as_str());
+        }
+
+        // basic connection info
+        {
+            let info = self.conn.info().await;
+            println!(
+                "Checking Databend Query server via {} at {}:{} as user {}.",
+                info.handler, info.host, info.port, info.user
+            );
+            if let Some(warehouse) = &info.warehouse {
+                println!("Using Databend Cloud warehouse: {}", warehouse);
+            }
+            if let Some(database) = &info.database {
+                println!("Current database: {}", database);
+            } else {
+                println!("Current database: default");
+            }
+        }
+
+        // server version
+        {
+            let version = self.conn.version().await?;
+            println!("Server version: {}", version);
+        }
+
+        // license info
+        match self.conn.query_iter("call admin$license_info()").await {
+            Ok(mut rows) => {
+                let row = rows.next().await.unwrap()?;
+                let linfo: (String, String, String, NaiveDateTime, NaiveDateTime, String) = row
+                    .try_into()
+                    .map_err(|e| anyhow!("parse license info failed: {}", e))?;
+                if chrono::Utc::now().naive_utc() > linfo.4 {
+                    eprintln!("-> WARN: License expired at {}", linfo.4);
+                } else {
+                    println!(
+                        "License({}) issued by {} for {} from {} to {}",
+                        linfo.1, linfo.0, linfo.2, linfo.3, linfo.4
+                    );
+                }
+            }
+            Err(_) => {
+                eprintln!("-> WARN: License not available, only community features enabled.");
+            }
+        }
+
+        // backend storage
+        {
+            let stage_file = "@~/bendsql/.check";
+            match self.conn.get_presigned_url("UPLOAD", stage_file).await {
+                Err(_) => {
+                    eprintln!("-> WARN: Backend storage dose not support presigned url.");
+                    eprintln!("         Loading data from local file may not work as expected.");
+                    eprintln!("         Be aware of data transfer cost with argument `presigned_url_disabled=1`.");
+                }
+                Ok(resp) => {
+                    let now_utc = chrono::Utc::now();
+                    let data = now_utc.to_rfc3339().as_bytes().to_vec();
+                    let size = data.len() as u64;
+                    let reader = Box::new(std::io::Cursor::new(data));
+                    match self.conn.upload_to_stage(stage_file, reader, size).await {
+                        Err(e) => {
+                            eprintln!("-> ERR: Backend storage upload not working as expected.");
+                            eprintln!("        {}", e);
+                        }
+                        Ok(()) => {
+                            let u = url::Url::parse(&resp.url)?;
+                            let host = u.host_str().unwrap_or("unknown");
+                            println!("Backend storage OK: {}", host);
+                        }
+                    };
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn handle_repl(&mut self) {
