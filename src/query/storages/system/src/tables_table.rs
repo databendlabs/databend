@@ -32,10 +32,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -180,6 +182,8 @@ where TablesTable<T>: HistoryAware
         let mut databases = vec![];
 
         let mut database_tables = vec![];
+        let mut owner: Vec<Option<Vec<u8>>> = Vec::new();
+        let user_api = UserApiProvider::instance();
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
@@ -256,6 +260,7 @@ where TablesTable<T>: HistoryAware
                 };
 
                 for table in tables {
+                    let table_id = table.get_id();
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     if visibility_checker.check_table_visibility(
@@ -263,19 +268,32 @@ where TablesTable<T>: HistoryAware
                         db.name(),
                         table.name(),
                         db_id,
-                        table.get_id(),
+                        table_id,
                     ) && table.engine() != "STREAM"
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());
                         database_tables.push(table);
+                        owner.push(
+                            user_api
+                                .get_ownership(&tenant, &OwnershipObject::Table {
+                                    catalog_name: ctl_name.to_string(),
+                                    db_id,
+                                    table_id,
+                                })
+                                .await
+                                .ok()
+                                .and_then(|ownership| {
+                                    ownership.map(|o| o.role.as_bytes().to_vec())
+                                }),
+                        );
                     }
                 }
             }
         }
 
         let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
-        let mut owner: Vec<Option<Vec<u8>>> = Vec::new();
+
         let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
@@ -283,13 +301,6 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
-            owner.push(
-                tbl.get_table_info()
-                    .meta
-                    .owner
-                    .as_ref()
-                    .map(|v| v.owner_role_name.as_bytes().to_vec()),
-            );
             let stats = match tbl.table_statistics(ctx.clone()).await {
                 Ok(stats) => stats,
                 Err(err) => {
