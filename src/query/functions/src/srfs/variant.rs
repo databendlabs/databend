@@ -422,7 +422,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 let columns = match json_path {
                                     Some((path, ref selector)) => {
                                         // get inner input values by path
-                                        let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                        let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                         selector.select(
                                             val,
                                             &mut builder.data,

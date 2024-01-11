@@ -1442,7 +1442,7 @@ fn get_by_keypath_fn(
     let mut builder = if string_res {
         ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
     } else {
-        ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(len, len * 50))
+        ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
     };
 
     let mut validity = MutableBitmap::with_capacity(len);
@@ -1474,7 +1474,7 @@ fn get_by_keypath_fn(
                                     ColumnBuilder::String(builder) => {
                                         builder.put_str(&to_string(&res));
                                     }
-                                    ColumnBuilder::Binary(builder) => {
+                                    ColumnBuilder::Variant(builder) => {
                                         builder.put_slice(&res);
                                     }
                                     _ => unreachable!(),
@@ -1498,7 +1498,7 @@ fn get_by_keypath_fn(
             ColumnBuilder::String(builder) => {
                 builder.commit_row();
             }
-            ColumnBuilder::Binary(builder) => {
+            ColumnBuilder::Variant(builder) => {
                 builder.commit_row();
             }
             _ => unreachable!(),

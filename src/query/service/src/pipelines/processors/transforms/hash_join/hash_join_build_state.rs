@@ -477,7 +477,7 @@ impl HashJoinBuildState {
             }};
         }
 
-        macro_rules! insert_string_key {
+        macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
                 let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
@@ -689,10 +689,10 @@ impl HashJoinBuildState {
         }
 
         match hashtable {
-            HashJoinHashTable::Serializer(table) => insert_string_key! {
+            HashJoinHashTable::Serializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
-            HashJoinHashTable::SingleBinary(table) => insert_string_key! {
+            HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {

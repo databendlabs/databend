@@ -584,6 +584,38 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Variant(_) => DataType::Variant,
         }
     }
+
+    /// Check if the scalar is valid for the given data type.
+    pub fn is_value_of_type(&self, data_type: &DataType) -> bool {
+        match (self, data_type) {
+            (ScalarRef::Null, DataType::Null) => true,
+            (ScalarRef::Null, DataType::Nullable(_)) => true,
+            _ => match (self, data_type.remove_nullable()) {
+                (ScalarRef::EmptyArray, DataType::EmptyArray) => true,
+                (ScalarRef::EmptyMap, DataType::EmptyMap) => true,
+                (ScalarRef::Number(_), DataType::Number(_)) => true,
+                (ScalarRef::Decimal(_), DataType::Decimal(_)) => true,
+                (ScalarRef::Boolean(_), DataType::Boolean) => true,
+                (ScalarRef::Binary(_), DataType::Binary) => true,
+                (ScalarRef::String(_), DataType::String) => true,
+                (ScalarRef::Timestamp(_), DataType::Timestamp) => true,
+                (ScalarRef::Date(_), DataType::Date) => true,
+                (ScalarRef::Bitmap(_), DataType::Bitmap) => true,
+                (ScalarRef::Variant(_), DataType::Variant) => true,
+                (ScalarRef::Array(val), DataType::Array(ty)) => val.data_type() == *ty,
+                (ScalarRef::Map(val), DataType::Map(ty)) => val.data_type() == *ty,
+                (ScalarRef::Tuple(val), DataType::Tuple(ty)) => {
+                    if val.len() != ty.len() {
+                        return false;
+                    }
+                    val.iter()
+                        .zip(ty)
+                        .all(|(val, ty)| val.is_value_of_type(&ty))
+                }
+                _ => false,
+            },
+        }
+    }
 }
 
 impl PartialOrd for Scalar {
@@ -1777,12 +1809,14 @@ impl ColumnBuilder {
             }
             ColumnBuilder::String(builder) => {
                 for row in 0..rows {
+                    #[cfg(debug_assertions)]
+                    (&reader[step * row..]).check_utf8().unwrap();
+
                     let reader = &reader[step * row..];
                     builder.put_slice(reader);
                     builder.commit_row();
                 }
             }
-
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
