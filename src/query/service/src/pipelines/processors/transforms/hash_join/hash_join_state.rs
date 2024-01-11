@@ -38,6 +38,7 @@ use databend_common_hashtable::StringHashJoinHashMap;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
+use databend_common_sql::DUMMY_TABLE_INDEX;
 use ethnum::U256;
 use parking_lot::RwLock;
 
@@ -144,7 +145,7 @@ pub struct HashJoinState {
     /// atomic_pointers to pointer to matched
     pub(crate) atomic_pointer: SyncUnsafeCell<MatchedPtr>,
     /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
-    pub(crate) chunk_offsets: SyncUnsafeCell<Vec<u64>>,
+    pub(crate) chunk_offsets: SyncUnsafeCell<Vec<u32>>,
 }
 
 impl HashJoinState {
@@ -247,6 +248,10 @@ impl HashJoinState {
 
     pub fn need_mark_scan(&self) -> bool {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
+    }
+
+    pub fn need_merge_into_target_partial_modified_scan(&self) -> bool {
+        self.merge_into_target_table_index != DUMMY_TABLE_INDEX
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {

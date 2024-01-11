@@ -258,12 +258,14 @@ impl HashJoinBuildState {
             if self.hash_join_state.need_mark_scan() {
                 build_state.mark_scan_map.push(block_mark_scan_map);
             }
-            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
-                let chunk_offsets = unsafe { &mut *self.hash_join_state.chunk_offsets.get() };
-                chunk_offsets.push(build_state.generation_state.build_num_rows as u64);
-            }
+
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
+
+            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
+                let chunk_offsets = unsafe { &mut *self.hash_join_state.chunk_offsets.get() };
+                chunk_offsets.push(build_state.generation_state.build_num_rows as u32);
+            }
         }
         Ok(())
     }

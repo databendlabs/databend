@@ -298,7 +298,7 @@ impl BlockInfoIndex {
     }
 
     #[allow(dead_code)]
-    fn gather_all_partial_block_offsets(&self, hits: &[u8]) -> Vec<(Interval, u64)> {
+    pub fn gather_all_partial_block_offsets(&self, hits: &[u8]) -> Vec<(Interval, u64)> {
         let mut res = Vec::with_capacity(10);
         let mut step = 0;
         while step < hits.len() {
@@ -321,6 +321,33 @@ impl BlockInfoIndex {
                 end += 1;
             }
             start = end;
+        }
+        res
+    }
+
+    /// return [{(Interval,prefix),(Interval,prefix)},chunk_idx]
+    pub fn chunk_offsets(
+        &self,
+        partial_unmodified: &Vec<(Interval, u64)>,
+        chunks_offsets: &Vec<u32>,
+    ) -> Vec<(Vec<(Interval, u64)>, u32)> {
+        let mut res = Vec::with_capacity(chunks_offsets.len());
+        let mut chunk_idx = 0;
+        let mut partial_idx = 0;
+        let mut offset = 0;
+        while chunk_idx < chunks_offsets.len() && partial_idx < partial_unmodified.len() {
+            // here is '<', not '<=', chunks_offsets[chunk_idx] is the count of chunks[chunk_idx]
+            if partial_unmodified[partial_idx].0.1 < chunks_offsets[chunk_idx] {
+                if offset >= res.len() {
+                    res.push((Vec::new(), chunk_idx as u32));
+                }
+                res[offset].0.push(partial_unmodified[partial_idx])
+            } else {
+                offset += 1;
+                chunk_idx += 1;
+                partial_idx -= 1;
+            }
+            partial_idx += 1;
         }
         res
     }
@@ -417,4 +444,23 @@ fn test_block_info_index() {
     }
     let result = block_info_index.gather_all_partial_block_offsets(&hits);
     assert_eq!(result.len(), 0);
+
+    // test chunk_offsets
+    // blocks: [0,10][11,20][21,30],[31,39]
+    // chunks: [0,20],[21,39]
+    // chunks_offsets: [21],[40]
+    // partial_unmodified: [((8,10),0),((13,16),1),((33,36),3)]
+    let partial_unmodified = vec![((8, 10), 0), ((13, 16), 1), ((33, 36), 3)];
+    let chunks_offsets = vec![21, 40];
+    let res = block_info_index.chunk_offsets(&partial_unmodified, &chunks_offsets);
+    assert_eq!(res.len(), 2);
+
+    assert_eq!(res[0].0.len(), 2);
+    assert_eq!(res[0].1, 0); // chunk_idx
+    assert_eq!(res[0].0[0], ((8, 10), 0));
+    assert_eq!(res[0].0[1], ((13, 16), 1));
+
+    assert_eq!(res[1].0.len(), 1);
+    assert_eq!(res[1].1, 1); // chunk_idx
+    assert_eq!(res[1].0[0], ((33, 36), 3));
 }

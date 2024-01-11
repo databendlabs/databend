@@ -114,3 +114,4 @@ pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
 pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
 pub use traits::HashJoinHashtableLike;
 pub use utils::BlockInfoIndex;
+pub use utils::Interval;

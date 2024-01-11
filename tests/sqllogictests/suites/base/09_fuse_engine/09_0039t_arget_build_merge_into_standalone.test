@@ -255,5 +255,52 @@ select * from target_build_optimization order by a,b,c;
 11 b11 c_11
 12 b12 c_12
 
+### test target_table is empty
+statement ok
+truncate table target_build_optimization;
+
+### make sure the plan is expected
+query T
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_build_optimization
+├── distributed: false
+├── target_build_optimization: true
+├── matched update: [condition: None,update set b = b (#1),a = a (#0),c = c (#2)]
+├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+└── HashJoin: LEFT OUTER
+    ├── equi conditions: [eq(t2.b (#1), t1.b (#4))]
+    ├── non-equi conditions: [gt(t1.a (#3), t2.a (#0))]
+    ├── LogicalGet
+    │   ├── table: default.default.source_optimization
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.target_build_optimization
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query TT
+merge into target_build_optimization as t1 using source_optimization as t2 on t1.a > t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+----
+12 0
+
+query TTT
+select * from target_build_optimization order by a,b,c;
+----
+1 b1 c_1
+2 b2 c_3
+5 b5 c_5
+6 b6 c_6
+7 b7 c_7
+8 b8 c_8
+9 b9 c_9
+10 b10 c_10
+11 b11 c_11
+12 b12 c_12
+
 statement ok
 set enable_experimental_merge_into = 0;

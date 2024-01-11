@@ -39,6 +39,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use log::info;
@@ -56,6 +57,7 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
+pub type ChunkPartialUnmodified = (Vec<(Interval, u64)>, u32);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -80,6 +82,9 @@ pub struct HashJoinProbeState {
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
+    /// for merge into target as build side.
+    pub(crate) final_merge_into_partial_unmodified_scan_tasks:
+        RwLock<VecDeque<ChunkPartialUnmodified>>,
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
@@ -138,6 +143,7 @@ impl HashJoinProbeState {
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
+            final_merge_into_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
@@ -422,6 +428,15 @@ impl HashJoinProbeState {
         Ok(())
     }
 
+    pub fn probe_merge_into_partial_modified_done(&self) -> Result<()> {
+        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
+            // Divide the final scan phase into multiple tasks.
+            self.generate_merge_into_final_scan_task()?;
+        }
+        Ok(())
+    }
+
     pub fn finish_spill(&self) -> Result<()> {
         self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
         let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
@@ -463,8 +478,31 @@ impl HashJoinProbeState {
         Ok(())
     }
 
+    pub fn generate_merge_into_final_scan_task(&self) -> Result<()> {
+        let block_info_index = unsafe {
+            &*self
+                .hash_join_state
+                .block_info_index
+                .as_ref()
+                .unwrap()
+                .get()
+        };
+        let matched = unsafe { &*self.hash_join_state.matched.get() };
+        let chunks_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
+        let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
+        // generate chunks
+        let tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
+        *self.final_merge_into_partial_unmodified_scan_tasks.write() = tasks.into();
+        Ok(())
+    }
+
     pub fn final_scan_task(&self) -> Option<usize> {
         let mut tasks = self.final_scan_tasks.write();
+        tasks.pop_front()
+    }
+
+    pub fn final_merge_into_partial_unmodified_scan_task(&self) -> Option<ChunkPartialUnmodified> {
+        let mut tasks = self.final_merge_into_partial_unmodified_scan_tasks.write();
         tasks.pop_front()
     }
 

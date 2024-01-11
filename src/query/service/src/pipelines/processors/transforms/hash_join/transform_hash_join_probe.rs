@@ -17,14 +17,18 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::split_prefix;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
+use databend_common_sql::DUMMY_TABLE_INDEX;
+use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
 
+use super::hash_join_probe_state::ChunkPartialUnmodified;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -121,6 +125,36 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
+    fn final_merge_into_partial_unmodified_scan(
+        &mut self,
+        item: ChunkPartialUnmodified,
+    ) -> Result<()> {
+        let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
+        let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
+        for (interval, prefix) in item.0 {
+            let indices = (interval.0..=interval.1)
+                .collect::<Vec<u32>>()
+                .chunks(self.max_block_size)
+                .map(|chunk| chunk.to_vec())
+                .collect::<Vec<Vec<u32>>>();
+            for range in indices.iter() {
+                let data_block = chunk_block.take(
+                    range,
+                    &mut self.probe_state.generation_state.string_items_buf,
+                )?;
+                assert!(!data_block.is_empty());
+                let (segment_idx, block_idx) = split_prefix(prefix);
+                let data_block = data_block.add_meta(Some(Box::new(BlockMetaIndex {
+                    segment_idx: segment_idx as usize,
+                    block_idx: block_idx as usize,
+                    inner: None,
+                })))?;
+                self.output_data_blocks.push_back(data_block);
+            }
+        }
+        Ok(())
+    }
+
     fn final_scan(&mut self, task: usize) -> Result<()> {
         let data_blocks = self
             .join_probe_state
@@ -202,6 +236,14 @@ impl TransformHashJoinProbe {
                 || self.join_probe_state.hash_join_state.need_mark_scan()
             {
                 self.join_probe_state.probe_done()?;
+                Ok(Event::Async)
+            } else if self
+                .join_probe_state
+                .hash_join_state
+                .need_merge_into_target_partial_modified_scan()
+            {
+                self.join_probe_state
+                    .probe_merge_into_partial_modified_done()?;
                 Ok(Event::Async)
             } else {
                 if !self.join_probe_state.spill_partitions.read().is_empty() {
@@ -369,11 +411,25 @@ impl Processor for TransformHashJoinProbe {
                 Ok(())
             }
             HashJoinProbeStep::FinalScan => {
-                if let Some(task) = self.join_probe_state.final_scan_task() {
+                // if self.join_probe_state.h
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .merge_into_target_table_index
+                    != DUMMY_TABLE_INDEX
+                {
+                    if let Some(item) = self
+                        .join_probe_state
+                        .final_merge_into_partial_unmodified_scan_task()
+                    {
+                        self.final_merge_into_partial_unmodified_scan(item)?;
+                        return Ok(());
+                    }
+                } else if let Some(task) = self.join_probe_state.final_scan_task() {
                     self.final_scan(task)?;
-                } else {
-                    self.outer_scan_finished = true;
+                    return Ok(());
                 }
+                self.outer_scan_finished = true;
                 Ok(())
             }
             HashJoinProbeStep::FastReturn
