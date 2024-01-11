@@ -463,4 +463,18 @@ fn test_block_info_index() {
     assert_eq!(res[1].0.len(), 1);
     assert_eq!(res[1].1, 1); // chunk_idx
     assert_eq!(res[1].0[0], ((33, 36), 3));
+
+    // test only one chunk
+    // blocks: [0,10][11,20][21,30],[31,39]
+    // chunks: [0,20],[21,39]
+    // chunks_offsets: [21],[40]
+    // partial_unmodified: [((8,10),0),((13,16),1),((33,36),3)]
+    let partial_unmodified = vec![((13, 16), 1)];
+    let chunks_offsets = vec![21, 40];
+    let res = block_info_index.chunk_offsets(&partial_unmodified, &chunks_offsets);
+    assert_eq!(res.len(), 1);
+
+    assert_eq!(res[0].0.len(), 1);
+    assert_eq!(res[0].1, 0); // chunk_idx
+    assert_eq!(res[0].0[0], ((13, 16), 1));
 }
