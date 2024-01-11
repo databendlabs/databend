@@ -501,14 +501,7 @@ impl Operator for Join {
         }
 
         // Try to use broadcast join
-        if !matches!(
-            self.join_type,
-            JoinType::Right
-                | JoinType::Full
-                | JoinType::RightAnti
-                | JoinType::RightSemi
-                | JoinType::RightMark
-        ) {
+        if !matches!(self.join_type, JoinType::Right | JoinType::Full) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
