@@ -52,6 +52,7 @@ pub struct MergeInto {
     pub distributed: bool,
     pub merge_type: MergeIntoType,
     pub change_join_order: bool,
+    pub target_build_optimization: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

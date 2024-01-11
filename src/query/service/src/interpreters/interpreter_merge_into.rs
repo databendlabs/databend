@@ -373,7 +373,7 @@ impl MergeIntoInterpreter {
             .into_iter()
             .enumerate()
             .collect();
-
+        let target_build_optimization = !self.plan.columns_set.contains(&self.plan.row_id_index);
         let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
@@ -390,6 +390,7 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::default(),
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
+                target_build_optimization,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -415,6 +416,7 @@ impl MergeIntoInterpreter {
                 },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
+                target_build_optimization: false, // we don't support for distributed mode for now..
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation

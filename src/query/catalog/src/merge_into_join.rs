@@ -37,8 +37,9 @@ impl Default for MergeIntoJoin {
     fn default() -> Self {
         Self {
             merge_into_join_type: MergeIntoJoinType::NormalJoin,
-            is_distributed: Default::default(),
-            target_tbl_idx: Default::default(),
+            is_distributed: false,
+            // Invalid Index
+            target_tbl_idx: usize::MAX,
         }
     }
 }

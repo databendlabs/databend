@@ -308,6 +308,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    false, // we don't support for distributed mode.
                 )?,
                 create_dummy_item(),
             ]));
@@ -768,6 +769,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    merge_into.target_build_optimization,
                 )?);
             }
         }

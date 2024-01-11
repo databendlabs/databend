@@ -42,6 +42,7 @@ use databend_common_storage::MergeStatus;
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
+use crate::operations::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;
@@ -262,6 +263,15 @@ impl Processor for MatchedSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            //  we receive a partial unmodified block data meta.
+            if data_block.get_meta().is_some() && data_block.is_empty() {
+                let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+                if meta_index.is_some() {
+                    self.output_data_row_id_data.push(data_block);
+                    return Ok(());
+                }
+            }
+
             if data_block.is_empty() {
                 return Ok(());
             }

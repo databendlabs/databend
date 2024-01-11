@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
@@ -29,7 +30,13 @@ use databend_common_pipeline_core::PipeItem;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
+use crate::operations::BlockMetaIndex;
 
+// There are two kinds of usage for this processor:
+// 1. we will receive a probed datablock from join, and split it by rowid into matched block and unmatched block
+// 2. we will receive a unmatched datablock, but this is an optimization for target table as build side. The unmatched
+// datablock is a physical block's partial unmodified block. And its meta is a prefix(segment_id_block_id).
+// we use the meta to distinct 1 and 2.
 pub struct MergeIntoSplitProcessor {
     input_port: Arc<InputPort>,
     output_port_matched: Arc<OutputPort>,
@@ -143,9 +150,19 @@ impl Processor for MergeIntoSplitProcessor {
         }
     }
 
-    // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(mut data_block) = self.input_data.take() {
+            //  we receive a partial unmodified block data. please see details at the top of this file.
+            if data_block.get_meta().is_some() {
+                let meta_index = BlockMetaIndex::downcast_from(data_block.take_meta().unwrap());
+                if meta_index.is_some() {
+                    self.output_data_not_matched_data = Some(data_block.clone());
+                    // if the downstream receive this, it should just treat this as a DeletedLog.
+                    self.output_data_matched_data =
+                        Some(DataBlock::empty_with_meta(Box::new(meta_index.unwrap())));
+                    return Ok(());
+                }
+            }
             //  for distributed execution, if one node matched all source data.
             //  if we use right join, we will receive a empty block, but we must
             //  give it to downstream.
