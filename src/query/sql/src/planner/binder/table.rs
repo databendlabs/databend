@@ -77,7 +77,6 @@ use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_parquet::Parquet2Table;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultCacheMetaManager;
 use databend_common_storages_result_cache::ResultCacheReader;
@@ -855,7 +854,6 @@ impl Binder {
 
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
-                let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
                 let mut read_options = ParquetReadOptions::default();
 
                 if !table_ctx.get_settings().get_enable_parquet_page_index()? {
@@ -873,25 +871,14 @@ impl Binder {
                     read_options = read_options.with_do_prewhere(false);
                 }
 
-                if use_parquet2 {
-                    Parquet2Table::create(
-                        table_ctx.clone(),
-                        stage_info.clone(),
-                        files_info,
-                        read_options,
-                        files_to_copy,
-                    )
-                    .await?
-                } else {
-                    ParquetRSTable::create(
-                        table_ctx.clone(),
-                        stage_info.clone(),
-                        files_info,
-                        read_options,
-                        files_to_copy,
-                    )
-                    .await?
-                }
+                ParquetRSTable::create(
+                    table_ctx.clone(),
+                    stage_info.clone(),
+                    files_info,
+                    read_options,
+                    files_to_copy,
+                )
+                .await?
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(

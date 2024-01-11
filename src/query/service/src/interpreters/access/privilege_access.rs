@@ -527,9 +527,6 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::StageSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
-                            DataSourceInfo::Parquet2Source(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
                             DataSourceInfo::ParquetSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }

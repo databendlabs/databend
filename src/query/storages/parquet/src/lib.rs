@@ -21,13 +21,11 @@
 #![feature(box_patterns)]
 #![allow(clippy::diverging_sub_expression)]
 
-mod parquet2;
 mod parquet_part;
 mod parquet_rs;
 mod read_settings;
 mod utils;
 
-pub use parquet2::Parquet2Table;
 pub use parquet_part::ParquetFilesPart;
 pub use parquet_part::ParquetPart;
 pub use parquet_rs::InMemoryRowGroup;

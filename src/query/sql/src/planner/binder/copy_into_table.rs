@@ -52,7 +52,6 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_parquet::Parquet2Table;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
@@ -180,16 +179,12 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
             let table_ctx = self.ctx.clone();
-            let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
             let stage_info = plan.stage_table_info.stage_info.clone();
             let files_info = plan.stage_table_info.files_info.clone();
             let read_options = ParquetReadOptions::default();
-            let table = if use_parquet2 {
-                Parquet2Table::create(table_ctx, stage_info, files_info, read_options, None).await?
-            } else {
+            let table =
                 ParquetRSTable::create(table_ctx, stage_info, files_info, read_options, None)
-                    .await?
-            };
+                    .await?;
             let table_info = table.get_table_info();
             let table_schema = table_info.schema();
 

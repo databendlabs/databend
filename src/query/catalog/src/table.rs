@@ -494,35 +494,6 @@ pub struct NavigationDescriptor {
 use std::collections::HashMap;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct Parquet2TableColumnStatisticsProvider {
-    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
-    num_rows: u64,
-}
-
-impl Parquet2TableColumnStatisticsProvider {
-    pub fn new(column_stats: HashMap<ColumnId, BasicColumnStatistics>, num_rows: u64) -> Self {
-        let column_stats = column_stats
-            .into_iter()
-            .map(|(column_id, stat)| (column_id, stat.get_useful_stat(num_rows)))
-            .collect();
-        Self {
-            column_stats,
-            num_rows,
-        }
-    }
-}
-
-impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
-        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
-    }
-
-    fn num_rows(&self) -> Option<u64> {
-        Some(self.num_rows)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     num_rows: u64,

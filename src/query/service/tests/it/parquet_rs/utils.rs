@@ -23,15 +23,10 @@ use databend_common_sql::Planner;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
-pub async fn create_parquet2_test_fixture() -> TestFixture {
+pub async fn create_parquet_test_fixture() -> TestFixture {
     let mut conf = ConfigBuilder::create().config();
     conf.storage.allow_insecure = true;
     let test_fixture = TestFixture::setup_with_config(&conf).await.unwrap();
-    test_fixture
-        .default_session()
-        .get_settings()
-        .set_use_parquet2(false)
-        .unwrap();
 
     test_fixture
 }
