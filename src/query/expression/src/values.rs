@@ -43,6 +43,8 @@ use serde::Serializer;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
@@ -64,6 +66,7 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
+use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
@@ -146,16 +149,16 @@ pub enum Column {
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
-    Binary(StringColumn),
+    Binary(BinaryColumn),
     String(StringColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
-    Bitmap(StringColumn),
+    Bitmap(BinaryColumn),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
-    Variant(StringColumn),
+    Variant(BinaryColumn),
 }
 
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
@@ -166,16 +169,16 @@ pub enum ColumnVec {
     Number(NumberColumnVec),
     Decimal(DecimalColumnVec),
     Boolean(Vec<Bitmap>),
-    Binary(Vec<StringColumn>),
+    Binary(Vec<BinaryColumn>),
     String(Vec<StringColumn>),
     Timestamp(Vec<Buffer<i64>>),
     Date(Vec<Buffer<i32>>),
     Array(Vec<ArrayColumn<AnyType>>),
     Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
-    Bitmap(Vec<StringColumn>),
+    Bitmap(Vec<BinaryColumn>),
     Nullable(Box<NullableColumnVec>),
     Tuple(Vec<ColumnVec>),
-    Variant(Vec<StringColumn>),
+    Variant(Vec<BinaryColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -186,16 +189,16 @@ pub enum ColumnBuilder {
     Number(NumberColumnBuilder),
     Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
-    Binary(StringColumnBuilder),
+    Binary(BinaryColumnBuilder),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
-    Bitmap(StringColumnBuilder),
+    Bitmap(BinaryColumnBuilder),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
-    Variant(StringColumnBuilder),
+    Variant(BinaryColumnBuilder),
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -1232,10 +1235,8 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.len(),
-            Column::Binary(col)
-            | Column::String(col)
-            | Column::Bitmap(col)
-            | Column::Variant(col) => col.memory_size(),
+            Column::Binary(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::String(col) => col.memory_size(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
@@ -1321,7 +1322,7 @@ impl ColumnBuilder {
             Column::Number(col) => ColumnBuilder::Number(NumberColumnBuilder::from_column(col)),
             Column::Decimal(col) => ColumnBuilder::Decimal(DecimalColumnBuilder::from_column(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
-            Column::Binary(col) => ColumnBuilder::Binary(StringColumnBuilder::from_column(col)),
+            Column::Binary(col) => ColumnBuilder::Binary(BinaryColumnBuilder::from_column(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
@@ -1331,7 +1332,7 @@ impl ColumnBuilder {
             Column::Map(box col) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Bitmap(col) => ColumnBuilder::Bitmap(StringColumnBuilder::from_column(col)),
+            Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
             Column::Nullable(box col) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
@@ -1341,7 +1342,7 @@ impl ColumnBuilder {
                     .map(|col| ColumnBuilder::from_column(col.clone()))
                     .collect(),
             ),
-            Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
+            Column::Variant(col) => ColumnBuilder::Variant(BinaryColumnBuilder::from_column(col)),
         }
     }
 
@@ -1381,7 +1382,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
             }
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
-            ScalarRef::Binary(s) => ColumnBuilder::Binary(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
@@ -1389,7 +1390,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n)),
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
@@ -1403,7 +1404,7 @@ impl ColumnBuilder {
                         .collect(),
                 )
             }
-            ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
         }
     }
 
@@ -1521,7 +1522,7 @@ impl ColumnBuilder {
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::Binary => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Binary(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::String => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
@@ -1562,11 +1563,11 @@ impl ColumnBuilder {
             }
             DataType::Bitmap => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Bitmap(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Bitmap(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Variant => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
@@ -1670,7 +1671,6 @@ impl ColumnBuilder {
                 builder.push(v);
             }
             ColumnBuilder::Binary(builder)
-            | ColumnBuilder::String(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
                 let offset = reader.read_scalar::<u64>()? as usize;
@@ -1678,6 +1678,16 @@ impl ColumnBuilder {
                 let last = *builder.offsets.last().unwrap() as usize;
                 reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
+            }
+            ColumnBuilder::String(builder) => {
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
+                let last = *builder.offsets.last().unwrap() as usize;
+                reader.read_exact(&mut builder.data[last..last + offset])?;
+                builder.commit_row();
+
+                #[cfg(debug_assertions)]
+                (&builder.data[last..last + offset]).check_utf8().unwrap();
             }
             ColumnBuilder::Timestamp(builder) => {
                 let value: i64 = reader.read_scalar()?;
@@ -1757,9 +1767,15 @@ impl ColumnBuilder {
                 }
             }
             ColumnBuilder::Binary(builder)
-            | ColumnBuilder::String(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.put_slice(reader);
+                    builder.commit_row();
+                }
+            }
+            ColumnBuilder::String(builder) => {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
                     builder.put_slice(reader);

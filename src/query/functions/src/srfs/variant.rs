@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
@@ -84,7 +85,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
                                 {
                                     let val = unsafe { val_arg.index_unchecked(row) };
-                                    let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                    let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
                                         selector.select(
                                             val,
@@ -118,7 +119,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             {
                                 let val = unsafe { val_arg.index_unchecked(row) };
                                 let path = unsafe { path_arg.index_unchecked(row) };
-                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                 if let ScalarRef::String(path) = path {
                                     match parse_json_path(path) {
                                         Ok(json_path) => {
@@ -460,7 +461,7 @@ pub(crate) fn unnest_variant_array(
     match array_values(val) {
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
-            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
@@ -484,7 +485,7 @@ fn unnest_variant_obj(
     match object_each(val) {
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
-            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
             let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
@@ -539,8 +540,8 @@ impl FlattenGenerator {
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
-        value_builder: &mut Option<StringColumnBuilder>,
-        this_builder: &mut Option<StringColumnBuilder>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         match self.mode {
@@ -601,8 +602,8 @@ impl FlattenGenerator {
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
-        value_builder: &mut Option<StringColumnBuilder>,
-        this_builder: &mut Option<StringColumnBuilder>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         if let Some(len) = array_length(input) {
@@ -654,8 +655,8 @@ impl FlattenGenerator {
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
-        value_builder: &mut Option<StringColumnBuilder>,
-        this_builder: &mut Option<StringColumnBuilder>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         if let Some(obj_keys) = object_keys(input) {
@@ -725,12 +726,12 @@ impl FlattenGenerator {
             None
         };
         let mut value_builder = if params.is_empty() || params.contains(&5) {
-            Some(StringColumnBuilder::with_capacity(0, 0))
+            Some(BinaryColumnBuilder::with_capacity(0, 0))
         } else {
             None
         };
         let mut this_builder = if params.is_empty() || params.contains(&6) {
-            Some(StringColumnBuilder::with_capacity(0, 0))
+            Some(BinaryColumnBuilder::with_capacity(0, 0))
         } else {
             None
         };
@@ -784,13 +785,13 @@ impl FlattenGenerator {
         let value_column = if let Some(value_builder) = value_builder {
             VariantType::upcast_column(value_builder.build()).wrap_nullable(None)
         } else {
-            VariantType::upcast_column(StringColumnBuilder::repeat(&[], rows).build())
+            VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
                 .wrap_nullable(None)
         };
         let this_column = if let Some(this_builder) = this_builder {
             VariantType::upcast_column(this_builder.build()).wrap_nullable(None)
         } else {
-            VariantType::upcast_column(StringColumnBuilder::repeat(&[], rows).build())
+            VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
                 .wrap_nullable(None)
         };
 

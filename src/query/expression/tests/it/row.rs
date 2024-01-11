@@ -20,9 +20,9 @@ use arrow_schema::SortOptions;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use databend_common_expression::converts::arrow2::set_validities;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
@@ -322,7 +322,7 @@ fn test_variant() {
     ];
 
     let mut validity = MutableBitmap::with_capacity(values.len());
-    let mut builder = StringColumnBuilder::with_capacity(values.len(), values.len() * 10);
+    let mut builder = BinaryColumnBuilder::with_capacity(values.len(), values.len() * 10);
     for value in values {
         if let Some(value) = value {
             validity.push(true);

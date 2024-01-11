@@ -22,6 +22,9 @@ use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryIterator;
 use super::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -225,7 +228,30 @@ pub struct StringColumn {
 impl StringColumn {
     pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
         debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
+        let col = StringColumn { data, offsets };
+        // todo!("new string")
+        col.check_utf8().unwrap();
+        col
+    }
+
+    /// # Safety
+    /// This function is unsound iff:
+    /// * the offsets are not monotonically increasing
+    /// * The `values` between two consecutive `offsets` are not valid utf8
+    pub unsafe fn new_unchecked(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
+        debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
         StringColumn { data, offsets }
+    }
+
+    /// # Safety
+    /// This function is unsound iff:
+    /// * the offsets are not monotonically increasing
+    /// * The `values` between two consecutive `offsets` are not valid utf8
+    pub unsafe fn from_binary_unchecked(col: BinaryColumn) -> Self {
+        StringColumn {
+            data: col.data,
+            offsets: col.offsets,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -280,6 +306,13 @@ impl StringColumn {
         }
     }
 
+    pub fn iter_binary(&self) -> BinaryIterator {
+        BinaryIterator {
+            data: &self.data,
+            offsets: self.offsets.windows(2),
+        }
+    }
+
     pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
         (self.data, self.offsets)
     }
@@ -303,6 +336,27 @@ impl StringColumn {
             }
         }
         Ok(())
+    }
+}
+
+impl From<StringColumn> for BinaryColumn {
+    fn from(col: StringColumn) -> BinaryColumn {
+        BinaryColumn {
+            data: col.data,
+            offsets: col.offsets,
+        }
+    }
+}
+
+impl TryFrom<BinaryColumn> for StringColumn {
+    type Error = ErrorCode;
+
+    fn try_from(col: BinaryColumn) -> Result<StringColumn> {
+        col.check_utf8()?;
+        Ok(StringColumn {
+            data: col.data,
+            offsets: col.offsets,
+        })
     }
 }
 
@@ -505,6 +559,29 @@ impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
     }
 }
 
+impl From<StringColumnBuilder> for BinaryColumnBuilder {
+    fn from(builder: StringColumnBuilder) -> BinaryColumnBuilder {
+        BinaryColumnBuilder {
+            need_estimated: builder.need_estimated,
+            data: builder.data,
+            offsets: builder.offsets,
+        }
+    }
+}
+
+impl TryFrom<BinaryColumnBuilder> for StringColumnBuilder {
+    type Error = ErrorCode;
+
+    fn try_from(builder: BinaryColumnBuilder) -> Result<StringColumnBuilder> {
+        builder.check_utf8()?;
+        Ok(StringColumnBuilder {
+            need_estimated: builder.need_estimated,
+            data: builder.data,
+            offsets: builder.offsets,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
@@ -557,10 +634,37 @@ impl CheckUTF8 for &[u8] {
     }
 }
 
+impl CheckUTF8 for BinaryColumn {
+    fn check_utf8(&self) -> Result<()> {
+        for val in self.iter() {
+            val.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
 impl CheckUTF8 for StringColumn {
     fn check_utf8(&self) -> Result<()> {
         for val in self.iter() {
             val.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for BinaryColumnBuilder {
+    fn check_utf8(&self) -> Result<()> {
+        for row in 0..self.len() {
+            unsafe { self.index_unchecked(row) }.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for StringColumnBuilder {
+    fn check_utf8(&self) -> Result<()> {
+        for row in 0..self.len() {
+            unsafe { self.index_unchecked(row) }.check_utf8()?;
         }
         Ok(())
     }
