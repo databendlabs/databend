@@ -417,7 +417,7 @@ impl<O: Offset> Utf8Array<O> {
 
         if data_type.to_physical_type() != Self::default_data_type().to_physical_type() {
             return Err(Error::oos(
-                "BinaryArray can only be initialized with DataType::Utf8 or DataType::LargeUtf8",
+                "Utf8Array can only be initialized with DataType::Utf8 or DataType::LargeUtf8",
             ));
         }
 

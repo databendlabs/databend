@@ -45,15 +45,15 @@ impl Rows for StringColumn {
     }
 
     fn to_column(&self) -> Column {
-        Column::String(self.clone())
+        Column::Binary(self.clone())
     }
 
     fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
-        col.as_string().cloned()
+        col.as_binary().cloned()
     }
 
     fn data_type() -> DataType {
-        DataType::String
+        DataType::Binary
     }
 }
 

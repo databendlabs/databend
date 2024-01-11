@@ -138,8 +138,13 @@ impl FieldEncoderCSV {
                 self.nested.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);
             }
-            // null, bool, number
-            _ => self.simple.write_field(column, row_index, out_buf, false),
+
+            Column::Null { .. }
+            | Column::EmptyArray { .. }
+            | Column::EmptyMap { .. }
+            | Column::Number(_)
+            | Column::Decimal(_)
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
     }
 

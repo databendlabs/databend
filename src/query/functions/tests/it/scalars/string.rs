@@ -32,8 +32,6 @@ fn test_string() {
     test_bit_length(file);
     test_octet_length(file);
     test_char_length(file);
-    test_to_base64(file);
-    test_from_base64(file);
     test_quote(file);
     test_reverse(file);
     test_ascii(file);
@@ -47,7 +45,6 @@ fn test_string() {
     test_bin(file);
     test_oct(file);
     test_hex(file);
-    test_unhex(file);
     test_pad(file);
     test_replace(file);
     test_translate(file);
@@ -112,27 +109,6 @@ fn test_char_length(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["latin", "кириллица", "кириллица and latin"]),
     )]);
-}
-
-fn test_to_base64(file: &mut impl Write) {
-    run_ast(file, "to_base64('Abc')", &[]);
-    run_ast(file, "to_base64('123')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
-        "a",
-        StringType::from_data(vec!["Abc", "123"]),
-    )]);
-}
-
-fn test_from_base64(file: &mut impl Write) {
-    run_ast(file, "from_base64('QWJj')", &[]);
-    run_ast(file, "from_base64('MTIz')", &[]);
-    run_ast(file, "from_base64(Null)", &[]);
-    run_ast(file, "from_base64(a)", &[(
-        "a",
-        StringType::from_data(vec!["QWJj", "MTIz"]),
-    )]);
-    run_ast(file, "from_base64('!@#')", &[]);
 }
 
 fn test_quote(file: &mut impl Write) {
@@ -448,19 +424,6 @@ fn test_hex(file: &mut impl Write) {
     run_ast(file, "hex(c)", columns);
     run_ast(file, "hex(d)", columns);
     run_ast(file, "hex(e)", columns);
-}
-
-fn test_unhex(file: &mut impl Write) {
-    run_ast(file, "unhex('6461746162656e64')", &[]);
-
-    let columns = &[("s", StringType::from_data(vec!["abc", "def", "databend"]))];
-    run_ast(file, "unhex(hex(s))", columns);
-
-    let columns = &[(
-        "s",
-        StringType::from_data(vec!["616263", "646566", "6461746162656e64"]),
-    )];
-    run_ast(file, "unhex(s)", columns);
 }
 
 fn test_pad(file: &mut impl Write) {

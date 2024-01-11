@@ -48,7 +48,7 @@ select id, t:a, t from @data/parquet/tuple.parquet where id > 2
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where t:b < 'c'
+select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
 ----
 1 1 (1,'a')
 2 3 (3,'b')
@@ -176,6 +176,22 @@ create table t2(a string null, b variant null)
 
 query 
 copy into t2 from @data/parquet/json_string.parquet
+----
+parquet/json_string.parquet 4 0 NULL NULL
+
+query 
+select * from t2 order by a
+----
+1 "7B226B31223A227631222C226B32223A227632227D"
+2 "7B226B223A7B226B31223A3132332C226B32223A3435367D7D"
+3 "5B312C322C335D"
+4 "5B2261222C2262225D"
+
+statement ok
+delete from t2
+
+query 
+copy into t2 from (select a, parse_json(b::STRING) from @data/parquet/json_string.parquet)
 ----
 parquet/json_string.parquet 4 0 NULL NULL
 

@@ -54,9 +54,10 @@ use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+use crate::pipelines::processors::transforms::group_by::BinaryKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::DictionaryBinaryKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::DictionaryStringKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::FixedKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::FixedKeysGroupColumnsBuilder;
@@ -65,7 +66,6 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::SerializedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::SerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::StringKeysColumnBuilder;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -415,18 +415,18 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         Ok(ShortStringHashMap::new(bump))
     }
 
-    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = BinaryKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_> {
-        StringKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> BinaryKeysColumnBuilder<'_> {
+        BinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -458,18 +458,18 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         Ok(StringHashMap::new(bump))
     }
 
-    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = BinaryKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_> {
-        StringKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> BinaryKeysColumnBuilder<'_> {
+        BinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -501,14 +501,14 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
         Ok(DictionaryStringHashMap::new(bump, self.dict_keys))
     }
 
-    type ColumnBuilder<'a> = DictionaryStringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = DictionaryBinaryKeysColumnBuilder<'a>;
 
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
     ) -> Self::ColumnBuilder<'_> {
-        DictionaryStringKeysColumnBuilder::create(capacity, value_capacity)
+        DictionaryBinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = DictionarySerializedKeysColumnIter;
@@ -516,7 +516,7 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
         DictionarySerializedKeysColumnIter::create(
             self.dict_keys,
-            column.as_string().ok_or_else(|| {
+            column.as_binary().ok_or_else(|| {
                 ErrorCode::IllegalDataType(
                     "Illegal data type for SerializedKeysColumnIter".to_string(),
                 )

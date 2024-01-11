@@ -987,6 +987,7 @@ impl Column {
 
     pub fn check_valid(&self) -> Result<()> {
         match self {
+            Column::Binary(x) => x.check_valid(),
             Column::String(x) => x.check_valid(),
             Column::Variant(x) => x.check_valid(),
             Column::Bitmap(x) => x.check_valid(),
@@ -1893,6 +1894,9 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Boolean(builder), Column::Boolean(other)) => {
                 append_bitmap(builder, other);
+            }
+            (ColumnBuilder::Binary(builder), Column::Binary(other)) => {
+                builder.append_column(other);
             }
             (ColumnBuilder::String(builder), Column::String(other)) => {
                 builder.append_column(other);

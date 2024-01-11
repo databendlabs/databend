@@ -60,7 +60,7 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
     }
 }
 
-pub struct StringKeysColumnBuilder<'a> {
+pub struct BinaryKeysColumnBuilder<'a> {
     pub inner_builder: StringColumnBuilder,
 
     _initial: usize,
@@ -68,9 +68,9 @@ pub struct StringKeysColumnBuilder<'a> {
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> StringKeysColumnBuilder<'a> {
+impl<'a> BinaryKeysColumnBuilder<'a> {
     pub fn create(capacity: usize, value_capacity: usize) -> Self {
-        StringKeysColumnBuilder {
+        BinaryKeysColumnBuilder {
             inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
             _initial: value_capacity,
@@ -78,7 +78,7 @@ impl<'a> StringKeysColumnBuilder<'a> {
     }
 }
 
-impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
+impl<'a> KeysColumnBuilder for BinaryKeysColumnBuilder<'a> {
     type T = &'a [u8];
 
     fn bytes_size(&self) -> usize {
@@ -91,7 +91,7 @@ impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
     }
 
     fn finish(self) -> Column {
-        Column::String(self.inner_builder.build())
+        Column::Binary(self.inner_builder.build())
     }
 }
 
@@ -132,15 +132,15 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
     }
 }
 
-pub struct DictionaryStringKeysColumnBuilder<'a> {
+pub struct DictionaryBinaryKeysColumnBuilder<'a> {
     bytes_size: usize,
     data: Vec<DictionaryKeys>,
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> DictionaryStringKeysColumnBuilder<'a> {
+impl<'a> DictionaryBinaryKeysColumnBuilder<'a> {
     pub fn create(_: usize, _: usize) -> Self {
-        DictionaryStringKeysColumnBuilder {
+        DictionaryBinaryKeysColumnBuilder {
             bytes_size: 0,
             data: vec![],
             _phantom: PhantomData,
@@ -148,7 +148,7 @@ impl<'a> DictionaryStringKeysColumnBuilder<'a> {
     }
 }
 
-impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
+impl<'a> KeysColumnBuilder for DictionaryBinaryKeysColumnBuilder<'a> {
     type T = &'a DictionaryKeys;
 
     fn bytes_size(&self) -> usize {
@@ -182,6 +182,6 @@ impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
             }
         }
 
-        Column::String(builder.build())
+        Column::Binary(builder.build())
     }
 }
