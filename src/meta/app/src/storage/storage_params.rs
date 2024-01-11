@@ -40,7 +40,7 @@ pub enum StorageParams {
     S3(StorageS3Config),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
-    HuggingFace(StorageHuggingFaceConfig),
+    Huggingface(StorageHuggingfaceConfig),
 
     /// None means this storage type is none.
     ///
@@ -74,7 +74,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
-            StorageParams::HuggingFace(_) => true,
+            StorageParams::Huggingface(_) => true,
             StorageParams::None => false,
         }
     }
@@ -96,7 +96,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.root = f(&v.root),
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
-            StorageParams::HuggingFace(v) => v.root = f(&v.root),
+            StorageParams::Huggingface(v) => v.root = f(&v.root),
             StorageParams::None => {}
         };
 
@@ -217,7 +217,7 @@ impl Display for StorageParams {
             StorageParams::Webhdfs(v) => {
                 write!(f, "webhdfs | root={},endpoint={}", v.root, v.endpoint_url)
             }
-            StorageParams::HuggingFace(v) => {
+            StorageParams::Huggingface(v) => {
                 write!(
                     f,
                     "huggingface | repo_type={}, repo_id={}, root={}",
@@ -573,7 +573,7 @@ impl Debug for StorageCosConfig {
 }
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageHuggingFaceConfig {
+pub struct StorageHuggingfaceConfig {
     pub repo_id: String,
     pub repo_type: String,
     pub revision: String,
@@ -581,7 +581,7 @@ pub struct StorageHuggingFaceConfig {
     pub root: String,
 }
 
-impl Debug for StorageHuggingFaceConfig {
+impl Debug for StorageHuggingfaceConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut ds = f.debug_struct("StorageHuggingFaceConfig");
 
