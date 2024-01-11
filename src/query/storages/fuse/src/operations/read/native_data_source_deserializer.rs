@@ -327,7 +327,7 @@ impl NativeDeserializeDataTransform {
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let filter_executor = if let Some(expr) = prewhere_filter.as_ref() {
-            let (select_expr, has_or) = build_select_expr(expr);
+            let (select_expr, has_or) = build_select_expr(expr).into();
             Some(FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),
@@ -1139,7 +1139,7 @@ fn new_dummy_filter_executor(func_ctx: FunctionContext) -> FilterExecutor {
         scalar: Scalar::Boolean(true),
         data_type: DataType::Boolean,
     };
-    let (select_expr, has_or) = build_select_expr(&dummy_expr);
+    let (select_expr, has_or) = build_select_expr(&dummy_expr).into();
     // TODO: specify the capacity (max_block_size) of the selection.
     FilterExecutor::new(
         select_expr,

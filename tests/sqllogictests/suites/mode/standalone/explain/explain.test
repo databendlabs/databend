@@ -1175,22 +1175,22 @@ from numbers(10) where number > 5
 Sort
 ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
-├── estimated rows: 4.00
+├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
     ├── build keys: [b.number (#2), b.register_at (#3)]
     ├── probe keys: [a.number (#0), a.pt (#1)]
     ├── filters: []
-    ├── estimated rows: 4.00
+    ├── estimated rows: 0.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
     │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
-    │   ├── estimated rows: 2.00
+    │   ├── estimated rows: 0.00
     │   └── Filter
     │       ├── output columns: [numbers.number (#2)]
     │       ├── filters: [numbers.number (#2) > 5]
-    │       ├── estimated rows: 2.00
+    │       ├── estimated rows: 0.00
     │       └── TableScan
     │           ├── table: default.system.numbers
     │           ├── output columns: [number (#2)]
@@ -1203,11 +1203,11 @@ Sort
     └── EvalScalar(Probe)
         ├── output columns: [numbers.number (#0), pt (#1)]
         ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
-        ├── estimated rows: 2.00
+        ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [numbers.number (#0)]
             ├── filters: [numbers.number (#0) > 5]
-            ├── estimated rows: 2.00
+            ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.system.numbers
                 ├── output columns: [number (#0)]
@@ -1294,7 +1294,7 @@ explain select * from t1 where a in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1
 ----
 HashJoin
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── join type: RIGHT SEMI
+├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [CAST(subquery_2 (#2) AS Int32 NULL)]
 ├── filters: []

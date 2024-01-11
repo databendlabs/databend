@@ -59,7 +59,7 @@ statement ok
 CREATE TABLE Test (k int, v int);
 
 # push down filter in window function
-query
+query T
 explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
 ----
 Filter
@@ -67,43 +67,43 @@ Filter
 ├── filters: [rank() OVER (PARTITION BY k ORDER BY v DESC) (#4) = 1]
 ├── estimated rows: 0.00
 └── Window
-  ├── output columns: [test.k (#0), test.v (#1), rank() OVER (PARTITION BY k ORDER BY v DESC) (#4)]
-  ├── aggregate function: [rank]
-  ├── partition by: [k]
-  ├── order by: [v]
-  ├── frame: [Range: Preceding(None) ~ CurrentRow]
-  └── UnionAll
-    ├── output columns: [test.k (#0), test.v (#1)]
-    ├── estimated rows: 0.00
-    ├── Filter
-    │   ├── output columns: [test.k (#0), test.v (#1)]
-    │   ├── filters: [is_true(test.k (#0) = 12)]
-    │   ├── estimated rows: 0.00
-    │   └── TableScan
-    │       ├── table: default.test_explain_window.test
-    │       ├── output columns: [k (#0), v (#1)]
-    │       ├── read rows: 0
-    │       ├── read bytes: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Filter
-      ├── output columns: [test.k (#2), test.v (#3)]
-      ├── filters: [is_true(test.k (#2) = 12)]
-      ├── estimated rows: 0.00
-      └── TableScan
-        ├── table: default.test_explain_window.test
-        ├── output columns: [k (#2), v (#3)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-        └── estimated rows: 0.00
+    ├── output columns: [test.k (#0), test.v (#1), rank() OVER (PARTITION BY k ORDER BY v DESC) (#4)]
+    ├── aggregate function: [rank]
+    ├── partition by: [k]
+    ├── order by: [v]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── UnionAll
+        ├── output columns: [test.k (#0), test.v (#1)]
+        ├── estimated rows: 0.00
+        ├── Filter
+        │   ├── output columns: [test.k (#0), test.v (#1)]
+        │   ├── filters: [is_true(test.k (#0) = 12)]
+        │   ├── estimated rows: 0.00
+        │   └── TableScan
+        │       ├── table: default.test_explain_window.test
+        │       ├── output columns: [k (#0), v (#1)]
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+        │       └── estimated rows: 0.00
+        └── Filter
+            ├── output columns: [test.k (#2), test.v (#3)]
+            ├── filters: [is_true(test.k (#2) = 12)]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.test
+                ├── output columns: [k (#2), v (#3)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                └── estimated rows: 0.00
 
 # cannot push down filter in window function
-query
+query T
 explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
 ----
 Filter
@@ -139,40 +139,40 @@ Filter
       └── estimated rows: 0.00
 
 # cannot push down filter in window function
-query
+query T
 explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
 ----
 Filter
 ├── output columns: [test.k (#0), test.v (#1)]
 ├── filters: [rank() OVER (ORDER BY v DESC) (#4) = 1, is_true(t1.k (#0) = 12)]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Window
-  ├── output columns: [test.k (#0), test.v (#1), rank() OVER (ORDER BY v DESC) (#4)]
-  ├── aggregate function: [rank]
-  ├── partition by: []
-  ├── order by: [v]
-  ├── frame: [Range: Preceding(None) ~ CurrentRow]
-  └── UnionAll
-    ├── output columns: [test.k (#0), test.v (#1)]
-    ├── estimated rows: 0.00
-    ├── TableScan
-    │   ├── table: default.test_explain_window.test
-    │   ├── output columns: [k (#0), v (#1)]
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 0.00
-    └── TableScan
-      ├── table: default.test_explain_window.test
-      ├── output columns: [k (#2), v (#3)]
-      ├── read rows: 0
-      ├── read bytes: 0
-      ├── partitions total: 0
-      ├── partitions scanned: 0
-      ├── push downs: [filters: [], limit: NONE]
-      └── estimated rows: 0.00                                                                                        
+    ├── output columns: [test.k (#0), test.v (#1), rank() OVER (ORDER BY v DESC) (#4)]
+    ├── aggregate function: [rank]
+    ├── partition by: []
+    ├── order by: [v]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── UnionAll
+        ├── output columns: [test.k (#0), test.v (#1)]
+        ├── estimated rows: 0.00
+        ├── TableScan
+        │   ├── table: default.test_explain_window.test
+        │   ├── output columns: [k (#0), v (#1)]
+        │   ├── read rows: 0
+        │   ├── read bytes: 0
+        │   ├── partitions total: 0
+        │   ├── partitions scanned: 0
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.test
+            ├── output columns: [k (#2), v (#3)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 statement ok
 drop table if exists t
@@ -180,7 +180,7 @@ drop table if exists t
 statement ok
 create table t(a int)
 
-query
+query T
 explain select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3;
 ----
 Filter
@@ -216,7 +216,7 @@ DROP view IF EXISTS vwpush
 statement ok
 create view vwpush (b, rnum) as select b, row_number() over (order by b) from tbpush
 
-query
+query T
 explain select b, row_number() over (order by b) from tbpush where b > 3;
 ----
 Window
@@ -239,51 +239,51 @@ Window
       ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
       └── estimated rows: 0.00
 
-query
+query T
 explain select * from vwpush where b > 3;
 ----
 Filter
 ├── output columns: [tbpush.b (#0), rnum (#1)]
 ├── filters: [is_true(vwpush.b (#0) > 3)]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Window
-  ├── output columns: [tbpush.b (#0), rnum (#1)]
-  ├── aggregate function: [row_number]
-  ├── partition by: []
-  ├── order by: [b]
-  ├── frame: [Range: Preceding(None) ~ CurrentRow]
-  └── TableScan
-    ├── table: default.test_explain_window.tbpush
-    ├── output columns: [b (#0)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    ├── output columns: [tbpush.b (#0), rnum (#1)]
+    ├── aggregate function: [row_number]
+    ├── partition by: []
+    ├── order by: [b]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── TableScan
+        ├── table: default.test_explain_window.tbpush
+        ├── output columns: [b (#0)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
-query
+query T
 explain select * from (select b, row_number() over (order by b) from tbpush) where b > 3;
 ----
 Filter
 ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
 ├── filters: [is_true(tbpush.b (#0) > 3)]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Window
-  ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
-  ├── aggregate function: [row_number]
-  ├── partition by: []
-  ├── order by: [b]
-  ├── frame: [Range: Preceding(None) ~ CurrentRow]
-  └── TableScan
-    ├── table: default.test_explain_window.tbpush
-    ├── output columns: [b (#0)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+    ├── aggregate function: [row_number]
+    ├── partition by: []
+    ├── order by: [b]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── TableScan
+        ├── table: default.test_explain_window.tbpush
+        ├── output columns: [b (#0)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 statement ok
 DROP DATABASE test_explain_window;
