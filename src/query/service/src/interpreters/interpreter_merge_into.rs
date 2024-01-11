@@ -373,7 +373,9 @@ impl MergeIntoInterpreter {
             .into_iter()
             .enumerate()
             .collect();
-        let target_build_optimization = !self.plan.columns_set.contains(&self.plan.row_id_index);
+        let target_build_optimization =
+            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
+                && !self.plan.columns_set.contains(&self.plan.row_id_index);
         let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat

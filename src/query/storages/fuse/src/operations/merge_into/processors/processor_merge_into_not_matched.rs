@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
@@ -37,6 +38,7 @@ use databend_common_storage::MergeStatus;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
+use crate::operations::BlockMetaIndex;
 // (source_schema,condition,values_exprs)
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
@@ -157,6 +159,9 @@ impl Processor for MergeIntoNotMatchedProcessor {
             if data_block.is_empty() {
                 return Ok(());
             }
+            // target build optimization
+            let no_need_add_status = data_block.get_meta().is_some()
+                && BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap()).is_some();
             let start = Instant::now();
             let mut current_block = data_block;
             for (idx, op) in self.ops.iter().enumerate() {
@@ -169,12 +174,13 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     metrics_inc_merge_into_append_blocks_rows_counter(
                         satisfied_block.num_rows() as u32
                     );
-
-                    self.ctx.add_merge_status(MergeStatus {
-                        insert_rows: satisfied_block.num_rows(),
-                        update_rows: 0,
-                        deleted_rows: 0,
-                    });
+                    if !no_need_add_status {
+                        self.ctx.add_merge_status(MergeStatus {
+                            insert_rows: satisfied_block.num_rows(),
+                            update_rows: 0,
+                            deleted_rows: 0,
+                        });
+                    }
 
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)

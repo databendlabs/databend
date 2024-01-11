@@ -151,15 +151,16 @@ impl Processor for MergeIntoSplitProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(mut data_block) = self.input_data.take() {
+        if let Some(data_block) = self.input_data.take() {
             //  we receive a partial unmodified block data. please see details at the top of this file.
             if data_block.get_meta().is_some() {
-                let meta_index = BlockMetaIndex::downcast_from(data_block.take_meta().unwrap());
+                let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
                 if meta_index.is_some() {
                     self.output_data_not_matched_data = Some(data_block.clone());
                     // if the downstream receive this, it should just treat this as a DeletedLog.
-                    self.output_data_matched_data =
-                        Some(DataBlock::empty_with_meta(Box::new(meta_index.unwrap())));
+                    self.output_data_matched_data = Some(DataBlock::empty_with_meta(Box::new(
+                        meta_index.unwrap().clone(),
+                    )));
                     return Ok(());
                 }
             }

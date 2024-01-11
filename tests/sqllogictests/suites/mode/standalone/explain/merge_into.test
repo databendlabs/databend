@@ -23,6 +23,8 @@ explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON s
 ----
 MergeInto:
 target_table: default.default.salaries2
+├── distributed: false                                                                                                                                                       |
+├── target_build_optimization: false 
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
@@ -50,6 +52,8 @@ explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON s
 ----
 MergeInto:
 target_table: default.default.salaries2
+├── distributed: false                                                                                                                                                       |
+├── target_build_optimization: false 
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
