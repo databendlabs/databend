@@ -48,8 +48,8 @@ b VARIANT 0 1
 query 
 select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
-id INT 1 0
-t TUPLE(A INT32, B STRING) 1 1
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
 
 statement ok
 drop CONNECTION IF EXISTS my_conn

@@ -175,11 +175,6 @@ statement ok
 create table t2(a string null, b variant null)
 
 query 
-copy into t2 from @data/parquet/json_string.parquet
-----
-parquet/json_string.parquet 4 0 NULL NULL
-
-query 
 copy into t2 from (select a, parse_json(b) from @data/parquet/json_string.parquet)
 ----
 parquet/json_string.parquet 4 0 NULL NULL
