@@ -35,7 +35,6 @@ pub fn blocks_to_parquet(
     let compression = to_parquet_rs_compression(compression);
     let props = WriterProperties::builder()
         .set_compression(compression)
-        .set_data_page_size_limit(usize::MAX)
         .set_max_row_group_size(usize::MAX)
         .set_encoding(Encoding::PLAIN)
         .set_dictionary_enabled(false)
