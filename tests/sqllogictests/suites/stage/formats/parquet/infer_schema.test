@@ -1,8 +1,8 @@
 query 
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
-id INT 1 0
-t TUPLE(A INT32, B STRING) 1 1
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
 
 query 
 select * from infer_schema(location => '@data/parquet/complex.parquet')
@@ -60,5 +60,5 @@ create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_
 query
 select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
 ----
-id INT 1 0
-t TUPLE(A INT32, B STRING) 1 1
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
