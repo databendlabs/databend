@@ -125,6 +125,7 @@ impl<'a> SelectivityEstimator<'a> {
             } else {
                 // The column is derived column, give a small selectivity currently.
                 // Need to improve it later.
+                // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
                 return Ok(SMALL_SELECTIVITY);
             };
             let const_datum = if let Some(datum) = Datum::from_scalar(constant.value.clone()) {

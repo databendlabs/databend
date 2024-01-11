@@ -98,7 +98,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 1)], limit: NONE, virtual_columns: [v['a'][0], v['b']]]
-└── estimated rows: 0.20
+└── estimated rows: 0.00
 
 statement ok
 drop table t1
