@@ -31,6 +31,7 @@ use databend_common_meta_app::storage::StorageGcsConfig;
 #[cfg(feature = "storage-hdfs")]
 use databend_common_meta_app::storage::StorageHdfsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
 use databend_common_meta_app::storage::StorageMokaConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
@@ -78,6 +79,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
+        StorageParams::Huggingface(cfg) => build_operator(init_huggingface_operator(cfg)?)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -368,6 +370,20 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .secret_id(&cfg.secret_id)
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
+        .root(&cfg.root);
+
+    Ok(builder)
+}
+
+/// init_huggingface_operator will init an opendal operator with input config.
+fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Builder> {
+    let mut builder = services::Huggingface::default();
+
+    builder
+        .repo_type(&cfg.repo_type)
+        .repo_id(&cfg.repo_id)
+        .revision(&cfg.revision)
+        .token(&cfg.token)
         .root(&cfg.root);
 
     Ok(builder)

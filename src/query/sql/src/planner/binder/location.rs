@@ -385,21 +385,34 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+/// Huggingface uri looks like `hf://opendal/huggingface-testdata/path/to/file`.
+///
+/// We need to parse `huggingface-testdata` from the root.
 fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let (repo_name, root) = root
+        .trim_start_matches('/')
+        .split_once('/')
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                "input uri is not a valid huggingface uri",
+            )
+        })?;
+
     let sp = StorageParams::Huggingface(StorageHuggingfaceConfig {
-        repo_id: l.name.to_string(),
+        repo_id: format!("{}/{repo_name}", l.name),
         repo_type: l
             .connection
             .get("repo_type")
             .cloned()
-            .unwrap_or_else(|| "datasets".to_string()),
+            .unwrap_or_else(|| "dataset".to_string()),
         revision: l
             .connection
             .get("revision")
             .cloned()
             .unwrap_or_else(|| "main".to_string()),
-        root,
-        token: l.connection.get("token:").cloned().unwrap_or_default(),
+        root: root.to_string(),
+        token: l.connection.get("token").cloned().unwrap_or_default(),
     });
 
     l.connection.check()?;
