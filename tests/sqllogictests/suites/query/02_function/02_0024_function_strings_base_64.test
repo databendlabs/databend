@@ -4,7 +4,7 @@ SELECT TO_BASE64('abc')
 YWJj
 
 query T
-SELECT FROM_BASE64(TO_BASE64('abc'))
+SELECT FROM_BASE64(TO_BASE64('abc'))::STRING
 ----
 abc
 

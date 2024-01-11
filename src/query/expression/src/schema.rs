@@ -937,12 +937,6 @@ impl TableSchema {
             next_column_id: self.next_column_id,
         }
     }
-
-    pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
-
-        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
-    }
 }
 
 impl DataField {

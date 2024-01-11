@@ -123,6 +123,29 @@ impl RowConverter {
                 DataType::Date => lengths
                     .iter_mut()
                     .for_each(|x| *x += i32::ENCODED_LEN as u64),
+                DataType::Binary => {
+                    let col = col.remove_nullable();
+                    if all_null {
+                        lengths.iter_mut().for_each(|x| *x += 1)
+                    } else if let Some(validity) = validity {
+                        col.as_binary()
+                            .unwrap()
+                            .iter()
+                            .zip(validity.iter())
+                            .zip(lengths.iter_mut())
+                            .for_each(|((bytes, v), length)| {
+                                *length += variable::encoded_len(bytes, !v) as u64
+                            })
+                    } else {
+                        col.as_binary()
+                            .unwrap()
+                            .iter()
+                            .zip(lengths.iter_mut())
+                            .for_each(|(bytes, length)| {
+                                *length += variable::encoded_len(bytes, false) as u64
+                            })
+                    }
+                }
                 DataType::String => {
                     let col = col.remove_nullable();
                     if all_null {
@@ -231,6 +254,7 @@ fn encode_column(out: &mut StringColumnBuilder, column: &Column, asc: bool, null
         }
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
+        Column::Binary(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         Column::String(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         Column::Variant(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         _ => unimplemented!(),

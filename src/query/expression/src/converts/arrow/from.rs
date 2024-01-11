@@ -45,7 +45,10 @@ impl TryFrom<&ArrowSchema> for DataSchema {
                 )?))
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(DataSchema::new(fields))
+        Ok(DataSchema::new_from(
+            fields,
+            schema.metadata.clone().into_iter().collect(),
+        ))
     }
 }
 
@@ -58,7 +61,10 @@ impl TryFrom<&ArrowSchema> for TableSchema {
             .iter()
             .map(|arrow_f| TableField::try_from(&arrow2_field_from_arrow_field(arrow_f)))
             .collect::<Result<Vec<_>>>()?;
-        Ok(TableSchema::new(fields))
+        Ok(TableSchema::new_from(
+            fields,
+            schema.metadata.clone().into_iter().collect(),
+        ))
     }
 }
 

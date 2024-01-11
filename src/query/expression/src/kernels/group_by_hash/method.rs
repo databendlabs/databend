@@ -152,8 +152,8 @@ impl HashMethodKind {
 
     pub fn data_type(&self) -> DataType {
         match self {
-            HashMethodKind::Serializer(_) => DataType::String,
-            HashMethodKind::SingleString(_) => DataType::String,
+            HashMethodKind::Serializer(_) => DataType::Binary,
+            HashMethodKind::SingleString(_) => DataType::Binary,
             HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
@@ -164,7 +164,7 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => {
                 DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
             }
-            HashMethodKind::DictionarySerializer(_) => DataType::String,
+            HashMethodKind::DictionarySerializer(_) => DataType::Binary,
         }
     }
 }

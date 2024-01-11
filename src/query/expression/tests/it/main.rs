@@ -55,6 +55,7 @@ fn get_all_test_data_types() -> Vec<DataType> {
         DataType::EmptyArray,
         DataType::EmptyMap,
         DataType::Boolean,
+        DataType::Binary,
         DataType::String,
         DataType::Bitmap,
         DataType::Variant,

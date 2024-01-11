@@ -154,7 +154,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 query 
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2')
+61 62 [6331,6332] (6431,6432)
 
 statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN a string not null
