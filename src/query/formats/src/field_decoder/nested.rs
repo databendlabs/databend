@@ -125,6 +125,7 @@ impl NestedValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader),
             ColumnBuilder::Array(c) => self.read_array(c, reader),
             ColumnBuilder::Map(c) => self.read_map(c, reader),

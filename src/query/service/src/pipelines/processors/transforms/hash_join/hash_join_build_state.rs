@@ -529,9 +529,9 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::Binary(col)) | KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
-                    // must return `Column::String` | `Column::Variant` | `Column::Bitmap`.
+                    // must return `Column::Binary` | `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {

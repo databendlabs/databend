@@ -1849,28 +1849,28 @@ error:
 ast            : CAST('Abc' AS BINARY)
 raw expr       : CAST('Abc' AS Binary)
 checked expr   : to_binary<String>("Abc")
-optimized expr : 0x416263
+optimized expr : 416263
 output type    : Binary
 output domain  : Undefined
-output         : 0x416263
+output         : 416263
 
 
 ast            : CAST('Dobrý den' AS BINARY)
 raw expr       : CAST('Dobrý den' AS Binary)
 checked expr   : to_binary<String>("Dobrý den")
-optimized expr : 0x446f6272c3bd2064656e
+optimized expr : 446F6272C3BD2064656E
 output type    : Binary
 output domain  : Undefined
-output         : 0x446f6272c3bd2064656e
+output         : 446F6272C3BD2064656E
 
 
 ast            : CAST('ß😀山' AS BINARY)
 raw expr       : CAST('ß😀山' AS Binary)
 checked expr   : to_binary<String>("ß😀山")
-optimized expr : 0xc39ff09f9880e5b1b1
+optimized expr : C39FF09F9880E5B1B1
 output type    : Binary
 output domain  : Undefined
-output         : 0xc39ff09f9880e5b1b1
+output         : C39FF09F9880E5B1B1
 
 
 error: 
@@ -1894,15 +1894,15 @@ ast            : CAST(a AS BINARY)
 raw expr       : CAST(a::String AS Binary)
 checked expr   : to_binary<String>(a)
 evaluation:
-+--------+-------------------+------------------------+
-|        | a                 | Output                 |
-+--------+-------------------+------------------------+
-| Type   | String            | Binary                 |
-| Domain | {"Abc"..="ß😀山"} | Undefined              |
-| Row 0  | 'Abc'             | 0x416263               |
-| Row 1  | 'Dobrý den'       | 0x446f6272c3bd2064656e |
-| Row 2  | 'ß😀山'           | 0xc39ff09f9880e5b1b1   |
-+--------+-------------------+------------------------+
++--------+-------------------+----------------------+
+|        | a                 | Output               |
++--------+-------------------+----------------------+
+| Type   | String            | Binary               |
+| Domain | {"Abc"..="ß😀山"} | Undefined            |
+| Row 0  | 'Abc'             | 416263               |
+| Row 1  | 'Dobrý den'       | 446F6272C3BD2064656E |
+| Row 2  | 'ß😀山'           | C39FF09F9880E5B1B1   |
++--------+-------------------+----------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                           |
@@ -1924,15 +1924,15 @@ ast            : CAST(a AS BINARY NULL)
 raw expr       : CAST(a::String NULL AS Binary NULL)
 checked expr   : CAST(a AS Binary NULL)
 evaluation:
-+--------+----------------------------+------------------------+
-|        | a                          | Output                 |
-+--------+----------------------------+------------------------+
-| Type   | String NULL                | Binary NULL            |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
-| Row 0  | 'Abc'                      | 0x416263               |
-| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
-| Row 2  | NULL                       | NULL                   |
-+--------+----------------------------+------------------------+
++--------+----------------------------+----------------------+
+|        | a                          | Output               |
++--------+----------------------------+----------------------+
+| Type   | String NULL                | Binary NULL          |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                      | 416263               |
+| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
+| Row 2  | NULL                       | NULL                 |
++--------+----------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -1994,7 +1994,7 @@ evaluation:
 |        | a                 | Output      |
 +--------+-------------------+-------------+
 | Type   | String            | String      |
-| Domain | {"Abc"..="ß😀山"} | {""..}      |
+| Domain | {"Abc"..="ß😀山"} | Unknown     |
 | Row 0  | 'Abc'             | 'Abc'       |
 | Row 1  | 'Dobrý den'       | 'Dobrý den' |
 | Row 2  | 'ß😀山'           | 'ß😀山'     |
@@ -2020,15 +2020,15 @@ ast            : CAST(CAST(a AS BINARY NULL) AS STRING NULL)
 raw expr       : CAST(CAST(a::String NULL AS Binary NULL) AS String NULL)
 checked expr   : CAST(CAST(a AS Binary NULL) AS String NULL)
 evaluation:
-+--------+----------------------------+-----------------+
-|        | a                          | Output          |
-+--------+----------------------------+-----------------+
-| Type   | String NULL                | String NULL     |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 'Abc'                      | 'Abc'           |
-| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
-| Row 2  | NULL                       | NULL            |
-+--------+----------------------------+-----------------+
++--------+----------------------------+-------------+
+|        | a                          | Output      |
++--------+----------------------------+-------------+
+| Type   | String NULL                | String NULL |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Unknown     |
+| Row 0  | 'Abc'                      | 'Abc'       |
+| Row 1  | 'Dobrý den'                | 'Dobrý den' |
+| Row 2  | NULL                       | NULL        |
++--------+----------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -4078,28 +4078,28 @@ output         : [[NULL], [NULL, NULL]]
 ast            : TRY_CAST('Abc' AS BINARY)
 raw expr       : TRY_CAST('Abc' AS Binary)
 checked expr   : try_to_binary<String>("Abc")
-optimized expr : 0x416263
+optimized expr : 416263
 output type    : Binary NULL
 output domain  : Undefined
-output         : 0x416263
+output         : 416263
 
 
 ast            : TRY_CAST('Dobrý den' AS BINARY)
 raw expr       : TRY_CAST('Dobrý den' AS Binary)
 checked expr   : try_to_binary<String>("Dobrý den")
-optimized expr : 0x446f6272c3bd2064656e
+optimized expr : 446F6272C3BD2064656E
 output type    : Binary NULL
 output domain  : Undefined
-output         : 0x446f6272c3bd2064656e
+output         : 446F6272C3BD2064656E
 
 
 ast            : TRY_CAST('ß😀山' AS BINARY)
 raw expr       : TRY_CAST('ß😀山' AS Binary)
 checked expr   : try_to_binary<String>("ß😀山")
-optimized expr : 0xc39ff09f9880e5b1b1
+optimized expr : C39FF09F9880E5B1B1
 output type    : Binary NULL
 output domain  : Undefined
-output         : 0xc39ff09f9880e5b1b1
+output         : C39FF09F9880E5B1B1
 
 
 ast            : TRY_CAST(NULL AS BINARY)
@@ -4124,15 +4124,15 @@ ast            : TRY_CAST(a AS BINARY)
 raw expr       : TRY_CAST(a::String AS Binary)
 checked expr   : try_to_binary<String>(a)
 evaluation:
-+--------+-------------------+------------------------+
-|        | a                 | Output                 |
-+--------+-------------------+------------------------+
-| Type   | String            | Binary NULL            |
-| Domain | {"Abc"..="ß😀山"} | Undefined ∪ {NULL}     |
-| Row 0  | 'Abc'             | 0x416263               |
-| Row 1  | 'Dobrý den'       | 0x446f6272c3bd2064656e |
-| Row 2  | 'ß😀山'           | 0xc39ff09f9880e5b1b1   |
-+--------+-------------------+------------------------+
++--------+-------------------+----------------------+
+|        | a                 | Output               |
++--------+-------------------+----------------------+
+| Type   | String            | Binary NULL          |
+| Domain | {"Abc"..="ß😀山"} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'             | 416263               |
+| Row 1  | 'Dobrý den'       | 446F6272C3BD2064656E |
+| Row 2  | 'ß😀山'           | C39FF09F9880E5B1B1   |
++--------+-------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -4146,15 +4146,15 @@ ast            : TRY_CAST(a AS BINARY)
 raw expr       : TRY_CAST(a::String NULL AS Binary)
 checked expr   : try_to_binary<String NULL>(a)
 evaluation:
-+--------+----------------------------+------------------------+
-|        | a                          | Output                 |
-+--------+----------------------------+------------------------+
-| Type   | String NULL                | Binary NULL            |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
-| Row 0  | 'Abc'                      | 0x416263               |
-| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
-| Row 2  | NULL                       | NULL                   |
-+--------+----------------------------+------------------------+
++--------+----------------------------+----------------------+
+|        | a                          | Output               |
++--------+----------------------------+----------------------+
+| Type   | String NULL                | Binary NULL          |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                      | 416263               |
+| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
+| Row 2  | NULL                       | NULL                 |
++--------+----------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -4168,15 +4168,15 @@ ast            : TRY_CAST(a AS BINARY NULL)
 raw expr       : TRY_CAST(a::String NULL AS Binary NULL)
 checked expr   : TRY_CAST(a AS Binary NULL)
 evaluation:
-+--------+----------------------------+------------------------+
-|        | a                          | Output                 |
-+--------+----------------------------+------------------------+
-| Type   | String NULL                | Binary NULL            |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}     |
-| Row 0  | 'Abc'                      | 0x416263               |
-| Row 1  | 'Dobrý den'                | 0x446f6272c3bd2064656e |
-| Row 2  | NULL                       | NULL                   |
-+--------+----------------------------+------------------------+
++--------+----------------------------+----------------------+
+|        | a                          | Output               |
++--------+----------------------------+----------------------+
+| Type   | String NULL                | Binary NULL          |
+| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                      | 416263               |
+| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
+| Row 2  | NULL                       | NULL                 |
++--------+----------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |

@@ -24,6 +24,7 @@ use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::buffer::Buffer;
 use crate::arrow::datatypes::DataType;
+use crate::arrow::error::Error;
 use crate::arrow::error::Result;
 use crate::arrow::io::parquet::read::InitNested;
 use crate::arrow::io::parquet::read::NestedState;
@@ -308,7 +309,18 @@ fn try_new_binary_array<O: Offset>(
     validity: Option<Bitmap>,
 ) -> Result<Box<dyn Array>> {
     if matches!(data_type, DataType::Utf8 | DataType::LargeUtf8) {
-        let array = Utf8Array::<O>::try_new(data_type, offsets, values, validity)?;
+        // todo!("new string")
+        let array =
+            Utf8Array::<O>::try_new(data_type, offsets, values, validity).map_err(|err| {
+                Error::External(
+                    "Encountered invalid utf8 data for string type, \
+                        if you were reading column with string type from a table, \
+                        it's recommended to alter the column type to `BINARY`.\n\
+                        Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`"
+                        .to_string(),
+                    Box::new(err),
+                )
+            })?;
         Ok(Box::new(array) as Box<dyn Array>)
     } else {
         let array = BinaryArray::<O>::try_new(data_type, offsets, values, validity)?;

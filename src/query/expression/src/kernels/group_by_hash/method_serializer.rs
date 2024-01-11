@@ -48,7 +48,7 @@ impl HashMethod for HashMethodSerializer {
             serialize_size += column.serialize_size();
             serialize_columns.push(column.clone());
         }
-        Ok(KeysState::Column(Column::String(serialize_group_columns(
+        Ok(KeysState::Column(Column::Binary(serialize_group_columns(
             &serialize_columns,
             num_rows,
             serialize_size,
@@ -57,7 +57,7 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
-            KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            KeysState::Column(Column::Binary(col)) => Ok(col.iter()),
             _ => unreachable!(),
         }
     }
@@ -68,7 +68,7 @@ impl HashMethod for HashMethodSerializer {
         hashes: &mut Vec<u64>,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
-            KeysState::Column(Column::String(col)) => {
+            KeysState::Column(Column::Binary(col)) => {
                 hashes.extend(col.iter().map(hash_join_fast_string_hash));
                 let (data, offsets) = col.into_buffer();
                 Ok(Box::new(StringKeyAccessor::new(data, offsets)))

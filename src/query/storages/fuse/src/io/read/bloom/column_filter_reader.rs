@@ -161,18 +161,14 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             let array = array?;
             let col = Column::from_arrow(
                 array.as_ref(),
-                &databend_common_expression::types::DataType::String,
+                &databend_common_expression::types::DataType::Binary,
             )?;
 
             let filter_bytes = col
-                .as_string()
-                .map(|str| unsafe { str.index_unchecked(0) })
-                .ok_or_else(|| {
-                    // BloomPruner will log and handle this exception
-                    ErrorCode::Internal(
-                        "unexpected exception: load bloom filter raw data as string failed",
-                    )
-                })?;
+                .as_binary()
+                .expect("load bloom filter raw data as binary failed")
+                .index(0)
+                .unwrap();
             metrics_inc_block_index_read_bytes(filter_bytes.len() as u64);
             let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
             Ok(filter)
