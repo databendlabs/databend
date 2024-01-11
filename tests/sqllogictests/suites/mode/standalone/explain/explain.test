@@ -80,7 +80,7 @@ HashJoin
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
-├── estimated rows: 0.90
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1)]

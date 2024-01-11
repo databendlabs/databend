@@ -112,7 +112,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 1.80
+├── estimated rows: 2.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
@@ -151,7 +151,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 1.80
+├── estimated rows: 2.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
@@ -260,7 +260,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 1.80
+├── estimated rows: 2.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_not_null(t1.a (#1))]
@@ -299,7 +299,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 0.90
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) = 1)]

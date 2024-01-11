@@ -25,14 +25,14 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t2.a (#2)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
@@ -73,14 +73,14 @@ HashJoin
 ├── build keys: [t2.a (#1)]
 ├── probe keys: [t1.a (#2)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t2.a (#1)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
@@ -121,14 +121,14 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t.a (#1)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t2.a (#2)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
@@ -169,14 +169,14 @@ HashJoin
 ├── build keys: [t2.a (#1)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#2)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t2.a (#1)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
@@ -217,14 +217,14 @@ HashJoin
 ├── build keys: [t2.a (#0)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#0), t.a (#2)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t2.a (#0)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
@@ -265,14 +265,14 @@ HashJoin
 ├── build keys: [t2.a (#0)]
 ├── probe keys: [t1.a (#2)]
 ├── filters: []
-├── estimated rows: 0.81
+├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#0), t.a (#1)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t2.a (#0)]
 │   ├── filters: []
-│   ├── estimated rows: 0.90
+│   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
