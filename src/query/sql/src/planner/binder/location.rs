@@ -27,6 +27,7 @@ use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
@@ -384,6 +385,28 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let sp = StorageParams::Huggingface(StorageHuggingfaceConfig {
+        repo_id: l.name.to_string(),
+        repo_type: l
+            .connection
+            .get("repo_type")
+            .cloned()
+            .unwrap_or_else(|| "datasets".to_string()),
+        revision: l
+            .connection
+            .get("revision")
+            .cloned()
+            .unwrap_or_else(|| "main".to_string()),
+        root,
+        token: l.connection.get("token:").cloned().unwrap_or_default(),
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub async fn parse_uri_location(
     l: &mut UriLocation,
@@ -482,6 +505,7 @@ pub async fn parse_uri_location(
             }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
+        Scheme::Huggingface => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
