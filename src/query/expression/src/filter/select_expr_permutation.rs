@@ -16,14 +16,23 @@ use rand::Rng;
 
 #[derive(Clone, Debug)]
 pub struct FilterPermutation {
+    // Whether we can reorder filter expressions.
     can_reorder: bool,
+    // Whether there is a swap to be observed.
     observe: bool,
+    // If there is a better swap, we keep it at least once.
     keep_better: bool,
+    // The last swap index is swap_idx and swap_idx + 1.
     swap_idx: usize,
+    // The sum of runtime of this permutation.
     runtime_sum: u64,
+    // The count of runtime of this permutation.
     runtime_count: u64,
+    // The possibility of swap for index [0, permutation.len() - 1]
     swap_possibility: Vec<u32>,
+    // The permutation of filter expressions.
     permutation: Vec<usize>,
+    // The border of random number.
     random_number_border: u64,
 }
 
