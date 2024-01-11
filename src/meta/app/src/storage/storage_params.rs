@@ -40,6 +40,7 @@ pub enum StorageParams {
     S3(StorageS3Config),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
+    HuggingFace(StorageHuggingFaceConfig),
 
     /// None means this storage type is none.
     ///
@@ -73,6 +74,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::HuggingFace(_) => true,
             StorageParams::None => false,
         }
     }
@@ -94,6 +96,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.root = f(&v.root),
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
+            StorageParams::HuggingFace(v) => v.root = f(&v.root),
             StorageParams::None => {}
         };
 
@@ -213,6 +216,13 @@ impl Display for StorageParams {
             }
             StorageParams::Webhdfs(v) => {
                 write!(f, "webhdfs | root={},endpoint={}", v.root, v.endpoint_url)
+            }
+            StorageParams::HuggingFace(v) => {
+                write!(
+                    f,
+                    "huggingface | repo_type={}, repo_id={}, root={}",
+                    v.repo_type, v.repo_id, v.root
+                )
             }
             StorageParams::None => {
                 write!(f, "none",)
@@ -557,6 +567,29 @@ impl Debug for StorageCosConfig {
         ds.field("root", &self.root);
         ds.field("secret_id", &mask_string(&self.secret_id, 3));
         ds.field("secret_key", &mask_string(&self.secret_key, 3));
+
+        ds.finish()
+    }
+}
+
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageHuggingFaceConfig {
+    pub repo_id: String,
+    pub repo_type: String,
+    pub revision: String,
+    pub token: String,
+    pub root: String,
+}
+
+impl Debug for StorageHuggingFaceConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("StorageHuggingFaceConfig");
+
+        ds.field("repo_id", &self.repo_id);
+        ds.field("repo_type", &self.repo_type);
+        ds.field("revision", &self.revision);
+        ds.field("root", &self.root);
+        ds.field("token", &mask_string(&self.token, 3));
 
         ds.finish()
     }
