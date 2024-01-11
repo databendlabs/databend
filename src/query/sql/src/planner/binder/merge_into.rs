@@ -407,6 +407,7 @@ impl Binder {
             merge_type,
             distributed: false,
             change_join_order: false,
+            row_id_index: column_binding.index,
         })
     }
 

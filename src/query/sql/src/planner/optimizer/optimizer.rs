@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
@@ -332,6 +333,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     let flag = plan.matched_evaluators.len() == 1
         && plan.matched_evaluators[0].condition.is_none()
         && plan.matched_evaluators[0].update.is_some();
+    let mut new_columns_set = plan.columns_set.clone();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -341,6 +343,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             == 0
         && flag
     {
+        new_columns_set.remove(&plan.row_id_index);
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
@@ -378,9 +381,9 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 merge_into_join_sexpr,
                 change_join_order,
                 opt_ctx.table_ctx.clone(),
-                plan.merge_type.clone(),
-                plan.target_table_idx,
+                plan.as_ref(),
                 false, // we will open it, but for now we don't support distributed
+                new_columns_set.as_mut(),
             )?;
             (merge_into_join_sexpr.clone(), false)
         } else {
@@ -394,12 +397,14 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             input: Box::new(optimized_distributed_merge_into_join_sexpr),
             distributed,
             change_join_order,
+            columns_set: new_columns_set.clone(),
             ..*plan
         })))
     } else {
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: join_sexpr,
             change_join_order,
+            columns_set: new_columns_set,
             ..*plan
         })))
     }
@@ -409,9 +414,9 @@ fn try_to_change_as_broadcast_join(
     merge_into_join_sexpr: SExpr,
     change_join_order: bool,
     table_ctx: Arc<dyn TableContext>,
-    merge_into_type: MergeIntoType,
-    target_tbl_idx: usize,
+    plan: &MergeInto,
     only_one_matched_clause: bool,
+    new_columns_set: &mut HashSet<usize>,
 ) -> Result<SExpr> {
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
@@ -424,13 +429,15 @@ fn try_to_change_as_broadcast_join(
             // for now, when we use target table as build side and it's a broadcast join,
             // we will use merge_into_block_info_hashtable to reduce i/o operations.
             if change_join_order
-                && matches!(merge_into_type, MergeIntoType::FullOperation)
+                && matches!(plan.merge_type, MergeIntoType::FullOperation)
                 && only_one_matched_clause
             {
+                // remove rowid
+                new_columns_set.remove(&plan.row_id_index);
                 table_ctx.set_merge_into_join(MergeIntoJoin {
                     merge_into_join_type: MergeIntoJoinType::Left,
                     is_distributed: true,
-                    target_tbl_idx,
+                    target_tbl_idx: plan.target_table_idx,
                 })
             }
             return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
