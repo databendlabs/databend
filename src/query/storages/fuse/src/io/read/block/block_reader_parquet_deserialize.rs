@@ -315,6 +315,7 @@ impl BlockReader {
                     "unexpected deserialization error, no array found for field {field_name} "
                 ))
             })?;
+            assert!(array_iter.next().is_none());
 
             // mark the array
             if is_nested {
