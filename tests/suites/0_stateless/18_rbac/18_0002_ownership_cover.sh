@@ -83,34 +83,29 @@ echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT
 echo "=== test ownership: show stmt ==="
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database db_a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists db_a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 
 
 echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '123' with DEFAULT_ROLE='role1';" | $BENDSQL_CLIENT_CONNECT
-echo "create user b identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "grant create on *.* to a;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create on *.* to b;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '123'" | $BENDSQL_CLIENT_CONNECT
+echo "create database db_a;" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on db_a.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
 
+echo "create user b identified by '123';" | $BENDSQL_CLIENT_CONNECT
 
 export USER_A_CONNECT="bendsql --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-
+echo "set default role role1;" | $USER_A_CONNECT
 echo "show roles;" | $USER_A_CONNECT
-echo "create database db_a;" | $USER_A_CONNECT
 echo "create table db_a.t(id int);" | $USER_A_CONNECT
 echo "create table db_a.t1(id int);" | $USER_A_CONNECT
+echo "show tables from db_a" | $USER_A_CONNECT
+echo "show databases" | $USER_A_CONNECT
 
 echo "show grants for role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for a;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop table db_a.t" | $USER_A_CONNECT
-
-echo "show grants for role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for a;" | $BENDSQL_CLIENT_CONNECT
 
 echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
 echo "show grants for b;" | $BENDSQL_CLIENT_CONNECT
@@ -122,12 +117,12 @@ echo "show tables from db_a;" | $USER_B_CONNECT
 
 echo "revoke role role1 from a;" | $BENDSQL_CLIENT_CONNECT
 echo "show grants for a ;" | $BENDSQL_CLIENT_CONNECT
-echo "revoke create on *.* from a;" | $BENDSQL_CLIENT_CONNECT
 
 echo "show tables from db_a;" | $USER_A_CONNECT
 echo "show tables from db_a;" | $USER_B_CONNECT
 
+echo "drop table db_a.t1;" | $USER_B_CONNECT
+echo "drop database db_a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database db_a;" | $BENDSQL_CLIENT_CONNECT
