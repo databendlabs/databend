@@ -332,7 +332,11 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     // update xx when not matched then insert xx.
     let flag = plan.matched_evaluators.len() == 1
         && plan.matched_evaluators[0].condition.is_none()
-        && plan.matched_evaluators[0].update.is_some();
+        && plan.matched_evaluators[0].update.is_some()
+        && !opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_enable_distributed_merge_into()?;
     let mut new_columns_set = plan.columns_set.clone();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
@@ -426,11 +430,11 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
 
 fn try_to_change_as_broadcast_join(
     merge_into_join_sexpr: SExpr,
-    change_join_order: bool,
-    table_ctx: Arc<dyn TableContext>,
-    plan: &MergeInto,
-    only_one_matched_clause: bool,
-    new_columns_set: &mut HashSet<usize>,
+    _change_join_order: bool,
+    _table_ctx: Arc<dyn TableContext>,
+    _plan: &MergeInto,
+    _only_one_matched_clause: bool,
+    _new_columns_set: &mut HashSet<usize>,
 ) -> Result<SExpr> {
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
@@ -442,18 +446,19 @@ fn try_to_change_as_broadcast_join(
                 .replace_plan(Arc::new(RelOperator::Join(join)));
             // for now, when we use target table as build side and it's a broadcast join,
             // we will use merge_into_block_info_hashtable to reduce i/o operations.
-            if change_join_order
-                && matches!(plan.merge_type, MergeIntoType::FullOperation)
-                && only_one_matched_clause
-            {
-                // remove rowid
-                new_columns_set.remove(&plan.row_id_index);
-                table_ctx.set_merge_into_join(MergeIntoJoin {
-                    merge_into_join_type: MergeIntoJoinType::Left,
-                    is_distributed: true,
-                    target_tbl_idx: plan.target_table_idx,
-                })
-            }
+            // Todo(JackTan25): we don't support in distributed mod for target build optimization for now. we will enable in next pr.
+            // if change_join_order
+            //     && matches!(plan.merge_type, MergeIntoType::FullOperation)
+            //     && only_one_matched_clause
+            // {
+            // remove rowid
+            // new_columns_set.remove(&plan.row_id_index);
+            // table_ctx.set_merge_into_join(MergeIntoJoin {
+            //     merge_into_join_type: MergeIntoJoinType::Left,
+            //     is_distributed: true,
+            //     target_tbl_idx: plan.target_table_idx,
+            // })
+            // }
             return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
         }
     }
