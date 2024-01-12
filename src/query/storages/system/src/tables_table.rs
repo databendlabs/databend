@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -203,10 +204,14 @@ where TablesTable<T>: HistoryAware
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
-                            dbs.push(database);
+                        match ctl.get_database(tenant.as_str(), db.as_str()).await {
+                            Ok(database) => dbs.push(database),
+                            Err(err) => {
+                                let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                            }
                         }
-                        ctx.push_warning(format!("get database failed: {}", db))
                     }
                 }
             }
@@ -215,11 +220,11 @@ where TablesTable<T>: HistoryAware
                 dbs = match ctl.list_databases(tenant.as_str()).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
-                        ctx.push_warning(format!(
-                            "list databases failed on catalog {}: {}",
-                            ctl.name(),
-                            err
-                        ));
+                        let msg =
+                            format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
                         vec![]
                     }
                 }
@@ -250,11 +255,11 @@ where TablesTable<T>: HistoryAware
                         // - iceberg database
                         // - others
                         // TODO(liyz): return the warnings in the HTTP query protocol.
-                        ctx.push_warning(format!(
-                            "list tables failed on db {}: {}",
-                            db.name(),
-                            err
-                        ));
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
                         continue;
                     }
                 };
@@ -304,11 +309,14 @@ where TablesTable<T>: HistoryAware
             let stats = match tbl.table_statistics(ctx.clone()).await {
                 Ok(stats) => stats,
                 Err(err) => {
-                    ctx.push_warning(format!(
-                        "get table statistics failed on table {}: {}",
+                    let msg = format!(
+                        "Unable to get table statistics on table {}: {}",
                         tbl.name(),
                         err
-                    ));
+                    );
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
+
                     None
                 }
             };
