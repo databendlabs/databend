@@ -102,6 +102,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (70, "2023-12-25: Add: datatype.proto Binary type", ),
     (71, "2024-01-02: Add: user.proto/password options", ),
     (72, "2024-01-09: Add: user.proto/CSVFileFormatParams add field `empty_field_as`", ),
+    (73, "2024-01-11: Add: config.proto/StorageConfig add HuggingfaceConfig", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
