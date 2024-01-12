@@ -41,25 +41,25 @@ Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 1
 ├── offset: 0
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Sort
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
         ├── group by: [number, number, number, number]
         ├── aggregate functions: []
-        ├── estimated rows: 0.20
+        ├── estimated rows: 0.00
         └── AggregatePartial
             ├── output columns: [#_group_by_key]
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
-            ├── estimated rows: 0.20
+            ├── estimated rows: 0.00
             └── Filter
                 ├── output columns: [numbers.number (#0)]
                 ├── filters: [numbers.number (#0) > 1]
-                ├── estimated rows: 0.20
+                ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
@@ -228,11 +228,11 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.20
+│   ├── estimated rows: 0.00
 │   └── AggregateFinal
 │       ├── output columns: [count(*) (#2)]
 │       ├── group by: []

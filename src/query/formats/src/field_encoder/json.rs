@@ -55,6 +55,11 @@ impl FieldEncoderJSON {
     pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
         match &column {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+
+            Column::Binary(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                self.write_string(buf, out_buf);
+            }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.write_string(buf, out_buf);
@@ -75,8 +80,12 @@ impl FieldEncoderJSON {
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
 
-            // null, bool, number
-            _ => self.simple.write_field(column, row_index, out_buf, false),
+            Column::Null { .. }
+            | Column::EmptyArray { .. }
+            | Column::EmptyMap { .. }
+            | Column::Number(_)
+            | Column::Decimal(_)
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
     }
 

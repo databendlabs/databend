@@ -137,7 +137,7 @@ impl HiveBlockReader {
         };
 
         let projected_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         Ok(Arc::new(HiveBlockReader {
             operator,
             projection,

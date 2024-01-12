@@ -48,6 +48,7 @@ impl Datum {
                 Some(Datum::Float(F64::from(f32::from(v) as f64)))
             }
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
+            Scalar::Binary(v) => Some(Datum::Bytes(v)),
             Scalar::String(v) => Some(Datum::Bytes(v)),
             _ => None,
         }

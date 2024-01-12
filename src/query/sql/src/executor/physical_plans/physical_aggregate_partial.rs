@@ -44,7 +44,7 @@ impl AggregatePartial {
         for agg in self.agg_funcs.iter() {
             fields.push(DataField::new(
                 &agg.output_column.to_string(),
-                DataType::String,
+                DataType::Binary,
             ));
         }
         if !self.group_by.is_empty() {

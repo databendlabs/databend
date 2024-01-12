@@ -154,6 +154,8 @@ build_exceptions! {
 
     /// ParquetFileInvalid is used when given parquet file is invalid.
     ParquetFileInvalid(1201),
+    /// InvalidUtf8String is used when given string is not a valid utf8 string.
+    InvalidUtf8String(1202),
 
     // Table related errors starts here.
 

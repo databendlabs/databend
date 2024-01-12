@@ -263,7 +263,7 @@ impl BloomIndex {
             }
 
             let filter_name = Self::build_filter_column_name(version, &field)?;
-            filter_fields.push(TableField::new(&filter_name, TableDataType::String));
+            filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }
 
@@ -287,8 +287,8 @@ impl BloomIndex {
         let mut filter_columns = Vec::with_capacity(fields.len());
         for filter in &self.filters {
             let serialized_bytes = filter.to_bytes()?;
-            let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
-            filter_columns.push(BlockEntry::new(DataType::String, filter_value));
+            let filter_value = Value::Scalar(Scalar::Binary(serialized_bytes));
+            filter_columns.push(BlockEntry::new(DataType::Binary, filter_value));
         }
         Ok(DataBlock::new(filter_columns, 1))
     }
