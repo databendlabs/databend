@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
@@ -25,21 +26,28 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
 use super::buffers::FileOutputBuffers;
+use crate::append::output::DataSummary;
 use crate::append::path::unload_path;
+use crate::append::UnloadOutput;
 
 pub struct RowBasedFileWriter {
     input: Arc<InputPort>,
+    output: Arc<OutputPort>,
     table_info: StageTableInfo,
 
     // always blocks for a whole file if not empty
     input_data: Option<DataBlock>,
     // always the data for a whole file if not empty
-    output_data: Vec<u8>,
+    file_to_write: Option<(Vec<u8>, DataSummary)>,
+
+    unload_output: UnloadOutput,
+    unload_output_blocks: Option<VecDeque<DataBlock>>,
 
     data_accessor: Operator,
     prefix: Vec<u8>,
@@ -54,6 +62,7 @@ pub struct RowBasedFileWriter {
 impl RowBasedFileWriter {
     pub fn try_create(
         input: Arc<InputPort>,
+        output: Arc<OutputPort>,
         table_info: StageTableInfo,
         data_accessor: Operator,
         prefix: Vec<u8>,
@@ -61,6 +70,8 @@ impl RowBasedFileWriter {
         group_id: usize,
         compression: Option<CompressAlgorithm>,
     ) -> Result<ProcessorPtr> {
+        let unload_output =
+            UnloadOutput::create(table_info.stage_info.copy_options.detailed_output);
         Ok(ProcessorPtr::create(Box::new(RowBasedFileWriter {
             table_info,
             input,
@@ -70,8 +81,11 @@ impl RowBasedFileWriter {
             uuid,
             group_id,
             batch_id: 0,
-            output_data: vec![],
+            file_to_write: None,
             compression,
+            output,
+            unload_output,
+            unload_output_blocks: None,
         })))
     }
 }
@@ -87,15 +101,34 @@ impl Processor for RowBasedFileWriter {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if !self.output_data.is_empty() {
+        if self.output.is_finished() {
+            self.input.finish();
+            Ok(Event::Finished)
+        } else if self.file_to_write.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Async)
         } else if self.input_data.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else if self.input.is_finished() {
-            self.input.set_not_need_data();
-            Ok(Event::Finished)
+            if self.unload_output.is_empty() {
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+            if self.unload_output_blocks.is_none() {
+                self.unload_output_blocks = Some(self.unload_output.to_block_partial().into());
+            }
+            if self.output.can_push() {
+                if let Some(block) = self.unload_output_blocks.as_mut().unwrap().pop_front() {
+                    self.output.push_data(Ok(block));
+                    Ok(Event::NeedConsume)
+                } else {
+                    self.output.finish();
+                    Ok(Event::Finished)
+                }
+            } else {
+                Ok(Event::NeedConsume)
+            }
         } else if self.input.has_data() {
             self.input_data = Some(self.input.pull_data().unwrap()?);
             self.input.set_not_need_data();
@@ -110,16 +143,28 @@ impl Processor for RowBasedFileWriter {
         let block = self.input_data.take().unwrap();
         let block_meta = block.get_owned_meta().unwrap();
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
-        let size = buffers.buffers.iter().map(|b| b.len()).sum::<usize>();
+        let size = buffers
+            .buffers
+            .iter()
+            .map(|b| b.buffer.len())
+            .sum::<usize>();
+        let row_counts = buffers.buffers.iter().map(|b| b.row_counts).sum::<usize>();
         let mut output = Vec::with_capacity(self.prefix.len() + size);
         output.extend_from_slice(self.prefix.as_slice());
         for b in buffers.buffers {
-            output.extend_from_slice(b.as_slice());
+            output.extend_from_slice(b.buffer.as_slice());
         }
+        let input_bytes = output.len();
         if let Some(compression) = self.compression {
             output = CompressCodec::from(compression).compress_all(&output)?;
         }
-        self.output_data = output;
+        let output_bytes = output.len();
+        let summary = DataSummary {
+            row_counts,
+            input_bytes,
+            output_bytes,
+        };
+        self.file_to_write = Some((output, summary));
         Ok(())
     }
 
@@ -132,7 +177,8 @@ impl Processor for RowBasedFileWriter {
             self.batch_id,
             self.compression,
         );
-        let data = mem::take(&mut self.output_data);
+        let (data, summary) = mem::take(&mut self.file_to_write).unwrap();
+        self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;
         Ok(())

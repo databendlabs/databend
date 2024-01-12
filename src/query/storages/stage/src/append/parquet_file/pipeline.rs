@@ -44,7 +44,7 @@ pub(crate) fn append_data_to_parquet_files(
     if max_file_size != usize::MAX {
         pipeline.try_resize(max_threads)?;
     }
-    pipeline.add_sink(|input| {
+    pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut options_ext =
             FileFormatOptionsExt::create_from_settings(&ctx.get_settings(), false)?;
@@ -54,6 +54,7 @@ pub(crate) fn append_data_to_parquet_files(
         )?;
         ParquetFileWriter::try_create(
             input,
+            output,
             table_info.clone(),
             output_format,
             op.clone(),

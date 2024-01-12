@@ -25,6 +25,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
+use crate::append::row_based_file::buffers::FileOutputBuffer;
 use crate::append::row_based_file::buffers::FileOutputBuffers;
 
 pub(super) struct LimitFileSizeProcessor {
@@ -34,7 +35,7 @@ pub(super) struct LimitFileSizeProcessor {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-    buffers: Vec<Vec<u8>>,
+    buffers: Vec<FileOutputBuffer>,
 }
 
 impl LimitFileSizeProcessor {
@@ -119,7 +120,7 @@ impl Processor for LimitFileSizeProcessor {
             .iter()
             .enumerate()
             .find_map(|(idx, b)| {
-                size += b.len();
+                size += b.buffer.len();
                 if size >= self.threshold {
                     Some(idx)
                 } else {

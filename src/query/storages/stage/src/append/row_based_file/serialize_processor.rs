@@ -25,6 +25,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
+use super::buffers::FileOutputBuffer;
 use super::buffers::FileOutputBuffers;
 
 pub(super) struct SerializeProcessor {
@@ -60,7 +61,7 @@ impl Transform for SerializeProcessor {
             let small_block = block.slice(i..end);
             let bs = self.output_format.serialize_block(&small_block)?;
             bytes += bs.len();
-            buffers.push(bs);
+            buffers.push(FileOutputBuffer::create(bs, small_block.num_rows()));
         }
         let progress_values = ProgressValues {
             rows: num_rows,

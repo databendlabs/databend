@@ -71,10 +71,11 @@ pub(crate) fn append_data_to_row_based_files(
 
     let compression = InputContext::get_compression_alg_copy(compression, "")?;
 
-    pipeline.add_sink(|input| {
+    pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         RowBasedFileWriter::try_create(
             input,
+            output,
             table_info.clone(),
             op.clone(),
             prefix.clone(),

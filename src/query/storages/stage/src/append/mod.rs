@@ -17,3 +17,5 @@ mod output;
 mod parquet_file;
 mod path;
 mod row_based_file;
+
+pub use output::UnloadOutput;

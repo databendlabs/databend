@@ -17,10 +17,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use super::parquet_file::append_data_to_parquet_files;
 use super::row_based_file::append_data_to_row_based_files;
+use crate::append::output::SumSummaryTransform;
 use crate::StageTable;
 
 impl StageTable {
@@ -72,6 +75,16 @@ impl StageTable {
                 &group_id,
             )?,
         };
+        if !self.table_info.stage_info.copy_options.detailed_output {
+            pipeline.try_resize(1)?;
+            pipeline.add_transform(move |input, output| {
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                    input,
+                    output,
+                    SumSummaryTransform::default(),
+                )))
+            })?;
+        }
         Ok(())
     }
 }
