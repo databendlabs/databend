@@ -157,7 +157,10 @@ impl Processor for MergeIntoSplitProcessor {
                 let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
                 if meta_index.is_some() {
                     // we reserve the meta in data_block to avoid adding insert `merge_status` in `merge_into_not_matched` by mistake.
-                    self.output_data_not_matched_data = Some(data_block.clone());
+                    // if `is_empty`, it's a whole block matched, we need to delete.
+                    if !data_block.is_empty() {
+                        self.output_data_not_matched_data = Some(data_block.clone());
+                    }
                     // if the downstream receive this, it should just treat this as a DeletedLog.
                     self.output_data_matched_data = Some(DataBlock::empty_with_meta(Box::new(
                         meta_index.unwrap().clone(),

@@ -57,7 +57,7 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
-pub type ChunkPartialUnmodified = (Vec<(Interval, u64)>, u32);
+pub type ChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -488,8 +488,13 @@ impl HashJoinProbeState {
         let matched = unsafe { &*self.hash_join_state.matched.get() };
         let chunks_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
+        let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
         // generate chunks
-        let tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
+        let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
+        for prefix in all_matched_blocks {
+            // deleted block
+            tasks.push((Vec::new(), prefix));
+        }
         *self.final_merge_into_partial_unmodified_scan_tasks.write() = tasks.into();
         Ok(())
     }

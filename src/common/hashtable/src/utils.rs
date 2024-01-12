@@ -199,7 +199,7 @@ pub mod sse {
 // `merge into t using source on xxx when matched then update xxx when not macthed then insert xxx.
 // for merge into:
 // we use BlockInfoIndex to maintain an index for the block info in chunks.
-#[allow(dead_code)]
+
 pub struct BlockInfoIndex {
     // the intervals will be like below:
     // (0,10)(11,29),(30,38). it's ordered.
@@ -221,9 +221,7 @@ pub type Interval = (u32, u32);
 /// segment2_block0 |
 ///
 /// .........
-
 impl BlockInfoIndex {
-    #[allow(dead_code)]
     pub fn new_with_capacity(capacity: usize) -> Self {
         BlockInfoIndex {
             intervals: Vec::with_capacity(capacity),
@@ -235,7 +233,6 @@ impl BlockInfoIndex {
     /// 1.interval stands for the (start,end) in chunks for one block.
     /// 2.prefix is the segment_id_block_id composition.
     /// we can promise the ordered insert from outside.
-    #[allow(dead_code)]
     pub fn insert_block_offsets(&mut self, interval: Interval, prefix: u64) {
         self.intervals.push(interval);
         self.prefixs.push(prefix);
@@ -255,8 +252,7 @@ impl BlockInfoIndex {
     ///                |--|
     /// case4: |-----|------|------|
     ///              |--------|           
-    #[allow(dead_code)]
-    pub fn get_block_info(&self, interval: Interval) -> Vec<(Interval, u64)> {
+    fn get_block_info(&self, interval: Interval) -> Vec<(Interval, u64)> {
         let mut res = Vec::<(Interval, u64)>::with_capacity(2);
         let left_idx = self.search_idx(interval.0);
         let right_idx = self.search_idx(interval.1);
@@ -282,7 +278,6 @@ impl BlockInfoIndex {
 
     /// search idx help us to find out the intervals idx which contain offset.
     /// It must contain offset.
-    #[allow(dead_code)]
     fn search_idx(&self, offset: u32) -> usize {
         let mut l = 0;
         let mut r = self.length - 1;
@@ -297,7 +292,55 @@ impl BlockInfoIndex {
         l
     }
 
-    #[allow(dead_code)]
+    pub fn gather_matched_all_blocks(&self, hits: &[u8]) -> Vec<u64> {
+        let mut res = Vec::with_capacity(10);
+        let mut step = 0;
+        while step < hits.len() {
+            if hits[step] == 1 {
+                break;
+            }
+            step += 1;
+        }
+        if step == hits.len() {
+            return res;
+        }
+        let mut start = step;
+        let mut end = step;
+        while start < hits.len() {
+            while end < hits.len() && hits[end] == 1 {
+                end += 1;
+            }
+            let left = self.search_idx(start as u32);
+            let right = self.search_idx((end - 1) as u32);
+            if left == right {
+                // macthed only one block.
+                if self.intervals[left].0 == (start as u32)
+                    && self.intervals[right].1 == (end - 1) as u32
+                {
+                    res.push(self.prefixs[left]);
+                }
+            } else {
+                assert!(right > left);
+                // 1. left most side.
+                if self.intervals[left].0 == start as u32 {
+                    res.push(self.prefixs[left]);
+                }
+                for idx in left + 1..right {
+                    res.push(self.prefixs[idx]);
+                }
+                // 2. right most side.
+                if self.intervals[right].1 == (end - 1) as u32 {
+                    res.push(self.prefixs[right]);
+                }
+            }
+            while end < hits.len() && hits[end] == 0 {
+                end += 1;
+            }
+            start = end;
+        }
+        res
+    }
+
     pub fn gather_all_partial_block_offsets(&self, hits: &[u8]) -> Vec<(Interval, u64)> {
         let mut res = Vec::with_capacity(10);
         let mut step = 0;
@@ -330,7 +373,7 @@ impl BlockInfoIndex {
         &self,
         partial_unmodified: &Vec<(Interval, u64)>,
         chunks_offsets: &Vec<u32>,
-    ) -> Vec<(Vec<(Interval, u64)>, u32)> {
+    ) -> Vec<(Vec<(Interval, u64)>, u64)> {
         let mut res = Vec::with_capacity(chunks_offsets.len());
         let mut chunk_idx = 0;
         let mut partial_idx = 0;
@@ -339,7 +382,7 @@ impl BlockInfoIndex {
             // here is '<', not '<=', chunks_offsets[chunk_idx] is the count of chunks[chunk_idx]
             if partial_unmodified[partial_idx].0.1 < chunks_offsets[chunk_idx] {
                 if offset >= res.len() {
-                    res.push((Vec::new(), chunk_idx as u32));
+                    res.push((Vec::new(), chunk_idx as u64));
                 }
                 res[offset].0.push(partial_unmodified[partial_idx])
             } else {
@@ -348,6 +391,10 @@ impl BlockInfoIndex {
                 partial_idx -= 1;
             }
             partial_idx += 1;
+        }
+        // check
+        for chunk in &res {
+            assert!(!chunk.0.is_empty());
         }
         res
     }
@@ -477,4 +524,58 @@ fn test_block_info_index() {
     assert_eq!(res[0].0.len(), 1);
     assert_eq!(res[0].1, 0); // chunk_idx
     assert_eq!(res[0].0[0], ((13, 16), 1));
+
+    // test matched all blocks
+    // blocks: [0,10][11,20][21,30],[31,39]
+
+    // 1.empty
+    let mut hits = vec![0; 40];
+    // set [11,19]
+    for item in hits.iter_mut().take(19 + 1).skip(11) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.is_empty());
+
+    let mut hits = vec![0; 40];
+    // set [13,28]
+    for item in hits.iter_mut().take(28 + 1).skip(13) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.is_empty());
+
+    // 2.one
+    let mut hits = vec![0; 40];
+    // set [11,20]
+    for item in hits.iter_mut().take(20 + 1).skip(11) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.len() == 1 && res[0] == 1);
+
+    let mut hits = vec![0; 40];
+    // set [13,33]
+    for item in hits.iter_mut().take(33 + 1).skip(13) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.len() == 1 && res[0] == 2);
+
+    // 3.multi blocks
+    let mut hits = vec![0; 40];
+    // set [11,30]
+    for item in hits.iter_mut().take(30 + 1).skip(11) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.len() == 2 && res[0] == 1 && res[1] == 2);
+
+    let mut hits = vec![0; 40];
+    // set [10,31]
+    for item in hits.iter_mut().take(31 + 1).skip(11) {
+        *item = 1;
+    }
+    let res = block_info_index.gather_matched_all_blocks(&hits);
+    assert!(res.len() == 2 && res[0] == 1 && res[1] == 2);
 }

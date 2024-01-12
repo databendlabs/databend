@@ -129,6 +129,18 @@ impl TransformHashJoinProbe {
         &mut self,
         item: ChunkPartialUnmodified,
     ) -> Result<()> {
+        // matched whole block, need to delete
+        if item.0.is_empty() {
+            let prefix = item.1;
+            let (segment_idx, block_idx) = split_prefix(prefix);
+            let data_block = DataBlock::empty_with_meta(Box::new(BlockMetaIndex {
+                segment_idx: segment_idx as usize,
+                block_idx: block_idx as usize,
+                inner: None,
+            }));
+            self.output_data_blocks.push_back(data_block);
+            return Ok(());
+        }
         let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
         let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
         for (interval, prefix) in item.0 {
@@ -149,7 +161,6 @@ impl TransformHashJoinProbe {
                     block_idx: block_idx as usize,
                     inner: None,
                 })))?;
-                // add null columns
                 self.output_data_blocks.push_back(data_block);
             }
         }
