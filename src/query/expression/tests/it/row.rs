@@ -230,7 +230,7 @@ fn test_binary() {
     ]);
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
@@ -259,7 +259,7 @@ fn test_binary() {
     let num_rows = col.len();
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
     unsafe {
@@ -278,7 +278,7 @@ fn test_binary() {
     }
 
     let converter = RowConverter::new(vec![SortField::new_with_options(
-        DataType::String.wrap_nullable(),
+        DataType::Binary.wrap_nullable(),
         false,
         false,
     )])

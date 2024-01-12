@@ -25,7 +25,6 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Value;

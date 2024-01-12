@@ -53,7 +53,7 @@ pub fn build_expression_transform(
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
                 let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
-                check_cast(None, false, expr, f.data_type().clone(), &BUILTIN_FUNCTIONS)?
+                check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
                 // #issue13932
                 // if there is a non-null constraint, we should return an error

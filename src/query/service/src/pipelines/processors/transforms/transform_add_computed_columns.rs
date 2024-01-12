@@ -61,7 +61,7 @@ where Self: Transform
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
                     let expr = parse_computed_expr(ctx.clone(), input_schema.clone(), stored_expr)?;
-                    check_cast(None, false, expr, f.data_type().clone(), &BUILTIN_FUNCTIONS)?
+                    check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
                 } else {
                     return Err(ErrorCode::Internal(
                         "Missed field must be a computed column",
