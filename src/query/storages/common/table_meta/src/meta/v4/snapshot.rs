@@ -115,6 +115,7 @@ impl TableSnapshot {
             cluster_key_meta,
             table_statistics_location,
         }
+        .fix_binary_to_string()
     }
 
     pub fn new_empty_snapshot(schema: TableSchema) -> Self {
@@ -144,6 +145,11 @@ impl TableSnapshot {
             clone.cluster_key_meta,
             clone.table_statistics_location,
         )
+    }
+
+    pub fn fix_binary_to_string(mut self) -> Self {
+        self.summary.fix_binary_to_string();
+        self
     }
 
     /// Serializes the struct to a byte vector.
@@ -243,6 +249,7 @@ where T: Into<v3::TableSnapshot>
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
         }
+        .fix_binary_to_string()
     }
 }
 

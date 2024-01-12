@@ -96,6 +96,23 @@ impl ColumnStatistics {
             distinct_of_values: None,
         }
     }
+
+    pub fn fix_binary_to_string(&mut self) {
+        if let Scalar::Binary(data) = &self.min {
+            log::warn!(
+                "Fixed reading binary min to string of binary data {:?}",
+                data
+            );
+            self.min = Scalar::String(data.clone());
+        }
+        if let Scalar::Binary(data) = &self.max {
+            log::warn!(
+                "Fixed reading binary max to string of binary data {:?}",
+                data
+            );
+            self.max = Scalar::String(data.clone());
+        }
+    }
 }
 
 impl ClusterStatistics {
@@ -169,6 +186,12 @@ impl Statistics {
             index_size: v0.index_size,
             col_stats,
             cluster_stats: None,
+        }
+    }
+
+    pub fn fix_binary_to_string(&mut self) {
+        for (_, col_stats) in self.col_stats.iter_mut() {
+            col_stats.fix_binary_to_string()
         }
     }
 }

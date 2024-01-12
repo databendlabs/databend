@@ -75,6 +75,26 @@ impl SegmentInfo {
             blocks,
             summary,
         }
+        .fix_binary_to_string()
+    }
+
+    pub fn fix_binary_to_string(mut self) -> Self {
+        self.summary.fix_binary_to_string();
+
+        // This will clone the whole block meta which may be inefficient
+        self.blocks = self
+            .blocks
+            .iter()
+            .map(|b| {
+                let mut c = b.as_ref().clone();
+                c.col_stats
+                    .iter_mut()
+                    .for_each(|(_, x)| x.fix_binary_to_string());
+
+                Arc::new(c)
+            })
+            .collect();
+        self
     }
 
     // Total block bytes of this segment.
@@ -122,6 +142,7 @@ impl SegmentInfo {
             blocks: s.blocks.into_iter().map(|v| Arc::new(v.into())).collect(),
             summary: s.summary.into(),
         }
+        .fix_binary_to_string()
     }
     pub fn from_v2(s: v2::SegmentInfo) -> Self {
         // NOTE: it is important to let the format_version return from here
@@ -131,6 +152,7 @@ impl SegmentInfo {
             blocks: s.blocks,
             summary: s.summary,
         }
+        .fix_binary_to_string()
     }
 
     /// Serializes the Segment struct to a byte vector.
@@ -229,8 +251,10 @@ impl CompactSegmentInfo {
         let mut block_metas_raw_bytes = vec![0; blocks_size as usize];
         cursor.read_exact(&mut block_metas_raw_bytes)?;
 
-        let summary: Statistics =
+        let mut summary: Statistics =
             read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        summary.fix_binary_to_string();
 
         let segment = CompactSegmentInfo {
             format_version: version,
@@ -246,12 +270,25 @@ impl CompactSegmentInfo {
 
     pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
         let mut reader = Cursor::new(&self.raw_block_metas.bytes);
-        read_and_deserialize(
+        let metas: Vec<Arc<BlockMeta>> = read_and_deserialize(
             &mut reader,
             self.raw_block_metas.bytes.len() as u64,
             &self.raw_block_metas.encoding,
             &self.raw_block_metas.compression,
-        )
+        )?;
+
+        let metas = metas
+            .iter()
+            .map(|b| {
+                let mut c = b.as_ref().clone();
+                c.col_stats
+                    .iter_mut()
+                    .for_each(|(_, x)| x.fix_binary_to_string());
+
+                Arc::new(c)
+            })
+            .collect();
+        Ok(metas)
     }
 }
 

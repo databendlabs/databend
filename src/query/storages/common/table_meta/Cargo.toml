@@ -21,6 +21,7 @@ chrono = { workspace = true }
 enum-as-inner = "0.5"
 futures = { workspace = true }
 futures-util = { workspace = true }
+log = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
