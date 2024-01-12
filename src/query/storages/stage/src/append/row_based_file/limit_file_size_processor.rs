@@ -25,7 +25,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
-use crate::row_based_file::buffers::FileOutputBuffers;
+use crate::append::row_based_file::buffers::FileOutputBuffers;
 
 pub(super) struct LimitFileSizeProcessor {
     input: Arc<InputPort>,

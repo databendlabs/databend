@@ -25,7 +25,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
-use crate::row_based_file::buffers::FileOutputBuffers;
+use super::buffers::FileOutputBuffers;
 
 pub(super) struct SerializeProcessor {
     ctx: Arc<dyn TableContext>,
