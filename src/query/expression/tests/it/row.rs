@@ -220,6 +220,88 @@ fn test_null_encoding() {
 }
 
 #[test]
+fn test_binary() {
+    let col = BinaryType::from_opt_data(vec![
+        Some("hello".as_bytes().to_vec()),
+        Some("he".as_bytes().to_vec()),
+        None,
+        Some("foo".as_bytes().to_vec()),
+        Some("".as_bytes().to_vec()),
+    ]);
+
+    let converter =
+        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+    let num_rows = col.len();
+    let rows = converter.convert_columns(&[col], num_rows);
+
+    unsafe {
+        assert!(rows.index_unchecked(1) < rows.index_unchecked(0));
+        assert!(rows.index_unchecked(2) < rows.index_unchecked(4));
+        assert!(rows.index_unchecked(3) < rows.index_unchecked(0));
+        assert!(rows.index_unchecked(3) < rows.index_unchecked(1));
+    }
+
+    const BLOCK_SIZE: usize = 32;
+
+    let col = BinaryType::from_opt_data(vec![
+        None,
+        Some(vec![0_u8; 0]),
+        Some(vec![0_u8; 6]),
+        Some(vec![0_u8; BLOCK_SIZE]),
+        Some(vec![0_u8; BLOCK_SIZE + 1]),
+        Some(vec![1_u8; 6]),
+        Some(vec![1_u8; BLOCK_SIZE]),
+        Some(vec![1_u8; BLOCK_SIZE + 1]),
+        Some(vec![0xFF_u8; 6]),
+        Some(vec![0xFF_u8; BLOCK_SIZE]),
+        Some(vec![0xFF_u8; BLOCK_SIZE + 1]),
+    ]);
+    let num_rows = col.len();
+
+    let converter =
+        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+    let rows = converter.convert_columns(&[col.clone()], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) < rows.index_unchecked(j),
+                    "{} < {} - {:?} < {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+
+    let converter = RowConverter::new(vec![SortField::new_with_options(
+        DataType::String.wrap_nullable(),
+        false,
+        false,
+    )])
+    .unwrap();
+    let rows = converter.convert_columns(&[col], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) > rows.index_unchecked(j),
+                    "{} > {} - {:?} > {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn test_string() {
     let col = StringType::from_opt_data(vec![
         Some("hello".as_bytes().to_vec()),
@@ -252,9 +334,6 @@ fn test_string() {
         Some(vec![1_u8; 6]),
         Some(vec![1_u8; BLOCK_SIZE]),
         Some(vec![1_u8; BLOCK_SIZE + 1]),
-        Some(vec![0xFF_u8; 6]),
-        Some(vec![0xFF_u8; BLOCK_SIZE]),
-        Some(vec![0xFF_u8; BLOCK_SIZE + 1]),
     ]);
     let num_rows = col.len();
 

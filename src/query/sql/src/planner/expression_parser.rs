@@ -32,8 +32,11 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
@@ -421,16 +424,23 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                 &field.data_type().into(),
                 &BUILTIN_FUNCTIONS,
             )?;
-            let func_ctx = ctx.get_function_context()?;
-            let (default_value, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
-            if let Expr::Constant { scalar, .. } = default_value {
-                Ok(scalar)
-            } else {
-                Err(ErrorCode::BadDataValueType(format!(
+            
+            let dummy_block = DataBlock::new(vec![], 1);
+            let func_ctx = FunctionContext::default();
+            let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            let result = evaluator.run(&expr)?;
+
+            match result {
+                databend_common_expression::Value::Scalar(s) => Ok(s),
+                databend_common_expression::Value::Column(c) if c.len() == 1 => {
+                    let value = unsafe { c.index_unchecked(0) };
+                    Ok(value.to_owned())
+                }
+                _ => Err(ErrorCode::BadDataValueType(format!(
                     "Invalid default value for column: {}, must be constant but got: {}",
                     field.name(),
-                    default_value.sql_display(),
-                )))
+                    result
+                ))),
             }
         }
         None => Ok(Scalar::default_value(&data_type)),
