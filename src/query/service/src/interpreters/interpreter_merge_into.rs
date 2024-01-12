@@ -199,12 +199,37 @@ impl MergeIntoInterpreter {
                 break;
             }
         }
-
+        // attentation!! for now we have some strategies:
+        // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
+        // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
+        // 2. merge into join strategies:
+        // Left,Right,Inner,Left Anti, Right Anti
+        // important flag:
+        //      I. change join order: if true, target table as build side, if false, source as build side.
+        //      II. distributed: this merge into is executed at a distributed stargety.
+        // 2.1 Left: there are macthed and not macthed, and change join order is false.
+        // 2.2 Left Anti: change join order is true, but it's insert-only.
+        // 2.3 Inner: this is matched only case.
+        //      2.3.1 change join order is true,
+        //      2.3.2 change join order is false.
+        // 2.4 Right: change join order is false, there are macthed and not macthed
+        // 2.5 Right Anti: change join order is false, but it's insert-only.
+        // distributed execution stargeties:
+        // I. change join order is true, we use the `optimize_distributed_query`'s result.
+        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
+        // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
+        let target_build_optimization =
+            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
+                && !self.plan.columns_set.contains(&self.plan.row_id_index);
+        if target_build_optimization {
+            assert!(*change_join_order && !*distributed);
+        }
         if *distributed && !*change_join_order {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
-        if !insert_only && !found_row_id {
+        if !target_build_optimization && !insert_only && !found_row_id {
             // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
@@ -373,9 +398,7 @@ impl MergeIntoInterpreter {
             .into_iter()
             .enumerate()
             .collect();
-        let target_build_optimization =
-            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
-                && !self.plan.columns_set.contains(&self.plan.row_id_index);
+
         let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
