@@ -117,7 +117,7 @@ impl<'a> FuseEncoding<'a> {
                                 &read_settings,
                                 table.operator.clone(),
                                 &block.location.0,
-                                ranges,
+                                &ranges,
                                 true,
                             )
                             .await?;

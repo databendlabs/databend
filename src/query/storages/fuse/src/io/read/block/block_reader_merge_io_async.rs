@@ -36,7 +36,6 @@ use crate::io::BlockReader;
 use crate::MergeIOReadResult;
 
 impl BlockReader {
-    /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
     /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 48Bytes),
     /// will read the range that contains both ranges, thus avoiding extra seek.
     ///
@@ -47,7 +46,7 @@ impl BlockReader {
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
-        raw_ranges: Vec<(ColumnId, Range<u64>)>,
+        raw_ranges: &[(ColumnId, Range<u64>)],
         put_cache: bool,
     ) -> Result<MergeIOReadResult> {
         let table_data_cache = if put_cache {
@@ -111,7 +110,7 @@ impl BlockReader {
             metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
         }
 
-        for (raw_idx, raw_range) in &raw_ranges {
+        for (raw_idx, raw_range) in raw_ranges {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
@@ -193,19 +192,22 @@ impl BlockReader {
             settings,
             self.operator.clone(),
             location,
-            ranges,
+            &ranges,
             self.put_cache,
         )
         .await?;
 
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
+
+        self.report_cache_metrics(&merge_io_read_res, ranges.iter().map(|(_, r)| r));
+
         Ok(merge_io_read_res)
     }
 
     #[inline]
     #[async_backtrace::framed]
-    pub async fn read_range(
+    async fn read_range(
         op: Operator,
         path: &str,
         index: usize,
