@@ -319,14 +319,16 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    // Optimization Todo(@JackTan25): If insert only, we can reduce the target columns after join.
     pub(crate) fn build_merge_into_source(
         &mut self,
         merge_into_source: &MergeIntoSource,
     ) -> Result<()> {
         let MergeIntoSource {
             input,
-            row_id_idx,
             merge_type,
+            merge_into_split_idx,
+            ..
         } = merge_into_source;
 
         self.build_pipeline(input)?;
@@ -341,7 +343,7 @@ impl PipelineBuilder {
             let output_len = self.main_pipeline.output_len();
             for _ in 0..output_len {
                 let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                    MergeIntoSplitProcessor::create(*merge_into_split_idx, false)?;
                 items.push(merge_into_split_processor.into_pipe_item());
             }
 

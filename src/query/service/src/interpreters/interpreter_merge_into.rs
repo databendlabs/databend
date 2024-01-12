@@ -50,6 +50,7 @@ use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -138,9 +139,37 @@ impl MergeIntoInterpreter {
             merge_type,
             distributed,
             change_join_order,
+            split_idx,
             ..
         } = &self.plan;
 
+        // attentation!! for now we have some strategies:
+        // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
+        // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
+        // 2. merge into join strategies:
+        // Left,Right,Inner,Left Anti, Right Anti
+        // important flag:
+        //      I. change join order: if true, target table as build side, if false, source as build side.
+        //      II. distributed: this merge into is executed at a distributed stargety.
+        // 2.1 Left: there are macthed and not macthed, and change join order is false.
+        // 2.2 Left Anti: change join order is true, but it's insert-only.
+        // 2.3 Inner: this is matched only case.
+        //      2.3.1 change join order is true,
+        //      2.3.2 change join order is false.
+        // 2.4 Right: change join order is false, there are macthed and not macthed
+        // 2.5 Right Anti: change join order is false, but it's insert-only.
+        // distributed execution stargeties:
+        // I. change join order is true, we use the `optimize_distributed_query`'s result.
+        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
+        // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
+        let target_build_optimization =
+            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
+                && !self.plan.columns_set.contains(&self.plan.row_id_index);
+
+        if target_build_optimization {
+            assert!(*change_join_order && !*distributed);
+        }
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
@@ -174,7 +203,7 @@ impl MergeIntoInterpreter {
 
         let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
-        let mut row_id_idx = if !insert_only {
+        let mut row_id_idx = if !insert_only && !target_build_optimization {
             match meta_data
                 .read()
                 .row_id_index_by_table_index(*target_table_idx)
@@ -199,32 +228,18 @@ impl MergeIntoInterpreter {
                 break;
             }
         }
-        // attentation!! for now we have some strategies:
-        // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
-        // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
-        // 2. merge into join strategies:
-        // Left,Right,Inner,Left Anti, Right Anti
-        // important flag:
-        //      I. change join order: if true, target table as build side, if false, source as build side.
-        //      II. distributed: this merge into is executed at a distributed stargety.
-        // 2.1 Left: there are macthed and not macthed, and change join order is false.
-        // 2.2 Left Anti: change join order is true, but it's insert-only.
-        // 2.3 Inner: this is matched only case.
-        //      2.3.1 change join order is true,
-        //      2.3.2 change join order is false.
-        // 2.4 Right: change join order is false, there are macthed and not macthed
-        // 2.5 Right Anti: change join order is false, but it's insert-only.
-        // distributed execution stargeties:
-        // I. change join order is true, we use the `optimize_distributed_query`'s result.
-        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
-        // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
-        // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
-        let target_build_optimization =
-            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
-                && !self.plan.columns_set.contains(&self.plan.row_id_index);
-        if target_build_optimization {
-            assert!(*change_join_order && !*distributed);
+
+        let mut merge_into_split_idx = DUMMY_COLUMN_INDEX;
+        if matches!(merge_type, MergeIntoType::FullOperation) {
+            for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+                if *data_field.name() == split_idx.to_string() {
+                    merge_into_split_idx = idx;
+                    break;
+                }
+            }
+            assert!(merge_into_split_idx != DUMMY_COLUMN_INDEX);
         }
+
         if *distributed && !*change_join_order {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
@@ -270,12 +285,14 @@ impl MergeIntoInterpreter {
                 input: Box::new(rollback_join_input),
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
+                merge_into_split_idx: merge_into_split_idx as u32,
             })
         } else {
             PhysicalPlan::MergeIntoSource(MergeIntoSource {
                 input: Box::new(join_input),
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
+                merge_into_split_idx: merge_into_split_idx as u32,
             })
         };
 

@@ -52,8 +52,8 @@ pub struct MergeIntoSplitProcessor {
 }
 
 impl MergeIntoSplitProcessor {
-    pub fn create(row_id_idx: u32, target_table_empty: bool) -> Result<Self> {
-        let merge_into_split_mutator = MergeIntoSplitMutator::try_create(row_id_idx);
+    pub fn create(split_idx: u32, target_table_empty: bool) -> Result<Self> {
+        let merge_into_split_mutator = MergeIntoSplitMutator::try_create(split_idx);
         let input_port = InputPort::create();
         let output_port_matched = OutputPort::create();
         let output_port_not_matched = OutputPort::create();

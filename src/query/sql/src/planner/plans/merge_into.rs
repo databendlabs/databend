@@ -70,6 +70,7 @@ pub struct MergeInto {
     pub change_join_order: bool,
     // when we use target table as build side, we need to remove rowid columns.
     pub row_id_index: IndexType,
+    pub split_idx: IndexType,
 }
 
 impl std::fmt::Debug for MergeInto {
