@@ -77,3 +77,4 @@ mod v070_binary_type;
 mod v071_user_password;
 mod v072_csv_format_params;
 mod v073_huggingface_config;
+mod v074_table_db_meta;

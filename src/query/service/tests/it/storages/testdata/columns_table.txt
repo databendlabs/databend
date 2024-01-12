@@ -264,6 +264,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'ordinal_position'                | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'original'                        | 'system'             | 'indexes'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'owner'                           | 'system'             | 'databases'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'owner'                           | 'system'             | 'stages'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'owner'                           | 'system'             | 'streams'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'owner'                           | 'system'             | 'tables'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'owner'                           | 'system'             | 'tables_with_history' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
