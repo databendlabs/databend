@@ -138,7 +138,7 @@ pub struct HashJoinState {
 
     /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
     /// When merge into target table as build side, we should preserve block info index.
-    pub(crate) block_info_index: Option<SyncUnsafeCell<BlockInfoIndex>>,
+    pub(crate) block_info_index: SyncUnsafeCell<BlockInfoIndex>,
     /// we use matched to tag the matched offset in chunks.
     pub(crate) matched: SyncUnsafeCell<Vec<u8>>,
     /// the matched will be modified concurrently, so we use
@@ -195,7 +195,11 @@ impl HashJoinState {
             table_index,
             merge_into_target_table_index,
             is_distributed_merge_into,
-            block_info_index: None,
+            block_info_index: if merge_into_target_table_index == DUMMY_TABLE_INDEX {
+                SyncUnsafeCell::new(BlockInfoIndex::new_with_capacity(0))
+            } else {
+                SyncUnsafeCell::new(Default::default())
+            },
             matched: SyncUnsafeCell::new(Vec::new()),
             atomic_pointer: SyncUnsafeCell::new(MatchedPtr(std::ptr::null_mut())),
             chunk_offsets: SyncUnsafeCell::new(Vec::with_capacity(100)),

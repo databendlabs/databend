@@ -134,6 +134,7 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
+
         // case 1
         if !*change_join_order {
             if let MergeIntoType::MatechedOnly = merge_type {
@@ -169,11 +170,13 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
             // not macthed operation
+            let table_default_schema = &tbl.schema().remove_computed_fields();
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input_schema.clone(),
                 self.func_ctx.clone(),
                 self.ctx.clone(),
+                Arc::new(DataSchema::from(table_default_schema)),
             )?;
             let pipe_items = vec![
                 merge_into_not_matched_processor.into_pipe_item(),
@@ -471,6 +474,7 @@ impl PipelineBuilder {
                     field_index_of_input_schema.clone(),
                     input.output_schema()?,
                     Arc::new(DataSchema::from(tbl.schema())),
+                    merge_into.target_build_optimization,
                 )?;
                 pipe_items.push(matched_split_processor.into_pipe_item());
             }
@@ -480,11 +484,13 @@ impl PipelineBuilder {
                 // (distributed,change join order):(true,true) target is build side, we
                 // need to support insert in local node.
                 if !*distributed || *change_join_order {
+                    let table_default_schema = &tbl.schema().remove_computed_fields();
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
                         self.func_ctx.clone(),
                         self.ctx.clone(),
+                        Arc::new(DataSchema::from(table_default_schema)),
                     )?;
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {

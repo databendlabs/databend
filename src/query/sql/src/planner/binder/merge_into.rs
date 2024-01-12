@@ -395,8 +395,10 @@ impl Binder {
         for column in self.metadata.read().columns() {
             if column.table_index().is_some()
                 && *column.table_index().as_ref().unwrap() == table_index
+                && column.index() != column_binding.index
             {
-                split_idx = column.index()
+                split_idx = column.index();
+                break;
             }
         }
         assert!(split_idx != DUMMY_COLUMN_INDEX);

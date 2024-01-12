@@ -318,12 +318,14 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
                 condition_format
             ))));
         } else {
-            let update_format = evaluator
-                .update
-                .as_ref()
-                .unwrap()
+            let map = evaluator.update.as_ref().unwrap();
+            let mut field_indexes: Vec<usize> =
+                map.iter().map(|(field_idx, _)| *field_idx).collect();
+            field_indexes.sort();
+            let update_format = field_indexes
                 .iter()
-                .map(|(field_idx, expr)| {
+                .map(|field_idx| {
+                    let expr = map.get(field_idx).unwrap();
                     format!(
                         "{} = {}",
                         taregt_schema.field(*field_idx).name(),

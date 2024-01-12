@@ -18,7 +18,6 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataBlock;
 
 pub struct MergeIntoSplitMutator {
@@ -33,10 +32,7 @@ impl MergeIntoSplitMutator {
     // (matched_block,not_matched_block)
     pub fn split_data_block(&mut self, block: &DataBlock) -> Result<(DataBlock, DataBlock)> {
         let split_column = &block.columns()[self.split_idx as usize];
-        assert_eq!(
-            split_column.data_type,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        );
+        assert!(matches!(split_column.data_type, DataType::Nullable(_)),);
 
         // get row_id do check duplicate and get filter
         let filter: Bitmap = match &split_column.value {

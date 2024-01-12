@@ -380,7 +380,12 @@ impl HashJoinProbeState {
 
     pub fn probe_attach(&self) -> Result<usize> {
         let mut worker_id = 0;
-        if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
+        if self.hash_join_state.need_outer_scan()
+            || self.hash_join_state.need_mark_scan()
+            || self
+                .hash_join_state
+                .need_merge_into_target_partial_modified_scan()
+        {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
         if self.hash_join_state.enable_spill {
@@ -479,14 +484,7 @@ impl HashJoinProbeState {
     }
 
     pub fn generate_merge_into_final_scan_task(&self) -> Result<()> {
-        let block_info_index = unsafe {
-            &*self
-                .hash_join_state
-                .block_info_index
-                .as_ref()
-                .unwrap()
-                .get()
-        };
+        let block_info_index = unsafe { &*self.hash_join_state.block_info_index.get() };
         let matched = unsafe { &*self.hash_join_state.matched.get() };
         let chunks_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);

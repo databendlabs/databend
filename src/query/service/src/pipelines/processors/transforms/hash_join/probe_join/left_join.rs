@@ -391,8 +391,13 @@ impl HashJoinProbeState {
                         continue;
                     }
                 }
-                let offset = chunk_offsets[row_ptr.chunk_index as usize] as usize
-                    + row_ptr.row_index as usize;
+                let offset = if row_ptr.chunk_index == 0 {
+                    row_ptr.row_index as usize
+                } else {
+                    (chunk_offsets[(row_ptr.chunk_index - 1) as usize] - 1) as usize
+                        + row_ptr.row_index as usize
+                };
+
                 let mut old_mactehd_counts =
                     unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
                 let new_matched_count = old_mactehd_counts + 1;

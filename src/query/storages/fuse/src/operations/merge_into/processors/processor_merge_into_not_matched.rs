@@ -58,6 +58,8 @@ pub struct MergeIntoNotMatchedProcessor {
     func_ctx: FunctionContext,
     // data_schemas[i] means the i-th op's result block's schema.
     data_schemas: HashMap<usize, DataSchemaRef>,
+    // for target table build optimization
+    target_table_schema: DataSchemaRef,
     ctx: Arc<dyn TableContext>,
 }
 
@@ -67,6 +69,7 @@ impl MergeIntoNotMatchedProcessor {
         input_schema: DataSchemaRef,
         func_ctx: FunctionContext,
         ctx: Arc<dyn TableContext>,
+        target_table_schema: DataSchemaRef,
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         let mut data_schemas = HashMap::with_capacity(unmatched.len());
@@ -99,6 +102,7 @@ impl MergeIntoNotMatchedProcessor {
             output_data: Vec::new(),
             func_ctx,
             data_schemas,
+            target_table_schema,
             ctx,
         })
     }
@@ -155,13 +159,21 @@ impl Processor for MergeIntoNotMatchedProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(mut data_block) = self.input_data.take() {
             if data_block.is_empty() {
                 return Ok(());
             }
-            // target build optimization
+            // target build optimization, we `take_meta` not `get_meta`, because the `BlockMetaIndex` is
+            // just used to judge whether we need to update `merge_status`, we shouldn't pass it through.
+            // no_need_add_status means this the origin data block from targe table, and we can push it directly.
             let no_need_add_status = data_block.get_meta().is_some()
-                && BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap()).is_some();
+                && BlockMetaIndex::downcast_from(data_block.take_meta().unwrap()).is_some();
+            if no_need_add_status {
+                data_block =
+                    data_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
+                self.output_data.push(data_block);
+                return Ok(());
+            }
             let start = Instant::now();
             let mut current_block = data_block;
             for (idx, op) in self.ops.iter().enumerate() {
@@ -174,13 +186,11 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     metrics_inc_merge_into_append_blocks_rows_counter(
                         satisfied_block.num_rows() as u32
                     );
-                    if !no_need_add_status {
-                        self.ctx.add_merge_status(MergeStatus {
-                            insert_rows: satisfied_block.num_rows(),
-                            update_rows: 0,
-                            deleted_rows: 0,
-                        });
-                    }
+                    self.ctx.add_merge_status(MergeStatus {
+                        insert_rows: satisfied_block.num_rows(),
+                        update_rows: 0,
+                        deleted_rows: 0,
+                    });
 
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)

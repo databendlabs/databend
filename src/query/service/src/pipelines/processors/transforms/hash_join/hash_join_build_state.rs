@@ -199,8 +199,12 @@ impl HashJoinBuildState {
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };
         let start_offset = build_state.generation_state.build_num_rows + old_size;
         let end_offset = start_offset + input_rows - 1;
+
         // merge into target table as build side.
-        if self.hash_join_state.block_info_index.is_some() {
+        if self
+            .hash_join_state
+            .need_merge_into_target_partial_modified_scan()
+        {
             assert!(input.get_meta().is_some());
             let block_meta_index =
                 BlockMetaIndex::downcast_ref_from(input.get_meta().unwrap()).unwrap();
@@ -208,14 +212,7 @@ impl HashJoinBuildState {
                 block_meta_index.segment_idx as u64,
                 block_meta_index.block_idx as u64,
             );
-            let block_info_index = unsafe {
-                &mut *self
-                    .hash_join_state
-                    .block_info_index
-                    .as_ref()
-                    .unwrap()
-                    .get()
-            };
+            let block_info_index = unsafe { &mut *self.hash_join_state.block_info_index.get() };
             block_info_index
                 .insert_block_offsets((start_offset as u32, end_offset as u32), row_prefix);
         }

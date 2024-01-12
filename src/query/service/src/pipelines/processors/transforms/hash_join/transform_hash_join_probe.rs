@@ -149,6 +149,7 @@ impl TransformHashJoinProbe {
                     block_idx: block_idx as usize,
                     inner: None,
                 })))?;
+                // add null columns
                 self.output_data_blocks.push_back(data_block);
             }
         }
