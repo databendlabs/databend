@@ -180,7 +180,7 @@ select count(*) from fuse_block('default','target_build_optimization');
 
 ### make sure the plan is expected
 query T
-explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b > t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
 ----
 MergeInto:
 target_table: default.default.target_build_optimization
@@ -261,7 +261,7 @@ truncate table target_build_optimization;
 
 ### make sure the plan is expected
 query T
-explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b > t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
 ----
 MergeInto:
 target_table: default.default.target_build_optimization
