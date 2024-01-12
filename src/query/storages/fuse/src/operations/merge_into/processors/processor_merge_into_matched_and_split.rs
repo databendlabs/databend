@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -26,6 +27,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::RawExpr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
@@ -356,18 +358,23 @@ impl MatchedSplitProcessor {
         let cast_exprs = current_columns
             .iter()
             .enumerate()
-            .map(|(idx, col)| Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::ColumnRef {
-                    span: None,
-                    id: idx,
-                    data_type: col.data_type.clone(),
-                    display_name: "".to_string(),
-                }),
-                dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+            .map(|(idx, col)| {
+                check(
+                    &RawExpr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(RawExpr::ColumnRef {
+                            span: None,
+                            id: idx,
+                            data_type: col.data_type.clone(),
+                            display_name: "".to_string(),
+                        }),
+                        dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+                    },
+                    &BUILTIN_FUNCTIONS,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let cast_operator = BlockOperator::Map {
             exprs: cast_exprs,
             projections: Some((current_columns.len()..current_columns.len() * 2).collect()),
