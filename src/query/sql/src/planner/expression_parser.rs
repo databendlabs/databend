@@ -28,14 +28,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
@@ -415,34 +413,24 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
     match field.default_expr() {
         Some(default_expr) => {
             let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-            let mut expr = expr.remove(0);
-
-            if expr.data_type() != &data_type {
-                expr = Expr::Cast {
-                    span: None,
-                    is_try: data_type.is_nullable(),
-                    expr: Box::new(expr),
-                    dest_type: data_type,
-                };
-            }
-
-            let dummy_block = DataBlock::new(vec![], 1);
-            let func_ctx = FunctionContext::default();
-            let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
-            let result = evaluator.run(&expr)?;
-
-            match result {
-                databend_common_expression::Value::Scalar(s) => Ok(s),
-                databend_common_expression::Value::Column(c) if c.len() == 1 => {
-                    let value = unsafe { c.index_unchecked(0) };
-                    Ok(value.to_owned())
-                }
-                _ => Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid default value for column: {}, must be constant, actual: {}",
+            let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+            let expr = check_cast(
+                None,
+                false,
+                expr,
+                &field.data_type().into(),
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let func_ctx = ctx.get_function_context()?;
+            let (default_value, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+            if let Expr::Constant { scalar, .. } = default_value {
+                Ok(scalar)
+            } else {
+                Err(ErrorCode::BadDataValueType(format!(
+                    "Invalid default value for column: {}, must be constant but got: {}",
                     field.name(),
-                    result
-                ))),
+                    default_value.sql_display(),
+                )))
             }
         }
         None => Ok(Scalar::default_value(&data_type)),

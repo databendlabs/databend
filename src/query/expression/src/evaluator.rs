@@ -217,7 +217,6 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        #[cfg(debug_assertions)]
         match &result {
             Ok(Value::Scalar(result)) => {
                 assert!(
@@ -229,27 +228,30 @@ impl<'a> Evaluator<'a> {
             }
             Ok(Value::Column(result)) => assert_eq!(&result.data_type(), expr.data_type()),
             Err(_) => {
-                use std::sync::atomic::AtomicBool;
-                use std::sync::atomic::Ordering;
-
-                static RECURSING: AtomicBool = AtomicBool::new(false);
-                if RECURSING
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_ok()
+                #[cfg(debug_assertions)]
                 {
-                    assert_eq!(
-                        ConstantFolder::fold_with_domain(
-                            expr,
-                            &self.data_block.domains().into_iter().enumerate().collect(),
-                            self.func_ctx,
-                            self.fn_registry
-                        )
-                        .1,
-                        None,
-                        "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                        result.unwrap_err()
-                    );
-                    RECURSING.store(false, Ordering::SeqCst);
+                    use std::sync::atomic::AtomicBool;
+                    use std::sync::atomic::Ordering;
+
+                    static RECURSING: AtomicBool = AtomicBool::new(false);
+                    if RECURSING
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        assert_eq!(
+                            ConstantFolder::fold_with_domain(
+                                expr,
+                                &self.data_block.domains().into_iter().enumerate().collect(),
+                                self.func_ctx,
+                                self.fn_registry
+                            )
+                            .1,
+                            None,
+                            "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                            result.unwrap_err()
+                        );
+                        RECURSING.store(false, Ordering::SeqCst);
+                    }
                 }
             }
         }
