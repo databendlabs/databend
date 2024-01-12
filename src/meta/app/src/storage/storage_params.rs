@@ -574,9 +574,21 @@ impl Debug for StorageCosConfig {
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageHuggingfaceConfig {
+    /// repo_id for huggingface repo, looks like `opendal/huggingface-testdata`
     pub repo_id: String,
+    /// repo_type for huggingface repo
+    ///
+    /// available value: `dataset`, `model`
+    /// default value: `dataset`
     pub repo_type: String,
+    /// revision for huggingface repo
+    ///
+    /// available value: branches, tags or commits in the repo.
+    /// default value: `main`
     pub revision: String,
+    /// token for huggingface
+    ///
+    /// Only needed for private repo.
     pub token: String,
     pub root: String,
 }
