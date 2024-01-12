@@ -1133,20 +1133,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let revoke_ownership = map(
-        rule! {
-            REVOKE ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ FROM ~ ROLE ~ #role_name
-        },
-        |(_, _, _, level, _, _, role_name)| {
-            Statement::Revoke(RevokeStmt {
-                source: AccountMgrSource::Privs {
-                    privileges: vec![UserPrivilegeType::Ownership],
-                    level,
-                },
-                principal: PrincipalIdentity::Role(role_name),
-            })
-        },
-    );
     let show_grants = map(
         rule! {
             SHOW ~ GRANTS ~ #show_grant_option?
@@ -1898,7 +1884,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-            | #revoke_ownership : "REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"

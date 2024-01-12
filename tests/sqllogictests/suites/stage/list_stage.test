@@ -28,4 +28,4 @@ delta/partitioned/p0=10/p2=12/p4=14/part-00000-62d00564-86cc-4256-a203-dbb878f58
 query 
 select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') where name = 'parquet/tuple.parquet'
 ----
-parquet/tuple.parquet 2049 NULL
+parquet/tuple.parquet 2029 NULL

@@ -61,6 +61,11 @@ impl FromToProto for mt::storage::StorageParams {
             Some(pb::storage_config::Storage::Hdfs(s)) => Ok(mt::storage::StorageParams::Hdfs(
                 mt::storage::StorageHdfsConfig::from_pb(s)?,
             )),
+            Some(pb::storage_config::Storage::Huggingface(s)) => {
+                Ok(mt::storage::StorageParams::Huggingface(
+                    mt::storage::StorageHuggingfaceConfig::from_pb(s)?,
+                ))
+            }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -92,6 +97,9 @@ impl FromToProto for mt::storage::StorageParams {
             }),
             mt::storage::StorageParams::Hdfs(v) => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Hdfs(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Huggingface(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Huggingface(v.to_pb()?)),
             }),
             others => Err(Incompatible {
                 reason: format!("stage type: {} not supported", others),
@@ -359,6 +367,38 @@ impl FromToProto for StorageHdfsConfig {
             min_reader_ver: MIN_READER_VER,
             root: self.root.clone(),
             name_node: self.name_node.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::storage::StorageHuggingfaceConfig {
+    type PB = pb::HuggingfaceStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: pb::HuggingfaceStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(mt::storage::StorageHuggingfaceConfig {
+            repo_type: p.repo_type,
+            repo_id: p.repo_id,
+            revision: p.revision,
+            token: p.token,
+            root: p.root,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::HuggingfaceStorageConfig, Incompatible> {
+        Ok(pb::HuggingfaceStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            repo_type: self.repo_type.clone(),
+            repo_id: self.repo_id.clone(),
+            revision: self.revision.clone(),
+            token: self.token.clone(),
+            root: self.root.clone(),
         })
     }
 }
