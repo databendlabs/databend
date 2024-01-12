@@ -14,10 +14,8 @@
 
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::ArrayType;
-
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
-
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
