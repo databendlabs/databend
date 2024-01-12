@@ -547,9 +547,6 @@ fn test_statement() {
         "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON STAGE s1 FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON UDF f1 FROM ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
     ];
 
@@ -644,6 +641,7 @@ fn test_statement_error() {
         "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
         "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
         "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
         "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
     ];
 
