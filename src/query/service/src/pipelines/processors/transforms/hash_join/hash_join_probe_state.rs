@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::chunk;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
