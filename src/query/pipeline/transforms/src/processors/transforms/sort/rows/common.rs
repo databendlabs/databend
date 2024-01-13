@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::string::StringColumn;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -31,9 +31,9 @@ use jsonb::convert_to_comparable;
 use super::RowConverter;
 use super::Rows;
 
-pub type CommonRows = StringColumn;
+pub type CommonRows = BinaryColumn;
 
-impl Rows for StringColumn {
+impl Rows for BinaryColumn {
     type Item<'a> = &'a [u8];
 
     fn len(&self) -> usize {
@@ -57,7 +57,7 @@ impl Rows for StringColumn {
     }
 }
 
-impl RowConverter<StringColumn> for CommonRowConverter {
+impl RowConverter<BinaryColumn> for CommonRowConverter {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
@@ -72,7 +72,7 @@ impl RowConverter<StringColumn> for CommonRowConverter {
         CommonRowConverter::new(sort_fields)
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<StringColumn> {
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
             .map(|entry| match &entry.value {
@@ -95,7 +95,7 @@ impl RowConverter<StringColumn> for CommonRowConverter {
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
                             let mut builder =
-                                StringColumnBuilder::with_capacity(col.len(), col.data().len());
+                                BinaryColumnBuilder::with_capacity(col.len(), col.data().len());
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {

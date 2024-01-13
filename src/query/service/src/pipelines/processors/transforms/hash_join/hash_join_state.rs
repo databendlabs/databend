@@ -30,11 +30,11 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
-use databend_common_expression::HashMethodSingleString;
+use databend_common_expression::HashMethodSingleBinary;
+use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::BlockInfoIndex;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::StringHashJoinHashMap;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
@@ -49,13 +49,13 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
 pub struct SerializerHashJoinHashTable {
-    pub(crate) hash_table: StringHashJoinHashMap,
+    pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct SingleStringHashJoinHashTable {
-    pub(crate) hash_table: StringHashJoinHashMap,
-    pub(crate) hash_method: HashMethodSingleString,
+pub struct SingleBinaryHashJoinHashTable {
+    pub(crate) hash_table: BinaryHashJoinHashMap,
+    pub(crate) hash_method: HashMethodSingleBinary,
 }
 
 pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
@@ -66,7 +66,7 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
 pub enum HashJoinHashTable {
     Null,
     Serializer(SerializerHashJoinHashTable),
-    SingleString(SingleStringHashJoinHashTable),
+    SingleBinary(SingleBinaryHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),

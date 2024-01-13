@@ -15,7 +15,7 @@
 use databend_common_arrow::arrow::bitmap::Bitmap;
 
 use super::row_converter::null_sentinel;
-use crate::types::string::StringColumnBuilder;
+use crate::types::binary::BinaryColumnBuilder;
 
 /// The block size of the variable length encoding
 const BLOCK_SIZE: usize = 32;
@@ -51,7 +51,7 @@ pub(super) fn encoded_len(val: &[u8], is_null: bool) -> usize {
 /// - `0xFF_u8` if this is not the last block for this string
 /// - otherwise the length of the block as a `u8`
 pub(super) fn encode<'a, I>(
-    out: &mut StringColumnBuilder,
+    out: &mut BinaryColumnBuilder,
     i: I,
     (all_null, validity): (bool, Option<&Bitmap>),
     asc: bool,

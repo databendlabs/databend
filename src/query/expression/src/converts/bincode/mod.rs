@@ -25,12 +25,12 @@ use serde::Serialize;
 use serde::Serializer;
 
 use crate::types::array::ArrayColumn;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalScalar;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberScalar;
-use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::Column;
 use crate::Scalar;
@@ -61,15 +61,15 @@ pub enum LegacyColumn {
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
-    String(StringColumn),
+    String(BinaryColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<LegacyArrayColumn>),
     Map(Box<LegacyArrayColumn>),
-    Bitmap(StringColumn),
+    Bitmap(BinaryColumn),
     Nullable(Box<LegacyNullableColumn>),
     Tuple(Vec<LegacyColumn>),
-    Variant(StringColumn),
+    Variant(BinaryColumn),
 }
 
 #[derive(Clone)]
@@ -114,7 +114,7 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Number(num_col) => Column::Number(num_col),
             LegacyColumn::Decimal(dec_col) => Column::Decimal(dec_col),
             LegacyColumn::Boolean(bmp) => Column::Boolean(bmp),
-            LegacyColumn::String(str_col) => Column::String(str_col),
+            LegacyColumn::String(str_col) => Column::String(str_col.try_into().unwrap()),
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
             LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType> {
@@ -172,7 +172,7 @@ impl From<Column> for LegacyColumn {
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
             Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
             Column::Binary(_) => unreachable!(),
-            Column::String(str_col) => LegacyColumn::String(str_col),
+            Column::String(str_col) => LegacyColumn::String(str_col.into()),
             Column::Timestamp(buf) => LegacyColumn::Timestamp(buf),
             Column::Date(buf) => LegacyColumn::Date(buf),
             Column::Array(arr_col) => LegacyColumn::Array(Box::new(LegacyArrayColumn {

@@ -217,31 +217,45 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering;
+        match &result {
+            Ok(Value::Scalar(result)) => {
+                assert!(
+                    result.as_ref().is_value_of_type(expr.data_type()),
+                    "{} is not of type {}",
+                    result,
+                    expr.data_type()
+                )
+            }
+            Ok(Value::Column(result)) => assert_eq!(&result.data_type(), expr.data_type()),
+            Err(_) => {
+                #[cfg(debug_assertions)]
+                {
+                    use std::sync::atomic::AtomicBool;
+                    use std::sync::atomic::Ordering;
 
-            static RECURSING: AtomicBool = AtomicBool::new(false);
-            if RECURSING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        &self.data_block.domains().into_iter().enumerate().collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                    result.unwrap_err()
-                );
-                RECURSING.store(false, Ordering::SeqCst);
+                    static RECURSING: AtomicBool = AtomicBool::new(false);
+                    if RECURSING
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        assert_eq!(
+                            ConstantFolder::fold_with_domain(
+                                expr,
+                                &self.data_block.domains().into_iter().enumerate().collect(),
+                                self.func_ctx,
+                                self.fn_registry
+                            )
+                            .1,
+                            None,
+                            "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                            result.unwrap_err()
+                        );
+                        RECURSING.store(false, Ordering::SeqCst);
+                    }
+                }
             }
         }
+
         result
     }
 
@@ -648,42 +662,17 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let new_array = if inner_dest_ty.is_nullable() {
-                        self.run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
-                    } else {
-                        self.run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(array),
-                            None,
-                            None,
-                        )?
-                    }
-                    .into_column()
-                    .unwrap();
+                    let new_array = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .into_column()
+                        .unwrap();
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
-                    let new_values = if inner_dest_ty.is_nullable() {
-                        self.run_try_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.values),
-                        )?
-                    } else {
-                        self.run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.values),
-                            None,
-                            None,
-                        )?
-                    }
-                    .into_column()
-                    .unwrap();
+                    let new_values = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .into_column()
+                        .unwrap();
                     let new_col = Column::Array(Box::new(ArrayColumn {
                         values: new_values,
                         offsets: col.offsets,
@@ -743,21 +732,10 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                let new_value = if dest_ty.is_nullable() {
-                                    self.run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
-                                } else {
-                                    self.run_cast(
-                                        span,
-                                        src_ty,
-                                        dest_ty,
-                                        Value::Scalar(field),
-                                        None,
-                                        None,
-                                    )?
-                                }
-                                .into_scalar()
-                                .unwrap();
-                                Ok(new_value)
+                                Ok(self
+                                    .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
+                                    .into_scalar()
+                                    .unwrap())
                             })
                             .collect::<Result<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
@@ -768,25 +746,17 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                let new_column = if dest_ty.is_nullable() {
-                                    self.run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
-                                } else {
-                                    self.run_cast(
-                                        span,
-                                        src_ty,
-                                        dest_ty,
-                                        Value::Column(field),
-                                        None,
-                                        None,
-                                    )?
-                                }
-                                .into_column()
-                                .unwrap();
-                                Ok(new_column)
+                                Ok(self
+                                    .run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
+                                    .into_column()
+                                    .unwrap())
                             })
                             .collect::<Result<_>>()?;
                         let new_col = Column::Tuple(new_fields);
-                        Ok(Value::Column(new_col))
+                        Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                            validity: Bitmap::new_constant(true, new_col.len()),
+                            column: new_col,
+                        }))))
                     }
                     other => unreachable!("source: {}", other),
                 }

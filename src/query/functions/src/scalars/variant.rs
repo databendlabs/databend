@@ -22,8 +22,10 @@ use chrono::Datelike;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -1306,7 +1308,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
+    let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
     let mut items = Vec::with_capacity(columns.len());
 
     for idx in 0..cap {
@@ -1343,7 +1345,7 @@ fn json_object_impl_fn(
 ) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
+    let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
         for i in 0..cap {
             ctx.set_error(i, "The number of keys and values must be equal");
@@ -1437,7 +1439,12 @@ fn get_by_keypath_fn(
     });
     let len = len_opt.unwrap_or(1);
 
-    let mut builder = StringColumnBuilder::with_capacity(len, len * 50);
+    let mut builder = if string_res {
+        ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
+    } else {
+        ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
+    };
+
     let mut validity = MutableBitmap::with_capacity(len);
 
     for idx in 0..len {
@@ -1463,10 +1470,14 @@ fn get_by_keypath_fn(
                     match json_row {
                         ScalarRef::Variant(json) => match get_by_keypath(json, path.paths.iter()) {
                             Some(res) => {
-                                if string_res {
-                                    builder.put_slice(to_string(&res).as_bytes());
-                                } else {
-                                    builder.put_slice(&res);
+                                match &mut builder {
+                                    ColumnBuilder::String(builder) => {
+                                        builder.put_str(&to_string(&res));
+                                    }
+                                    ColumnBuilder::Variant(builder) => {
+                                        builder.put_slice(&res);
+                                    }
+                                    _ => unreachable!(),
                                 }
                                 validity.push(true);
                             }
@@ -1483,33 +1494,22 @@ fn get_by_keypath_fn(
             None => validity.push(false),
         }
 
-        builder.commit_row();
+        match &mut builder {
+            ColumnBuilder::String(builder) => {
+                builder.commit_row();
+            }
+            ColumnBuilder::Variant(builder) => {
+                builder.commit_row();
+            }
+            _ => unreachable!(),
+        }
     }
 
-    let validity: Bitmap = validity.into();
+    let builder = ColumnBuilder::Nullable(Box::new(NullableColumnBuilder { builder, validity }));
 
     match len_opt {
-        Some(_) => {
-            let column = builder.build();
-            let val = if string_res {
-                Value::Column(Column::String(column))
-            } else {
-                Value::Column(Column::Variant(column))
-            };
-            val.wrap_nullable(Some(validity))
-        }
-        None => {
-            if !validity.get_bit(0) {
-                Value::Scalar(Scalar::Null)
-            } else {
-                let row = builder.build_scalar();
-                if string_res {
-                    Value::Scalar(Scalar::String(row))
-                } else {
-                    Value::Scalar(Scalar::Variant(row))
-                }
-            }
-        }
+        Some(_) => Value::Column(builder.build()),
+        None => Value::Scalar(builder.build_scalar()),
     }
 }
 

@@ -21,9 +21,9 @@ use ethnum::i256;
 use super::fixed;
 use super::fixed::FixedLengthEncoding;
 use super::variable;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
-use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
@@ -69,8 +69,8 @@ impl RowConverter {
         }
     }
 
-    /// Convert columns into [`StringColumn`] represented comparable row format.
-    pub fn convert_columns(&self, columns: &[Column], num_rows: usize) -> StringColumn {
+    /// Convert columns into [`BinaryColumn`] represented comparable row format.
+    pub fn convert_columns(&self, columns: &[Column], num_rows: usize) -> BinaryColumn {
         debug_assert!(columns.len() == self.fields.len());
         debug_assert!(
             columns
@@ -90,7 +90,7 @@ impl RowConverter {
         rows
     }
 
-    fn new_empty_rows(&self, cols: &[Column], num_rows: usize) -> StringColumnBuilder {
+    fn new_empty_rows(&self, cols: &[Column], num_rows: usize) -> BinaryColumnBuilder {
         let mut lengths = vec![0_u64; num_rows];
 
         for (field, col) in self.fields.iter().zip(cols.iter()) {
@@ -223,7 +223,7 @@ impl RowConverter {
 
         let buffer = vec![0_u8; cur_offset as usize];
 
-        StringColumnBuilder::from_data(buffer, offsets)
+        BinaryColumnBuilder::from_data(buffer, offsets)
     }
 }
 
@@ -232,7 +232,7 @@ pub(super) fn null_sentinel(nulls_first: bool) -> u8 {
     if nulls_first { 0 } else { 0xFF }
 }
 
-fn encode_column(out: &mut StringColumnBuilder, column: &Column, asc: bool, nulls_first: bool) {
+fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, nulls_first: bool) {
     let validity = column.validity();
     let column = column.remove_nullable();
     match column {

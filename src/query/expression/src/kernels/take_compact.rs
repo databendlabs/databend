@@ -20,6 +20,7 @@ use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
@@ -104,7 +105,7 @@ impl Column {
             Column::Boolean(bm) => {
                 Self::take_compacted_arg_types::<BooleanType>(bm, indices, num_rows)
             }
-            Column::Binary(column) => BinaryType::upcast_column(Self::take_compact_string_types(
+            Column::Binary(column) => BinaryType::upcast_column(Self::take_compact_binary_types(
                 column, indices, num_rows,
             )),
             Column::String(column) => StringType::upcast_column(Self::take_compact_string_types(
@@ -161,7 +162,7 @@ impl Column {
                     &column, builder, indices,
                 )
             }
-            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_compact_string_types(
+            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_compact_binary_types(
                 column, indices, num_rows,
             )),
             Column::Nullable(c) => {
@@ -180,7 +181,7 @@ impl Column {
                     .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => VariantType::upcast_column(Self::take_compact_string_types(
+            Column::Variant(column) => VariantType::upcast_column(Self::take_compact_binary_types(
                 column, indices, num_rows,
             )),
         }
@@ -232,17 +233,17 @@ impl Column {
         builder
     }
 
-    pub fn take_compact_string_types(
-        col: &StringColumn,
+    pub fn take_compact_binary_types(
+        col: &BinaryColumn,
         indices: &[(u32, u32)],
         num_rows: usize,
-    ) -> StringColumn {
+    ) -> BinaryColumn {
         // Each element of `items` is (string(&[u8]), repeat times).
         let mut items = Vec::with_capacity(indices.len());
         let mut items_ptr = items.as_mut_ptr();
 
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets = Vec::with_capacity(num_rows + 1);
         let mut offsets_ptr = offsets.as_mut_ptr();
         let mut data_size = 0;
@@ -299,7 +300,21 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn take_compact_string_types(
+        col: &StringColumn,
+        indices: &[(u32, u32)],
+        num_rows: usize,
+    ) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::take_compact_binary_types(
+                &col.clone().into(),
+                indices,
+                num_rows,
+            ))
+        }
     }
 
     fn take_compacted_arg_types<T: ArgType>(

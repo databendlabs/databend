@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 use byteorder::BigEndian;
 use byteorder::WriteBytesExt;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::number::Number;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -61,7 +61,7 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
 }
 
 pub struct BinaryKeysColumnBuilder<'a> {
-    pub inner_builder: StringColumnBuilder,
+    pub inner_builder: BinaryColumnBuilder,
 
     _initial: usize,
 
@@ -71,7 +71,7 @@ pub struct BinaryKeysColumnBuilder<'a> {
 impl<'a> BinaryKeysColumnBuilder<'a> {
     pub fn create(capacity: usize, value_capacity: usize) -> Self {
         BinaryKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
+            inner_builder: BinaryColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
             _initial: value_capacity,
         }
@@ -168,7 +168,7 @@ impl<'a> KeysColumnBuilder for DictionaryBinaryKeysColumnBuilder<'a> {
 
     #[inline(always)]
     fn finish(self) -> Column {
-        let mut builder = StringColumnBuilder::with_capacity(self.data.len(), self.bytes_size);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.data.len(), self.bytes_size);
 
         unsafe {
             for dictionary_keys in self.data {

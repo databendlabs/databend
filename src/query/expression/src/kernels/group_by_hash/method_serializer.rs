@@ -16,13 +16,13 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
-use crate::types::string::StringIterator;
+use crate::types::binary::BinaryIterator;
 use crate::types::DataType;
+use crate::BinaryKeyAccessor;
 use crate::Column;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
-use crate::StringKeyAccessor;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
@@ -30,7 +30,7 @@ pub struct HashMethodSerializer {}
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
 
-    type HashKeyIter<'a> = StringIterator<'a>;
+    type HashKeyIter<'a> = BinaryIterator<'a>;
 
     fn name(&self) -> String {
         "Serializer".to_string()
@@ -71,7 +71,7 @@ impl HashMethod for HashMethodSerializer {
             KeysState::Column(Column::Binary(col)) => {
                 hashes.extend(col.iter().map(hash_join_fast_string_hash));
                 let (data, offsets) = col.into_buffer();
-                Ok(Box::new(StringKeyAccessor::new(data, offsets)))
+                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
             }
             _ => unreachable!(),
         }

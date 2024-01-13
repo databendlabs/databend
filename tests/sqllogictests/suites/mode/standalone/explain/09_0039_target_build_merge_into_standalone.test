@@ -189,8 +189,8 @@ target_table: default.default.target_build_optimization
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.b (#1), t1.b (#4))]
-    ├── non-equi conditions: [gt(t1.a (#3), t2.a (#0))]
+    ├── equi conditions: [eq(t2.a (#0), t1.a (#3))]
+    ├── non-equi conditions: [gt(t1.b (#4), t2.b (#1))]
     ├── LogicalGet
     │   ├── table: default.default.source_optimization
     │   ├── filters: []
@@ -270,8 +270,8 @@ target_table: default.default.target_build_optimization
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.b (#1), t1.b (#4))]
-    ├── non-equi conditions: [gt(t1.a (#3), t2.a (#0))]
+    ├── equi conditions: [eq(t2.a (#0), t1.a (#3))]
+    ├── non-equi conditions: [gt(t1.b (#4), t2.b (#1))]
     ├── LogicalGet
     │   ├── table: default.default.source_optimization
     │   ├── filters: []
