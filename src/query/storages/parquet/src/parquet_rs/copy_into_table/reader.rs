@@ -22,9 +22,11 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use opendal::Operator;
 use parquet::file::metadata::FileMetaData;
@@ -107,12 +109,13 @@ impl RowGroupReaderForCopy {
                         ArrowField::from(from_field).data_type(),
                         ArrowField::from(to_field).data_type(),
                     ) {
-                        Expr::Cast {
-                            span: None,
-                            is_try: false,
-                            expr: Box::new(expr),
-                            dest_type: to_field.data_type().into(),
-                        }
+                        check_cast(
+                            None,
+                            false,
+                            expr,
+                            &to_field.data_type().into(),
+                            &BUILTIN_FUNCTIONS,
+                        )?
                     } else {
                         return Err(ErrorCode::BadDataValueType(format!(
                             "Cannot cast column {} from {:?} to {:?}",

@@ -16,6 +16,8 @@ use std::io::Write;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -67,7 +69,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |val, _| match val {
             ValueRef::Scalar(val) => Value::Scalar(val.to_vec()),
-            ValueRef::Column(col) => Value::Column(col),
+            ValueRef::Column(col) => Value::Column(col.into()),
         },
     );
 
@@ -78,7 +80,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(val) => Value::Scalar(Some(val.to_vec())),
             ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: Bitmap::new_constant(true, col.len()),
-                column: col,
+                column: col.into(),
             }),
         },
     );
@@ -187,7 +189,7 @@ fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<B
 
 /// Binary to String scalar function with estimated output column capacity.
 pub fn vectorize_binary_to_string(
-    estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
+    estimate_bytes: impl Fn(&BinaryColumn) -> usize + Copy,
     func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
 ) -> impl Fn(ValueRef<BinaryType>, &mut EvalContext) -> Value<StringType> + Copy {
     move |arg1, ctx| match arg1 {
@@ -211,17 +213,17 @@ pub fn vectorize_binary_to_string(
 /// String to Binary scalar function with estimated output column capacity.
 pub fn vectorize_string_to_binary(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
+    func: impl Fn(&[u8], &mut BinaryColumnBuilder, &mut EvalContext) + Copy,
 ) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Value<BinaryType> + Copy {
     move |arg1, ctx| match arg1 {
         ValueRef::Scalar(val) => {
-            let mut builder = StringColumnBuilder::with_capacity(1, 0);
+            let mut builder = BinaryColumnBuilder::with_capacity(1, 0);
             func(val, &mut builder, ctx);
             Value::Scalar(builder.build_scalar())
         }
         ValueRef::Column(col) => {
             let data_capacity = estimate_bytes(&col);
-            let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
+            let mut builder = BinaryColumnBuilder::with_capacity(col.len(), data_capacity);
             for val in col.iter() {
                 func(val, &mut builder, ctx);
             }

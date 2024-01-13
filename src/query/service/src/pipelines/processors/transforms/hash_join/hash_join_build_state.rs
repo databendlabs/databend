@@ -40,15 +40,15 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
-use databend_common_expression::HashMethodSingleString;
+use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringHashJoinHashMap;
 use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
@@ -69,7 +69,7 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
-use crate::pipelines::processors::transforms::hash_join::SingleStringHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -322,16 +322,16 @@ impl HashJoinBuildState {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
+                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSerializer::default(),
                     })
                 }
-                HashMethodKind::SingleString(_) => {
+                HashMethodKind::SingleBinary(_) => {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
-                    HashJoinHashTable::SingleString(SingleStringHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSingleString::default(),
+                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
+                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        hash_method: HashMethodSingleBinary::default(),
                     })
                 }
                 HashMethodKind::KeysU8(hash_method) => {
@@ -477,14 +477,15 @@ impl HashJoinBuildState {
             }};
         }
 
-        macro_rules! insert_string_key {
+        macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
                 let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::Binary(col)) | KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::String(col) ) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
                     // must return `Column::Binary` | `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
@@ -688,10 +689,10 @@ impl HashJoinBuildState {
         }
 
         match hashtable {
-            HashJoinHashTable::Serializer(table) => insert_string_key! {
+            HashJoinHashTable::Serializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
-            HashJoinHashTable::SingleString(table) => insert_string_key! {
+            HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {

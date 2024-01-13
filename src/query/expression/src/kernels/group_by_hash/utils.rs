@@ -18,8 +18,8 @@ use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance;
 use crate::kernels::utils::store_advance_aligned;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
-use crate::types::string::StringColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -30,9 +30,9 @@ pub fn serialize_group_columns(
     columns: &[Column],
     num_rows: usize,
     serialize_size: usize,
-) -> StringColumn {
-    // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-    // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+) -> BinaryColumn {
+    // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+    // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
     let mut data: Vec<u8> = Vec::with_capacity(serialize_size);
     let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
     let mut data_ptr = data.as_mut_ptr();
@@ -53,7 +53,7 @@ pub fn serialize_group_columns(
         set_vec_len_by_ptr(&mut offsets, offsets_ptr);
     }
 
-    StringColumn::new(data.into(), offsets.into())
+    BinaryColumn::new(data.into(), offsets.into())
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
@@ -76,7 +76,13 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             })
         }
         Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
-        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => {
+            let value = unsafe { v.index_unchecked(row) };
+            let len = value.len();
+            store_advance::<u64>(&(len as u64), row_space);
+            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+        }
+        Column::String(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
             store_advance::<u64>(&(len as u64), row_space);

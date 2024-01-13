@@ -20,7 +20,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use super::StateAddr;
-use crate::types::string::StringColumnBuilder;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -74,7 +74,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         offset: usize,
-        builder: &mut StringColumnBuilder,
+        builder: &mut BinaryColumnBuilder,
     ) -> Result<()> {
         for place in places {
             self.serialize(place.next(offset), &mut builder.data)?;

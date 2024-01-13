@@ -29,7 +29,7 @@ use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodKeysU128;
 use databend_common_expression::HashMethodKeysU256;
 use databend_common_expression::HashMethodSerializer;
-use databend_common_expression::HashMethodSingleString;
+use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::KeysState;
 use databend_common_hashtable::DictionaryKeys;
@@ -403,7 +403,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
+impl PolymorphicKeysHelper<HashMethodSingleBinary> for HashMethodSingleBinary {
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = ShortStringHashMap<[u8], T>;
