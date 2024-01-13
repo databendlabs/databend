@@ -133,6 +133,10 @@ impl TransformHashJoinProbe {
         if item.0.is_empty() {
             let prefix = item.1;
             let (segment_idx, block_idx) = split_prefix(prefix);
+            info!(
+                "matched whole block: segment_idx: {}, block_idx: {}",
+                segment_idx, block_idx
+            );
             let data_block = DataBlock::empty_with_meta(Box::new(BlockMetaIndex {
                 segment_idx: segment_idx as usize,
                 block_idx: block_idx as usize,
@@ -156,6 +160,10 @@ impl TransformHashJoinProbe {
                 )?;
                 assert!(!data_block.is_empty());
                 let (segment_idx, block_idx) = split_prefix(prefix);
+                info!(
+                    "matched partial block: segment_idx: {}, block_idx: {}",
+                    segment_idx, block_idx
+                );
                 let data_block = data_block.add_meta(Some(Box::new(BlockMetaIndex {
                     segment_idx: segment_idx as usize,
                     block_idx: block_idx as usize,

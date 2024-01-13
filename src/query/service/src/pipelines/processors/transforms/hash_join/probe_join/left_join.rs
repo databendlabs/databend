@@ -403,7 +403,7 @@ impl HashJoinProbeState {
                 let new_matched_count = old_mactehd_counts + 1;
                 if old_mactehd_counts > 0 {
                     return Err(ErrorCode::UnresolvableConflict(
-                        "multi rows from source match one and the same row in the target_table multi times",
+                        "multi rows from source match one and the same row in the target_table multi times in probe phase",
                     ));
                 }
                 loop {

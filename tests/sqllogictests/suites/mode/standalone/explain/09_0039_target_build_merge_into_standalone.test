@@ -286,7 +286,7 @@ target_table: default.default.target_build_optimization
 query TT
 merge into target_build_optimization as t1 using source_optimization as t2 on t1.a > t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
 ----
-12 0
+10 0
 
 query TTT
 select * from target_build_optimization order by a,b,c;

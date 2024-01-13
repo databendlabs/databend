@@ -144,6 +144,10 @@ impl MatchedAggregator {
                     .meta_indexes
                     .insert((meta_index.segment_idx, meta_index.block_idx))
                 {
+                    info!(
+                        "duplicated block: segment_idx: {}, block_idx: {}",
+                        meta_index.segment_idx, meta_index.block_idx
+                    );
                     return Err(ErrorCode::Internal(
                         "merge into get duplicated block for target build unmodified optimization",
                     ));
