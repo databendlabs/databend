@@ -69,6 +69,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: true,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "ccc".to_string(),
         number_of_files: 100,
