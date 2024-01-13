@@ -497,7 +497,7 @@ impl HashJoinProbeState {
         }
         let intervals = block_info_index.print_intervals();
         for interval in intervals {
-            info!("interval :{} ", interval);
+            info!("interval :({},{}) ", interval.0, interval.1);
         }
         for (row_idx, hit) in matched.iter().enumerate() {
             info!("row_idx :{}, hit: {} ", row_idx, hit);
