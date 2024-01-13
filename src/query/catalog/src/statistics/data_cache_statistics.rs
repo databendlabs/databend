@@ -26,9 +26,9 @@ pub struct DataCacheMetrics {
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct DataCacheMetricValues {
-    pub bytes_from_storage: usize,
-    pub bytes_from_disk_cache: usize,
-    pub bytes_from_mem_cache: usize,
+    pub bytes_from_remote_disk: usize,
+    pub bytes_from_local_disk: usize,
+    pub bytes_from_memory: usize,
 }
 
 impl DataCacheMetrics {
