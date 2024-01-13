@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::chunk;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -490,6 +491,17 @@ impl HashJoinProbeState {
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
         // generate chunks
+        info!("chunk len: {}", chunks_offsets.len());
+        for chunk_offset in chunks_offsets {
+            info!("chunk offset: {}", chunk_offset);
+        }
+        let intervals = block_info_index.print_intervals();
+        for interval in intervals {
+            info!("interval :{} ", interval);
+        }
+        for (row_idx, hit) in matched.iter().enumerate() {
+            info!("row_idx :{}, hit: {} ", row_idx, hit);
+        }
         let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
         info!("partial unmodified blocks num: {}", tasks.len());
         for prefix in all_matched_blocks {

@@ -230,6 +230,9 @@ impl BlockInfoIndex {
         }
     }
 
+    pub fn print_intervals(&self) -> Vec<Interval> {
+        self.intervals.clone()
+    }
     /// 1.interval stands for the (start,end) in chunks for one block.
     /// 2.prefix is the segment_id_block_id composition.
     /// we can promise the ordered insert from outside.
