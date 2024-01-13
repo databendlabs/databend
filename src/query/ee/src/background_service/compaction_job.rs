@@ -17,33 +17,33 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::BooleanArray;
-use arrow_array::LargeBinaryArray;
+use arrow_array::LargeStringArray;
 use arrow_array::RecordBatch;
 use arrow_array::UInt64Array;
 use chrono::Utc;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::time::Instant;
-use common_base::base::uuid::Uuid;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_api::BackgroundApi;
-use common_meta_app::background::BackgroundJobIdent;
-use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundJobParams;
-use common_meta_app::background::BackgroundJobStatus;
-use common_meta_app::background::BackgroundJobType::ONESHOT;
-use common_meta_app::background::BackgroundTaskIdent;
-use common_meta_app::background::BackgroundTaskInfo;
-use common_meta_app::background::BackgroundTaskState;
-use common_meta_app::background::GetBackgroundJobReq;
-use common_meta_app::background::ManualTriggerParams;
-use common_meta_app::background::UpdateBackgroundJobParamsReq;
-use common_meta_app::background::UpdateBackgroundJobStatusReq;
-use common_meta_app::background::UpdateBackgroundTaskReq;
-use common_meta_app::schema::TableStatistics;
-use common_meta_store::MetaStore;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::base::tokio::time::Instant;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_api::BackgroundApi;
+use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundJobParams;
+use databend_common_meta_app::background::BackgroundJobStatus;
+use databend_common_meta_app::background::BackgroundJobType::ONESHOT;
+use databend_common_meta_app::background::BackgroundTaskIdent;
+use databend_common_meta_app::background::BackgroundTaskInfo;
+use databend_common_meta_app::background::BackgroundTaskState;
+use databend_common_meta_app::background::GetBackgroundJobReq;
+use databend_common_meta_app::background::ManualTriggerParams;
+use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
+use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
+use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_store::MetaStore;
+use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::table_functions::SuggestedBackgroundTasksSource;
@@ -170,7 +170,7 @@ impl CompactionJob {
             let db_names = records
                 .column(0)
                 .as_any()
-                .downcast_ref::<arrow_array::LargeBinaryArray>()
+                .downcast_ref::<arrow_array::LargeStringArray>()
                 .unwrap();
             let db_ids = records
                 .column(1)
@@ -180,7 +180,7 @@ impl CompactionJob {
             let tb_names = records
                 .column(2)
                 .as_any()
-                .downcast_ref::<LargeBinaryArray>()
+                .downcast_ref::<LargeStringArray>()
                 .unwrap();
             let tb_ids = records
                 .column(3)
@@ -188,9 +188,9 @@ impl CompactionJob {
                 .downcast_ref::<UInt64Array>()
                 .unwrap();
             for i in 0..records.num_rows() {
-                let db_name = String::from_utf8_lossy(db_names.value(i)).to_string();
+                let db_name = db_names.value(i).to_owned();
                 let db_id = db_ids.value(i);
-                let tb_name = String::from_utf8_lossy(tb_names.value(i)).to_string();
+                let tb_name = tb_names.value(i).to_owned();
                 let tb_id = tb_ids.value(i);
                 match self
                     .compact_table(
@@ -503,16 +503,13 @@ impl CompactionJob {
                     1 => {
                         // Only table name provided, assuming no database
                         let table = parts[0].to_owned();
-                        result
-                            .entry("default".to_owned())
-                            .or_insert(Vec::new())
-                            .push(table);
+                        result.entry("default".to_owned()).or_default().push(table);
                     }
                     2 => {
                         // Both database and table names provided
                         let db = parts[0].to_owned();
                         let table = parts[1].to_owned();
-                        result.entry(db).or_insert(Vec::new()).push(table);
+                        result.entry(db).or_default().push(table);
                     }
                     _ => {
                         // Invalid input, skipping entry

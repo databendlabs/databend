@@ -17,26 +17,23 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::Result;
-use common_expression::eval_function;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_storage::infer_schema_with_extension;
-use common_storage::ColumnNodes;
-use storages_common_table_meta::meta::ColumnMeta;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read as pread;
+use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::Result;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_storage::infer_schema_with_extension;
+use databend_common_storage::ColumnNodes;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::VirtualColumnReader;
 use crate::io::read::block::DeserializedArray;
@@ -94,6 +91,7 @@ impl VirtualColumnReader {
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
+                None,
                 self.compression.into(),
                 None,
                 None,
@@ -135,6 +133,7 @@ impl VirtualColumnReader {
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
+                None,
                 self.compression.into(),
                 None,
                 None,
@@ -206,7 +205,7 @@ impl VirtualColumnReader {
             let part = FusePartInfo::from_part(&virtual_data.part)?;
             let schema = virtual_data.schema;
 
-            let table_schema = TableSchema::from(&schema);
+            let table_schema = TableSchema::try_from(&schema).unwrap();
             let parquet_schema_descriptor = to_parquet_schema(&schema)?;
             let column_nodes = ColumnNodes::new_from_schema(&schema, Some(&table_schema));
 
@@ -234,7 +233,7 @@ impl VirtualColumnReader {
                             let data_type = DataType::from(&*virtual_column.data_type);
                             let column = BlockEntry::new(
                                 data_type.clone(),
-                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                             );
                             virtual_values.insert(index, column);
                         }
@@ -257,27 +256,22 @@ impl VirtualColumnReader {
                 .index_of(&virtual_column.source_name)
                 .unwrap();
             let source = data_block.get_by_offset(src_index);
-            let mut src_arg = (source.value.clone(), source.data_type.clone());
-            for path in virtual_column.paths.iter() {
-                let path_arg = match path {
-                    Scalar::String(_) => (Value::Scalar(path.clone()), DataType::String),
-                    Scalar::Number(NumberScalar::UInt64(_)) => (
-                        Value::Scalar(path.clone()),
-                        DataType::Number(NumberDataType::UInt64),
-                    ),
-                    _ => unreachable!(),
-                };
-                let (value, data_type) = eval_function(
-                    None,
-                    "get",
-                    [src_arg, path_arg],
-                    &func_ctx,
-                    data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
-                )?;
-                src_arg = (value, data_type);
-            }
-            let column = BlockEntry::new(DataType::from(&*virtual_column.data_type), src_arg.0);
+            let src_arg = (source.value.clone(), source.data_type.clone());
+            let path_arg = (
+                Value::Scalar(virtual_column.key_paths.clone()),
+                DataType::String,
+            );
+
+            let (value, data_type) = eval_function(
+                None,
+                "get_by_keypath",
+                [src_arg, path_arg],
+                &func_ctx,
+                data_block.num_rows(),
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            let column = BlockEntry::new(data_type, value);
             data_block.add_column(column);
         }
 

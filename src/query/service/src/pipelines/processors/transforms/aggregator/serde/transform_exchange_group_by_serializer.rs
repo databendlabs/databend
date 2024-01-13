@@ -17,52 +17,52 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_base::base::GlobalUniqName;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::arrow::serialize_column;
-use common_expression::types::ArgType;
-use common_expression::types::ArrayType;
-use common_expression::types::Int64Type;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::FromData;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use common_pipeline_transforms::processors::transforms::UnknownMode;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FromData;
+use databend_common_hashtable::HashtableLike;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_settings::FlightCompression;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
-use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::SerializeGroupByStream;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_spill_writer::spilling_group_by_payload as local_spilling_group_by_payload;
-use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::serialize_group_by;
+use crate::pipelines::processors::transforms::aggregator::spilling_group_by_payload as local_spilling_group_by_payload;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::SerializeGroupByStream;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
-use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
@@ -87,9 +87,17 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
         location_prefix: String,
         schema: DataSchemaRef,
         local_pos: usize,
+        compression: Option<FlightCompression>,
     ) -> Box<dyn Processor> {
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
 
         BlockMetaTransformer::create(
             input,
@@ -101,7 +109,7 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
                 local_pos,
                 ipc_fields,
                 location_prefix,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
             },
         )
     }

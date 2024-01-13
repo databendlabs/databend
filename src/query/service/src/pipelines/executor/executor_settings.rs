@@ -15,19 +15,22 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_exception::Result;
-use common_settings::Settings;
+use databend_common_exception::Result;
+use databend_common_settings::Settings;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,
+    pub enable_profiling: bool,
     pub max_execute_time_in_seconds: Duration,
 }
 
 impl ExecutorSettings {
     pub fn try_create(settings: &Settings, query_id: String) -> Result<ExecutorSettings> {
+        let enable_profiling = settings.get_enable_query_profiling()?;
         let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
         Ok(ExecutorSettings {
+            enable_profiling,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
         })

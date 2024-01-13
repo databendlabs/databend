@@ -17,27 +17,28 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::MatchExpr;
-use common_storage::metrics::merge_into::merge_into_matched_operation_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::MatchExpr;
+use databend_common_storage::MergeStatus;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -57,6 +58,7 @@ impl BlockMetaInfo for SourceFullMatched {
     }
 }
 
+#[allow(dead_code)]
 enum MutationKind {
     Update(UpdateDataBlockMutation),
     Delete(DeleteDataBlockMutation),
@@ -65,7 +67,7 @@ enum MutationKind {
 // if we use hash shuffle join strategy, the enum
 // type can't be parser when transform data between nodes.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MixRowNumberKindAndLog {
+pub struct MixRowIdKindAndLog {
     pub log: Option<MutationLogs>,
     // kind's range is [0,1,2], 0 stands for log
     // 1 stands for row_id_update, 2 stands for row_id_delete,
@@ -73,9 +75,9 @@ pub struct MixRowNumberKindAndLog {
 }
 
 #[typetag::serde(name = "mix_row_id_kind_and_log")]
-impl BlockMetaInfo for MixRowNumberKindAndLog {
+impl BlockMetaInfo for MixRowIdKindAndLog {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        MixRowNumberKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
+        MixRowIdKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -141,6 +143,7 @@ impl MatchedSplitProcessor {
                         filter.clone(),
                         ctx.get_function_context()?,
                         row_id_idx,
+                        input_schema.num_fields(),
                     ),
                 }))
             } else {
@@ -258,7 +261,6 @@ impl Processor for MatchedSplitProcessor {
         }
     }
 
-    // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {
@@ -270,6 +272,7 @@ impl Processor for MatchedSplitProcessor {
             }
             let start = Instant::now();
             let mut current_block = data_block;
+
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {
@@ -306,6 +309,11 @@ impl Processor for MatchedSplitProcessor {
             current_block = current_block.filter_boolean_value(&filter)?;
             if !current_block.is_empty() {
                 // add updated row_ids
+                self.ctx.add_merge_status(MergeStatus {
+                    insert_rows: 0,
+                    update_rows: current_block.num_rows(),
+                    deleted_rows: 0,
+                });
                 self.output_data_row_id_data.push(DataBlock::new_with_meta(
                     vec![current_block.get_by_offset(self.row_id_idx).clone()],
                     current_block.num_rows(),
@@ -317,13 +325,59 @@ impl Processor for MatchedSplitProcessor {
                 current_block = op.execute(&self.ctx.get_function_context()?, current_block)?;
                 metrics_inc_merge_into_append_blocks_counter(1);
                 metrics_inc_merge_into_append_blocks_rows_counter(current_block.num_rows() as u32);
+
+                current_block = self.cast_data_type_for_merge(current_block)?;
+
                 current_block =
                     current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
+
                 self.output_data_updated_data = Some(current_block);
             }
             let elapsed_time = start.elapsed().as_millis() as u64;
             merge_into_matched_operation_milliseconds(elapsed_time);
         }
         Ok(())
+    }
+}
+
+impl MatchedSplitProcessor {
+    fn cast_data_type_for_merge(&self, current_block: DataBlock) -> Result<DataBlock> {
+        // cornor case: for merge into update, if the target table's column is not null,
+        // for example, target table has three columns like (a,b,c), and we use update set target_table.a = xxx,
+        // it's fine because we have cast the xxx'data_type into a's data_type in `generate_update_list()`,
+        // but for b,c, the hash table will transform the origin data_type (b_type,c_type) into
+        // (nullable(b_type),nullable(c_type)), so we will get datatype not match error, let's transform
+        // them back here.
+        let current_columns = current_block.columns();
+        assert_eq!(
+            self.target_table_schema.fields.len(),
+            current_columns.len(),
+            "target table columns and current columns length mismatch"
+        );
+        let cast_exprs = current_columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col)| {
+                check(
+                    &RawExpr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(RawExpr::ColumnRef {
+                            span: None,
+                            id: idx,
+                            data_type: col.data_type.clone(),
+                            display_name: "".to_string(),
+                        }),
+                        dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+                    },
+                    &BUILTIN_FUNCTIONS,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let cast_operator = BlockOperator::Map {
+            exprs: cast_exprs,
+            projections: Some((current_columns.len()..current_columns.len() * 2).collect()),
+        };
+        cast_operator.execute(&self.ctx.get_function_context()?, current_block)
     }
 }

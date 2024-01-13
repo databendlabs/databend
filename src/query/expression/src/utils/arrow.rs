@@ -14,20 +14,22 @@
 
 use std::io::Cursor;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow::io::ipc::read::read_file_metadata;
-use common_arrow::arrow::io::ipc::read::FileReader;
-use common_arrow::arrow::io::ipc::write::FileWriter;
-use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::Schema;
+use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
+use databend_common_arrow::arrow::io::ipc::read::FileReader;
+use databend_common_arrow::arrow::io::ipc::write::FileWriter;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::TableDataType;
+use crate::DataField;
 use crate::Value;
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
@@ -70,7 +72,7 @@ pub fn serialize_column(col: &Column) -> Vec<u8> {
     writer.start().unwrap();
     writer
         .write(
-            &common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
+            &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
             None,
         )
         .unwrap();
@@ -79,18 +81,21 @@ pub fn serialize_column(col: &Column) -> Vec<u8> {
     buffer
 }
 
-pub fn deserialize_column(bytes: &[u8]) -> Option<Column> {
+pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {
     let mut cursor = Cursor::new(bytes);
 
-    let metadata = read_file_metadata(&mut cursor).ok()?;
+    let metadata = read_file_metadata(&mut cursor)?;
     let f = metadata.schema.fields[0].clone();
-    let table_type = TableDataType::from(&f);
-    let data_type = (&table_type).into();
+    let data_field = DataField::try_from(&f)?;
 
     let mut reader = FileReader::new(cursor, metadata, None, None);
-    let col = reader.next()?.ok()?.into_arrays().remove(0);
+    let col = reader
+        .next()
+        .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
+        .into_arrays()
+        .remove(0);
 
-    Some(Column::from_arrow(col.as_ref(), &data_type))
+    Column::from_arrow(col.as_ref(), data_field.data_type())
 }
 
 /// Convert a column to a arrow array.

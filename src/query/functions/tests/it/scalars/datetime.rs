@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -26,7 +26,6 @@ fn test_datetime() {
     let file = &mut mint.new_goldenfile("datetime.txt").unwrap();
 
     test_to_timestamp(file);
-    test_to_datetime(file);
     test_to_date(file);
     test_date_add_subtract(file);
     test_timestamp_add_subtract(file);
@@ -50,31 +49,6 @@ fn test_to_timestamp(file: &mut impl Write) {
     run_ast(file, "to_timestamp(315360000000000)", &[]);
     run_ast(file, "to_timestamp(253402300800000000)", &[]);
     run_ast(file, "to_timestamp(a)", &[(
-        "a",
-        Int64Type::from_data(vec![
-            -315360000000000i64,
-            315360000000,
-            -100,
-            0,
-            100,
-            315360000000,
-            315360000000000,
-        ]),
-    )]);
-}
-
-fn test_to_datetime(file: &mut impl Write) {
-    run_ast(file, "to_datetime(-30610224000000001)", &[]);
-    run_ast(file, "to_datetime(-315360000000000)", &[]);
-    run_ast(file, "to_datetime(-315360000000)", &[]);
-    run_ast(file, "to_datetime(-100)", &[]);
-    run_ast(file, "to_datetime(-0)", &[]);
-    run_ast(file, "to_datetime(0)", &[]);
-    run_ast(file, "to_datetime(100)", &[]);
-    run_ast(file, "to_datetime(315360000000)", &[]);
-    run_ast(file, "to_datetime(315360000000000)", &[]);
-    run_ast(file, "to_datetime(253402300800000000)", &[]);
-    run_ast(file, "to_datetime(a)", &[(
         "a",
         Int64Type::from_data(vec![
             -315360000000000i64,

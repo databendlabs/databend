@@ -22,3 +22,36 @@ EmptySink × 1 processor
 
 statement ok
 drop table t1
+
+## issue #13657
+statement ok
+drop table if exists t4;
+
+statement ok
+drop table if exists template;
+
+statement ok
+create table template(a int);
+
+statement ok
+explain pipeline create table t4 as select * from template;
+
+statement error 1025
+select * from t4;
+
+statement ok
+create table t4(a int);
+
+statement ok
+explain pipeline create table t4 as select * from template;
+
+statement ok
+insert into template values(1);
+
+statement ok
+explain pipeline truncate table template;
+
+query T
+select * from template;
+----
+1

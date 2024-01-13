@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::table::AppendMode;
-use common_exception::Result;
-use common_sql::executor::DistributedInsertSelect;
+use databend_common_catalog::table::AppendMode;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;

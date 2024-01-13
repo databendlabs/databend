@@ -15,7 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageInfo;
 
 use crate::plans::Plan;
 

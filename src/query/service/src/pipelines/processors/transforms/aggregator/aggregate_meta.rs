@@ -16,14 +16,14 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Range;
 
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::Column;
-use common_expression::DataBlock;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::HashTableCell;
 
 pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub bucket: isize,

@@ -15,16 +15,15 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_expression as ex;
-use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
-use common_protos::pb;
+use databend_common_expression as ex;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -176,7 +175,7 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or(Incompatible {
+        let schema = p.schema.ok_or_else(|| Incompatible {
             reason: "TableMeta.schema can not be None".to_string(),
         })?;
 
@@ -213,7 +212,7 @@ impl FromToProto for mt::TableMeta {
                 .map(mt::TableStatistics::from_pb)
                 .transpose()?
                 .unwrap_or_default(),
-            shared_by: BTreeSet::from_iter(p.shared_by.into_iter()),
+            shared_by: BTreeSet::from_iter(p.shared_by),
             column_mask_policy: if p.column_mask_policy.is_empty() {
                 None
             } else {
@@ -257,8 +256,8 @@ impl FromToProto for mt::TableMeta {
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
-            shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
-            column_mask_policy: self.column_mask_policy.clone().unwrap_or(BTreeMap::new()),
+            shared_by: Vec::from_iter(self.shared_by.clone()),
+            column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             owner: match self.owner.as_ref() {
                 Some(o) => Some(o.to_pb()?),
                 None => None,

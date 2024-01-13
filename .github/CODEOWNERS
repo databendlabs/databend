@@ -39,15 +39,7 @@
 /src/common/http/                  @datafuselabs/databend-api-reviewer
 /src/query/service/src/servers/    @datafuselabs/databend-api-reviewer
 
-# Website
-/website/              @datafuselabs/databend-document-reviewer
-/docs/                 @datafuselabs/databend-document-reviewer
-
 # Tool
 /docker/               @datafuselabs/databend-tool-reviewer
 /scripts/              @datafuselabs/databend-tool-reviewer
 /.github/              @datafuselabs/databend-tool-reviewer
-
-# Docs
-
-**/*.md @soyeric128

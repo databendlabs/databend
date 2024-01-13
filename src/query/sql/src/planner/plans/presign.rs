@@ -14,11 +14,11 @@
 
 use std::time::Duration;
 
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::StageInfo;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::principal::StageInfo;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {

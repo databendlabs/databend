@@ -23,6 +23,7 @@ pub enum ExplainKind {
     Pipeline,
     Fragments,
     Raw,
+    Optimized,
     Plan,
 
     JOIN,

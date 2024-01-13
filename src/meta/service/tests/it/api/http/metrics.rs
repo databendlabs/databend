@@ -42,7 +42,7 @@ async fn test_metrics() -> anyhow::Result<()> {
     // record some metrics to make the registry get initialized
     server_metrics::incr_leader_change();
     network_metrics::incr_recv_bytes(1);
-    raft_metrics::network::incr_recv_bytes_from_peer("addr".to_string(), 1);
+    raft_metrics::network::incr_recvfrom_bytes("addr".to_string(), 1);
     raft_metrics::storage::incr_raft_storage_fail("fun", true);
 
     let cluster_router = Route::new()

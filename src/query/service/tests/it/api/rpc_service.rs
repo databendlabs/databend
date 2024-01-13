@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@ use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::flight::data::Empty;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::ConnectionFactory;
-use common_grpc::GrpcConnectionError;
-use common_grpc::RpcClientTlsConfig;
+use databend_common_arrow::arrow_format::flight::data::Empty;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::GrpcConnectionError;
+use databend_common_grpc::RpcClientTlsConfig;
 use databend_query::api::RpcService;
-use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::*;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;

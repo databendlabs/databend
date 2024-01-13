@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: The tag to release
+        description: Tag to release
         required: true
         type: string
 
@@ -20,7 +20,6 @@ concurrency:
 
 jobs:
   linux:
-    name: ${{ matrix.target }}
     runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
     strategy:
       matrix:
@@ -34,23 +33,19 @@ jobs:
         with:
           target: ${{ matrix.target }}
           version: ${{ inputs.tag }}
-      - name: Publish to PyPI
-        timeout-minutes: 10
+      - name: upload
         if: inputs.tag
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: actions/upload-artifact@v3
         with:
-          skip-existing: true
-          password: ${{ secrets.PYPI_PASSWORD }}
-          packages-dir: src/bendpy/dist
+          name: python
+          path: src/bendpy/dist/*.whl
 
   macos:
     if: inputs.tag
-    name: ${{ matrix.target }}
     runs-on: macos-latest
     strategy:
       matrix:
         target:
-          - x86_64-apple-darwin
           - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
@@ -60,13 +55,27 @@ jobs:
         with:
           target: ${{ matrix.target }}
           version: ${{ inputs.tag }}
-      - name: Publish to PyPI
+      - name: upload
         if: inputs.tag
-        timeout-minutes: 10
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
-        uses: PyO3/maturin-action@v1
+        uses: actions/upload-artifact@v3
         with:
-          command: upload
-          args: --skip-existing *
-          working-directory: src/bendpy/dist
+          name: python
+          path: src/bendpy/dist/*.whl
+
+  publish:
+    if: inputs.tag
+    name: Publish
+    needs: [linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v3
+        with:
+          name: python
+          path: src/bendpy/dist
+      - name: Publish to PyPI
+        timeout-minutes: 10
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          packages-dir: src/bendpy/dist

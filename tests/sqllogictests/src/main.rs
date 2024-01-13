@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ use std::path::Path;
 use std::time::Instant;
 
 use clap::Parser;
-use client::ClickhouseHttpClient;
 use futures_util::stream;
 use futures_util::StreamExt;
 use sqllogictest::default_column_validator;
@@ -47,7 +46,6 @@ mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
-const HANDLER_CLICKHOUSE: &str = "clickhouse";
 
 pub struct Databend {
     client: Client,
@@ -79,7 +77,7 @@ pub async fn main() -> Result<()> {
     let args = SqlLogicTestArgs::parse();
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
-        None => vec![HANDLER_MYSQL, HANDLER_HTTP, HANDLER_CLICKHOUSE],
+        None => vec![HANDLER_MYSQL, HANDLER_HTTP],
     };
     for handler in handlers.iter() {
         match *handler {
@@ -88,9 +86,6 @@ pub async fn main() -> Result<()> {
             }
             HANDLER_HTTP => {
                 run_http_client().await?;
-            }
-            HANDLER_CLICKHOUSE => {
-                run_ck_http_client().await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -123,17 +118,6 @@ async fn run_http_client() -> Result<()> {
     Ok(())
 }
 
-async fn run_ck_http_client() -> Result<()> {
-    println!(
-        "Clickhouse http client starts to run with: {:?}",
-        SqlLogicTestArgs::parse()
-    );
-    let suits = SqlLogicTestArgs::parse().suites;
-    let suits = std::fs::read_dir(suits).unwrap();
-    run_suits(suits, ClientType::Clickhouse).await?;
-    Ok(())
-}
-
 // Create new databend with client type
 async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     let mut client: Client;
@@ -148,9 +132,6 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
         }
         ClientType::Http => {
             client = Client::Http(HttpClient::create()?);
-        }
-        ClientType::Clickhouse => {
-            client = Client::Clickhouse(ClickhouseHttpClient::create(&args.database)?);
         }
     }
     if args.enable_sandbox {

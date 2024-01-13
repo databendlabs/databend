@@ -1,5 +1,5 @@
 [package]
-name = "common-sharing"
+name = "databend-common-sharing"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,21 +11,21 @@ doctest = false
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 bytes = { workspace = true }
-common-auth = { path = "../../common/auth" }
-common-base = { path = "../../common/base" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-meta-api = { path = "../../meta/api" }
-common-meta-app = { path = "../../meta/app" }
-common-storage = { path = "../../common/storage" }
-common-users = { path = "../users" }
+databend-common-auth = { path = "../../common/auth" }
+databend-common-base = { path = "../../common/base" }
+databend-common-config = { path = "../config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-api = { path = "../../meta/api" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
 http = "0.2"
 log = { workspace = true }
-moka = "0.10"
+moka = "0.12"
 opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

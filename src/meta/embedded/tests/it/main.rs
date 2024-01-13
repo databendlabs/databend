@@ -12,5 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![allow(clippy::diverging_sub_expression)]
+
 mod kv_api_impl;
 mod schema_api_impl;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use background_service::Suggestion;
+use databend_enterprise_background_service::Suggestion;
 use http::StatusCode;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -36,7 +36,7 @@ pub async fn list_suggestions(
     ctx: &HttpQueryContext,
     _req: &Request,
 ) -> PoemResult<Json<SuggestionsResponse>> {
-    let session = ctx.get_session(SessionType::HTTPAPI("ListSuggestions".to_string()));
+    let session = ctx.upgrade_session(SessionType::HTTPAPI("ListSuggestions".to_string()))?;
     let context = session
         .create_query_context()
         .await

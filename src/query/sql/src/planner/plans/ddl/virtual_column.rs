@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_storages_common_table_meta::meta::Location;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnPlan {
+    pub if_not_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -33,6 +35,7 @@ impl CreateVirtualColumnPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterVirtualColumnPlan {
+    pub if_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -47,6 +50,7 @@ impl AlterVirtualColumnPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnPlan {
+    pub if_exists: bool,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -63,6 +67,8 @@ pub struct RefreshVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub virtual_columns: Vec<String>,
+    pub segment_locs: Option<Vec<Location>>,
 }
 
 impl RefreshVirtualColumnPlan {

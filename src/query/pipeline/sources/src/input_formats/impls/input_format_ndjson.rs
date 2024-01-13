@@ -15,16 +15,17 @@
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_exception::Result;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_formats::FieldDecoder;
-use common_formats::FieldJsonAstDecoder;
-use common_formats::FileFormatOptionsExt;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageFileFormatType;
-use common_storage::FileParseError;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_formats::FieldDecoder;
+use databend_common_formats::FieldJsonAstDecoder;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_storage::FileParseError;
 
 use crate::input_formats::error_utils::truncate_column_data;
 use crate::input_formats::AligningStateRowDelimiter;
@@ -46,6 +47,8 @@ impl InputFormatNDJson {
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         default_values: &Option<Vec<Scalar>>,
+        null_field_as: &NullAs,
+        missing_field_as: &NullAs,
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
             serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
@@ -75,26 +78,75 @@ impl InputFormatNDJson {
                 } else {
                     field.name().to_lowercase()
                 };
-                let value = &json[field_name];
-                if value == &serde_json::Value::Null {
-                    match default_values {
-                        None => {
+                let value = json.get(field_name);
+                match value {
+                    None => match missing_field_as {
+                        NullAs::Error => {
+                            return Err(FileParseError::ColumnMissingError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                            });
+                        }
+                        NullAs::Null => {
+                            if field.is_nullable_or_null() {
+                                column.push_default();
+                            } else {
+                                return Err(FileParseError::ColumnMissingError {
+                                    column_index,
+                                    column_name: field.name().to_owned(),
+                                    column_type: field.data_type.to_string(),
+                                });
+                            }
+                        }
+                        NullAs::FieldDefault => {
+                            if let Some(values) = default_values {
+                                column.push(values[column_index].as_ref());
+                            } else {
+                                column.push_default();
+                            }
+                        }
+                        NullAs::TypeDefault => {
                             column.push_default();
                         }
-                        Some(values) => {
-                            column.push(values[column_index].as_ref());
+                    },
+                    Some(serde_json::Value::Null) => match null_field_as {
+                        NullAs::Error => unreachable!("null_field_as should be error"),
+                        NullAs::Null => {
+                            if field.is_nullable_or_null() {
+                                column.push_default();
+                            } else {
+                                return Err(FileParseError::ColumnDecodeError {
+                                        column_index,
+                                        column_name: field.name().to_owned(),
+                                        column_type: field.data_type.to_string(),
+                                        decode_error: "null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL".to_owned(),
+                                        column_data: "null".to_owned(),
+                                    });
+                            }
                         }
+                        NullAs::FieldDefault => {
+                            if let Some(values) = default_values {
+                                column.push(values[column_index].as_ref());
+                            } else {
+                                column.push_default();
+                            }
+                        }
+                        NullAs::TypeDefault => {
+                            column.push_default();
+                        }
+                    },
+                    Some(value) => {
+                        field_decoder.read_field(column, value).map_err(|e| {
+                            FileParseError::ColumnDecodeError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                decode_error: e.to_string(),
+                                column_data: truncate_column_data(value.to_string()),
+                            }
+                        })?;
                     }
-                } else {
-                    field_decoder.read_field(column, value).map_err(|e| {
-                        FileParseError::ColumnDecodeError {
-                            column_index,
-                            column_name: field.name().to_owned(),
-                            column_type: field.data_type.to_string(),
-                            decode_error: e.to_string(),
-                            column_data: truncate_column_data(value.to_string()),
-                        }
-                    })?;
                 }
             }
         }
@@ -123,8 +175,9 @@ impl InputFormatTextBase for InputFormatNDJson {
     fn create_field_decoder(
         _params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldJsonAstDecoder::create(options))
+        Arc::new(FieldJsonAstDecoder::create(options, rounding_mode))
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
@@ -136,6 +189,11 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
+        let format_params = match builder.ctx.file_format_params {
+            FileFormatParams::NdJson(ref p) => p,
+            _ => unreachable!(),
+        };
+
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
@@ -146,6 +204,8 @@ impl InputFormatTextBase for InputFormatNDJson {
                     columns,
                     &builder.ctx.schema,
                     &builder.ctx.default_values,
+                    &format_params.null_field_as,
+                    &format_params.missing_field_as,
                 ) {
                     builder.ctx.on_error(
                         e,

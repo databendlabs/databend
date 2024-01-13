@@ -1,0 +1,52 @@
+statement ok
+drop table if exists iti
+
+statement ok
+create table iti (a int, b string, c int)
+
+# CsvFileFormatParams not the same in clickhouse handler
+
+# copy 2 files in one threads to test appending 2 batch of rows to the same column builders
+query 
+copy /*+ set_var(max_threads=1) */into iti from @data/csv/ pattern = 'wrong_sample.*[.]csv' file_format = (type = CSV) ON_ERROR=continue
+----
+csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
+csv/wrong_sample2.csv 4 3 Invalid value 'b1' for column 2 (c Int32 NULL): invalid text for number 4
+
+
+query 
+select * from iti order by a
+----
+1 'Beijing' 100
+5 'Shenzhen' 70
+7 'Beijing' 99
+11 'beijing' 100
+12 'shanghai' 80
+13 'guangzhou' 0
+17 'beijing' 99
+
+statement ok
+truncate table iti
+
+query 
+copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_5 force=true
+----
+csv/wrong_sample.csv 3 0 NULL NULL
+
+
+query 
+select * from iti order by a
+----
+1 'Beijing' 100
+5 'Shenzhen' 70
+7 'Beijing' 99
+
+statement ok
+truncate table iti
+
+query error (?s)1046.*abort after 4 errors! the last error: Invalid value 'b1' for column 2 \(c Int32 NULL\): invalid text for number\nat file 'csv/wrong_sample\.csv', line 2
+copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_4 force=true
+
+query 
+select * from iti order by a
+----

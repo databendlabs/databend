@@ -9,6 +9,8 @@ options="$1"
 # Create Database
 echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $BENDSQL_CLIENT_CONNECT_DEFAULT
 
+echo "use ${MYSQL_DATABASE}" | $BENDSQL_CLIENT_CONNECT_DEFAULT
+
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "DROP TABLE IF EXISTS $t" | $BENDSQL_CLIENT_CONNECT
 done
@@ -112,6 +114,6 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
-    insert_sql="insert into $t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "database: tpch" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"' > /dev/null 2>&1
+    insert_sql="insert into ${MYSQL_DATABASE}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "database: tpch" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"'
 done

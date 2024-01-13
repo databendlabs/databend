@@ -15,32 +15,35 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::InternalColumnMeta;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::StealablePartitions;
-use common_catalog::plan::TopK;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
-use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
-use crate::operations::read::parquet_data_source_deserializer::DeserializeDataTransform;
-use crate::operations::read::parquet_data_source_reader::ReadParquetDataSource;
+use crate::operations::read::DeserializeDataTransform;
+use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::ReadNativeDataSource;
+use crate::operations::read::ReadParquetDataSource;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     mut max_threads: usize,
@@ -75,7 +78,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -100,7 +105,9 @@ pub fn build_fuse_native_source_pipeline(
                     output.clone(),
                     ReadNativeDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -133,6 +140,7 @@ pub fn build_fuse_native_source_pipeline(
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     plan: &DataSourcePlan,
@@ -157,7 +165,9 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<true>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -180,7 +190,9 @@ pub fn build_fuse_parquet_source_pipeline(
                     output.clone(),
                     ReadParquetDataSource::<false>::create(
                         i,
+                        plan.table_index,
                         ctx.clone(),
+                        table_schema.clone(),
                         output,
                         block_reader.clone(),
                         partitions.clone(),
@@ -290,6 +302,7 @@ pub(crate) fn fill_internal_column_meta(
     data_block: DataBlock,
     fuse_part: &FusePartInfo,
     offsets: Option<Vec<usize>>,
+    base_block_ids: Option<Scalar>,
 ) -> Result<DataBlock> {
     // Fill `BlockMetaInfoPtr` if query internal columns
     let block_meta = fuse_part.block_meta_index().unwrap();
@@ -300,6 +313,7 @@ pub(crate) fn fill_internal_column_meta(
         segment_location: block_meta.segment_location.clone(),
         snapshot_location: block_meta.snapshot_location.clone(),
         offsets,
+        base_block_ids,
     };
 
     let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));

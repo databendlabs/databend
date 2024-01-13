@@ -13,41 +13,45 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_sql::binder::resolve_stage_location;
-use common_storage::init_stage_operator;
-use common_storage::read_parquet_schema_async;
-use common_storage::read_parquet_schema_async_rs;
-use common_storage::StageFilesInfo;
+use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_sql::binder::resolve_file_location;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::read_parquet_schema_async;
+use databend_common_storage::read_parquet_schema_async_rs;
+use databend_common_storage::StageFilesInfo;
+use opendal::Scheme;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipeline;
+use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 use crate::table_functions::TableFunction;
@@ -179,8 +183,50 @@ impl AsyncSource for InferSchemaSource {
         }
         self.is_finished = true;
 
-        let (stage_info, path) =
-            resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
+        let file_location = if let Some(location) =
+            self.args_parsed.location.clone().strip_prefix('@')
+        {
+            FileLocation::Stage(location.to_string())
+        } else if let Some(connection_name) = &self.args_parsed.connection_name {
+            let conn = self.ctx.get_connection(connection_name).await?;
+            let uri = UriLocation::from_uri(
+                self.args_parsed.location.clone(),
+                "".to_string(),
+                conn.storage_params,
+            )?;
+            let proto = conn.storage_type.parse::<Scheme>()?;
+            if proto != uri.protocol.parse::<Scheme>()? {
+                return Err(ErrorCode::BadArguments(format!(
+                    "protocol from connection_name={connection_name} ({proto}) not match with uri protocol ({0}).",
+                    uri.protocol
+                )));
+            }
+            FileLocation::Uri(uri)
+        } else {
+            let uri = UriLocation::from_uri(
+                self.args_parsed.location.clone(),
+                "".to_string(),
+                BTreeMap::default(),
+            )?;
+            FileLocation::Uri(uri)
+        };
+        let (stage_info, path) = resolve_file_location(self.ctx.as_ref(), &file_location).await?;
+        let enable_experimental_rbac_check = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_rbac_check()?;
+        if enable_experimental_rbac_check {
+            let visibility_checker = self.ctx.get_visibility_checker().await?;
+            if !stage_info.is_temporary
+                && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied, privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    &self.ctx.get_current_user()?.identity(),
+                )));
+            }
+        }
         let files_info = StageFilesInfo {
             path: path.clone(),
             ..self.args_parsed.files_info.clone()
@@ -198,7 +244,7 @@ impl AsyncSource for InferSchemaSource {
                 if use_parquet2 {
                     let arrow_schema =
                         read_parquet_schema_async(&operator, &first_file.path).await?;
-                    TableSchema::from(&arrow_schema)
+                    TableSchema::try_from(&arrow_schema)?
                 } else {
                     let arrow_schema = read_parquet_schema_async_rs(
                         &operator,

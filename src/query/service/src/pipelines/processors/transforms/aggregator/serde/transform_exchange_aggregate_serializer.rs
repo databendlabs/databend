@@ -15,33 +15,51 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::Result;
-use common_expression::{BlockMetaInfoDowncast, DataSchemaRef, FromData};
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::Processor;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FromData;
+use databend_common_hashtable::HashtableLike;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_settings::FlightCompression;
 use futures_util::future::BoxFuture;
-use opendal::Operator;
 use log::info;
-use common_arrow::arrow::io::flight::{default_ipc_fields, WriteOptions};
-use common_arrow::arrow::io::ipc::IpcField;
-use common_base::base::{GlobalUniqName, ProgressValues};
-use common_catalog::table_context::TableContext;
-use common_expression::arrow::serialize_column;
-use common_expression::types::{ArgType, ArrayType, Int64Type, UInt64Type, ValueType};
-use common_pipeline_transforms::processors::transforms::{BlockMetaTransform, BlockMetaTransformer};
+use opendal::Operator;
 
-use crate::api::{ExchangeShuffleMeta, serialize_block};
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};
-use crate::pipelines::processors::transforms::group_by::{HashMethodBounds, PartitionedHashMethod};
-use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::{serialize_aggregate, SerializeAggregateStream};
-use crate::pipelines::processors::transforms::aggregator::serde::transform_exchange_group_by_serializer::{FlightSerialized, FlightSerializedMeta};
-use crate::pipelines::processors::transforms::metrics::{metrics_inc_aggregate_spill_data_serialize_milliseconds, metrics_inc_aggregate_spill_write_bytes, metrics_inc_aggregate_spill_write_count, metrics_inc_aggregate_spill_write_milliseconds};
-use common_hashtable::HashtableLike;
-use crate::pipelines::processors::transforms::aggregator::serde::{AggregateSerdeMeta, exchange_defines};
-use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_spill_writer::spilling_aggregate_payload as local_spilling_aggregate_payload;
+use crate::api::serialize_block;
+use crate::api::ExchangeShuffleMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::serialize_aggregate;
+use crate::pipelines::processors::transforms::aggregator::spilling_aggregate_payload as local_spilling_aggregate_payload;
+use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
+use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
+use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
@@ -66,11 +84,19 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
         operator: Operator,
         location_prefix: String,
         params: Arc<AggregatorParams>,
+        compression: Option<FlightCompression>,
         schema: DataSchemaRef,
         local_pos: usize,
     ) -> Box<dyn Processor> {
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
 
         BlockMetaTransformer::create(input, output, TransformExchangeAggregateSerializer::<
             Method,
@@ -82,7 +108,7 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
             location_prefix,
             local_pos,
             ipc_fields,
-            options: WriteOptions { compression: None },
+            options: WriteOptions { compression },
         })
     }
 }

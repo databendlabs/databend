@@ -1,0 +1,62 @@
+statement ok
+drop table if exists default.t;
+
+statement ok
+create table default.t(id int);
+
+statement ok
+DROP DATABASE IF EXISTS COLUMNTEST
+
+statement ok
+CREATE DATABASE COLUMNTEST
+
+statement ok
+CREATE TABLE COLUMNTEST.A(ID INT, ID2 INT DEFAULT 1, ID3 STRING, ID4 STRING DEFAULT 'ID4')
+
+statement ok
+CREATE TABLE COLUMNTEST.T(TID INT, TID2 INT DEFAULT 1, TID3 STRING, TID4 STRING DEFAULT 'ID4')
+
+statement ok
+SELECT lower(database), name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'columntest'
+
+statement ok
+SELECT lower(database), name FROM system.columns  WHERE table LIKE 'views'
+
+query TT
+SELECT lower(database), name FROM system.columns  WHERE table = 't' or database='columntest' order by lower(database), name
+----
+columntest id
+columntest id2
+columntest id3
+columntest id4
+columntest tid
+columntest tid2
+columntest tid3
+columntest tid4
+default id
+
+query TT
+SELECT lower(database), name FROM system.columns  WHERE table = 't' and database='columntest' order by name
+----
+columntest tid
+columntest tid2
+columntest tid3
+columntest tid4
+
+statement ok
+drop view if exists default.test_v_t;
+
+statement ok
+create view default.test_v_t as select * from default.t;
+
+statement ok
+drop table default.t;
+
+statement ok
+select * from system.columns where table='test_v_t'
+
+statement ok
+drop view if exists default.test_v_t;
+
+statement ok
+DROP DATABASE COLUMNTEST

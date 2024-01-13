@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::vec;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::util::get_join_predicates;
 use crate::binder::JoinPredicate;
@@ -123,7 +123,7 @@ impl Rule for RuleLeftExchangeJoin {
         let contains_cross_join =
             join1.join_type == JoinType::Cross || join2.join_type == JoinType::Cross;
 
-        let predicates = vec![get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
+        let predicates = [get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
         let mut join_3 = Join::default();
         let mut join_4 = Join::default();
@@ -144,6 +144,9 @@ impl Rule for RuleLeftExchangeJoin {
         for predicate in predicates.iter() {
             let join_pred = JoinPredicate::new(predicate, &join4_prop, &t2_prop);
             match join_pred {
+                JoinPredicate::ALL(pred) => {
+                    join_4_preds.push(pred.clone());
+                }
                 JoinPredicate::Left(pred) => {
                     join_4_preds.push(pred.clone());
                 }
@@ -173,7 +176,10 @@ impl Rule for RuleLeftExchangeJoin {
         for predicate in join_4_preds.iter() {
             let join_pred = JoinPredicate::new(predicate, &t1_prop, &t3_prop);
             match join_pred {
-                JoinPredicate::Left(_) | JoinPredicate::Right(_) | JoinPredicate::Other(_) => {
+                JoinPredicate::ALL(_)
+                | JoinPredicate::Left(_)
+                | JoinPredicate::Right(_)
+                | JoinPredicate::Other(_) => {
                     // TODO(leiysky): push down the predicate
                     join_4.non_equi_conditions.push(predicate.clone());
                 }

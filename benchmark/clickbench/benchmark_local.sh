@@ -22,6 +22,10 @@ for bin in databend-query databend-meta; do
         killall -9 $bin || true
     fi
 done
+
+# Wait for killed process to cleanup resources
+sleep 1
+
 echo 'Start databend-meta...'
 nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."

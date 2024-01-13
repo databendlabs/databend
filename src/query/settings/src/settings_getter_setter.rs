@@ -12,20 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::Dialect;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
+use databend_common_ast::Dialect;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
 use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
+use crate::SettingMode;
+
+#[derive(Clone, Copy)]
+pub enum FlightCompression {
+    Lz4,
+    Zstd,
+}
 
 impl Settings {
     // Get u64 value, we don't get from the metasrv.
     fn try_get_u64(&self, key: &str) -> Result<u64> {
+        DefaultSettings::check_setting_mode(key, SettingMode::Read)?;
+
+        unsafe { self.unchecked_try_get_u64(key) }
+    }
+
+    unsafe fn unchecked_try_get_u64(&self, key: &str) -> Result<u64> {
         match self.changes.get(key) {
             Some(v) => v.value.as_u64(),
             None => DefaultSettings::try_get_u64(key),
@@ -33,6 +46,12 @@ impl Settings {
     }
 
     fn try_get_string(&self, key: &str) -> Result<String> {
+        DefaultSettings::check_setting_mode(key, SettingMode::Read)?;
+
+        unsafe { self.unchecked_try_get_string(key) }
+    }
+
+    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
@@ -40,19 +59,33 @@ impl Settings {
     }
 
     fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
-        match DefaultSettings::instance()?.settings.get(key) {
-            None => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown variable: {:?}",
-                key
-            ))),
-            Some(default_val) => {
-                if !matches!(&default_val.value, UserSettingValue::UInt64(_)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Set a integer({}) into {:?}.",
-                        val, key
-                    )));
+        DefaultSettings::check_setting_mode(key, SettingMode::Write)?;
+
+        unsafe { self.unchecked_try_set_u64(key, val) }
+    }
+
+    /// Sets a u64 value for a given key in the settings.
+    /// Ensures that the key exists, the setting type is UInt64, and the value is within any defined numeric range.
+    unsafe fn unchecked_try_set_u64(&self, key: &str, val: u64) -> Result<()> {
+        // Retrieve the instance of default settings
+        let default_settings = DefaultSettings::instance()?;
+
+        let setting_value = default_settings
+            .settings
+            .get(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        match &setting_value.value {
+            UserSettingValue::UInt64(_) => {
+                // If a numeric range is defined, validate the value against this range
+                if let Some(range) = &setting_value.range {
+                    // Check if the value falls within the numeric range
+                    range.is_within_numeric_range(val).map_err(|err| {
+                        ErrorCode::WrongValueForVariable(format!("{}: {}", key, err.message()))
+                    })?;
                 }
 
+                // Insert the value into changes with a session scope
                 self.changes.insert(key.to_string(), ChangeValue {
                     level: ScopeLevel::Session,
                     value: UserSettingValue::UInt64(val),
@@ -60,12 +93,40 @@ impl Settings {
 
                 Ok(())
             }
+            // If the setting type is not UInt64, return an error
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Set an integer ({}) into {:?}",
+                val, key
+            ))),
         }
     }
 
+    pub fn set_setting(&self, k: String, v: String) -> Result<()> {
+        DefaultSettings::check_setting_mode(&k, SettingMode::Write)?;
+
+        unsafe { self.unchecked_set_setting(k, v) }
+    }
+
+    unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<()> {
+        let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
+        self.changes.insert(key, ChangeValue {
+            value,
+            level: ScopeLevel::Session,
+        });
+        Ok(())
+    }
+
+    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
+    }
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
+    }
+
+    // Max block size for parquet reader
+    pub fn get_parquet_max_block_size(&self) -> Result<u64> {
+        self.try_get_u64("parquet_max_block_size")
     }
 
     // Get max_threads.
@@ -188,8 +249,9 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
-    pub fn get_disable_join_reorder(&self) -> Result<bool> {
-        Ok(self.try_get_u64("disable_join_reorder")? != 0)
+    /// # Safety
+    pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
+        Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
     pub fn get_join_spilling_threshold(&self) -> Result<usize> {
@@ -205,15 +267,16 @@ impl Settings {
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
-        match self.try_get_string("sql_dialect")?.as_str() {
+        match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
+            "experimental" => Ok(Dialect::Experimental),
             _ => Ok(Dialect::PostgreSQL),
         }
     }
 
     pub fn get_collation(&self) -> Result<&str> {
-        match self.try_get_string("collation")?.as_str() {
+        match self.try_get_string("collation")?.to_lowercase().as_str() {
             "utf8" => Ok("utf8"),
             _ => Ok("binary"),
         }
@@ -259,12 +322,20 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_allow_inconsistent")? != 0)
     }
 
-    pub fn get_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("spilling_bytes_threshold_per_proc")? as usize)
+    pub fn get_aggregate_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("aggregate_spilling_bytes_threshold_per_proc")? as usize)
     }
 
-    pub fn get_spilling_memory_ratio(&self) -> Result<usize> {
-        Ok(self.try_get_u64("spilling_memory_ratio")? as usize)
+    pub fn get_aggregate_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
@@ -291,6 +362,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }
 
+    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
+    }
+
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
         self.try_get_u64("table_lock_expire_secs")
     }
@@ -299,16 +374,19 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    pub fn get_enterprise_license(&self) -> Result<String> {
-        self.try_get_string("enterprise_license")
+    /// # Safety
+    pub unsafe fn get_enterprise_license(&self) -> Result<String> {
+        self.unchecked_try_get_string("enterprise_license")
     }
 
-    pub fn set_enterprise_license(&self, val: String) -> Result<()> {
-        self.set_setting("enterprise_license".to_string(), val)
+    /// # Safety
+    pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
+        self.unchecked_set_setting("enterprise_license".to_string(), val)
     }
 
-    pub fn get_deduplicate_label(&self) -> Result<Option<String>> {
-        let deduplicate_label = self.try_get_string("deduplicate_label")?;
+    /// # Safety
+    pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
+        let deduplicate_label = self.unchecked_try_get_string("deduplicate_label")?;
         if deduplicate_label.is_empty() {
             Ok(None)
         } else {
@@ -316,8 +394,9 @@ impl Settings {
         }
     }
 
-    pub fn set_deduplicate_label(&self, val: String) -> Result<()> {
-        self.set_setting("deduplicate_label".to_string(), val)
+    /// # Safety
+    pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
+        self.unchecked_set_setting("deduplicate_label".to_string(), val)
     }
 
     pub fn get_enable_distributed_copy(&self) -> Result<bool> {
@@ -344,8 +423,16 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
 
-    pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
+    pub fn get_enable_compact_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_compact_after_write")? != 0)
+    }
+
+    pub fn get_auto_compaction_imperfect_blocks_threshold(&self) -> Result<u64> {
+        self.try_get_u64("auto_compaction_imperfect_blocks_threshold")
+    }
+
+    pub fn set_auto_compaction_imperfect_blocks_threshold(&self, val: u64) -> Result<()> {
+        self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
@@ -389,17 +476,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
-    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
-    }
-
-    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
-        self.try_set_u64(
-            "enable_refresh_aggregating_index_after_write",
-            u64::from(val),
-        )
-    }
-
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
         Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
     }
@@ -422,5 +498,49 @@ impl Settings {
 
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
+    }
+
+    pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_connect_timeout_secs")
+    }
+
+    pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_timeout_secs")
+    }
+
+    pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
+        Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
+    }
+
+    pub fn get_query_flight_compression(&self) -> Result<Option<FlightCompression>> {
+        match self
+            .try_get_string("query_flight_compression")?
+            .to_uppercase()
+            .as_str()
+        {
+            "NONE" => Ok(None),
+            "LZ4" => Ok(Some(FlightCompression::Lz4)),
+            "ZSTD" => Ok(Some(FlightCompression::Zstd)),
+            _ => unreachable!("check possible_values in set variable"),
+        }
+    }
+
+    pub fn get_enable_refresh_virtual_column_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_virtual_column_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_refresh_virtual_column_after_write", u64::from(val))
+    }
+
+    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64(
+            "enable_refresh_aggregating_index_after_write",
+            u64::from(val),
+        )
     }
 }

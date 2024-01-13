@@ -14,8 +14,8 @@
 
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -56,7 +56,7 @@ impl AuthType {
     }
 
     fn bad_auth_types(s: &str) -> String {
-        let all = vec![
+        let all = [
             NO_PASSWORD_STR,
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,

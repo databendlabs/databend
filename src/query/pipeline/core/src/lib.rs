@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::arc_with_non_send_sync)]
+
 pub mod processors;
 
-pub mod input_error;
-pub mod lock_guard;
-pub mod pipe;
-pub mod pipeline;
-pub mod pipeline_display;
-pub mod unsafe_cell_wrap;
+mod input_error;
+mod lock_guard;
+mod pipe;
+mod pipeline;
+mod pipeline_display;
+mod unsafe_cell_wrap;
 
 pub use input_error::InputError;
 pub use lock_guard::LockGuard;
 pub use lock_guard::UnlockApi;
+pub use pipe::Pipe;
+pub use pipe::PipeItem;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
+pub use processors::PlanScope;
+pub use processors::PlanScopeGuard;

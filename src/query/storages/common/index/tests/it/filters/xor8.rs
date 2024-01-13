@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::ScalarRef;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::ScalarRef;
+use databend_storages_common_index::filters::Filter;
+use databend_storages_common_index::filters::FilterBuilder;
+use databend_storages_common_index::filters::Xor8Builder;
+use databend_storages_common_index::filters::Xor8Filter;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use storages_common_index::filters::Filter;
-use storages_common_index::filters::FilterBuilder;
-use storages_common_index::filters::Xor8Builder;
-use storages_common_index::filters::Xor8Filter;
 
 #[test]
 fn test_xor_bitmap_u64() -> Result<()> {

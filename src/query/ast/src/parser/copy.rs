@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
-
 use nom::branch::alt;
 use nom::combinator::map;
 
@@ -43,13 +41,11 @@ use crate::util::ident;
 use crate::util::IResult;
 use crate::Input;
 
-const MAX_COPIED_FILES_NUM: usize = 2000;
-
 fn table_triple(i: Input) -> IResult<TableIdentifier> {
     map(dot_separated_idents_1_to_3, TableIdentifier::from_tuple)(i)
 }
 
-fn copy_into_table(i: Input) -> IResult<Statement> {
+pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
         map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
@@ -165,9 +161,7 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
         ),
         map(
             rule! { MAX_FILES ~ "=" ~ #literal_u64 },
-            |(_, _, max_files)| {
-                CopyIntoTableOption::MaxFiles(min(MAX_COPIED_FILES_NUM, max_files as usize))
-            },
+            |(_, _, max_files)| CopyIntoTableOption::MaxFiles(max_files as usize),
         ),
         map(
             rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },

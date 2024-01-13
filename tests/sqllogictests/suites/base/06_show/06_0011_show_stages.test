@@ -1,0 +1,14 @@
+statement ok
+DROP STAGE if exists test_stage
+
+statement ok
+CREATE STAGE test_stage
+
+statement ok
+SHOW STAGES
+
+statement ok
+DESC STAGE test_stage
+
+statement ok
+DROP STAGE test_stage

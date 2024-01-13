@@ -1,0 +1,83 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_index_db
+
+statement ok
+CREATE DATABASE test_index_db
+
+statement ok
+USE test_index_db
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx1
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx2
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx3
+
+statement ok
+CREATE TABLE t1(a int,b int) Engine = Fuse
+
+statement ok
+CREATE TABLE t2(a int,b int) Engine = Fuse
+
+statement ok
+CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
+
+statement ok
+CREATE AGGREGATING INDEX idx2 AS SELECT b FROM t1 WHERE a < 10
+
+statement ok
+CREATE AGGREGATING INDEX idx3 AS SELECT * FROM t2
+
+statement ok
+SHOW INDEXES
+
+query TTT
+SELECT name, type, definition FROM system.indexes
+----
+idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
+idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE (a < 10)
+idx3 AGGREGATING SELECT * FROM test_index_db.t2
+
+statement ok
+DROP AGGREGATING INDEX idx2
+
+query TTT
+SELECT name, type, definition FROM system.indexes
+----
+idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
+idx3 AGGREGATING SELECT * FROM test_index_db.t2
+
+statement ok
+DROP AGGREGATING INDEX idx1
+
+statement ok
+DROP AGGREGATING INDEX idx3
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE IF EXISTS test_index_db

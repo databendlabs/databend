@@ -20,11 +20,13 @@ mod processor_merge_into_split;
 mod processor_merge_into_split_row_number_and_log;
 mod transform_add_rownumber_column;
 mod transform_matched_mutation_aggregator;
+
 pub use processor_distributed_merge_into_block_deserialize::TransformDistributedMergeIntoBlockDeserialize;
 pub use processor_distributed_merge_into_block_serialize::TransformDistributedMergeIntoBlockSerialize;
 pub use processor_merge_into_matched_and_split::MatchedSplitProcessor;
-pub use processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
+pub use processor_merge_into_matched_and_split::MixRowIdKindAndLog;
 pub(crate) use processor_merge_into_matched_and_split::RowIdKind;
+pub use processor_merge_into_matched_and_split::SourceFullMatched;
 pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;
 pub use processor_merge_into_split_row_number_and_log::RowNumberAndLogSplitProcessor;

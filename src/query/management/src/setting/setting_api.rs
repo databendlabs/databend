@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_meta_app::principal::UserSetting;
-use common_meta_types::MatchSeq;
-use common_meta_types::SeqV;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait SettingApi: Sync + Send {
-    // Add a setting to /tenant/cluster/setting-name.
+    /// Add a setting to /tenant/cluster/setting-name.
+    /// Returns the `seq` of the updated setting.
     async fn set_setting(&self, setting: UserSetting) -> Result<u64>;
 
-    // Get all the settings for tenant/cluster.
+    /// Get all the settings for tenant/cluster.
     async fn get_settings(&self) -> Result<Vec<UserSetting>>;
 
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>>;
 
-    // Drop the setting by name.
+    /// Drop the setting by name.
     async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()>;
 }

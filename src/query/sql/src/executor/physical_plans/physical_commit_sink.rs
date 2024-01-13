@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
-// TODO(sky): make TableMutationAggregator distributed
 /// The commit sink is used to commit the data to the table.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CommitSink {
@@ -30,6 +30,8 @@ pub struct CommitSink {
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
+    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub need_lock: bool,
+    pub deduplicated_label: Option<String>,
 }

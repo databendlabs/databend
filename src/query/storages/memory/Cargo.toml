@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-memory"
+name = "databend-common-storages-memory"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,23 +12,22 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-meta-app = { path = "../../../meta/app" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sinks = { path = "../../pipeline/sinks" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-storage = { path = "../../../common/storage" }
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sinks = { path = "../../pipeline/sinks" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
-once_cell = { workspace = true }
-parking_lot = "0.12.1"
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../../common/building" }
+databend-common-building = { path = "../../../common/building" }

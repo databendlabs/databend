@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::StageTableInfo;
-use common_catalog::table::AppendMode;
-use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::StageInfo;
-use common_storage::StageFilesInfo;
-use common_storages_stage::StageTable;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::AppendMode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storages_stage::StageTable;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -117,8 +117,10 @@ impl CopyIntoLocationInterpreter {
             to_table,
             data_schema,
             None,
+            vec![],
             false,
             AppendMode::Normal,
+            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
         Ok(build_res)
     }

@@ -1,0 +1,69 @@
+query I
+select count() from numbers(100) where ignore(number + 1)
+----
+0
+
+query I
+select count() from numbers(100) where not ignore(to_varchar(number + 3), 1, 4343, 4343, 'a')
+----
+100
+
+query I
+SELECT TRY_INET_ATON('10.0.5.9')
+----
+167773449
+
+query T
+SELECT TRY_INET_ATON(NULL)
+----
+NULL
+
+query I
+SELECT TRY_INET_ATON('hello')
+----
+NULL
+
+query I
+SELECT INET_ATON('10.0.5.9')
+----
+167773449
+
+query T
+SELECT INET_ATON(NULL)
+----
+NULL
+
+
+statement error 1006
+SELECT INET_ATON('hello')
+
+query T
+SELECT TRY_INET_NTOA(167773449)
+----
+10.0.5.9
+
+query T
+SELECT TRY_INET_NTOA('167773449')
+----
+10.0.5.9
+
+query T
+SELECT TRY_INET_NTOA(NULL)
+----
+NULL
+
+query T
+SELECT INET_NTOA(167773449)
+----
+10.0.5.9
+
+query T
+SELECT INET_NTOA(NULL)
+----
+NULL
+
+query T
+SELECT array(1);
+----
+[1]
+

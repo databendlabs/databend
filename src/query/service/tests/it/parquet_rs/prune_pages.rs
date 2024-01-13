@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::plan::ParquetReadOptions;
-use common_expression::FunctionContext;
-use common_expression::TableSchema;
-use common_storages_parquet::ParquetRSPruner;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_storages_parquet::ParquetRSPruner;
 use parquet::arrow::arrow_reader::ArrowReaderMetadata;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -26,7 +26,7 @@ use parquet::arrow::arrow_reader::RowSelector;
 
 use crate::parquet_rs::data::make_test_file_page;
 use crate::parquet_rs::data::Scenario;
-use crate::parquet_rs::utils::create_test_fixture;
+use crate::parquet_rs::utils::create_parquet2_test_fixture;
 use crate::parquet_rs::utils::get_data_source_plan;
 
 async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelection) {
@@ -34,8 +34,10 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     let file_path = file.path().to_string_lossy();
     let sql = format!("select * from 'fs://{file_path}' where {predicate}");
 
-    let fixture = create_test_fixture().await;
-    let plan = get_data_source_plan(fixture.ctx(), &sql).await.unwrap();
+    let fixture = create_parquet2_test_fixture().await;
+    let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
+        .await
+        .unwrap();
     let metadata = ArrowReaderMetadata::load(
         file.as_file(),
         ArrowReaderOptions::new()
@@ -55,12 +57,13 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
         ParquetReadOptions::default()
             .with_prune_row_groups(false)
             .with_prune_pages(true),
+        vec![],
     )
     .unwrap();
 
     let row_groups = (0..parquet_meta.num_row_groups()).collect::<Vec<_>>();
     let selection = pruner
-        .prune_pages(parquet_meta, &row_groups)
+        .prune_pages(parquet_meta, &row_groups, None)
         .unwrap()
         .unwrap();
 

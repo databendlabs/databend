@@ -14,17 +14,15 @@
 
 use std::collections::HashMap;
 
-use common_ast::ast::TableReference;
-use common_ast::ast::UpdateStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UpdateStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
-use super::Finder;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
-use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
 
@@ -103,19 +101,9 @@ impl Binder {
 
             // TODO(zhyass): update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
-            let f = |scalar: &ScalarExpr| {
-                matches!(
-                    scalar,
-                    ScalarExpr::WindowFunction(_)
-                        | ScalarExpr::AggregateFunction(_)
-                        | ScalarExpr::SubqueryExpr(_)
-                )
-            };
-            let finder = Finder::new(&f);
-            let finder = scalar.accept(finder)?;
-            if !finder.scalars().is_empty() {
+            if !self.check_allowed_scalar_expr(&scalar)? {
                 return Err(ErrorCode::SemanticError(
-                    "update_list in update statement can't contain subquery|window|aggregate functions".to_string(),
+                    "update_list in update statement can't contain subquery|window|aggregate|udf functions".to_string(),
                 )
                 .set_span(scalar.span()));
             }
@@ -126,6 +114,16 @@ impl Binder {
         let (selection, subquery_desc) = self
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
+
+        if let Some(selection) = &selection {
+            if !self.check_allowed_scalar_expr_with_subquery(selection)? {
+                return Err(ErrorCode::SemanticError(
+                    "selection in update statement can't contain window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(selection.span()));
+            }
+        }
 
         let plan = UpdatePlan {
             catalog: catalog_name,

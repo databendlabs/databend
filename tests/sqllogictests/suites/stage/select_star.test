@@ -1,0 +1,49 @@
+statement ok
+drop stage if exists unload;
+
+statement ok
+create stage unload;
+
+statement ok
+drop table if exists a
+
+statement ok
+create table a(_a int)
+
+statement ok
+insert into a values (1),(2)
+
+statement ok
+copy into @unload from a file_format = (type = 'csv')
+
+query
+select $1 from @unload (file_format => 'csv')
+----
+1
+2
+
+query error 1065.*Query from CSV file lacks column positions\. Specify as \$1, \$2, etc\.
+select * from @unload (file_format => 'csv')
+----
+
+query error 1065.*select \* from file only support Parquet format
+select *, $1 from @unload (file_format => 'csv')
+----
+
+statement ok
+remove @unload
+
+statement ok
+copy into @unload from a file_format = (type = 'parquet')
+
+query
+select *, $1 from @unload (file_format => 'parquet')
+----
+1	1
+2	2
+
+query
+select * from @unload (file_format => 'parquet')
+----
+1
+2

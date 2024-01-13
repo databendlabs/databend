@@ -21,28 +21,29 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::sync::Notify;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::tokio::time::sleep as tokio_async_sleep;
-use common_base::base::DummySignalStream;
-use common_base::base::GlobalInstance;
-use common_base::base::SignalStream;
-use common_base::base::SignalType;
-pub use common_catalog::cluster_info::Cluster;
-use common_config::InnerConfig;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::ConnectionFactory;
-use common_management::ClusterApi;
-use common_management::ClusterMgr;
-use common_meta_store::MetaStore;
-use common_meta_store::MetaStoreProvider;
-use common_meta_types::MatchSeq;
-use common_meta_types::NodeInfo;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::base::tokio::sync::Notify;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
+use databend_common_base::base::DummySignalStream;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::SignalStream;
+use databend_common_base::base::SignalType;
+pub use databend_common_catalog::cluster_info::Cluster;
+use databend_common_config::InnerConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_management::ClusterApi;
+use databend_common_management::ClusterMgr;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NodeInfo;
+use databend_common_metrics::cluster::*;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -149,9 +150,9 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: InnerConfig) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
-        GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
+    pub async fn init(cfg: &InnerConfig) -> Result<()> {
+        let metastore = ClusterDiscovery::create_meta_client(cfg).await?;
+        GlobalInstance::set(Self::try_create(cfg, metastore).await?);
 
         Ok(())
     }
@@ -199,7 +200,7 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "discover",
                     &self.cluster_id,
@@ -228,7 +229,7 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()));
                 }
 
-                super::metrics::metrics_gauge_discovered_nodes(
+                metrics_gauge_discovered_nodes(
                     &self.local_id,
                     &self.cluster_id,
                     &self.tenant_id,
@@ -245,7 +246,7 @@ impl ClusterDiscovery {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(
+                metric_incr_cluster_error_count(
                     &self.local_id,
                     "drop_invalid_ndes.get_nodes",
                     &self.cluster_id,
@@ -406,7 +407,7 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
-                            super::metrics::metric_incr_cluster_heartbeat_count(
+                            metric_incr_cluster_heartbeat_count(
                                 &node.id,
                                 &node.flight_address,
                                 &cluster_id,

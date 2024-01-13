@@ -1,0 +1,4 @@
+query 
+select * from inspect_parquet('@data/parquet/tuple.parquet')
+----
+parquet-cpp-arrow version 14.0.2 3 3 1 2029 217 205

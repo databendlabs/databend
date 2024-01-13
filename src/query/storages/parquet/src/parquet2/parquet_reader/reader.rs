@@ -17,36 +17,34 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Projection;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_storage::metrics::copy::metrics_inc_copy_read_part_cost_milliseconds;
-use common_storage::metrics::copy::metrics_inc_copy_read_size_bytes;
-use common_storage::ColumnNodes;
-use opendal::BlockingOperator;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_metrics::storage::*;
+use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
-use super::data::DataReader;
 use super::data::OneBlock;
 use super::BlockIterator;
 use super::IndexedChunk;
-use super::IndexedReaders;
+use super::IndexedChunks;
 use super::Parquet2PartData;
 use crate::parquet2::parquet_reader::deserialize::try_next_block;
 use crate::parquet2::parquet_table::arrow_to_table_schema;
 use crate::parquet2::projection::project_parquet_schema;
 use crate::parquet2::Parquet2RowGroupPart;
 use crate::ParquetPart;
+use crate::ReadSettings;
 
 /// The reader to parquet files with a projected schema.
 ///
@@ -238,46 +236,36 @@ impl Parquet2Reader {
         Ok(Box::new(OneBlock(Some(block))))
     }
 
-    pub fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
+    pub fn read_from_merge_io(
+        &self,
+        column_chunks: &mut IndexedChunks,
+    ) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read().len());
 
         for index in self.columns_to_read() {
-            let reader = readers.get_mut(index).unwrap();
-            let data = reader.read_all()?;
+            let bytes = column_chunks.get_mut(index).unwrap();
+            let data = bytes.to_vec();
 
             chunks.push((*index, data));
         }
 
         Ok(chunks)
     }
-    pub fn row_group_readers_from_blocking_io(
+
+    pub fn readers_from_blocking_io(
         &self,
-        part: &Parquet2RowGroupPart,
-        operator: &BlockingOperator,
-    ) -> Result<IndexedReaders> {
-        let mut readers: HashMap<usize, DataReader> =
-            HashMap::with_capacity(self.columns_to_read().len());
-
-        for index in self.columns_to_read() {
-            let meta = &part.column_metas[index];
-            let reader = operator
-                .reader_with(&part.location)
-                .range(meta.offset..meta.offset + meta.length)
-                .call()?;
-            metrics_inc_copy_read_size_bytes(meta.length);
-            readers.insert(
-                *index,
-                DataReader::new(Box::new(reader), meta.length as usize),
-            );
-        }
-        Ok(readers)
-    }
-
-    pub fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<Parquet2PartData> {
+        ctx: Arc<dyn TableContext>,
+        part: PartInfoPtr,
+    ) -> Result<Parquet2PartData> {
         let part = ParquetPart::from_part(&part)?;
         match part {
             ParquetPart::Parquet2RowGroup(part) => Ok(Parquet2PartData::RowGroup(
-                self.row_group_readers_from_blocking_io(part, &self.operator().blocking())?,
+                self.sync_read_columns_data_by_merge_io(
+                    &ReadSettings::from_ctx(&ctx)?,
+                    part,
+                    &self.operator().blocking(),
+                )?
+                .column_buffers()?,
             )),
             ParquetPart::ParquetFiles(part) => {
                 let op = self.operator().blocking();
@@ -296,44 +284,20 @@ impl Parquet2Reader {
     #[async_backtrace::framed]
     pub async fn readers_from_non_blocking_io(
         &self,
+        ctx: Arc<dyn TableContext>,
         part: &ParquetPart,
     ) -> Result<Parquet2PartData> {
         match part {
             ParquetPart::Parquet2RowGroup(part) => {
-                let mut join_handlers = Vec::with_capacity(self.columns_to_read().len());
-                let path = Arc::new(part.location.to_string());
-
-                for index in self.columns_to_read().iter() {
-                    let op = self.operator().clone();
-                    let path = path.clone();
-
-                    let meta = &part.column_metas[index];
-                    let (offset, length) = (meta.offset, meta.length);
-
-                    join_handlers.push(async move {
-                        // Perf.
-                        {
-                            metrics_inc_copy_read_size_bytes(length);
-                        }
-
-                        let data = op.read_with(&path).range(offset..offset + length).await?;
-                        Ok::<_, ErrorCode>((
-                            *index,
-                            DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
-                        ))
-                    });
-                }
-
-                let start = Instant::now();
-                let readers = futures::future::try_join_all(join_handlers).await?;
-
-                // Perf.
-                {
-                    metrics_inc_copy_read_part_cost_milliseconds(start.elapsed().as_millis() as u64);
-                }
-
-                let readers = readers.into_iter().collect::<IndexedReaders>();
-                Ok(Parquet2PartData::RowGroup(readers))
+                let chunks = self
+                    .read_columns_data_by_merge_io(
+                        &ReadSettings::from_ctx(&ctx)?,
+                        part,
+                        self.operator(),
+                    )
+                    .await?
+                    .column_buffers()?;
+                Ok(Parquet2PartData::RowGroup(chunks))
             }
             ParquetPart::ParquetFiles(part) => {
                 let mut join_handlers = Vec::with_capacity(part.files.len());

@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_expression::ColumnId;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::ColumnStatistics;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::executor::physical_plans::common::OnConflictField;
 use crate::executor::PhysicalPlan;
@@ -36,14 +36,14 @@ pub struct ReplaceDeduplicate {
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub table_schema: TableSchemaRef,
-    pub select_ctx: Option<SelectCtx>,
+    pub select_ctx: Option<ReplaceSelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,
     pub delete_when: Option<(RemoteExpr, String)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct SelectCtx {
+pub struct ReplaceSelectCtx {
     pub select_column_bindings: Vec<ColumnBinding>,
     pub select_schema: DataSchemaRef,
 }

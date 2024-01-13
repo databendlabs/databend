@@ -15,12 +15,12 @@
 #[macro_use]
 extern crate criterion;
 
-use common_ast::parser::parse_expr;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use criterion::black_box;
 use criterion::Criterion;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_parser");

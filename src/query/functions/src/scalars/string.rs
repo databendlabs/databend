@@ -15,25 +15,25 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use base64::engine::general_purpose;
-use base64::prelude::*;
 use bstr::ByteSlice;
-use common_expression::types::number::SimpleDomain;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::ArrayType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::vectorize_with_builder_3_arg;
-use common_expression::vectorize_with_builder_4_arg;
-use common_expression::EvalContext;
-use common_expression::FunctionDomain;
-use common_expression::FunctionRegistry;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -239,6 +239,41 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+        "translate",
+        |_, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+            |str, from, to, output, _| {
+            if from.is_empty() || from == to {
+                output.put_slice(str);
+                output.commit_row();
+                return;
+            }
+            let to_len = to.len();
+            str.iter().for_each(|x| {
+                if let Some(index) = from.find([*x]) {
+                    if index < to_len {
+                        output.put_u8(to[index]);
+                    }
+                } else {
+                    output.put_u8(*x);
+                }
+            });
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
+        "to_uuid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
+            let uuid = Uuid::from_u128(arg as u128);
+            let str = uuid.as_simple().to_string();
+            output.put_slice(str.as_bytes());
+            output.commit_row();
+        }),
+    );
+
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
         |_, _, _| FunctionDomain::Full,
@@ -309,34 +344,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         "locate",
         |_, _, _, _| FunctionDomain::Full,
         move |substr: &[u8], str: &[u8], pos: u64, _| find_at(str, substr, pos),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "to_base64",
-        |_, _| FunctionDomain::Full,
-        vectorize_string_to_string(
-            |col| col.data().len() * 4 / 3 + col.len() * 4,
-            |val, output, _| {
-                base64::write::EncoderWriter::new(&mut output.data, &general_purpose::STANDARD)
-                    .write_all(val)
-                    .unwrap();
-                output.commit_row();
-            },
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "from_base64",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.data().len() * 4 / 3 + col.len() * 4,
-            |val, output, ctx| {
-                if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-                output.commit_row();
-            },
-        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -518,7 +525,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "hex",
+        "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data().len() * 2,
@@ -551,7 +558,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-        "hex",
+        "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             write!(output.data, "{val:x}").unwrap();
@@ -575,23 +582,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
                 } else {
                     (0..times).for_each(|_| output.put_slice(a));
-                }
-                output.commit_row();
-            },
-        ),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "unhex",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_string_to_string(
-            |col| col.data().len() / 2,
-            |val, output, ctx| {
-                let old_len = output.data.len();
-                let extra_len = val.len() / 2;
-                output.data.resize(old_len + extra_len, 0);
-                if let Err(err) = hex::decode_to_slice(val, &mut output.data[old_len..]) {
-                    ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
             },
@@ -851,8 +841,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 pub(crate) mod soundex {
-    use common_expression::types::string::StringColumnBuilder;
-    use common_expression::EvalContext;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::EvalContext;
 
     pub fn soundex(val: &[u8], output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
         let mut last = None;

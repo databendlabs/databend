@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-stoerr"
+name = "databend-common-meta-stoerr"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+databend-common-exception = { path = "../../common/exception" }
 
 anyerror = { workspace = true }
 prost = { workspace = true }

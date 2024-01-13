@@ -1,0 +1,21 @@
+>>>> drop stage if exists my_stage;
+>>>> drop connection if exists my_conn;
+>>>> create connection my_conn storage_type = 's4';
+Error: APIError: ResponseError with 4000: invalid input parameter (protocol s4 is not supported yet.)
+<<<<
+>>>> create connection my_conn storage_type = 's4' connection_name='my_conn'
+Error: APIError: ResponseError with 4000: invalid input parameter (protocol s4 is not supported yet.)
+<<<<
+>>>> create connection my_conn storage_type = 's3' connection_name='my_conn'
+Error: APIError: ResponseError with 4000: invalid input parameter (can not use connection_name when create connection)
+<<<<
+>>>> create connection my_conn storage_type = 's4' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
+Error: APIError: ResponseError with 4000: invalid input parameter (protocol s4 is not supported yet.)
+<<<<
+>>>> create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
+>>>> create stage my_stage url= 's3://testbucket/admin/tempdata/' connection = (connection_name='my_conn', endpoint_url='xx');
+Error: APIError: ResponseError with 4000: invalid input parameter (connection_name can not be used with other connection options)
+<<<<
+>>>> create stage my_stage url= 'http://testbucket/admin/tempdata/' connection = (connection_name='my_conn');
+Error: APIError: ResponseError with 4000: invalid input parameter (protocol from connection_name=my_conn (s3) not match with uri protocol (http).)
+<<<<

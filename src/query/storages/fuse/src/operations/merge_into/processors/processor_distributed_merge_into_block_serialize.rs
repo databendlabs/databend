@@ -14,23 +14,23 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType::UInt64;
-use common_expression::types::NumberType;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::Value;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType::UInt64;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
 
-use super::processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
+use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
 use super::RowIdKind;
 use crate::operations::common::MutationLogs;
 
@@ -42,8 +42,7 @@ pub struct TransformDistributedMergeIntoBlockSerialize;
 
 /// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockSerialize {
-    #[allow(dead_code)]
-    fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
             input,
             output,
@@ -80,7 +79,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 vec![entry],
                 1,
-                Some(Box::new(MixRowNumberKindAndLog {
+                Some(Box::new(MixRowIdKindAndLog {
                     log: Some(log),
                     kind: 0,
                 })),
@@ -91,7 +90,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
                 data.num_rows(),
-                Some(Box::new(MixRowNumberKindAndLog {
+                Some(Box::new(MixRowIdKindAndLog {
                     log: None,
                     kind: match row_id_kind {
                         RowIdKind::Update => 1,

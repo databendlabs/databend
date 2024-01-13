@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::FunctionRegistry;
+use databend_common_expression::FunctionRegistry;
 
 mod arithmetic;
 mod arithmetic_modulo;
 mod array;
+mod binary;
 mod bitmap;
 mod boolean;
 mod comparison;
@@ -51,13 +52,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     math::register(registry);
     map::register(registry);
     string::register(registry);
+    binary::register(registry);
     string_multi_args::register(registry);
     tuple::register(registry);
     geo::register(registry);
     geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    decimal::register(registry);
+    decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
 }

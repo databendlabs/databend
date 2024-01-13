@@ -14,16 +14,15 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::OwnershipInfo;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::principal::UserPrivilegeType;
-use common_meta_types::MatchSeq;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_types::MatchSeq;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -120,22 +119,11 @@ impl UserApiProvider {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_stage(),
         );
-
-        let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-        public.grants.grant_privileges(
-            &GrantObject::Table(
-                "default".to_string(),
-                "system".to_string(),
-                "one".to_string(),
-            ),
-            UserPrivilegeType::Select.into(),
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_udf(),
         );
-
-        // MySQL all user has this priv.
-        public.grants.grant_privileges(
-            &GrantObject::Database("default".to_string(), "information_schema".to_string()),
-            UserPrivilegeType::Select.into(),
-        );
+        let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
 
         let mut result = HashMap::new();
         result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
@@ -147,7 +135,7 @@ impl UserApiProvider {
     pub async fn grant_ownership_to_role(
         &self,
         tenant: &str,
-        object: &GrantObjectByID,
+        object: &OwnershipObject,
         new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
@@ -164,7 +152,7 @@ impl UserApiProvider {
     pub async fn get_ownership(
         &self,
         tenant: &str,
-        object: &GrantObjectByID,
+        object: &OwnershipObject,
     ) -> Result<Option<OwnershipInfo>> {
         let client = self.get_role_api_client(tenant)?;
         let ownership = client

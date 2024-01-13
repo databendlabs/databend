@@ -14,8 +14,8 @@
 
 use std::iter::Iterator;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
-use ethnum::i256;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use itertools::Itertools;
 
 use crate::types::decimal::*;
 use crate::types::nullable::NullableColumn;
@@ -23,141 +23,96 @@ use crate::types::number::*;
 use crate::types::*;
 use crate::Column;
 
-pub trait FromData<D, Phantom: ?Sized> {
-    fn from_data(_: D) -> Column;
+pub trait FromData<D> {
+    fn from_data(_: Vec<D>) -> Column;
 
-    fn from_data_with_validity(d: D, valids: Vec<bool>) -> Column {
+    fn from_data_with_validity(d: Vec<D>, valids: Vec<bool>) -> Column {
         let column = Self::from_data(d);
         Column::Nullable(Box::new(NullableColumn {
             column,
             validity: valids.into(),
         }))
     }
+
+    fn from_opt_data(_: Vec<Option<D>>) -> Column;
 }
 
-pub trait FromOptData<D, Phantom: ?Sized> {
-    fn from_opt_data(_: D) -> Column;
-}
+macro_rules! impl_from_data {
+    ($T: ident) => {
+        impl FromData<<$T as ValueType>::Scalar> for $T {
+            fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
+                $T::upcast_column($T::column_from_iter(d.into_iter(), &[]))
+            }
 
-macro_rules! for_common_scalar_values {
-    ($macro:tt $(, $x:tt)*) => {
-        $macro! {
-            [$($x),*],
-            { Int8Type },
-            { Int16Type },
-            { Int32Type },
-            { Int64Type },
-            { UInt8Type },
-            { UInt16Type },
-            { UInt32Type },
-            { UInt64Type },
-            { Float32Type },
-            { Float64Type },
-            { BooleanType },
-            { StringType },
-            { DateType },
-            { TimestampType },
-            { VariantType },
-            { BitmapType }
+            fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {
+                type NT = NullableType<$T>;
+                NT::upcast_column(NT::column_from_iter(d.into_iter(), &[]))
+            }
         }
     };
 }
 
-macro_rules! impl_from_iterator {
-    ([], $( { $T: ident} ),*) => {
-        $(
-            impl<D: Iterator<Item = <$T as ValueType>::Scalar>> FromData<D, i8> for $T
-            {
-                fn from_data(d: D) -> Column {
-                    $T::upcast_column($T::column_from_iter(d, &[]))
-                }
-            }
-        )*
-    };
-}
+impl_from_data! { Int8Type }
+impl_from_data! { Int16Type }
+impl_from_data! { Int32Type }
+impl_from_data! { Int64Type }
+impl_from_data! { UInt8Type }
+impl_from_data! { UInt16Type }
+impl_from_data! { UInt32Type }
+impl_from_data! { UInt64Type }
+impl_from_data! { Float32Type }
+impl_from_data! { Float64Type }
+impl_from_data! { Decimal128Type }
+impl_from_data! { Decimal256Type }
+impl_from_data! { BooleanType }
+impl_from_data! { BinaryType }
+impl_from_data! { StringType }
+impl_from_data! { DateType }
+impl_from_data! { TimestampType }
+impl_from_data! { VariantType }
+impl_from_data! { BitmapType }
 
-macro_rules! impl_from_data {
-    ([], $( { $T: ident} ),*) => {
-        $(
-            impl FromData<Vec<<$T as ValueType>::Scalar>, i16> for $T
-            {
-                fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
-                    $T::upcast_column($T::column_from_vec(d, &[]))
-                }
-            }
-        )*
-    };
-}
+impl<'a> FromData<&'a [u8]> for BinaryType {
+    fn from_data(d: Vec<&'a [u8]>) -> Column {
+        BinaryType::from_data(d.into_iter().map(|d| d.to_vec()).collect_vec())
+    }
 
-macro_rules! impl_from_opt_data {
-    ([], $( { $T: ident} ),*) => {
-        $(
-            impl FromOptData<Vec<Option<<$T as ValueType>::Scalar>>, i8> for $T
-            {
-                fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {
-                    type NT = NullableType::<$T>;
-                    NT::upcast_column(NT::column_from_vec(d, &[]))
-                }
-            }
-        )*
-    };
-}
-
-for_common_scalar_values! { impl_from_iterator }
-for_common_scalar_values! { impl_from_data }
-for_common_scalar_values! { impl_from_opt_data }
-
-impl<'a, D: AsRef<[&'a str]>> FromData<D, [Vec<u8>; 2]> for StringType {
-    fn from_data(d: D) -> Column {
-        StringType::upcast_column(StringType::column_from_ref_iter(
-            d.as_ref().iter().map(|c| c.as_bytes()),
-            &[],
-        ))
+    fn from_opt_data(d: Vec<Option<&'a [u8]>>) -> Column {
+        BinaryType::from_opt_data(d.into_iter().map(|d| d.map(|d| d.to_vec())).collect_vec())
     }
 }
 
-impl<'a, D: AsRef<[&'a [u8]]>> FromData<D, [Vec<u8>; 2]> for BitmapType {
-    fn from_data(d: D) -> Column {
-        BitmapType::upcast_column(BitmapType::column_from_ref_iter(
-            d.as_ref().iter().copied(),
-            &[],
-        ))
+impl<'a> FromData<&'a str> for StringType {
+    fn from_data(d: Vec<&'a str>) -> Column {
+        StringType::from_data(d.into_iter().map(|d| d.as_bytes().to_vec()).collect_vec())
+    }
+
+    fn from_opt_data(d: Vec<Option<&'a str>>) -> Column {
+        StringType::from_opt_data(
+            d.into_iter()
+                .map(|d| d.map(|d| d.as_bytes().to_vec()))
+                .collect_vec(),
+        )
     }
 }
 
-impl<D: AsRef<[f32]>> FromData<D, [Vec<f32>; 0]> for Float32Type {
-    fn from_data(d: D) -> Column {
-        Float32Type::upcast_column(Float32Type::column_from_iter(
-            d.as_ref().iter().map(|f| (*f).into()),
-            &[],
-        ))
+impl FromData<f32> for Float32Type {
+    fn from_data(d: Vec<f32>) -> Column {
+        Float32Type::from_data(d.into_iter().map(F32::from).collect_vec())
+    }
+
+    fn from_opt_data(d: Vec<Option<f32>>) -> Column {
+        Float32Type::from_opt_data(d.into_iter().map(|d| d.map(F32::from)).collect_vec())
     }
 }
 
-impl<D: AsRef<[f64]>> FromData<D, [Vec<f64>; 0]> for Float64Type {
-    fn from_data(d: D) -> Column {
-        Float64Type::upcast_column(Float64Type::column_from_iter(
-            d.as_ref().iter().map(|f| (*f).into()),
-            &[],
-        ))
+impl FromData<f64> for Float64Type {
+    fn from_data(d: Vec<f64>) -> Column {
+        Float64Type::from_data(d.into_iter().map(F64::from).collect_vec())
     }
-}
 
-impl<D: AsRef<[i128]>> FromData<D, [Vec<i128>; 0]> for Decimal128Type {
-    fn from_data(d: D) -> Column {
-        Decimal128Type::upcast_column(Decimal128Type::column_from_iter(
-            d.as_ref().iter().copied(),
-            &[],
-        ))
-    }
-}
-
-impl<D: AsRef<[i256]>> FromData<D, [Vec<i256>; 0]> for Decimal256Type {
-    fn from_data(d: D) -> Column {
-        Decimal256Type::upcast_column(Decimal256Type::column_from_iter(
-            d.as_ref().iter().copied(),
-            &[],
-        ))
+    fn from_opt_data(d: Vec<Option<f64>>) -> Column {
+        Float64Type::from_opt_data(d.into_iter().map(|d| d.map(F64::from)).collect_vec())
     }
 }
 
@@ -186,34 +141,5 @@ impl<Num: Decimal> DecimalType<Num> {
             column: col,
             validity: validity.into(),
         }))
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use crate::types::number::Float32Type;
-    use crate::types::number::Int8Type;
-    use crate::types::TimestampType;
-    use crate::FromData;
-    use crate::FromOptData;
-
-    #[test]
-    fn test() {
-        let a = Int8Type::from_data(vec![1, 2, 3]);
-        let b = Int8Type::from_data(vec![1, 2, 3].into_iter());
-        assert!(a == b);
-
-        let a = TimestampType::from_data(vec![1, 2, 3]);
-        let b = TimestampType::from_data(vec![1, 2, 3].into_iter());
-        assert!(a == b);
-
-        let a = Float32Type::from_data(vec![1.0f32, 2.0, 3.0]);
-        let b = Float32Type::from_data(vec![1.0f32, 2.0, 3.0].into_iter());
-        assert!(a == b);
-
-        let a = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
-        let b = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
-        assert!(a == b);
     }
 }

@@ -16,23 +16,23 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use comfy_table::Table;
-use common_exception::Result;
-use common_expression::type_check;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ConstantFolder;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::type_check;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
 
 mod arithmetic;
 mod array;
+mod binary;
 mod bitmap;
-
 mod boolean;
 mod cast;
 mod comparison;
@@ -220,7 +220,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
 
 fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col, &col.data_type());
+    let new_col = Column::from_arrow(&*arrow_col, &col.data_type()).unwrap();
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 

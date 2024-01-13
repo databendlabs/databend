@@ -1,5 +1,5 @@
 [package]
-name = "common-management"
+name = "databend-common-management"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,24 +13,25 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../common/base" }
-common-exception = { path = "../../common/exception" }
-common-functions = { path = "../functions" }
-common-meta-api = { path = "../../meta/api" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-kvapi = { path = "../../meta/kvapi" }
-common-meta-store = { path = "../../meta/store" }
-common-meta-types = { path = "../../meta/types" }
-common-proto-conv = { path = "../../meta/proto-conv" }
-common-protos = { path = "../../meta/protos" }
+databend-common-base = { path = "../../common/base" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-functions = { path = "../functions" }
+databend-common-meta-api = { path = "../../meta/api" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-kvapi = { path = "../../meta/kvapi" }
+databend-common-meta-store = { path = "../../meta/store" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-proto-conv = { path = "../../meta/proto-conv" }
+databend-common-protos = { path = "../../meta/protos" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
+enumflags2 = { workspace = true }
 minitrace = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-common-expression = { path = "../../query/expression" }
-common-meta-embedded = { path = "../../meta/embedded" }
-common-storage = { path = "../../common/storage" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-meta-embedded = { path = "../../meta/embedded" }
+databend-common-storage = { path = "../../common/storage" }
 mockall = "0.11.2"

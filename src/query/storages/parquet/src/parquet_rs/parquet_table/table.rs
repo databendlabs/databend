@@ -14,48 +14,46 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_base::base::tokio::sync::Mutex;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::FullParquetMeta;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::ParquetTableInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
-use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::Table;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::Pipeline;
-use common_storage::init_stage_operator;
-use common_storage::parquet_rs::infer_schema_with_extension;
-use common_storage::parquet_rs::read_metadata_async;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::FullParquetMeta;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::ParquetTableInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DummyColumnStatisticsProvider;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::TableField;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::parquet_rs::infer_schema_with_extension;
+use databend_common_storage::parquet_rs::read_metadata_async;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
-use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
+use crate::parquet_rs::meta::read_metas_in_parallel;
+use crate::parquet_rs::schema::arrow_to_table_schema;
 
 pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
@@ -171,7 +169,7 @@ impl ParquetRSTable {
         // If not, throw error during reading.
         let size = operator.stat(path).await?.content_length();
         let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
-        let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.file_metadata().schema_descr_ptr();
         Ok((arrow_schema, schema_descr, compression_ratio))
@@ -249,7 +247,10 @@ impl Table for ParquetRSTable {
         true
     }
 
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         if !self.need_stats_provider {
             return Ok(Box::new(DummyColumnStatisticsProvider));
         }
@@ -276,6 +277,8 @@ impl Table for ParquetRSTable {
 
         let num_columns = self.leaf_fields.len();
 
+        let now = Instant::now();
+        log::info!("begin read {} parquet file metas", file_locations.len());
         let metas = read_metas_in_parallel(
             &self.operator,
             &file_locations, // The first file is already read.
@@ -285,6 +288,12 @@ impl Table for ParquetRSTable {
             self.max_memory_usage,
         )
         .await?;
+        let elapsed = now.elapsed();
+        log::info!(
+            "end read {} parquet file metas, use {} secs",
+            file_locations.len(),
+            elapsed.as_secs_f32()
+        );
 
         let provider = create_stats_provider(&metas, num_columns);
 
@@ -293,7 +302,10 @@ impl Table for ParquetRSTable {
         Ok(Box::new(provider))
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         if parquet_metas.is_empty() {
@@ -311,38 +323,6 @@ impl Table for ParquetRSTable {
             ..Default::default()
         }))
     }
-}
-
-fn lower_field_name(field: &ArrowField) -> ArrowField {
-    let name = field.name().to_lowercase();
-    let field = field.clone().with_name(name);
-    match &field.data_type() {
-        ArrowDataType::List(f) => {
-            let inner = lower_field_name(f);
-            field.with_data_type(ArrowDataType::List(Arc::new(inner)))
-        }
-        ArrowDataType::Struct(fields) => {
-            let typ = ArrowDataType::Struct(
-                fields
-                    .iter()
-                    .map(|f| lower_field_name(f))
-                    .collect::<Vec<_>>()
-                    .into(),
-            );
-            field.with_data_type(typ)
-        }
-        _ => field,
-    }
-}
-
-fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
-    let fields = schema
-        .fields
-        .iter()
-        .map(|f| Arc::new(lower_field_name(f)))
-        .collect::<Vec<_>>();
-    let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
-    TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
 fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {

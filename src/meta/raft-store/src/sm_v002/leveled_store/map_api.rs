@@ -17,7 +17,7 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures::stream::StreamExt;
 use futures_util::stream::BoxStream;
 use stream_more::KMerge;
@@ -90,11 +90,8 @@ where K: MapKey
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Send + Sync + Clone;
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Send + Sync + Clone + 'static;
 }
 
 /// Trait for using Self as an implementation of the MapApi.
@@ -163,7 +160,7 @@ impl MapApiExt {
     {
         //
         let got = s.get(&key).await?;
-        if got.is_tomb_stone() {
+        if got.is_tombstone() {
             return Ok((got.clone(), got.clone()));
         }
 
@@ -222,20 +219,29 @@ where
 /// Iterate over a range of entries by keys from multi levels.
 ///
 /// The returned iterator contains at most one entry for each key.
-/// There could be tombstone entries: [`Marked::TombStone`]
-pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R, L>(
+/// There could be tombstone entries: [`Marked::TombStone`].
+///
+/// The `TOP` is the type of the top level.
+/// The `L` is the type of frozen levels.
+///
+/// Because the top level is very likely to be a different type from the frozen levels, i.e., it is writable.
+pub(in crate::sm_v002) async fn compacted_range<'d, K, R, L, TOP>(
     range: R,
+    top: Option<&'d TOP>,
     levels: impl IntoIterator<Item = &'d L>,
 ) -> Result<KVResultStream<K>, io::Error>
 where
     K: MapKey,
-    K: Borrow<Q>,
-    R: RangeBounds<Q> + Clone + Send + Sync,
-    Q: Ord + Send + Sync + ?Sized,
+    R: RangeBounds<K> + Clone + Send + Sync + 'static,
     L: MapApiRO<K> + 'static,
+    TOP: MapApiRO<K> + 'static,
 {
-    // TODO: handle Result
     let mut kmerge = KMerge::by(util::by_key_seq);
+
+    if let Some(t) = top {
+        let strm = t.range(range.clone()).await?;
+        kmerge = kmerge.merge(strm);
+    }
 
     for lvl in levels {
         let strm = lvl.range(range.clone()).await?;
@@ -250,6 +256,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use futures_util::TryStreamExt;
 
     use crate::sm_v002::leveled_store::level::Level;
@@ -272,10 +280,10 @@ mod tests {
         assert_eq!(got, Marked::new_normal(1, b("a")));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l1, &l0]).await?;
-        assert_eq!(got, Marked::new_tomb_stone(1));
+        assert_eq!(got, Marked::new_tombstone(1));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l1, &l0]).await?;
-        assert_eq!(got, Marked::new_tomb_stone(1));
+        assert_eq!(got, Marked::new_tombstone(1));
 
         let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l0]).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
@@ -292,30 +300,55 @@ mod tests {
         let mut l0 = Level::default();
         l0.set(s("a"), Some((b("a"), None))).await?;
         l0.set(s("b"), Some((b("b"), None))).await?;
+        let l0 = Arc::new(l0);
 
         let mut l1 = l0.new_level();
         l1.set(s("a"), None).await?;
         l1.set(s("c"), None).await?;
+        let l1 = Arc::new(l1);
 
         let mut l2 = l1.new_level();
         l2.set(s("b"), Some((b("b2"), None))).await?;
 
-        let got = compacted_range::<String, String, _, _>(&s("").., [&l2, &l1, &l0]).await?;
-        let got = got.try_collect::<Vec<_>>().await?;
-        assert_eq!(got, vec![
-            //
-            (s("a"), Marked::new_tomb_stone(2)),
-            (s("b"), Marked::new_normal(3, b("b2"))),
-            (s("c"), Marked::new_tomb_stone(2)),
-        ]);
+        // With top level
+        {
+            let got = compacted_range(s("").., Some(&l2), [&l1, &l0]).await?;
+            let got = got.try_collect::<Vec<_>>().await?;
+            assert_eq!(got, vec![
+                //
+                (s("a"), Marked::new_tombstone(2)),
+                (s("b"), Marked::new_normal(3, b("b2"))),
+                (s("c"), Marked::new_tombstone(2)),
+            ]);
 
-        let got = compacted_range::<String, String, _, _>(&s("b").., [&l2, &l1, &l0]).await?;
-        let got = got.try_collect::<Vec<_>>().await?;
-        assert_eq!(got, vec![
-            //
-            (s("b"), Marked::new_normal(3, b("b2"))),
-            (s("c"), Marked::new_tomb_stone(2)),
-        ]);
+            let got = compacted_range(s("b").., Some(&l2), [&l1, &l0]).await?;
+            let got = got.try_collect::<Vec<_>>().await?;
+            assert_eq!(got, vec![
+                //
+                (s("b"), Marked::new_normal(3, b("b2"))),
+                (s("c"), Marked::new_tombstone(2)),
+            ]);
+        }
+
+        // Without top level
+        {
+            let got = compacted_range::<_, _, _, Level>(s("").., None, [&l1, &l0]).await?;
+            let got = got.try_collect::<Vec<_>>().await?;
+            assert_eq!(got, vec![
+                //
+                (s("a"), Marked::new_tombstone(2)),
+                (s("b"), Marked::new_normal(2, b("b"))),
+                (s("c"), Marked::new_tombstone(2)),
+            ]);
+
+            let got = compacted_range::<_, _, _, Level>(s("b").., None, [&l1, &l0]).await?;
+            let got = got.try_collect::<Vec<_>>().await?;
+            assert_eq!(got, vec![
+                //
+                (s("b"), Marked::new_normal(2, b("b"))),
+                (s("c"), Marked::new_tombstone(2)),
+            ]);
+        }
 
         Ok(())
     }

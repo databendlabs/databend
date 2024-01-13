@@ -20,6 +20,7 @@
 //! a embedded raft `StateMachine`.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
 mod kv_api_impl;
 mod meta_embedded;

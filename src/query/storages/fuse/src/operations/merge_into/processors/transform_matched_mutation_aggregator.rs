@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 
 use crate::operations::merge_into::mutator::MatchedAggregator;
 

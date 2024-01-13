@@ -15,11 +15,16 @@
 use std::iter::once;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryIterator;
 use super::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -48,11 +53,11 @@ impl ValueType for StringType {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_vec()
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         scalar
     }
 
@@ -60,7 +65,7 @@ impl ValueType for StringType {
         scalar.as_string().cloned()
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         col.as_string().cloned()
     }
 
@@ -68,13 +73,22 @@ impl ValueType for StringType {
         domain.as_string().map(StringDomain::clone)
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::String(builder) => Some(builder),
+            ColumnBuilder::String(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::String(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::String(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -89,26 +103,34 @@ impl ValueType for StringType {
         Domain::String(domain)
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        col.index(index)
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        let x = col.index(index)?;
+
+        #[cfg(debug_assertions)]
+        x.check_utf8().unwrap();
+
+        Some(x)
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
-        col.index_unchecked(index)
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        let x = col.index_unchecked(index);
+
+        #[cfg(debug_assertions)]
+        x.check_utf8().unwrap();
+
+        x
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter()
     }
 
@@ -141,12 +163,42 @@ impl ValueType for StringType {
         builder.build_scalar()
     }
 
-    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
         scalar.len()
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.data().len() + col.offsets().len() * 8
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left == right
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left != right
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left <= right
     }
 }
 
@@ -176,7 +228,30 @@ pub struct StringColumn {
 impl StringColumn {
     pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
         debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
+        let col = StringColumn { data, offsets };
+        // todo!("new string")
+        col.check_utf8().unwrap();
+        col
+    }
+
+    /// # Safety
+    /// This function is unsound iff:
+    /// * the offsets are not monotonically increasing
+    /// * The `values` between two consecutive `offsets` are not valid utf8
+    pub unsafe fn new_unchecked(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
+        debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
         StringColumn { data, offsets }
+    }
+
+    /// # Safety
+    /// This function is unsound iff:
+    /// * the offsets are not monotonically increasing
+    /// * The `values` between two consecutive `offsets` are not valid utf8
+    pub unsafe fn from_binary_unchecked(col: BinaryColumn) -> Self {
+        StringColumn {
+            data: col.data,
+            offsets: col.offsets,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -230,6 +305,59 @@ impl StringColumn {
             offsets: self.offsets.windows(2),
         }
     }
+
+    pub fn iter_binary(&self) -> BinaryIterator {
+        BinaryIterator {
+            data: &self.data,
+            offsets: self.offsets.windows(2),
+        }
+    }
+
+    pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
+        (self.data, self.offsets)
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        let offsets = self.offsets.as_slice();
+        let len = offsets.len();
+        if len < 1 {
+            return Err(ErrorCode::Internal(format!(
+                "StringColumn offsets length must be equal or greater than 1, but got {}",
+                len
+            )));
+        }
+
+        for i in 1..len {
+            if offsets[i] < offsets[i - 1] {
+                return Err(ErrorCode::Internal(format!(
+                    "StringColumn offsets value must be equal or greater than previous value, but got {}",
+                    offsets[i]
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl From<StringColumn> for BinaryColumn {
+    fn from(col: StringColumn) -> BinaryColumn {
+        BinaryColumn {
+            data: col.data,
+            offsets: col.offsets,
+        }
+    }
+}
+
+impl TryFrom<BinaryColumn> for StringColumn {
+    type Error = ErrorCode;
+
+    fn try_from(col: BinaryColumn) -> Result<StringColumn> {
+        col.check_utf8()?;
+        Ok(StringColumn {
+            data: col.data,
+            offsets: col.offsets,
+        })
+    }
 }
 
 pub struct StringIterator<'a> {
@@ -252,6 +380,7 @@ impl<'a> Iterator for StringIterator<'a> {
 }
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
+
 unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -430,6 +559,29 @@ impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
     }
 }
 
+impl From<StringColumnBuilder> for BinaryColumnBuilder {
+    fn from(builder: StringColumnBuilder) -> BinaryColumnBuilder {
+        BinaryColumnBuilder {
+            need_estimated: builder.need_estimated,
+            data: builder.data,
+            offsets: builder.offsets,
+        }
+    }
+}
+
+impl TryFrom<BinaryColumnBuilder> for StringColumnBuilder {
+    type Error = ErrorCode;
+
+    fn try_from(builder: BinaryColumnBuilder) -> Result<StringColumnBuilder> {
+        builder.check_utf8()?;
+        Ok(StringColumnBuilder {
+            need_estimated: builder.need_estimated,
+            data: builder.data,
+            offsets: builder.offsets,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
@@ -459,5 +611,61 @@ impl StringDomain {
                 max: other.max.clone().unwrap_or_else(|| max_value.clone()),
             },
         )
+    }
+}
+
+pub trait CheckUTF8 {
+    fn check_utf8(&self) -> Result<()>;
+}
+
+impl CheckUTF8 for &[u8] {
+    fn check_utf8(&self) -> Result<()> {
+        simdutf8::basic::from_utf8(self).map_err(|_| {
+            ErrorCode::InvalidUtf8String(format!(
+                "Encountered invalid utf8 data for string type, \
+                if you were reading column with string type from a table, \
+                it's recommended to alter the column type to `BINARY`.\n\
+                Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`\n\
+                Invalid utf8 data: `{}`",
+                hex::encode_upper(self)
+            ))
+        })?;
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for BinaryColumn {
+    fn check_utf8(&self) -> Result<()> {
+        for val in self.iter() {
+            val.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for StringColumn {
+    fn check_utf8(&self) -> Result<()> {
+        for val in self.iter() {
+            val.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for BinaryColumnBuilder {
+    fn check_utf8(&self) -> Result<()> {
+        for row in 0..self.len() {
+            unsafe { self.index_unchecked(row) }.check_utf8()?;
+        }
+        Ok(())
+    }
+}
+
+impl CheckUTF8 for StringColumnBuilder {
+    fn check_utf8(&self) -> Result<()> {
+        for row in 0..self.len() {
+            unsafe { self.index_unchecked(row) }.check_utf8()?;
+        }
+        Ok(())
     }
 }

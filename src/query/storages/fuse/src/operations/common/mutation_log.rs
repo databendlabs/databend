@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::Statistics;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::FormatVersion;
+use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::AbortOperation;
 use crate::operations::common::ConflictResolveContext;
@@ -135,7 +135,7 @@ fn merge_conflict_resolve_context(
                 removed_segment_indexes: l
                     .removed_segment_indexes
                     .into_iter()
-                    .chain(r.removed_segment_indexes.into_iter())
+                    .chain(r.removed_segment_indexes)
                     .collect(),
                 removed_statistics: merge_statistics(
                     &l.removed_statistics,
@@ -181,19 +181,19 @@ fn merge_commit_meta(
                 .abort_operation
                 .segments
                 .into_iter()
-                .chain(r.abort_operation.segments.into_iter())
+                .chain(r.abort_operation.segments)
                 .collect(),
             blocks: l
                 .abort_operation
                 .blocks
                 .into_iter()
-                .chain(r.abort_operation.blocks.into_iter())
+                .chain(r.abort_operation.blocks)
                 .collect(),
             bloom_filter_indexes: l
                 .abort_operation
                 .bloom_filter_indexes
                 .into_iter()
-                .chain(r.abort_operation.bloom_filter_indexes.into_iter())
+                .chain(r.abort_operation.bloom_filter_indexes)
                 .collect(),
         },
     }
@@ -262,8 +262,8 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 
     fn transform(
         &mut self,
-        data: common_expression::DataBlock,
-    ) -> common_exception::Result<Vec<common_expression::DataBlock>> {
+        data: databend_common_expression::DataBlock,
+    ) -> databend_common_exception::Result<Vec<databend_common_expression::DataBlock>> {
         let commit_meta = CommitMeta::try_from(data)?;
         self.to_merged.push(commit_meta);
         Ok(vec![])

@@ -25,9 +25,9 @@ use std::sync::Arc;
 
 use arrow_flight::FlightData;
 use catalog::CatalogInfoProvider;
-use common_sql::plans::Plan;
-use common_sql::PlanExtras;
 use dashmap::DashMap;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::PlanExtras;
 use futures::Stream;
 use parking_lot::Mutex;
 use sql_info::SqlInfoProvider;

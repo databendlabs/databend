@@ -21,29 +21,34 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::FunctionContext;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
-use common_settings::Settings;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::FileStatus;
-use common_storage::StageFileInfo;
-use common_storage::StorageMetrics;
-use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::FileStatus;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StorageMetrics;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_table_meta::meta::Location;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
+use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -51,6 +56,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -137,6 +143,8 @@ pub trait TableContext: Send + Sync {
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
+    fn set_need_compact_after_write(&self, enable: bool);
+    fn get_need_compact_after_write(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn get_query_str(&self) -> String;
@@ -148,12 +156,14 @@ pub trait TableContext: Send + Sync {
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
     fn get_error(&self) -> Option<ErrorCode>;
+    fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_current_session_id(&self) -> String {
         unimplemented!()
     }
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
@@ -167,6 +177,7 @@ pub trait TableContext: Send + Sync {
     fn get_shared_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> String;
     fn get_query_id_history(&self) -> HashSet<String>;
@@ -178,13 +189,12 @@ pub trait TableContext: Send + Sync {
     fn set_on_error_mode(&self, mode: OnErrorMode);
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
-
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
 
     async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
@@ -213,12 +223,32 @@ pub trait TableContext: Send + Sync {
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
 
+    fn clear_segment_locations(&self) -> Result<()>;
+
     fn get_segment_locations(&self) -> Result<Vec<Location>>;
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
 
+    fn add_merge_status(&self, merge_status: MergeStatus);
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
+
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
+
+    fn add_query_profiles(&self, profiles: &[PlanProfile]);
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile>;
+
+    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+
+    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
+
+    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool;
 }

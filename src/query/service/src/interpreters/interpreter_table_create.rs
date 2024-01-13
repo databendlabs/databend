@@ -15,55 +15,54 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_expression::ROW_ID_COL_NAME;
-use common_expression::SEGMENT_NAME_COL_NAME;
-use common_expression::SNAPSHOT_NAME_COL_NAME;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use common_license::license::Feature::ComputedColumn;
-use common_license::license_manager::get_license_manager;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::Ownership;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TableStatistics;
-use common_meta_types::MatchSeq;
-use common_sql::field_default_value;
-use common_sql::plans::CreateTablePlan;
-use common_sql::plans::PREDICATE_COLUMN_NAME;
-use common_sql::BloomIndexColumns;
-use common_storage::DataOperator;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
-use common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
-use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use common_users::UserApiProvider;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::is_internal_column;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_license::license::Feature::ComputedColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::Ownership;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::field_default_value;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_users::UserApiProvider;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
+use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
-use once_cell::sync::Lazy;
-use storages_common_cache::LoadParams;
-use storages_common_index::BloomIndex;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use storages_common_table_meta::table::OPT_KEY_COMMENT;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
-use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -184,7 +183,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &GrantObjectByID::Table {
+                    &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
                         db_id,
                         table_id: table.get_id(),
@@ -268,7 +267,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &GrantObjectByID::Table {
+                    &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
                         db_id,
                         table_id: reply.table_id,
@@ -306,6 +305,7 @@ impl CreateTableInterpreter {
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
             options: self.plan.options.clone(),
+            engine_options: self.plan.engine_options.clone(),
             default_cluster_key: None,
             field_comments,
             drop_on: None,
@@ -321,6 +321,7 @@ impl CreateTableInterpreter {
         is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
+        is_valid_change_tracking(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -417,7 +418,7 @@ impl CreateTableInterpreter {
 }
 
 /// Table option keys that can occur in 'create table statement'.
-pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
     r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
@@ -430,8 +431,14 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
+    r.insert(OPT_KEY_CHANGE_TRACKING);
 
     r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_ENGINE);
+
+    r.insert(OPT_KEY_LOCATION);
+    r.insert(OPT_KEY_CONNECTION_NAME);
 
     r.insert("transient");
     r
@@ -441,23 +448,8 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-/// The internal occupied coulmn that cannot be create.
-pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let mut r = HashSet::new();
-
-    // The key in INTERNAL_COLUMN_FACTORY.
-    r.insert(ROW_ID_COL_NAME);
-    r.insert(SNAPSHOT_NAME_COL_NAME);
-    r.insert(SEGMENT_NAME_COL_NAME);
-    r.insert(BLOCK_NAME_COL_NAME);
-
-    r.insert(PREDICATE_COLUMN_NAME);
-
-    r
-});
-
 pub fn is_valid_column(name: &str) -> Result<()> {
-    if INTERNAL_COLUMN_KEYS.contains(name) {
+    if is_internal_column(name) {
         return Err(ErrorCode::TableWithInternalColumnName(format!(
             "Cannot create table has column with the same name as internal column: {}",
             name
@@ -500,6 +492,13 @@ pub fn is_valid_bloom_index_columns(
 ) -> Result<()> {
     if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
         BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_change_tracking(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
+        value.to_lowercase().parse::<bool>()?;
     }
     Ok(())
 }

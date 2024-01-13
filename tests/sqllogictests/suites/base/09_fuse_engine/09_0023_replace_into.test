@@ -1,0 +1,512 @@
+statement ok
+set enable_distributed_replace_into = 1;
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0023
+
+statement ok
+CREATE DATABASE db_09_0023
+
+statement ok
+USE db_09_0023
+
+############################
+# replace into empty table #
+############################
+
+statement ok
+CREATE TABLE test(a int not null);
+
+statement ok
+REPLACE INTO test ON CONFLICT(a) values(1), (2), (3)
+
+query I
+SELECT * FROM test
+----
+1
+2
+3
+
+statement ok
+DROP TABLE test;
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int not null, b int not null, c int not null);
+
+statement ok
+REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (2, 1, 2), (3, 1, 3)
+
+query III
+SELECT * FROM test
+----
+1 1 1
+2 1 2
+3 1 3
+
+statement ok
+DROP TABLE test;
+
+###################
+# duplicated keys #
+###################
+
+statement ok
+CREATE TABLE test(a int not null);
+
+# note that "CONFLICT" is optional
+statement error 4000
+REPLACE INTO test ON(a) values(1), (2), (2)
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test(a int not null);
+
+# note that "CONFLICT" is optional
+statement error 4000
+REPLACE INTO test ON(a) values(1), (2), (2)
+
+statement ok
+DROP TABLE test;
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int not null, b int not null, c int not null);
+
+statement error 400
+REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (1, 1, 2), (3, 1, 3)
+
+statement ok
+DROP TABLE test;
+
+###################
+# non-empty table #
+###################
+
+statement ok
+CREATE TABLE test(a int not null);
+
+statement ok
+INSERT INTO test        values (1), (2), (3)
+
+statement ok
+REPLACE INTO test ON(a) values      (2), (3), (4)
+
+query I
+SELECT * FROM test order by a;
+----
+1
+2
+3
+4
+
+statement ok
+DROP TABLE test;
+
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int not null, b int not null, c int not null);
+
+statement ok
+INSERT INTO test        values (1, 1, 1), (2, 1, 2), (3, 1, 3)
+
+statement ok
+REPLACE INTO test ON CONFLICT(a,b) values (2, 1, 4), (3, 1, 5), (4, 1, 6)
+
+query III
+SELECT * FROM test order by c;
+----
+1 1 1
+2 1 4
+3 1 5
+4 1 6
+
+statement ok
+DROP TABLE test;
+
+
+############################
+# on conflict (2nd column) #
+############################
+
+statement ok
+CREATE TABLE test(c1 string not null, c2 int not null);
+
+statement ok
+INSERT INTO test values('a', 1), ('b', 2), ('c', 3)
+
+statement ok
+REPLACE INTO test ON(c2) values('replaced', 3), ('new', 4)
+
+query IT
+SELECT c2, c1 FROM test order by c2;
+----
+1 a
+2 b
+3 replaced
+4 new
+
+statement ok
+DROP TABLE test;
+
+
+
+# on multiple column (picking of non consecutive columns, the following case uses columns b and d )
+statement ok
+CREATE TABLE test(a int not null, b int not null, c int not null, d int not null);
+
+statement ok
+INSERT INTO test        values (1, 1, 1, 1), (1, 2, 2, 1), (1, 3, 3, 1)
+
+# duplicated on column (b, d)                    ^     ^       ^     ^
+#                                                |     |       |     |
+statement ok
+REPLACE INTO test ON CONFLICT(b,d) values    (1, 2, 4, 1), (1, 3, 5, 1), (1, 4, 6, 1)
+
+query III
+SELECT * FROM test order by c;
+----
+1 1 1 1
+1 2 4 1
+1 3 5 1
+1 4 6 1
+
+statement ok
+DROP TABLE test;
+
+#############
+# sub query #
+#############
+
+statement ok
+CREATE TABLE test(c1 int not null, c2 int not null);
+
+statement ok
+REPLACE INTO test ON(c1) select number, number from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 5050
+
+statement ok
+REPLACE INTO test ON(c1) select number, 0 from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 0
+
+statement ok
+DROP TABLE test;
+
+
+###################
+# specify columns #
+###################
+
+statement ok
+CREATE TABLE test(c1 int not null, c2 int not null, a int not null);
+
+statement error 1006
+replace into test(c1, a) on(c1) values(1, 1), (2, 2);
+
+statement error 1006
+replace into test(c2, a) on(c2) values(3, 3), (4, 4);
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(c1 int not null default 0, c2 int not null default 0, a int not null default 0);
+
+statement ok
+replace into test(c1, a) on(c1) values(1, 1), (2, 2);
+
+statement ok
+replace into test(c2, a) on(c2) values(3, 3), (4, 4);
+
+query III
+SELECT c1,  c2, a FROM test order by a;
+----
+1 0 1
+2 0 2
+0 3 3
+0 4 4
+
+###################
+# column mismatch #
+###################
+
+# num of column not match
+statement error 1303
+replace into test(c1) on(c1) values(1,2), (2,3), (3,4);
+
+statement error 1303
+replace into test(c1, c2, a) on(c1) values(1,2), (2,3), (3,4);
+
+statement error 1006
+replace into test(c1, c2, a) on(c1, c_not_exists) values(1,2), (2,3), (3,4);
+
+statement ok
+DROP TABLE test;
+
+##########################
+# deduplication semantic #
+##########################
+
+statement ok
+CREATE TABLE test(c1 int not null, c2 int not null);
+
+# duplicated on column c1
+statement ok
+insert into test values(1, 1), (1, 2), (1,3);
+
+statement ok
+replace into test on(c1) values(1, 4);
+
+query II
+SELECT * FROM test order by c1;
+----
+1 4
+
+statement ok
+DROP TABLE test;
+
+
+##############
+# from stage #
+##############
+
+statement ok
+CREATE TABLE tmp(id INTEGER not null, name VARCHAR not null, age INT not null)
+
+statement ok
+insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
+
+statement ok
+CREATE STAGE IF NOT EXISTS test_stage;
+
+statement ok
+CREATE TABLE test(id INTEGER not null, name VARCHAR not null, age INT not null);
+
+statement ok
+copy into @test_stage from tmp FILE_FORMAT = (type = parquet);
+
+statement ok
+drop table tmp;
+
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+# replace-into twice
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+# idempotent
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+statement ok
+DROP TABLE test;
+
+statement ok
+drop stage test_stage
+
+###############################################################
+# issue https://github.com/datafuselabs/databend/issues/10572 #
+###############################################################
+
+# with 5 segments and max_threads set to 3, `replace into` leads to
+# ERROR HY000 (1105): Code: 1068, Text = Cannot join handle from context's runtime
+
+statement ok
+CREATE TABLE test(a int not null);
+
+statement ok
+insert into test values(1);
+
+statement ok
+insert into test values(2);
+
+statement ok
+insert into test values(3);
+
+statement ok
+insert into test values(4);
+
+statement ok
+insert into test values(5);
+
+statement ok
+set max_threads = 3;
+
+# if not fixed: ERROR HY000 (1105): Code: 1068, Text = Cannot join handle from context's runtime
+statement ok
+replace into test on(a) values(6);
+
+statement ok
+drop table test
+
+
+#####################
+
+statement ok
+CREATE TABLE test(a int not null, b int not null) cluster by(a+1, b)
+
+statement ok
+insert into test values(1, 1)
+
+statement ok
+insert into test values(2, 2), (3, 2)
+
+
+# disable the auto re-clustering
+statement ok
+set enable_compact_after_write = 0;
+
+statement ok
+replace into test on(a) values(3, 3), (4, 4)
+
+query II
+select a, b FROM test order by a
+----
+1 1
+2 2
+3 3
+4 4
+
+# since auto re-clustering is disabled, the table is not expected to be re-clustered
+query TIIIFFT
+select * FROM clustering_information('db_09_0023','test')
+----
+((a + 1), b) 3 2 0 0.0 1.0 {"00001":3}
+
+statement ok
+DROP TABLE test
+
+
+
+###########################################
+# test cases for "prewhere"  optimization #
+###########################################
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (id int not null, c1 int not null, c2 int not null, c3 int not null, c4 int not null) row_per_block=3;
+
+statement ok
+insert into t select number, number * 3, number * 5, number * 7, number * 9 from numbers(100);
+
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+4950 14850 24750 34650 44550
+
+statement ok
+replace into t on(c1, c3) select * from t;
+
+# verify the replace into is idempotent
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+4950 14850 24750 34650 44550
+
+
+# update half of the rows, set columns other than c1 and c3 to 0
+statement ok
+replace into t on(c3, c1) select 0 , c1, 0, c3, 0 from t where t.id % 2 = 0;
+
+# verify the result is as expected
+query IIIII
+select sum(t.id), sum(t.c1), sum(t.c2), sum(t.c3), sum(t.c4) from (select 0 as id , c1, 0 as c2, c3, 0 as c4 from t where t.id % 2 = 0 union select * from t where t.id % 2 != 0) t;
+----
+2500 14850 12500 34650 22500
+
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+2500 14850 12500 34650 22500
+
+statement ok
+drop table t;
+
+# delete when
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists s;
+
+statement ok
+create table t(c int);
+
+statement ok
+create table s(c1 int , c2 int);
+
+statement ok
+insert into s values(1,2), (3, 4);
+
+# column c1 used for delete, column c2 used for insert or update
+statement ok
+replace into t on(c) delete when c1 = 1 select * from s;
+
+query I
+select * from t;
+----
+4
+
+statement ok
+replace into t on(c) delete when c1 = 0 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+4
+
+statement ok
+replace into t on(c) delete when c1 = 3 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+
+# column c2 used for delete, column c1 used for insert or update
+statement ok
+replace into t on(c) delete when c2 = 0 select * from s;
+
+query I
+select * from t order by c;
+----
+1
+2
+3
+
+statement ok
+replace into t on(c) delete when c2 = 2 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+3
+
+statement ok
+DROP DATABASE db_09_0023

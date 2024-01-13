@@ -18,27 +18,29 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::EventCause;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::EventCause;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
+use crate::sessions::QueryContext;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,
@@ -233,18 +235,54 @@ impl Processor for ExchangeShuffleTransform {
             return Ok(Event::Finished);
         }
 
-        if self.finished_inputs == self.inputs.len() && self.buffer.is_all_empty() {
-            for output in &self.outputs {
-                output.port.finish();
+        if self.finished_inputs == self.inputs.len() {
+            for (index, output) in self.outputs.iter_mut().enumerate() {
+                if self.buffer.is_empty(index) && output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                    output.port.finish();
+                }
             }
 
-            return Ok(Event::Finished);
+            if self.buffer.is_all_empty() {
+                return Ok(Event::Finished);
+            }
         }
 
         match self.waiting_outputs.is_empty() {
             true => Ok(Event::NeedConsume),
             false => Ok(Event::NeedData),
         }
+    }
+
+    fn details_status(&self) -> Option<String> {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Display {
+            queue_status: Vec<(usize, usize)>,
+            inputs: usize,
+            finished_inputs: usize,
+            outputs: usize,
+            finished_outputs: usize,
+
+            waiting_outputs: Vec<usize>,
+            waiting_inputs: VecDeque<usize>,
+        }
+
+        let mut queue_status = vec![];
+        for (idx, queue) in self.buffer.inner.iter().enumerate() {
+            queue_status.push((idx, queue.len()));
+        }
+
+        Some(format!("{:?}", Display {
+            queue_status,
+            inputs: self.inputs.len(),
+            outputs: self.outputs.len(),
+            finished_inputs: self.finished_inputs,
+            finished_outputs: self.finished_outputs,
+            waiting_inputs: self.waiting_inputs.clone(),
+            waiting_outputs: self.waiting_outputs.clone(),
+        }))
     }
 }
 
@@ -358,7 +396,11 @@ impl ExchangeShuffleTransform {
 }
 
 // Scatter the data block and push it to the corresponding output port
-pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
+pub fn exchange_shuffle(
+    ctx: &Arc<QueryContext>,
+    params: &ShuffleExchangeParams,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
     // append scatter transform
     pipeline.add_transform(|input, output| {
         Ok(ScatterTransform::create(
@@ -369,7 +411,10 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     })?;
 
     let exchange_injector = &params.exchange_injector;
-    exchange_injector.apply_shuffle_serializer(params, pipeline)?;
+
+    let settings = ctx.get_settings();
+    let compression = settings.get_query_flight_compression()?;
+    exchange_injector.apply_shuffle_serializer(params, compression, pipeline)?;
 
     let output_len = pipeline.output_len();
     if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {

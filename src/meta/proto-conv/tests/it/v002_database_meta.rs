@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::schema as mt;
+use databend_common_meta_app::schema as mt;
 use maplit::btreemap;
 use minitrace::func_name;
 
@@ -50,7 +50,7 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        shared_by: BTreeSet::from_iter(vec![1].into_iter()),
+        shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
         owner: None,
     };

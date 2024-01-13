@@ -188,7 +188,7 @@ WHERE
         AND (b < 10)
     )
 
-skipif clickhouse
+
 query T
 explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
@@ -205,7 +205,7 @@ SIZE_LIMIT = 10
 PURGE = false
 DISABLE_VARIANT_CHECK = false
 
-skipif clickhouse
+
 query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
@@ -443,7 +443,7 @@ Delete (children 2)
         ├── ColumnIdentifier b
         └── Literal UInt64(10)
 
-skipif clickhouse
+
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
@@ -923,7 +923,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -1032,3 +1032,55 @@ EvalScalar
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
     └── estimated rows: 0.00
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+CREATE TABLE t1(i int, j int);
+
+statement ok
+CREATE TABLE t2(k int, l int);
+
+statement ok
+INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
+
+statement ok
+INSERT INTO t2 VALUES (1, 10), (2, 20);
+
+query I
+EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
+----
+Sort
+├── output columns: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+├── sort keys: [i ASC NULLS LAST, j ASC NULLS LAST]
+├── estimated rows: 3.00
+└── HashJoin
+    ├── output columns: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+    ├── join type: LEFT OUTER
+    ├── build keys: [t2.k (#2)]
+    ├── probe keys: [t1.i (#0)]
+    ├── filters: []
+    ├── estimated rows: 3.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── output columns: [k (#2), l (#3)]
+    │   ├── read rows: 0
+    │   ├── read bytes: 0
+    │   ├── partitions total: 0
+    │   ├── partitions scanned: 0
+    │   ├── push downs: [filters: [false], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [i (#0), j (#1)]
+        ├── read rows: 3
+        ├── read bytes: 56
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 3.00

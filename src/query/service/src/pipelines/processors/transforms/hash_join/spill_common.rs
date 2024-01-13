@@ -14,18 +14,17 @@
 
 // Define some methods that are used by both the build and probe spilling of the hash join.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethodKind;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 
 pub fn get_hashes(
     func_ctx: &FunctionContext,
@@ -47,61 +46,6 @@ pub fn get_hashes(
             ))
         })
         .collect::<Result<_>>()?;
-    match method {
-        HashMethodKind::Serializer(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::DictionarySerializer(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::SingleString(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU8(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU16(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU32(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU64(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU128(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-        HashMethodKind::KeysU256(method) => {
-            let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-            for row in method.build_keys_iter(&rows_state)? {
-                hashes.push(method.get_hash(row));
-            }
-        }
-    }
+    hash_by_method(method, &columns, block.num_rows(), hashes)?;
     Ok(())
 }

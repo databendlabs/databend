@@ -14,16 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::principal::UserPrivilegeType::Ownership;
-use common_sql::plans::GrantPrivilegePlan;
-use common_users::UserApiProvider;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
+use databend_common_sql::plans::GrantPrivilegePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
+use log::error;
 use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
@@ -43,61 +45,30 @@ impl GrantPrivilegeInterpreter {
         Ok(GrantPrivilegeInterpreter { ctx, plan })
     }
 
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    async fn grant_ownership(
+    async fn convert_to_ownerobject(
         &self,
-        ctx: &Arc<QueryContext>,
         tenant: &str,
         object: &GrantObject,
-        role: &String,
-    ) -> Result<()> {
-        let user_mgr = UserApiProvider::instance();
-        let session = ctx.get_current_session();
-        let available_roles = session.get_all_available_roles().await?;
-        let current_role = match self.ctx.get_current_role() {
-            Some(current_role) => current_role,
-            None => {
-                return Err(common_exception::ErrorCode::UnknownRole(
-                    "No current role, cannot grant ownership",
-                ));
-            }
-        };
-
-        info!(
-            "{}: grant ownership on {:?} from role {} to {}",
-            ctx.get_id(),
-            object,
-            current_role.name,
-            role,
-        );
-
-        let (catalog, catalog_name) = match object.catalog() {
-            Some(ref catalog_name) => (
-                self.ctx.get_catalog(catalog_name).await?,
-                catalog_name.clone(),
-            ),
-            None => {
-                return Err(ErrorCode::IllegalGrant(
-                    "Illegal GRANT/REVOKE command, unknown catalog",
-                ));
-            }
-        };
-
-        let object_by_id = match object {
+        catalog_name: Option<String>,
+    ) -> Result<OwnershipObject> {
+        match object {
             GrantObject::Database(_, db_name) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                GrantObjectByID::Database {
+                Ok(OwnershipObject::Database {
                     catalog_name,
                     db_id,
-                }
+                })
             }
             GrantObject::Table(_, db_name, table_name) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -108,39 +79,82 @@ impl GrantPrivilegeInterpreter {
                     .get_table(tenant, db_name.as_str(), table_name)
                     .await?
                     .get_id();
-                GrantObjectByID::Table {
+                Ok(OwnershipObject::Table {
                     catalog_name,
                     db_id,
                     table_id,
-                }
+                })
             }
-            _ => {
-                return Err(ErrorCode::IllegalGrant(
-                    "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
-                ));
-            }
-        };
+            GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table {
+                catalog_name: catalog_name.unwrap(),
+                db_id: *db_id,
+                table_id: *table_id,
+            }),
+            GrantObject::DatabaseById(_, db_id) => Ok(OwnershipObject::Database {
+                catalog_name: catalog_name.unwrap(),
+                db_id: *db_id,
+            }),
+            GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
+                name: name.to_string(),
+            }),
+            GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
+                name: name.to_string(),
+            }),
+            GrantObject::Global => Err(ErrorCode::IllegalGrant(
+                "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
+            )),
+        }
+    }
+
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    async fn grant_ownership(
+        &self,
+        ctx: &Arc<QueryContext>,
+        tenant: &str,
+        owner_object: &OwnershipObject,
+        new_role: &str,
+    ) -> Result<()> {
+        let user_mgr = UserApiProvider::instance();
+        let session = ctx.get_current_session();
+        let available_roles = session.get_all_available_roles().await?;
+
+        // the new owner must be one of the available roles
+        if !available_roles.iter().any(|r| r.name == new_role) {
+            return Err(ErrorCode::IllegalGrant(
+                "Illegal GRANT/REVOKE command; invalid new owner",
+            ));
+        }
+
+        let mut log_msg = format!(
+            "{}: grant ownership on {:?}  to {}",
+            ctx.get_id(),
+            owner_object,
+            new_role
+        );
 
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
-        let owner = user_mgr.get_ownership(tenant, &object_by_id).await?;
+        let owner = user_mgr.get_ownership(tenant, owner_object).await?;
         if let Some(owner) = owner {
             let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
+            log_msg = format!(
+                "{}: grant ownership on {:?} from role {} to {}",
+                ctx.get_id(),
+                owner_object,
+                owner.role,
+                new_role
+            );
             if !can_grant_ownership {
+                error!("{}", log_msg);
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; only owner can grant ownership",
                 ));
             }
         }
 
-        // the new owner must be one of the available roles
-        if !available_roles.iter().any(|r| &r.name == role) {
-            return Err(ErrorCode::IllegalGrant(
-                "Illegal GRANT/REVOKE command; invalid new owner",
-            ));
-        }
-
+        info!("{}", log_msg);
         user_mgr
-            .grant_ownership_to_role(tenant, &object_by_id, role)
+            .grant_ownership_to_role(tenant, owner_object, new_role)
             .await?;
 
         Ok(())
@@ -177,12 +191,22 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) {
-                    self.grant_ownership(&self.ctx, &tenant, &plan.on, &role)
+                    let owner_object = self
+                        .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;
+                    if self.ctx.get_current_role().is_some() {
+                        self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
+                            .await?;
+                    } else {
+                        return Err(databend_common_exception::ErrorCode::UnknownRole(
+                            "No current role, cannot grant ownership",
+                        ));
+                    }
                 } else {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
                         .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
                 }
             }
         }
@@ -200,7 +224,7 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(common_exception::ErrorCode::IllegalGrant(
+        return Err(databend_common_exception::ErrorCode::IllegalGrant(
             "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
         ));
     }

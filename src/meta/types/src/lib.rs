@@ -13,19 +13,18 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(provide_any)]
 #![feature(no_sanitize)]
+#![feature(lazy_cell)]
 
 //! This crate defines data types used in meta data storage service.
 
 mod applied_state;
 mod change;
 mod cluster;
-mod cmd;
-pub mod config;
 mod endpoint;
-pub mod errors;
+mod eval_expire_time;
 mod grpc_config;
+mod grpc_helper;
 mod log_entry;
 mod match_seq;
 mod message;
@@ -36,10 +35,15 @@ mod raft_types;
 mod seq_errors;
 mod seq_num;
 mod seq_value;
+mod time;
 mod with;
 
 mod proto_display;
 mod proto_ext;
+
+pub mod cmd;
+pub mod config;
+pub mod errors;
 
 // reexport
 
@@ -56,8 +60,6 @@ pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
-pub use cmd::Cmd;
-pub use cmd::UpsertKV;
 pub use endpoint::Endpoint;
 pub use errors::meta_api_errors::MetaAPIError;
 pub use errors::meta_api_errors::MetaDataError;
@@ -74,6 +76,7 @@ pub use errors::meta_network_errors::MetaNetworkError;
 pub use errors::meta_network_errors::MetaNetworkResult;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
+pub use eval_expire_time::EvalExpireTime;
 pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
@@ -104,8 +107,15 @@ pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use seq_value::SeqValue;
+pub use time::Interval;
+pub use time::Time;
 pub use with::With;
 
+pub use crate::cmd::Cmd;
+pub use crate::cmd::CmdContext;
+pub use crate::cmd::MetaSpec;
+pub use crate::cmd::UpsertKV;
+pub use crate::grpc_helper::GrpcHelper;
 pub use crate::raft_snapshot_data::SnapshotData;
 pub use crate::raft_types::compat07;
 pub use crate::raft_types::new_log_id;
@@ -131,6 +141,7 @@ pub use crate::raft_types::NodeId;
 pub use crate::raft_types::RPCError;
 pub use crate::raft_types::RaftError;
 pub use crate::raft_types::RaftMetrics;
+pub use crate::raft_types::RemoteError;
 pub use crate::raft_types::Snapshot;
 pub use crate::raft_types::SnapshotMeta;
 pub use crate::raft_types::StorageError;

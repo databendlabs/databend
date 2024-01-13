@@ -16,12 +16,12 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
-use common_expression::TopKSorter;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -93,8 +93,8 @@ impl PredicateAndTopkPolicyBuilder {
             remain_schema
                 .fields()
                 .iter()
+                .filter(|&f| f.name() != topk.field.name())
                 .cloned()
-                .filter(|f| f.name() != topk.field.name())
                 .collect::<Vec<_>>()
         } else {
             remain_schema.fields().clone()
@@ -170,6 +170,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 .await?;
             // Topk column **must** not be in a nested column.
             let block = read_all(
+                self.src_schema.as_ref(),
                 &row_group,
                 topk.field_levels(),
                 selection.clone(),
@@ -191,6 +192,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 .fetch(self.predicate.projection(), selection.as_ref())
                 .await?;
             let block = read_all(
+                self.src_schema.as_ref(),
                 &row_group,
                 self.predicate.field_levels(),
                 selection.clone(),
@@ -289,7 +291,8 @@ impl ReadPolicy for PredicateAndTopkPolicy {
         if let Some(batch) = batch {
             debug_assert!(!self.prefetched.is_empty());
             let prefetched = self.prefetched.pop_front().unwrap();
-            let mut block = transform_record_batch(&batch, &self.remain_field_paths)?;
+            let mut block =
+                transform_record_batch(self.src_schema.as_ref(), &batch, &self.remain_field_paths)?;
             block.merge_block(prefetched);
             let block = block.resort(&self.src_schema, &self.dst_schema)?;
             Ok(Some(block))

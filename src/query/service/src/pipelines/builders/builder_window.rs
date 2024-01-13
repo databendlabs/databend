@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::with_number_mapped_type;
-use common_expression::SortColumnDescription;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_sql::executor::Window;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::Window;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
@@ -70,7 +70,7 @@ impl PipelineBuilder {
 
             sort_desc.extend(order_by.clone());
 
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, None)?;
         }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.try_resize(1)?;

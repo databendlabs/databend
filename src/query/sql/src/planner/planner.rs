@@ -14,25 +14,24 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::Statement;
-use common_ast::parser::parse_sql;
-use common_ast::parser::token::Token;
-use common_ast::parser::token::TokenKind;
-use common_ast::parser::token::Tokenizer;
-use common_ast::walk_statement_mut;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::token::Token;
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::token::Tokenizer;
+use databend_common_ast::walk_statement_mut;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
@@ -114,11 +113,14 @@ impl Planner {
                 let plan = binder.bind(&stmt).await?;
 
                 // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
-                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-                }));
+                let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
+                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
+                    .with_enable_join_reorder(unsafe {
+                        !self.ctx.get_settings().get_disable_join_reorder()?
+                    })
+                    .with_enable_dphyp(self.ctx.get_settings().get_enable_dphyp()?);
 
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
+                let optimized_plan = optimize(opt_ctx, plan)?;
                 Ok((optimized_plan, PlanExtras {
                     metadata,
                     format,

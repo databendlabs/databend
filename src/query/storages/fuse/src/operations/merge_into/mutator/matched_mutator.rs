@@ -19,36 +19,32 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_base::base::tokio::sync::Semaphore;
-use common_base::base::ProgressValues;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::split_prefix;
-use common_catalog::plan::split_row_id;
-use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::NumberColumn;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::split_prefix;
+use databend_common_catalog::plan::split_row_id;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_common_storage::MergeStatus;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -76,6 +72,7 @@ struct AggregationContext {
 }
 
 pub struct MatchedAggregator {
+    ctx: Arc<dyn TableContext>,
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -108,12 +105,13 @@ impl MatchedAggregator {
                 projection,
                 false,
                 false,
+                false,
             )
         }?;
 
         Ok(Self {
             aggregation_ctx: Arc::new(AggregationContext {
-                ctx,
+                ctx: ctx.clone(),
                 write_settings,
                 read_settings,
                 data_accessor,
@@ -123,7 +121,8 @@ impl MatchedAggregator {
             io_request_semaphore,
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
-            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+            segment_locations: AHashMap::from_iter(segment_locations),
+            ctx: ctx.clone(),
         })
     }
 
@@ -157,6 +156,23 @@ impl MatchedAggregator {
             RowIdKind::Delete => {
                 for row_id in row_ids {
                     let (prefix, offset) = split_row_id(row_id);
+                    let value = self.block_mutation_row_offset.get(&prefix);
+                    if value.is_none() {
+                        self.ctx.add_merge_status(MergeStatus {
+                            insert_rows: 0,
+                            update_rows: 0,
+                            deleted_rows: 1,
+                        });
+                    } else {
+                        let s = value.unwrap();
+                        if !s.1.contains(&(offset as usize)) {
+                            self.ctx.add_merge_status(MergeStatus {
+                                insert_rows: 0,
+                                update_rows: 0,
+                                deleted_rows: 1,
+                            });
+                        }
+                    }
                     // support idempotent delete
                     self.block_mutation_row_offset
                         .entry(prefix)
@@ -369,6 +385,7 @@ pub(crate) fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Bu
             Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
             _ => Err(ErrorCode::BadArguments("row id is not uint64")),
         },
+        Some(Column::Number(NumberColumn::UInt64(data))) => Ok(data.clone()),
         _ => Err(ErrorCode::BadArguments("row id is not uint64")),
     }
 }

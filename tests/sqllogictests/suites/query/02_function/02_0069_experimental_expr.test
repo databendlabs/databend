@@ -1,0 +1,38 @@
+statement ok
+set sql_dialect = 'experimental';
+
+query IIII
+select (3).add(4), 3 + {'k1': 4 }.k1, (3).add({'k1': 4 }.k1),  '3'.plus(4)
+----
+7 7 7 7
+
+
+query T
+select 'openai is nothing without its people'.upper() as c
+----
+OPENAI IS NOTHING WITHOUT ITS PEOPLE
+
+query IIII
+with t(f) as (select '11|open|22|ai|33|is nothing without sam'.split('|')
+        .array_filter(x -> try_cast(x as int) is not null ).array_apply(x -> x::int ).array_apply(x -> x::int64 ))
+	select f.array_aggregate('sum'), f.array_aggregate('max'), f.array_aggregate('min')  from t;
+----
+66 33 11
+
+statement error 1008
+SELECT t.a::String.lowe() FROM numbers(1) t(a)
+
+## List Comprehension
+
+query T
+select  [ x * 100  FOR x in [1,2,3] if x % 2 = 0 ];
+----
+[200]
+
+
+query IT
+SELECT  12_000_111_222, [x.split(' ')[2]
+     FOR x IN ['OpenAI', 'I LOVE', 'YOU ALL']
+     IF x.INSTR('LOVE') > 0][1];
+----
+12000111222 LOVE

@@ -14,10 +14,12 @@
 
 use std::collections::HashSet;
 
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use enumflags2::BitFlags;
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
 /// database or table.
@@ -25,10 +27,14 @@ use common_meta_app::principal::UserInfo;
 pub struct GrantObjectVisibilityChecker {
     granted_global: bool,
     granted_databases: HashSet<(String, String)>,
+    granted_databases_id: HashSet<(String, u64)>,
     granted_tables: HashSet<(String, String, String)>,
+    granted_tables_id: HashSet<(String, u64, u64)>,
     extra_databases: HashSet<(String, String)>,
+    extra_databases_id: HashSet<(String, u64)>,
     granted_udfs: HashSet<String>,
-    granted_stages: HashSet<String>,
+    granted_write_stages: HashSet<String>,
+    granted_read_stages: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -37,8 +43,12 @@ impl GrantObjectVisibilityChecker {
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
-        let mut granted_stages = HashSet::new();
+        let mut granted_write_stages = HashSet::new();
+        let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
+        let mut granted_databases_id = HashSet::new();
+        let mut extra_databases_id = HashSet::new();
+        let mut granted_tables_id = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
         for role in available_roles {
@@ -54,6 +64,9 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Database(catalog, db) => {
                         granted_databases.insert((catalog.to_string(), db.to_string()));
                     }
+                    GrantObject::DatabaseById(catalog, db) => {
+                        granted_databases_id.insert((catalog.to_string(), *db));
+                    }
                     GrantObject::Table(catalog, db, table) => {
                         granted_tables.insert((
                             catalog.to_string(),
@@ -63,11 +76,27 @@ impl GrantObjectVisibilityChecker {
                         // if table is visible, the table's database is also treated as visible
                         extra_databases.insert((catalog.to_string(), db.to_string()));
                     }
+                    GrantObject::TableById(catalog, db, table) => {
+                        granted_tables_id.insert((catalog.to_string(), *db, *table));
+                        // if table is visible, the table's database is also treated as visible
+                        extra_databases_id.insert((catalog.to_string(), *db));
+                    }
                     GrantObject::UDF(udf) => {
                         granted_udfs.insert(udf.to_string());
                     }
                     GrantObject::Stage(stage) => {
-                        granted_stages.insert(stage.to_string());
+                        if ent
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Write))
+                        {
+                            granted_write_stages.insert(stage.to_string());
+                        }
+                        if ent
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Read))
+                        {
+                            granted_read_stages.insert(stage.to_string());
+                        }
                     }
                 }
             }
@@ -76,10 +105,14 @@ impl GrantObjectVisibilityChecker {
         Self {
             granted_global,
             granted_databases,
+            granted_databases_id,
             granted_tables,
+            granted_tables_id,
             extra_databases,
+            extra_databases_id,
             granted_udfs,
-            granted_stages,
+            granted_write_stages,
+            granted_read_stages,
         }
     }
 
@@ -88,7 +121,18 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
-        if self.granted_stages.contains(stage) {
+        if self.granted_read_stages.contains(stage) || self.granted_write_stages.contains(stage) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_stage_read_visibility(&self, stage: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        if self.granted_read_stages.contains(stage) {
             return true;
         }
         false
@@ -105,7 +149,12 @@ impl GrantObjectVisibilityChecker {
         false
     }
 
-    pub fn check_database_visibility(&self, catalog: &str, db: &str) -> bool {
+    pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
+        // skip information_schema privilege check
+        if db.to_lowercase() == "information_schema" {
+            return true;
+        }
+
         if self.granted_global {
             return true;
         }
@@ -113,6 +162,13 @@ impl GrantObjectVisibilityChecker {
         if self
             .granted_databases
             .contains(&(catalog.to_string(), db.to_string()))
+        {
+            return true;
+        }
+
+        if self
+            .granted_databases_id
+            .contains(&(catalog.to_string(), db_id))
         {
             return true;
         }
@@ -125,10 +181,29 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
+        if self
+            .extra_databases_id
+            .contains(&(catalog.to_string(), db_id))
+        {
+            return true;
+        }
+
         false
     }
 
-    pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
+    pub fn check_table_visibility(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        db_id: u64,
+        table_id: u64,
+    ) -> bool {
+        // skip information_schema privilege check
+        if database.to_lowercase() == "information_schema" {
+            return true;
+        }
+
         if self.granted_global {
             return true;
         }
@@ -141,11 +216,25 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
+        if self
+            .granted_databases_id
+            .contains(&(catalog.to_string(), db_id))
+        {
+            return true;
+        }
+
         if self.granted_tables.contains(&(
             catalog.to_string(),
             database.to_string(),
             table.to_string(),
         )) {
+            return true;
+        }
+
+        if self
+            .granted_tables_id
+            .contains(&(catalog.to_string(), db_id, table_id))
+        {
             return true;
         }
 

@@ -16,34 +16,34 @@ use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Debug;
 
-use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::GetKVReq;
-use common_meta_kvapi::kvapi::ListKVReply;
-use common_meta_kvapi::kvapi::ListKVReq;
-use common_meta_kvapi::kvapi::MGetKVReply;
-use common_meta_kvapi::kvapi::MGetKVReq;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::ClientInfo;
-use common_meta_types::protobuf::ClusterStatus;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::InvalidArgument;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
+use databend_common_meta_kvapi::kvapi::GetKVReply;
+use databend_common_meta_kvapi::kvapi::GetKVReq;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::MGetKVReply;
+use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf::ClientInfo;
+use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::InvalidArgument;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use log::as_debug;
 use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 
-use crate::grpc_client::RealClient;
+use crate::established_client::EstablishedClient;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
 use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
-use crate::message::MakeClient;
+use crate::message::MakeEstablishedClient;
 use crate::message::Streamed;
 
 /// Bind a request type to its corresponding response type.
@@ -204,8 +204,8 @@ impl RequestFor for ExportReq {
     type Reply = tonic::codec::Streaming<WatchResponse>;
 }
 
-impl RequestFor for MakeClient {
-    type Reply = (RealClient, u64);
+impl RequestFor for MakeEstablishedClient {
+    type Reply = EstablishedClient;
 }
 
 impl RequestFor for GetEndpoints {

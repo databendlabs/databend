@@ -682,7 +682,7 @@ SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY c
 3500 7400
 
 # diff windows
-query II
+query TIIII
 SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno), sum(salary) OVER (PARTITION BY empno ORDER BY depname) FROM empsalary ORDER BY depname, empno
 ----
 develop 7 4200 4200 4200
@@ -695,6 +695,19 @@ personnel 5 3500 7400 3500
 sales 1 5000 5000 5000
 sales 3 4800 9800 4800
 sales 4 4800 14600 4800
+
+# window with where
+query TIII
+SELECT depname, empno, salary, RANK() OVER (PARTITION BY depname ORDER BY empno) FROM empsalary WHERE enroll_date BETWEEN '2006-10-01' AND '2007-12-10'
+----
+develop 8 6000 1
+develop 10 5200 2
+develop 11 5200 3
+personnel 2 3900 1
+personnel 5 3500 2
+sales 1 5000 1
+sales 3 4800 2
+sales 4 4800 3
 
 statement error 1065
 select max(sum(salary) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) from empsalary
@@ -715,4 +728,73 @@ statement error 1065
 select sum(salary) over(order by (sum(salary) over())) from empsalary
 
 statement ok
-DROP DATABASE test_window_basic
+DROP TABLE IF EXISTS Test
+
+statement ok
+CREATE TABLE Test (k int, v int)
+
+statement ok
+INSERT INTO Test SELECT generate_series AS k, generate_series AS v FROM generate_series(1, 2)
+
+# push down filter in window function
+query II
+SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 2
+----
+2 2
+2 2
+
+# cannot push down filter in window function
+query II
+SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 2
+----
+2 2
+2 2
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values (1),(2),(3),(4),(5)
+
+query II
+select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3
+----
+4
+5
+
+## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
+statement ok
+DROP TABLE IF EXISTS tbpush
+
+statement ok
+create table tbpush(b int);
+
+statement ok
+insert into tbpush values (1),(2);
+
+statement ok
+DROP view IF EXISTS vwpush
+
+statement ok
+create view vwpush (b, rnum) as select b, row_number() over (order by b) from tbpush
+
+query II
+select b, row_number() over (order by b) from tbpush where b > 1;
+----
+2 1
+
+query II
+select * from vwpush where b > 1;
+----
+2 2
+
+query II
+select * from (select b, row_number() over (order by b) from tbpush) where b > 1;
+----
+2 2 
+
+statement ok
+DROP DATABASE test_window_basic;

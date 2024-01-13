@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
@@ -80,29 +80,42 @@ impl Operator for EvalScalar {
         }
 
         // Derive outer columns
-        let mut outer_columns = input_prop.outer_columns.clone();
+        let mut outer_columns = input_prop
+            .outer_columns
+            .difference(&input_prop.output_columns)
+            .cloned()
+            .collect::<ColumnSet>();
         for item in self.items.iter() {
             let used_columns = item.scalar.used_columns();
-            let outer = used_columns
-                .difference(&output_columns)
-                .cloned()
-                .collect::<ColumnSet>();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+            let outer = used_columns.difference(&input_prop.output_columns).cloned();
+            outer_columns.extend(outer);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = input_prop.orderings.clone();
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

@@ -16,14 +16,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_expression::EXTENSION_KEY;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
+use databend_common_expression::FieldIndex;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;
 use parquet::file::footer::decode_metadata;
+use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
 
 const FOOTER_SIZE: u64 = 8;
@@ -37,11 +38,10 @@ pub async fn read_parquet_schema_async_rs(
     file_size: Option<u64>,
 ) -> Result<ArrowSchema> {
     let meta = read_metadata_async(path, operator, file_size).await?;
-    infer_schema_with_extension(&meta)
+    infer_schema_with_extension(meta.file_metadata())
 }
 
-pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema> {
-    let meta = meta.file_metadata();
+pub fn infer_schema_with_extension(meta: &FileMetaData) -> Result<ArrowSchema> {
     let mut arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
     // Convert data types to extension types using meta information.
     // Mainly used for types such as Variant and Bitmap,
@@ -204,10 +204,10 @@ pub fn traverse_parquet_schema_tree(
 
 #[cfg(test)]
 mod tests {
-    use common_expression::types::NumberDataType;
-    use common_expression::TableDataType;
-    use common_expression::TableField;
-    use common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
     use parquet::arrow::arrow_to_parquet_schema;
 
     use crate::parquet_rs::build_parquet_schema_tree;
@@ -244,13 +244,7 @@ mod tests {
             }),
             TableField::new("h", TableDataType::String),
         ]);
-        let arrow_fields = schema.to_arrow().fields;
-        let arrow_schema = arrow_schema::Schema::new(
-            arrow_fields
-                .into_iter()
-                .map(arrow_schema::Field::from)
-                .collect::<Vec<_>>(),
-        );
+        let arrow_schema = (&schema).into();
         let schema_desc = arrow_to_parquet_schema(&arrow_schema).unwrap();
         let mut leave_id = 0;
         let tree = build_parquet_schema_tree(schema_desc.root_schema(), &mut leave_id);

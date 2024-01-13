@@ -1,0 +1,29 @@
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int null);
+
+statement ok
+insert into t1 values(1), (NULL), (2);
+
+statement ok
+create table t2(b int null);
+
+statement ok
+insert into t2 values(1), (NULL), (3);
+
+query I
+select * from t1 join t2 on t1.a < t2.b order by t1.a;
+----
+1 3
+2 3
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

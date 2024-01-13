@@ -1,0 +1,65 @@
+query I
+SELECT 1
+----
+1
+
+statement error (?s)1065.*column x doesn't exist
+SELECT x
+
+query T
+SELECT 'a'
+----
+a
+
+query B
+SELECT NOT(1=1)
+----
+0
+
+query B
+SELECT NOT(1::boolean)
+----
+0
+
+query B
+SELECT NOT(1=1) from numbers(3)
+----
+0
+0
+0
+
+
+query B
+SELECT TRUE
+----
+1
+
+
+query B
+SELECT FALSE
+----
+0
+
+
+query B
+SELECT NOT(TRUE)
+----
+0
+
+query T
+SELECT 'That\'s good.'
+----
+That's good.
+
+statement error (?s)1065.*'SELECT \*' is used without specifying any tables in the FROM clause\.
+SELECT *
+
+query T
+SELECT 'That\'s good.'
+----
+That's good.
+
+query BB
+select 'false'::boolean = not 'true'::boolean, parse_json('"false"')::boolean
+----
+1	0

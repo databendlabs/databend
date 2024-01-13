@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::ServerState;
-use common_meta_types::Cmd;
-use common_meta_types::LogEntry;
-use common_meta_types::SeqV;
-use common_meta_types::UpsertKV;
+use databend_common_meta_sled_store::openraft::LogIdOptionExt;
+use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;

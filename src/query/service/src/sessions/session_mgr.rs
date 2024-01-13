@@ -21,22 +21,23 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
-use common_base::base::SignalStream;
-use common_catalog::table_context::ProcessInfoState;
-use common_config::GlobalConfig;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_settings::Settings;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::SignalStream;
+use databend_common_catalog::table_context::ProcessInfoState;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::session::*;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
 use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
-use crate::sessions::session_metrics;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -94,6 +95,26 @@ impl SessionManager {
         self.create_with_settings(typ, settings)
     }
 
+    pub fn try_upgrade_session(&self, session: Arc<Session>, typ_to: SessionType) -> Result<()> {
+        let typ_from = session.get_type();
+        if typ_from != SessionType::Dummy {
+            return Err(ErrorCode::Internal("bug: can only upgrade Dummy session"));
+        }
+        session.set_type(typ_to.clone());
+        self.try_add_session(session, typ_to)
+    }
+
+    pub fn try_add_session(&self, session: Arc<Session>, typ: SessionType) -> Result<()> {
+        let mut sessions = self.active_sessions.write();
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+            sessions.insert(session.get_id(), Arc::downgrade(&session));
+            set_session_active_connections(sessions.len());
+        }
+        incr_session_connect_numbers();
+        Ok(())
+    }
+
     pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
         if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
@@ -105,7 +126,9 @@ impl SessionManager {
         }
 
         if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
-            settings.set_enterprise_license(enterprise_license_key)?;
+            unsafe {
+                settings.set_enterprise_license(enterprise_license_key)?;
+            }
         }
         Ok(())
     }
@@ -124,19 +147,7 @@ impl SessionManager {
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
-        {
-            let mut sessions = self.active_sessions.write();
-            if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-                self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-            }
-
-            session_metrics::incr_session_connect_numbers();
-            session_metrics::set_session_active_connections(sessions.len());
-
-            if !matches!(typ, SessionType::FlightRPC) {
-                sessions.insert(session.get_id(), Arc::downgrade(&session));
-            }
-        }
+        self.try_add_session(session.clone(), typ.clone())?;
 
         if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();
@@ -181,8 +192,8 @@ impl SessionManager {
         {
             let sessions_count = { self.active_sessions.read().len() };
 
-            session_metrics::incr_session_close_numbers();
-            session_metrics::set_session_active_connections(sessions_count);
+            incr_session_close_numbers();
+            set_session_active_connections(sessions_count);
         }
     }
 
@@ -306,5 +317,40 @@ impl SessionManager {
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
         status_t
+    }
+
+    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let active_sessions = {
+            // Here the situation is the same of method `graceful_shutdown`:
+            //
+            // We should drop the read lock before
+            // - acquiring upgraded session reference: the Arc<Session>,
+            // - extracting the ProcessInfo from it
+            // - and then drop the Arc<Session>
+            // Since there are chances that we are the last one that holding the reference, and the
+            // destruction of session need to acquire the write lock of `active_sessions`, which leads
+            // to dead lock.
+            //
+            // Although online expression can also do this, to make this clearer, we wrap it in a block
+
+            let active_sessions_guard = self.active_sessions.read();
+            active_sessions_guard.values().cloned().collect::<Vec<_>>()
+        };
+
+        let mut queries_profiles = HashMap::new();
+        for weak_ptr in active_sessions {
+            if let Some(session_ctx) = weak_ptr.upgrade().map(|x| x.session_ctx.clone()) {
+                if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                    if let Some(executor) = context_shared.executor.read().upgrade() {
+                        queries_profiles.insert(
+                            context_shared.init_query_id.as_ref().read().clone(),
+                            executor.get_profiles(),
+                        );
+                    }
+                }
+            }
+        }
+
+        queries_profiles
     }
 }

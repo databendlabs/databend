@@ -14,19 +14,27 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature::ComputedColumn;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
-use common_sql::field_default_value;
-use common_sql::plans::AddColumnOption;
-use common_sql::plans::AddTableColumnPlan;
-use common_storages_share::save_share_table_info;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::ComputedColumn;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::field_default_value;
+use databend_common_sql::plans::AddColumnOption;
+use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_share::save_share_table_info;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
@@ -70,10 +78,11 @@ impl Interpreter for AddTableColumnInterpreter {
             table.check_mutable()?;
 
             let table_info = table.get_table_info();
-            if table_info.engine() == VIEW_ENGINE {
+            let engine = table_info.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is VIEW that doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
@@ -107,12 +116,15 @@ impl Interpreter for AddTableColumnInterpreter {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
 
+            generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
+
             let req = UpdateTableMetaReq {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
                 copied_files: None,
                 deduplicated_label: None,
+                update_stream_meta: vec![],
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;
@@ -129,4 +141,47 @@ impl Interpreter for AddTableColumnInterpreter {
 
         Ok(PipelineBuildResult::create())
     }
+}
+
+pub(crate) async fn generate_new_snapshot(
+    table: &dyn Table,
+    new_table_meta: &mut TableMeta,
+) -> Result<()> {
+    if let Ok(fuse_table) = FuseTable::try_from_table(table) {
+        if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
+            let mut new_snapshot = TableSnapshot::from_previous(snapshot.as_ref());
+
+            // replace schema
+            new_snapshot.schema = new_table_meta.schema.as_ref().clone();
+
+            // write down new snapshot
+            let new_snapshot_location = fuse_table
+                .meta_location_generator()
+                .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+
+            let data = new_snapshot.to_bytes()?;
+            fuse_table
+                .get_operator_ref()
+                .write(&new_snapshot_location, data)
+                .await?;
+
+            // write down hint
+            FuseTable::write_last_snapshot_hint(
+                fuse_table.get_operator_ref(),
+                fuse_table.meta_location_generator(),
+                new_snapshot_location.clone(),
+            )
+            .await;
+
+            new_table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+                new_snapshot_location.clone(),
+            );
+        } else {
+            info!("Snapshot not found, no need to generate new snapshot");
+        }
+    } else {
+        info!("Not a fuse table, no need to generate new snapshot");
+    }
+    Ok(())
 }

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio::io::AsyncWrite;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Column as ExprColumn;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::ScalarRef;
-use common_expression::SendableDataBlockStream;
-use common_formats::field_encoder::FieldEncoderValues;
-use common_io::prelude::FormatSettings;
+use databend_common_base::base::tokio::io::AsyncWrite;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Column as ExprColumn;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
 use log::error;
 use opensrv_mysql::*;
@@ -155,6 +155,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::EmptyMap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
+                DataType::Binary => Ok(ColumnType::MYSQL_TYPE_BLOB),
                 DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Number(num_ty) => match num_ty {
                     NumberDataType::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),

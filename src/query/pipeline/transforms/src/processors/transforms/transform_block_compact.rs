@@ -16,13 +16,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
 
 use super::Compactor;
-use super::TransformCompact;
 
 pub struct BlockCompactor {
     thresholds: BlockThresholds,
@@ -155,5 +154,3 @@ impl Compactor for BlockCompactor {
         Ok(res)
     }
 }
-
-pub type TransformBlockCompact = TransformCompact<BlockCompactor>;

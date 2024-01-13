@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::map_api::AsMap;
@@ -45,13 +45,13 @@ impl MapKey for ExpireKey {
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    sys_data: SysData,
+    pub(in crate::sm_v002) sys_data: SysData,
 
     /// Generic Key-value store.
-    kv: BTreeMap<String, Marked<Vec<u8>>>,
+    pub(in crate::sm_v002) kv: BTreeMap<String, Marked<Vec<u8>>>,
 
     /// The expiration queue of generic kv.
-    expire: BTreeMap<ExpireKey, Marked<String>>,
+    pub(in crate::sm_v002) expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
 impl Level {
@@ -100,19 +100,16 @@ impl MapApiRO<String> for Level {
         Ok(got)
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
-    where
-        String: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
+    where R: RangeBounds<String> + Clone + Send + Sync + 'static {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .kv
             .range(range)
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Vec<_>>();
 
-        let strm = futures::stream::iter(vec.into_iter()).map(Ok).boxed();
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
     }
 }
@@ -133,7 +130,7 @@ impl MapApi<String> for Level {
         } else {
             // Do not increase the sequence number, just use the max seq for all tombstone.
             let seq = self.curr_seq();
-            Marked::new_tomb_stone(seq)
+            Marked::new_tombstone(seq)
         };
 
         let prev = (*self).str_map().get(&key).await?;
@@ -153,19 +150,16 @@ impl MapApiRO<ExpireKey> for Level {
         Ok(got)
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
+    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
+        // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .expire
             .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (*k, v.clone()))
             .collect::<Vec<_>>();
 
-        let strm = futures::stream::iter(vec.into_iter()).map(Ok).boxed();
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
     }
 }

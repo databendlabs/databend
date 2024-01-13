@@ -15,15 +15,16 @@
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
-use arrow_schema::FieldRef;
-use common_arrow::arrow::array::Arrow2Arrow;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::TableSchema;
+use databend_common_arrow::arrow::array::Arrow2Arrow;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchema;
 use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ProjectionMask;
@@ -31,7 +32,7 @@ use parquet::schema::types::SchemaDescriptor;
 
 /// Traverse `batch` by `path_indices` to get output [`Column`].
 fn traverse_column(
-    field: &arrow_schema::FieldRef,
+    field: &DataField,
     path: &[FieldIndex],
     batch: &RecordBatch,
     schema: &arrow_schema::Schema,
@@ -41,17 +42,17 @@ fn traverse_column(
     for idx in path.iter().take(path.len() - 1) {
         let struct_array = columns
             .get(*idx)
-            .ok_or(error_cannot_traverse_path(path, schema))?
+            .ok_or_else(|| error_cannot_traverse_path(path, schema))?
             .as_any()
             .downcast_ref::<StructArray>()
-            .ok_or(error_cannot_traverse_path(path, schema))?;
+            .ok_or_else(|| error_cannot_traverse_path(path, schema))?;
         columns = struct_array.columns();
     }
     let idx = *path.last().unwrap();
     let array = columns
         .get(idx)
-        .ok_or(error_cannot_traverse_path(path, schema))?;
-    Ok(Column::from_arrow_rs(array.clone(), field)?)
+        .ok_or_else(|| error_cannot_traverse_path(path, schema))?;
+    Column::from_arrow_rs(array.clone(), field.data_type())
 }
 
 fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema) -> ErrorCode {
@@ -65,20 +66,21 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
 ///
 /// `field_paths` is used to traverse nested columns in `batch`.
 pub fn transform_record_batch(
+    data_schema: &DataSchema,
     batch: &RecordBatch,
     field_paths: &Option<FieldPaths>,
 ) -> Result<DataBlock> {
     if let Some(field_paths) = field_paths {
         transform_record_batch_by_field_paths(batch, field_paths)
     } else {
-        let (block, _) = DataBlock::from_record_batch(batch)?;
+        let (block, _) = DataBlock::from_record_batch(data_schema, batch)?;
         Ok(block)
     }
 }
 
 pub fn transform_record_batch_by_field_paths(
     batch: &RecordBatch,
-    field_paths: &[(FieldRef, Vec<FieldIndex>)],
+    field_paths: &[(DataField, Vec<FieldIndex>)],
 ) -> Result<DataBlock> {
     if batch.num_columns() == 0 {
         return Ok(DataBlock::new(vec![], batch.num_rows()));
@@ -94,8 +96,8 @@ pub fn transform_record_batch_by_field_paths(
 
 pub fn bitmap_to_boolean_array(bitmap: Bitmap) -> BooleanArray {
     let res = Box::new(
-        common_arrow::arrow::array::BooleanArray::try_new(
-            common_arrow::arrow::datatypes::DataType::Boolean,
+        databend_common_arrow::arrow::array::BooleanArray::try_new(
+            databend_common_arrow::arrow::datatypes::DataType::Boolean,
             bitmap,
             None,
         )
@@ -107,7 +109,7 @@ pub fn bitmap_to_boolean_array(bitmap: Bitmap) -> BooleanArray {
 /// FieldPaths is used to traverse nested columns in [`RecordBatch`].
 ///
 /// It records the DFS order of each field.
-pub type FieldPaths = Vec<(FieldRef, Vec<FieldIndex>)>;
+pub type FieldPaths = Vec<(DataField, Vec<FieldIndex>)>;
 
 /// Search `batch_schema` by column names from `output_schema` to compute path indices for getting columns from [`RecordBatch`].
 pub fn compute_output_field_paths(
@@ -119,7 +121,7 @@ pub fn compute_output_field_paths(
     if !inner_projection {
         return Ok(None);
     }
-    let expected_schema = to_arrow_schema(expected_schema);
+    let expected_schema = DataSchema::from(expected_schema);
     let batch_schema = parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
     let output_fields = expected_schema.fields();
     let parquet_schema_desc = arrow_to_parquet_schema(&batch_schema)?;
@@ -137,7 +139,7 @@ pub fn compute_output_field_paths(
                     let idx = fields
                         .iter()
                         .position(|t| t.name().eq_ignore_ascii_case(name))
-                        .ok_or(error_cannot_find_field(field.name(), parquet_schema))?;
+                        .ok_or_else(|| error_cannot_find_field(field.name(), parquet_schema))?;
                     path.push(idx);
                     ty = &fields[idx];
                 }
@@ -149,15 +151,6 @@ pub fn compute_output_field_paths(
     }
 
     Ok(Some(path_indices))
-}
-
-pub fn to_arrow_schema(schema: &TableSchema) -> arrow_schema::Schema {
-    let fields = schema
-        .fields()
-        .iter()
-        .map(|f| arrow_schema::Field::from(common_arrow::arrow::datatypes::Field::from(f)))
-        .collect::<Vec<_>>();
-    arrow_schema::Schema::new(fields)
 }
 
 pub fn error_cannot_find_field(name: &str, schema: &parquet::schema::types::Type) -> ErrorCode {

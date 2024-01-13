@@ -1,0 +1,75 @@
+statement ok
+drop database if exists db
+
+statement ok
+drop table if exists default.t
+
+statement ok
+create table default.t (id int not null)
+
+statement ok
+create database db
+
+statement ok
+create table db.t (id int not null, c1 tuple(int, int) not null)
+
+statement ok
+create table db.t1 (id int not null, c1 tuple(int, int) not null)
+
+statement ok
+create table db.t2 (id2 int not null, c1 tuple(int, int) not null)
+
+statement error 1006
+insert into db.t(id) values(1)
+
+statement ok
+insert into db.t(id,c1) values(1,(0,0))
+
+statement error 1006
+insert into db.t1(id) values(2)
+
+statement ok
+insert into db.t1(id,c1) values(2,(0,0))
+
+statement error 1006
+insert into db.t2(id2) values(3)
+
+statement ok
+insert into db.t2(id2,c1) values(3,(0,0))
+
+query TTTT
+select t.*, t.id, t.c1 from db.t
+----
+1 (0,0) 1 (0,0)
+
+query TTTT
+select db.t.*, db.t.id, db.t.c1 from db.t
+----
+1 (0,0) 1 (0,0)
+
+statement error 1003
+select default.t.* from db.t
+
+statement error 1025
+select t1.* from db.t
+
+query TT
+select t1.* from db.t as t1
+----
+1 (0,0)
+
+query TTTT
+select c.* from (select t1.*, t2.* from db.t as t1 join db.t1 as t2 on t1.id!=t2.id) as c
+----
+1  (0,0)     2  (0,0)
+
+query TTTT
+select c.* from (select t1.*, t.* from db.t as t1 join db.t2 as t on t1.id!=t.id2) as c
+----
+1  (0,0)     3  (0,0)
+
+statement ok
+drop database db
+
+statement ok
+drop table default.t

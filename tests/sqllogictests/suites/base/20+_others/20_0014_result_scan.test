@@ -1,0 +1,89 @@
+statement ok
+DROP DATABASE IF EXISTS db20_14;
+
+statement ok
+CREATE DATABASE db20_14;
+
+statement ok
+USE db20_14;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1 (a INT);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+statement ok
+SET enable_query_result_cache = 1;
+
+statement error `RESULT_SCAN` failed: No cache key found in current session for query ID '.*'\.
+SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+onlyif mysql
+query I
+SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
+----
+1
+2
+3
+
+# multiple executions should return the same result
+onlyif mysql
+query I
+SELECT * FROM RESULT_SCAN(last_query_id());
+----
+1
+2
+3
+
+statement ok
+INSERT INTO t1 VALUES (4);
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+4
+
+onlyif mysql
+query I
+SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
+----
+1
+2
+3
+4
+
+onlyif mysql
+query I
+SELECT * FROM RESULT_SCAN(last_query_id(-1)) ORDER BY a;
+----
+1
+2
+3
+4
+
+statement ok
+SET enable_query_result_cache = 0;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP DATABASE db20_14;

@@ -14,28 +14,28 @@
 
 use std::fmt::Display;
 
-use common_meta_app::app_error::AppError;
-use common_meta_app::app_error::DatamaskAlreadyExists;
-use common_meta_app::app_error::UnknownDatamask;
-use common_meta_app::data_mask::CreateDatamaskReply;
-use common_meta_app::data_mask::CreateDatamaskReq;
-use common_meta_app::data_mask::DatamaskId;
-use common_meta_app::data_mask::DatamaskMeta;
-use common_meta_app::data_mask::DatamaskNameIdent;
-use common_meta_app::data_mask::DropDatamaskReply;
-use common_meta_app::data_mask::DropDatamaskReq;
-use common_meta_app::data_mask::GetDatamaskReply;
-use common_meta_app::data_mask::GetDatamaskReq;
-use common_meta_app::data_mask::MaskpolicyTableIdList;
-use common_meta_app::data_mask::MaskpolicyTableIdListKey;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableMeta;
-use common_meta_kvapi::kvapi;
-use common_meta_types::ConditionResult::Eq;
-use common_meta_types::MetaError;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnRequest;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::DatamaskAlreadyExists;
+use databend_common_meta_app::app_error::UnknownDatamask;
+use databend_common_meta_app::data_mask::CreateDatamaskReply;
+use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskId;
+use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_app::data_mask::DatamaskNameIdent;
+use databend_common_meta_app::data_mask::DropDatamaskReply;
+use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::data_mask::GetDatamaskReply;
+use databend_common_meta_app::data_mask::GetDatamaskReq;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use log::as_debug;
 use log::debug;
 use minitrace::func_name;
@@ -49,10 +49,10 @@ use crate::kv_app_error::KVAppError;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::txn_trials;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls DatamaskApi.
@@ -66,10 +66,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let name_key = &req.name;
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
+        let mut trials = txn_backoff(None, func_name!());
         let id = loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
+
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
             debug!(seq = seq, id = id, name_key = as_debug!(name_key); "create_data_mask");
@@ -143,11 +143,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
 
+        let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
 
             let result =
                 get_data_mask_or_err(self, name_key, format!("drop_data_mask: {}", name_key)).await;

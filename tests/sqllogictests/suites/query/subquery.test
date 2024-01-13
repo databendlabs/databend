@@ -664,7 +664,22 @@ select * from t2 where t2.b < ANY(select NULL from t1 where t1.a = t1.a)
 ----
 
 statement ok
+create table t3(a int, b int);
+
+statement ok
+insert into t3 values(1, 2), (3, 4), (6, 5);
+
+query T
+SELECT  *, (SELECT SUM(a) FROM t3 WHERE b IN (SELECT b FROM t1 WHERE a = t2.a )) FROM t2 WHERE  b IN (SELECT b FROM t3 WHERE a > 1);
+----
+
+
+
+statement ok
 drop table t1
 
 statement ok
 drop table t2
+
+statement ok
+drop table t3

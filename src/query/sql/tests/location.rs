@@ -19,24 +19,24 @@ mod optimizer;
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use common_ast::ast::UriLocation;
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
-use common_config::GlobalConfig;
-use common_config::InnerConfig;
-use common_meta_app::storage::StorageFsConfig;
-// use common_storage::StorageFtpConfig;
-use common_meta_app::storage::StorageGcsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_sql::planner::binder::parse_uri_location;
+use databend_common_ast::ast::UriLocation;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+// use databend_common_storage::StorageFtpConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use databend_common_sql::planner::binder::parse_uri_location;
 
 #[tokio::test]
 async fn test_parse_uri_location() -> Result<()> {
@@ -46,7 +46,7 @@ async fn test_parse_uri_location() -> Result<()> {
         .expect("thread should has a name");
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(InnerConfig::default())?;
+    GlobalConfig::init(&InnerConfig::default())?;
 
     let cases = vec![
         (
@@ -164,10 +164,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
                     ("session_token", "session_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -199,10 +200,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("session_token", "security_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -234,10 +236,11 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![
+                [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("aws_token", "security_token"),
+                    ("region", "us-east-2"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -269,7 +272,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                vec![("role_arn", "aws::iam::xxxx")]
+                [("role_arn", "aws::iam::xxxx"), ("region", "us-east-2")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
                     .collect::<BTreeMap<String, String>>(),
@@ -284,7 +287,7 @@ async fn test_parse_uri_location() -> Result<()> {
                     security_token: "".to_string(),
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
-                    disable_credential_loader: true,
+                    disable_credential_loader: false,
                     enable_virtual_host_style: false,
                     role_arn: "aws::iam::xxxx".to_string(),
                     external_id: "".to_string(),
@@ -418,7 +421,7 @@ async fn test_parse_uri_location() -> Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input).await?;
+        let actual = parse_uri_location(&mut input, None).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 

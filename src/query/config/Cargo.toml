@@ -1,5 +1,5 @@
 [package]
-name = "common-config"
+name = "databend-common-config"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,32 +10,31 @@ test = true
 
 [features]
 default = []
-storage-hdfs = ["common-storage/storage-hdfs"]
+storage-hdfs = ["databend-common-storage/storage-hdfs"]
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]
 
 [dependencies]
-chrono-tz = { workspace = true }
-common-base = { path = "../../common/base" }
-common-exception = { path = "../../common/exception" }
-common-grpc = { path = "../../common/grpc" }
-common-meta-app = { path = "../../meta/app" }
-common-storage = { path = "../../common/storage" }
-common-tracing = { path = "../../common/tracing" }
-common-users = { path = "../users" }
+databend-common-base = { path = "../../common/base" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-tracing = { path = "../../common/tracing" }
+databend-common-users = { path = "../users" }
 
+chrono-tz = { workspace = true }
 clap = { workspace = true }
 hex = "0.4.3"
 log = { workspace = true }
-once_cell = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
-serfig = "0.1.0"
+serfig = { workspace = true }
 strum = "0.24.1"
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }

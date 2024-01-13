@@ -35,6 +35,7 @@ pub use http_query::PaginationConf;
 pub use http_query::ResponseState;
 pub use http_query_context::HttpQueryContext;
 pub use http_query_manager::HttpQueryManager;
+pub(crate) use http_query_manager::RemoveReason;
 pub use page_manager::Page;
 pub use page_manager::PageManager;
 pub use page_manager::ResponseData;

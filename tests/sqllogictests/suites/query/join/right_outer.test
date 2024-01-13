@@ -1,0 +1,38 @@
+# RIGHT OUTER JOIN
+statement ok
+drop table if exists t1_null
+
+statement ok
+drop table if exists t2_null
+
+query I
+select * from (SELECT number AS a FROM numbers(10)) x left join (SELECT number AS a FROM numbers(5))  y using(a) order by x.a
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query I
+select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5))  y using(a) order by x.a
+----
+0
+1
+2
+3
+4
+
+query II
+select * from (SELECT number AS a FROM numbers(1000)) x right join (SELECT number AS a FROM numbers(5))  y on x.a = y.a order by x.a
+----
+0 0
+1 1
+2 2
+3 3
+4 4

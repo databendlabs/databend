@@ -15,21 +15,20 @@
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
+use std::io::Write;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_arrow::arrow::bitmap::and;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute::cast as arrow_cast;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::offset::OffsetsBuffer;
-use common_arrow::arrow::trusted_len::TrustedLen;
-use common_exception::Result;
-use common_io::prelude::BinaryRead;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
@@ -44,6 +43,8 @@ use serde::Serializer;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
@@ -54,6 +55,7 @@ use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -64,6 +66,7 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
+use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
@@ -97,7 +100,9 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
+)]
 pub enum Scalar {
     Null,
     EmptyArray,
@@ -107,6 +112,7 @@ pub enum Scalar {
     Timestamp(i64),
     Date(i32),
     Boolean(bool),
+    Binary(Vec<u8>),
     String(Vec<u8>),
     Array(Column),
     Map(Column),
@@ -124,6 +130,7 @@ pub enum ScalarRef<'a> {
     Number(NumberScalar),
     Decimal(DecimalScalar),
     Boolean(bool),
+    Binary(&'a [u8]),
     String(&'a [u8]),
     Timestamp(i64),
     Date(i32),
@@ -142,15 +149,16 @@ pub enum Column {
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
+    Binary(BinaryColumn),
     String(StringColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
-    Bitmap(StringColumn),
+    Bitmap(BinaryColumn),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
-    Variant(StringColumn),
+    Variant(BinaryColumn),
 }
 
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
@@ -161,15 +169,16 @@ pub enum ColumnVec {
     Number(NumberColumnVec),
     Decimal(DecimalColumnVec),
     Boolean(Vec<Bitmap>),
+    Binary(Vec<BinaryColumn>),
     String(Vec<StringColumn>),
     Timestamp(Vec<Buffer<i64>>),
     Date(Vec<Buffer<i32>>),
     Array(Vec<ArrayColumn<AnyType>>),
     Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
-    Bitmap(Vec<StringColumn>),
+    Bitmap(Vec<BinaryColumn>),
     Nullable(Box<NullableColumnVec>),
     Tuple(Vec<ColumnVec>),
-    Variant(Vec<StringColumn>),
+    Variant(Vec<BinaryColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -180,15 +189,16 @@ pub enum ColumnBuilder {
     Number(NumberColumnBuilder),
     Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
+    Binary(BinaryColumnBuilder),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
-    Bitmap(StringColumnBuilder),
+    Bitmap(BinaryColumnBuilder),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
-    Variant(StringColumnBuilder),
+    Variant(BinaryColumnBuilder),
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -277,6 +287,15 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl<T: Decimal> Value<DecimalType<T>> {
+    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
+            Value::Column(col) => Value::Column(T::upcast_column(col, size)),
+        }
+    }
+}
+
 impl Value<AnyType> {
     pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
         match self {
@@ -325,6 +344,7 @@ impl Scalar {
             Scalar::Number(n) => ScalarRef::Number(*n),
             Scalar::Decimal(d) => ScalarRef::Decimal(*d),
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
+            Scalar::Binary(s) => ScalarRef::Binary(s.as_slice()),
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Date(d) => ScalarRef::Date(*d),
@@ -342,6 +362,7 @@ impl Scalar {
             DataType::EmptyArray => Scalar::EmptyArray,
             DataType::EmptyMap => Scalar::EmptyMap,
             DataType::Boolean => Scalar::Boolean(false),
+            DataType::Binary => Scalar::Binary(vec![]),
             DataType::String => Scalar::String(vec![]),
             DataType::Number(num_ty) => Scalar::Number(match num_ty {
                 NumberDataType::UInt8 => NumberScalar::UInt8(0),
@@ -391,6 +412,23 @@ impl Scalar {
             _ => unreachable!("is_positive() called on non-numeric scalar"),
         }
     }
+
+    pub fn get_i64(&self) -> Option<i64> {
+        match self {
+            Scalar::Number(n) => match n {
+                NumberScalar::Int8(x) => Some(*x as _),
+                NumberScalar::Int16(x) => Some(*x as _),
+                NumberScalar::Int32(x) => Some(*x as _),
+                NumberScalar::Int64(x) => Some(*x as _),
+                NumberScalar::UInt8(x) => Some(*x as _),
+                NumberScalar::UInt16(x) => Some(*x as _),
+                NumberScalar::UInt32(x) => Some(*x as _),
+                NumberScalar::UInt64(x) => i64::try_from(*x).ok(),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 impl<'a> ScalarRef<'a> {
@@ -402,6 +440,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Number(n) => Scalar::Number(*n),
             ScalarRef::Decimal(d) => Scalar::Decimal(*d),
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
+            ScalarRef::Binary(s) => Scalar::Binary(s.to_vec()),
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
@@ -480,7 +519,9 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::Bitmap(_) | ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Binary(_) | ScalarRef::Bitmap(_) | ScalarRef::Variant(_) => {
+                Domain::Undefined
+            }
         }
     }
 
@@ -500,6 +541,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Decimal(DecimalScalar::Decimal128(_, _)) => 16,
             ScalarRef::Decimal(DecimalScalar::Decimal256(_, _)) => 32,
             ScalarRef::Boolean(_) => 1,
+            ScalarRef::Binary(s) => s.len(),
             ScalarRef::String(s) => s.len(),
             ScalarRef::Timestamp(_) => 8,
             ScalarRef::Date(_) => 4,
@@ -525,6 +567,7 @@ impl<'a> ScalarRef<'a> {
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
             }),
             ScalarRef::Boolean(_) => DataType::Boolean,
+            ScalarRef::Binary(_) => DataType::Binary,
             ScalarRef::String(_) => DataType::String,
             ScalarRef::Timestamp(_) => DataType::Timestamp,
             ScalarRef::Date(_) => DataType::Date,
@@ -541,6 +584,38 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Variant(_) => DataType::Variant,
         }
     }
+
+    /// Check if the scalar is valid for the given data type.
+    pub fn is_value_of_type(&self, data_type: &DataType) -> bool {
+        match (self, data_type) {
+            (ScalarRef::Null, DataType::Null) => true,
+            (ScalarRef::Null, DataType::Nullable(_)) => true,
+            _ => match (self, data_type.remove_nullable()) {
+                (ScalarRef::EmptyArray, DataType::EmptyArray) => true,
+                (ScalarRef::EmptyMap, DataType::EmptyMap) => true,
+                (ScalarRef::Number(_), DataType::Number(_)) => true,
+                (ScalarRef::Decimal(_), DataType::Decimal(_)) => true,
+                (ScalarRef::Boolean(_), DataType::Boolean) => true,
+                (ScalarRef::Binary(_), DataType::Binary) => true,
+                (ScalarRef::String(_), DataType::String) => true,
+                (ScalarRef::Timestamp(_), DataType::Timestamp) => true,
+                (ScalarRef::Date(_), DataType::Date) => true,
+                (ScalarRef::Bitmap(_), DataType::Bitmap) => true,
+                (ScalarRef::Variant(_), DataType::Variant) => true,
+                (ScalarRef::Array(val), DataType::Array(ty)) => val.data_type() == *ty,
+                (ScalarRef::Map(val), DataType::Map(ty)) => val.data_type() == *ty,
+                (ScalarRef::Tuple(val), DataType::Tuple(ty)) => {
+                    if val.len() != ty.len() {
+                        return false;
+                    }
+                    val.iter()
+                        .zip(ty)
+                        .all(|(val, ty)| val.is_value_of_type(&ty))
+                }
+                _ => false,
+            },
+        }
+    }
 }
 
 impl PartialOrd for Scalar {
@@ -552,6 +627,7 @@ impl PartialOrd for Scalar {
             (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
             (Scalar::Decimal(d1), Scalar::Decimal(d2)) => d1.partial_cmp(d2),
             (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
+            (Scalar::Binary(s1), Scalar::Binary(s2)) => s1.partial_cmp(s2),
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
@@ -588,6 +664,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
             (ScalarRef::Decimal(d1), ScalarRef::Decimal(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
+            (ScalarRef::Binary(s1), ScalarRef::Binary(s2)) => s1.partial_cmp(s2),
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
@@ -628,6 +705,7 @@ impl Hash for ScalarRef<'_> {
                 }
             }),
             ScalarRef::Boolean(v) => v.hash(state),
+            ScalarRef::Binary(v) => v.hash(state),
             ScalarRef::String(v) => v.hash(state),
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
@@ -667,6 +745,7 @@ impl PartialOrd for Column {
             (Column::Number(col1), Column::Number(col2)) => col1.partial_cmp(col2),
             (Column::Decimal(col1), Column::Decimal(col2)) => col1.partial_cmp(col2),
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Binary(col1), Column::Binary(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::String(col1), Column::String(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
@@ -693,12 +772,6 @@ impl PartialEq for Column {
     }
 }
 
-pub const EXTENSION_KEY: &str = "Extension";
-pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
-pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
-pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
-pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
-
 impl Column {
     pub fn len(&self) -> usize {
         match self {
@@ -708,6 +781,7 @@ impl Column {
             Column::Number(col) => col.len(),
             Column::Decimal(col) => col.len(),
             Column::Boolean(col) => col.len(),
+            Column::Binary(col) => col.len(),
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
             Column::Date(col) => col.len(),
@@ -728,6 +802,7 @@ impl Column {
             Column::Number(col) => Some(ScalarRef::Number(col.index(index)?)),
             Column::Decimal(col) => Some(ScalarRef::Decimal(col.index(index)?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
+            Column::Binary(col) => Some(ScalarRef::Binary(col.index(index)?)),
             Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
@@ -756,6 +831,7 @@ impl Column {
             Column::Number(col) => ScalarRef::Number(col.index_unchecked(index)),
             Column::Decimal(col) => ScalarRef::Decimal(col.index_unchecked(index)),
             Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
+            Column::Binary(col) => ScalarRef::Binary(col.index_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
@@ -801,6 +877,7 @@ impl Column {
             Column::Boolean(col) => {
                 Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
             }
+            Column::Binary(col) => Column::Binary(col.slice(range)),
             Column::String(col) => Column::String(col.slice(range)),
             Column::Timestamp(col) => {
                 Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
@@ -840,7 +917,7 @@ impl Column {
                 value: None,
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
-            Column::EmptyMap { .. } => Domain::Undefined,
+            Column::EmptyMap { .. } => Domain::Map(None),
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
@@ -901,7 +978,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Bitmap(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Binary(_) | Column::Bitmap(_) | Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -918,6 +995,7 @@ impl Column {
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
             }),
             Column::Boolean(_) => DataType::Boolean,
+            Column::Binary(_) => DataType::Binary,
             Column::String(_) => DataType::String,
             Column::Timestamp(_) => DataType::Timestamp,
             Column::Date(_) => DataType::Date,
@@ -942,702 +1020,34 @@ impl Column {
         }
     }
 
-    pub fn arrow_field(&self) -> common_arrow::arrow::datatypes::Field {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field as ArrowField;
-        let dummy = "DUMMY".to_string();
-        let is_nullable = matches!(&self, Column::Nullable(_));
-        let arrow_type: ArrowDataType = (&self.data_type()).into();
-        ArrowField::new(dummy, arrow_type, is_nullable)
-    }
-
-    pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
-        let arrow_type = self.arrow_field().data_type().clone();
+    pub fn check_valid(&self) -> Result<()> {
         match self {
-            Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                arrow_type, *len,
-            )),
-            Column::EmptyArray { len } => Box::new(
-                common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
-            ),
-            Column::EmptyMap { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                arrow_type, *len,
-            )),
-            Column::Number(NumberColumn::UInt8(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::UInt16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::UInt32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::UInt64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::Int8(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::Int16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::Int32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::Int64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Number(NumberColumn::Float32(col)) => {
-                let values =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
-                Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
-                        arrow_type, values, None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::Number(NumberColumn::Float64(col)) => {
-                let values =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
-                Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
-                        arrow_type, values, None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::Decimal(DecimalColumn::Decimal128(col, _)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i128>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
-                let values = unsafe { std::mem::transmute(col.clone()) };
-                Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
-                        arrow_type,
-                        values,
-                        None,
-                    )
-                        .unwrap()
-                )
-            }
-            Column::Boolean(col) => Box::new(
-                common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
-                    .unwrap(),
-            ),
-            Column::String(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-
-            Column::Timestamp(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Date(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    arrow_type,
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Array(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    common_arrow::arrow::array::ListArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.values.as_arrow(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::Map(col) => {
-                let offsets: Buffer<i32> =
-                    col.offsets.iter().map(|offset| *offset as i32).collect();
-                let values = match (&arrow_type, &col.values) {
-                    (ArrowType::Map(inner_field, _), Column::Tuple(fields)) => {
-                        let inner_type = inner_field.data_type.clone();
-                        Box::new(
-                            common_arrow::arrow::array::StructArray::try_new(
-                                inner_type,
-                                fields.iter().map(|field| field.as_arrow()).collect(),
-                                None,
-                            )
-                            .unwrap(),
-                        )
-                    }
-                    (_, _) => unreachable!(),
-                };
-                Box::new(
-                    common_arrow::arrow::array::MapArray::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        values,
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::Bitmap(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-            Column::Nullable(col) => {
-                let arrow_array = col.column.as_arrow();
-                Self::set_validity(arrow_array.clone(), &col.validity)
-            }
-            Column::Tuple(fields) => Box::new(
-                common_arrow::arrow::array::StructArray::try_new(
-                    arrow_type,
-                    fields.iter().map(|field| field.as_arrow()).collect(),
-                    None,
-                )
-                .unwrap(),
-            ),
-            Column::Variant(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
-        }
-    }
-
-    pub fn set_validity(
-        arrow_array: Box<dyn common_arrow::arrow::array::Array>,
-        validity: &Bitmap,
-    ) -> Box<dyn common_arrow::arrow::array::Array> {
-        // merge Struct validity with the inner fields validity
-        let validity = match arrow_array.validity() {
-            Some(inner_validity) => and(inner_validity, validity),
-            None => validity.clone(),
-        };
-
-        match arrow_array.data_type() {
-            ArrowType::Null => arrow_array.clone(),
-            ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array.clone(),
-            ArrowType::Struct(_) => {
-                let struct_array = arrow_array
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
-                    .expect("fail to read from arrow: array should be `StructArray`");
-                let fields = struct_array
-                    .values()
-                    .iter()
-                    .map(|array| {
-                        let array = Self::set_validity(array.clone(), &validity);
-                        array.clone()
-                    })
-                    .collect::<Vec<_>>();
-                Box::new(
-                    common_arrow::arrow::array::StructArray::try_new(
-                        arrow_array.data_type().clone(),
-                        fields,
-                        Some(validity),
-                    )
-                    .unwrap(),
-                )
-            }
-            _ => arrow_array.with_validity(Some(validity)),
-        }
-    }
-
-    pub fn from_arrow(
-        arrow_col: &dyn common_arrow::arrow::array::Array,
-        data_type: &DataType,
-    ) -> Column {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-
-        let is_nullable = data_type.is_nullable();
-        let data_type = data_type.remove_nullable();
-        let column = match arrow_col.data_type() {
-            ArrowDataType::Null => Column::Null {
-                len: arrow_col.len(),
-            },
-            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
-                Column::EmptyArray {
-                    len: arrow_col.len(),
+            Column::Binary(x) => x.check_valid(),
+            Column::String(x) => x.check_valid(),
+            Column::Variant(x) => x.check_valid(),
+            Column::Bitmap(x) => x.check_valid(),
+            Column::Map(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
                 }
+                Ok(())
             }
-            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_MAP => {
-                Column::EmptyMap {
-                    len: arrow_col.len(),
+            Column::Array(x) => x.check_valid(),
+            Column::Nullable(x) => {
+                if x.column.len() != x.validity.len() {
+                    return Err(ErrorCode::Internal(
+                        "column and validity length mismatch".to_string(),
+                    ));
                 }
+                x.column.check_valid()
             }
-            ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt8Array>()
-                    .expect("fail to read from arrow: array should be `UInt8Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt16 => Column::Number(NumberColumn::UInt16(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt16Array>()
-                    .expect("fail to read from arrow: array should be `UInt16Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt32 => Column::Number(NumberColumn::UInt32(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt32Array>()
-                    .expect("fail to read from arrow: array should be `UInt32Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::UInt64 => Column::Number(NumberColumn::UInt64(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::UInt64Array>()
-                    .expect("fail to read from arrow: array should be `UInt64Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int8 => Column::Number(NumberColumn::Int8(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int8Array>()
-                    .expect("fail to read from arrow: array should be `Int8Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int16 => Column::Number(NumberColumn::Int16(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int16Array>()
-                    .expect("fail to read from arrow: array should be `Int16Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int32 => Column::Number(NumberColumn::Int32(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                    .expect("fail to read from arrow: array should be `Int32Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Int64 => Column::Number(NumberColumn::Int64(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values()
-                    .clone(),
-            )),
-            ArrowDataType::Float32 => {
-                let col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Float32Array>()
-                    .expect("fail to read from arrow: array should be `Float32Array`")
-                    .values()
-                    .clone();
-                let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
-                Column::Number(NumberColumn::Float32(col))
-            }
-            ArrowDataType::Float64 => {
-                let col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Float64Array>()
-                    .expect("fail to read from arrow: array should be `Float64Array`")
-                    .values()
-                    .clone();
-                let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
-                Column::Number(NumberColumn::Float64(col))
-            }
-            ArrowDataType::Boolean => Column::Boolean(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BooleanArray>()
-                    .expect("fail to read from arrow: array should be `BooleanArray`")
-                    .values()
-                    .clone(),
-            ),
-            ArrowDataType::LargeBinary => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col.offsets().clone().into_inner();
-
-                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                if data_type.is_variant() {
-                    // Variant column from udf server is converted to LargeBinary, we restore it back here.
-                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                } else {
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+            Column::Tuple(x) => {
+                for y in x.iter() {
+                    y.check_valid()?;
                 }
+                Ok(())
             }
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::Binary => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-
-            ArrowDataType::FixedSizeBinary(size) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
-                    .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
-
-                let offsets = (0..arrow_col.len() as u64 + 1)
-                    .map(|x| x * (*size) as u64)
-                    .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::Utf8 => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i32>>()
-                    .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-            // TODO: deprecate it and use LargeBinary instead
-            ArrowDataType::LargeUtf8 => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Utf8Array<i64>>()
-                    .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
-            }
-
-            ArrowType::Timestamp(uint, _) => {
-                let values = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values();
-                let convert = match uint {
-                    TimeUnit::Second => (1_000_000, 1),
-                    TimeUnit::Millisecond => (1_000, 1),
-                    TimeUnit::Microsecond => (1, 1),
-                    TimeUnit::Nanosecond => (1, 1_000),
-                };
-
-                let values = if convert.0 == 1 && convert.1 == 1 {
-                    values.clone()
-                } else {
-                    let values = values
-                        .iter()
-                        .map(|x| x * convert.0 / convert.1)
-                        .collect::<Vec<_>>();
-                    values.into()
-                };
-                Column::Timestamp(values)
-            }
-            ArrowDataType::Date32 => Column::Date(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int32Array>()
-                    .expect("fail to read from arrow: array should be `Int32Array`")
-                    .values()
-                    .clone(),
-            ),
-            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_VARIANT => {
-                match ty {
-                    ArrowDataType::LargeBinary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                        let offsets = arrow_col.offsets().clone().into_inner();
-
-                        let offsets =
-                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-
-                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    ArrowDataType::Binary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                        let offsets = arrow_col
-                            .offsets()
-                            .buffer()
-                            .iter()
-                            .map(|x| *x as u64)
-                            .collect::<Vec<_>>();
-                        Column::Variant(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        ))
-                    }
-                    _ => unreachable!(
-                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
-                    ),
-                }
-            }
-            ArrowDataType::List(f) => {
-                let array_list = arrow_cast::cast(
-                    arrow_col,
-                    &ArrowDataType::LargeList(f.clone()),
-                    arrow_cast::CastOptions {
-                        wrapped: true,
-                        partial: true,
-                    },
-                )
-                .expect("list to large list cast should be ok");
-
-                let values_col = array_list
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
-                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
-
-                let array_type = data_type.as_array().unwrap();
-                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
-                let offsets = values_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Array(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::LargeList(_) => {
-                let values_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
-                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
-
-                let array_type = data_type.as_array().unwrap();
-                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
-                let offsets = values_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Array(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::Map(_, _) => {
-                let map_type = data_type.as_map().unwrap();
-                let map_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::MapArray>()
-                    .expect("fail to read from arrow: array should be `MapArray`");
-
-                let values = Column::from_arrow(&**map_col.field(), map_type.as_ref());
-                let offsets = map_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Map(Box::new(ArrayColumn {
-                    values,
-                    offsets: offsets.into(),
-                }))
-            }
-            ArrowDataType::Struct(_) => {
-                let struct_type = data_type.as_tuple().unwrap();
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
-                    .expect("fail to read from arrow: array should be `StructArray`");
-                let fields = arrow_col
-                    .values()
-                    .iter()
-                    .zip(struct_type.iter())
-                    .map(|(field, dt)| Column::from_arrow(&**field, dt))
-                    .collect::<Vec<_>>();
-                Column::Tuple(fields)
-            }
-            ArrowDataType::Decimal(precision, scale) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
-                    .expect("fail to read from arrow: array should be `DecimalArray`");
-                Column::Decimal(DecimalColumn::Decimal128(
-                    arrow_col.values().clone(),
-                    DecimalSize {
-                        precision: *precision as u8,
-                        scale: *scale as u8,
-                    },
-                ))
-            }
-            ArrowDataType::Decimal256(precision, scale) => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
-                    .expect("fail to read from arrow: array should be `DecimalArray`");
-
-                let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
-                Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                }))
-            }
-            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BITMAP => {
-                match ty {
-                    ArrowDataType::LargeBinary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                        let offsets = arrow_col.offsets().clone().into_inner();
-
-                        let offsets =
-                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
-                    }
-                    ArrowDataType::Binary => {
-                        let arrow_col = arrow_col
-                            .as_any()
-                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
-                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
-                        let offsets = arrow_col
-                            .offsets()
-                            .buffer()
-                            .iter()
-                            .map(|x| *x as u64)
-                            .collect::<Vec<_>>();
-                        Column::Bitmap(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        ))
-                    }
-                    _ => unreachable!(
-                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
-                    ),
-                }
-            }
-            ty => unimplemented!("unsupported arrow type {ty:?}"),
-        };
-
-        if is_nullable {
-            let validity = arrow_col
-                .validity()
-                .cloned()
-                .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
-            Column::Nullable(Box::new(NullableColumn { column, validity }))
-        } else {
-            column
+            _ => Ok(()),
         }
     }
 
@@ -1647,27 +1057,46 @@ impl Column {
         use rand::Rng;
         use rand::SeedableRng;
 
-        // Migrate from legacy code:
         match ty {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
             DataType::EmptyMap => Column::EmptyMap { len },
-            DataType::Boolean => {
-                BooleanType::from_data((0..len).map(|_| SmallRng::from_entropy().gen_bool(0.5)))
-            }
-            DataType::String => StringType::from_data((0..len).map(|_| {
-                let rng = SmallRng::from_entropy();
-                rng.sample_iter(&Alphanumeric)
-                    // randomly generate 5 characters.
-                    .take(5)
-                    .map(u8::from)
-                    .collect::<Vec<_>>()
-            })),
+            DataType::Boolean => BooleanType::from_data(
+                (0..len)
+                    .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                    .collect_vec(),
+            ),
+            DataType::Binary => BinaryType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let rng = SmallRng::from_entropy();
+                        rng.sample_iter(&Alphanumeric)
+                            // randomly generate 5 characters.
+                            .take(5)
+                            .map(u8::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect_vec(),
+            ),
+            DataType::String => StringType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let rng = SmallRng::from_entropy();
+                        rng.sample_iter(&Alphanumeric)
+                            // randomly generate 5 characters.
+                            .take(5)
+                            .map(u8::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect_vec(),
+            ),
             DataType::Number(num_ty) => {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len).map(|_| SmallRng::from_entropy().gen()),
+                            (0..len)
+                                .map(|_| SmallRng::from_entropy().gen::<NUM_TYPE>())
+                                .collect_vec(),
                         )
                     }
                 })
@@ -1730,14 +1159,18 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
-            DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
-                let data: [u64; 4] = SmallRng::from_entropy().gen();
-                let rb = RoaringTreemap::from_iter(data.iter());
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed serialize roaring treemap");
-                buf
-            })),
+            DataType::Bitmap => BitmapType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let data: [u64; 4] = SmallRng::from_entropy().gen();
+                        let rb = RoaringTreemap::from_iter(data.iter());
+                        let mut buf = vec![];
+                        rb.serialize_into(&mut buf)
+                            .expect("failed serialize roaring treemap");
+                        buf
+                    })
+                    .collect_vec(),
+            ),
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()
@@ -1805,6 +1238,7 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
+            Column::Binary(col) => col.memory_size(),
             Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
@@ -1833,7 +1267,8 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.len(),
-            Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::Binary(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::String(col) => col.memory_size(),
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
@@ -1892,6 +1327,22 @@ impl<'de> Deserialize<'de> for Column {
     }
 }
 
+impl BorshSerialize for Column {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let bytes = serialize_column(self);
+        BorshSerialize::serialize(&bytes, writer)
+    }
+}
+
+impl BorshDeserialize for Column {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let bytes: Vec<u8> = borsh::BorshDeserialize::deserialize_reader(reader)?;
+        let column =
+            deserialize_column(&bytes).expect("expecting an arrow chunk with exactly one column");
+        Ok(column)
+    }
+}
+
 impl Eq for Column {}
 
 impl ColumnBuilder {
@@ -1903,6 +1354,7 @@ impl ColumnBuilder {
             Column::Number(col) => ColumnBuilder::Number(NumberColumnBuilder::from_column(col)),
             Column::Decimal(col) => ColumnBuilder::Decimal(DecimalColumnBuilder::from_column(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
+            Column::Binary(col) => ColumnBuilder::Binary(BinaryColumnBuilder::from_column(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
@@ -1912,7 +1364,7 @@ impl ColumnBuilder {
             Column::Map(box col) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Bitmap(col) => ColumnBuilder::Bitmap(StringColumnBuilder::from_column(col)),
+            Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
             Column::Nullable(box col) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
@@ -1922,7 +1374,7 @@ impl ColumnBuilder {
                     .map(|col| ColumnBuilder::from_column(col.clone()))
                     .collect(),
             ),
-            Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
+            Column::Variant(col) => ColumnBuilder::Variant(BinaryColumnBuilder::from_column(col)),
         }
     }
 
@@ -1962,6 +1414,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
             }
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
+            ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
@@ -1969,7 +1422,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n)),
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
@@ -1983,7 +1436,7 @@ impl ColumnBuilder {
                         .collect(),
                 )
             }
-            ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
         }
     }
 
@@ -1995,6 +1448,7 @@ impl ColumnBuilder {
             ColumnBuilder::Number(col) => col.len(),
             ColumnBuilder::Decimal(col) => col.len(),
             ColumnBuilder::Boolean(builder) => builder.len(),
+            ColumnBuilder::Binary(builder) => builder.len(),
             ColumnBuilder::String(builder) => builder.len(),
             ColumnBuilder::Timestamp(builder) => builder.len(),
             ColumnBuilder::Date(builder) => builder.len(),
@@ -2029,6 +1483,7 @@ impl ColumnBuilder {
                 builder.len() * 32
             }
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
+            ColumnBuilder::Binary(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::String(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
@@ -2054,6 +1509,7 @@ impl ColumnBuilder {
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
             }),
             ColumnBuilder::Boolean(_) => DataType::Boolean,
+            ColumnBuilder::Binary(_) => DataType::Binary,
             ColumnBuilder::String(_) => DataType::String,
             ColumnBuilder::Timestamp(_) => DataType::Timestamp,
             ColumnBuilder::Date(_) => DataType::Date,
@@ -2096,6 +1552,10 @@ impl ColumnBuilder {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(decimal_ty, capacity))
             }
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
+            DataType::Binary => {
+                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
+                ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
+            }
             DataType::String => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, data_capacity))
@@ -2135,11 +1595,11 @@ impl ColumnBuilder {
             }
             DataType::Bitmap => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Bitmap(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Bitmap(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Variant => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
@@ -2201,6 +1661,7 @@ impl ColumnBuilder {
             ColumnBuilder::Number(builder) => builder.push_default(),
             ColumnBuilder::Decimal(builder) => builder.push_default(),
             ColumnBuilder::Boolean(builder) => builder.push(false),
+            ColumnBuilder::Binary(builder) => builder.commit_row(),
             ColumnBuilder::String(builder) => builder.commit_row(),
             ColumnBuilder::Timestamp(builder) => builder.push(0),
             ColumnBuilder::Date(builder) => builder.push(0),
@@ -2241,7 +1702,7 @@ impl ColumnBuilder {
                 let v: bool = reader.read_scalar()?;
                 builder.push(v);
             }
-            ColumnBuilder::String(builder)
+            ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
                 let offset = reader.read_scalar::<u64>()? as usize;
@@ -2249,6 +1710,16 @@ impl ColumnBuilder {
                 let last = *builder.offsets.last().unwrap() as usize;
                 reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
+            }
+            ColumnBuilder::String(builder) => {
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
+                let last = *builder.offsets.last().unwrap() as usize;
+                reader.read_exact(&mut builder.data[last..last + offset])?;
+                builder.commit_row();
+
+                #[cfg(debug_assertions)]
+                (&builder.data[last..last + offset]).check_utf8().unwrap();
             }
             ColumnBuilder::Timestamp(builder) => {
                 let value: i64 = reader.read_scalar()?;
@@ -2327,7 +1798,7 @@ impl ColumnBuilder {
                     builder.push(v);
                 }
             }
-            ColumnBuilder::String(builder)
+            ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
                 for row in 0..rows {
@@ -2336,7 +1807,16 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+            ColumnBuilder::String(builder) => {
+                for row in 0..rows {
+                    #[cfg(debug_assertions)]
+                    (&reader[step * row..]).check_utf8().unwrap();
 
+                    let reader = &reader[step * row..];
+                    builder.put_slice(reader);
+                    builder.commit_row();
+                }
+            }
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
@@ -2421,6 +1901,7 @@ impl ColumnBuilder {
             ColumnBuilder::Number(builder) => builder.pop().map(Scalar::Number),
             ColumnBuilder::Decimal(builder) => builder.pop().map(Scalar::Decimal),
             ColumnBuilder::Boolean(builder) => builder.pop().map(Scalar::Boolean),
+            ColumnBuilder::Binary(builder) => builder.pop().map(Scalar::Binary),
             ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
@@ -2463,6 +1944,9 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Boolean(builder), Column::Boolean(other)) => {
                 append_bitmap(builder, other);
+            }
+            (ColumnBuilder::Binary(builder), Column::Binary(other)) => {
+                builder.append_column(other);
             }
             (ColumnBuilder::String(builder), Column::String(other)) => {
                 builder.append_column(other);
@@ -2510,6 +1994,7 @@ impl ColumnBuilder {
             ColumnBuilder::Number(builder) => Column::Number(builder.build()),
             ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
+            ColumnBuilder::Binary(builder) => Column::Binary(builder.build()),
             ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
@@ -2534,6 +2019,7 @@ impl ColumnBuilder {
             ColumnBuilder::Number(builder) => Scalar::Number(builder.build_scalar()),
             ColumnBuilder::Decimal(builder) => Scalar::Decimal(builder.build_scalar()),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
+            ColumnBuilder::Binary(builder) => Scalar::Binary(builder.build_scalar()),
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),

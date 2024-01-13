@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use common_arrow::arrow::bitmap::utils::BitChunksExact;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
 
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
@@ -27,6 +27,7 @@ use crate::kernels::utils::store_advance_aligned;
 use crate::kernels::utils::BitChunks;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -122,6 +123,10 @@ impl Column {
                 let column = Self::filter_boolean_types(bm, filter);
                 Column::Boolean(column)
             }
+            Column::Binary(column) => {
+                let column = Self::filter_binary_scalars(column, filter);
+                Column::Binary(column)
+            }
             Column::String(column) => {
                 let column = Self::filter_string_scalars(column, filter);
                 Column::String(column)
@@ -160,7 +165,7 @@ impl Column {
                 Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
             Column::Bitmap(column) => {
-                let column = Self::filter_string_scalars(column, filter);
+                let column = Self::filter_binary_scalars(column, filter);
                 Column::Bitmap(column)
             }
 
@@ -174,7 +179,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let column = Self::filter_string_scalars(column, filter);
+                let column = Self::filter_binary_scalars(column, filter);
                 Column::Variant(column)
             }
         }
@@ -190,7 +195,10 @@ impl Column {
         let mut start_index: usize = 0;
 
         if offset > 0 {
-            let n = 8 - offset;
+            // If `offset` > 0, the valid bits of this byte start at `offset`, and the
+            // max num of valid bits is `8 - offset`, but we also need to ensure that
+            // we cannot iterate more than `length` bits.
+            let n = std::cmp::min(8 - offset, length);
             start_index += n;
             filter
                 .iter()
@@ -253,7 +261,9 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
+                    if n >= offset && n < offset + length {
                         copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
                     mask = mask & (mask - 1);
@@ -306,19 +316,19 @@ impl Column {
     }
 
     /// low-level API using unsafe to improve performance.
-    fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
+    fn filter_binary_scalars(values: &BinaryColumn, filter: &Bitmap) -> BinaryColumn {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
         } else if num_rows == 0 {
-            return StringColumn::new(vec![].into(), vec![].into());
+            return BinaryColumn::new(vec![].into(), vec![0].into());
         }
 
         // Each element of `items` is (string pointer(u64), string length).
         let mut items: Vec<(u64, usize)> = Vec::with_capacity(num_rows);
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let values_offset = values.offsets().as_slice();
         let values_data_ptr = values.data().as_slice().as_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -335,7 +345,9 @@ impl Column {
                 let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
+                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
+                    // need to ensure that we cannot iterate more than `length` bits.
+                    if n >= offset && n < offset + length {
                         let start = *values_offset.get_unchecked(n - offset) as usize;
                         let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
                         data_size += len as u64;
@@ -431,13 +443,22 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::filter_binary_scalars(
+                &values.clone().into(),
+                filter,
+            ))
+        }
     }
 
     /// # Safety
     /// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
     /// * `ptr` must be [valid] for writes of `len` bits.
-    unsafe fn copy_continuous_bits(
+    pub unsafe fn copy_continuous_bits(
         ptr: &mut *mut u8,
         src: &[u8],
         mut dst_idx: usize,
@@ -507,7 +528,9 @@ impl Column {
                 let mut mask = filter_slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= filter_offset {
+                    // If `filter_length` > 0, the valid bits of this byte start at `filter_offset`, we also
+                    // need to ensure that we cannot iterate more than `filter_length` bits.
+                    if n >= filter_offset && n < filter_offset + filter_length {
                         if bitmap.get_bit_unchecked(n - filter_offset) {
                             buf |= BIT_MASK[builder_idx % 8];
                         } else {

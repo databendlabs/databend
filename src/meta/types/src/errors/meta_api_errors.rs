@@ -15,7 +15,10 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
+use databend_common_exception::ErrorCode;
+use tonic::Status;
 
+use crate::errors;
 use crate::raft_types::ChangeMembershipError;
 use crate::raft_types::Fatal;
 use crate::raft_types::ForwardToLeader;
@@ -163,8 +166,22 @@ impl From<MetaDataReadError> for MetaOperationError {
     }
 }
 
+impl From<Status> for MetaAPIError {
+    fn from(status: Status) -> Self {
+        let net_err = MetaNetworkError::from(status);
+        Self::NetworkError(net_err)
+    }
+}
+
 impl From<InvalidReply> for MetaAPIError {
     fn from(e: InvalidReply) -> Self {
+        let net_err = MetaNetworkError::from(e);
+        Self::NetworkError(net_err)
+    }
+}
+
+impl From<errors::IncompleteStream> for MetaAPIError {
+    fn from(e: errors::IncompleteStream) -> Self {
         let net_err = MetaNetworkError::from(e);
         Self::NetworkError(net_err)
     }
@@ -184,5 +201,11 @@ impl From<RaftError<ClientWriteError>> for MetaAPIError {
             }
             RaftError::Fatal(f) => MetaAPIError::DataError(MetaDataError::WriteError(f)),
         }
+    }
+}
+
+impl From<MetaAPIError> for ErrorCode {
+    fn from(e: MetaAPIError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
     }
 }

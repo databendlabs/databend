@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Table;
-use common_exception::Result;
+use databend_common_exception::Result;
 use terminal_size::terminal_size;
 use terminal_size::Width;
 use unicode_segmentation::UnicodeSegmentation;
@@ -27,7 +27,7 @@ use crate::DataSchemaRef;
 
 /// ! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
-    let block: DataBlock = DataBlock::concat(results)?;
+    let block = DataBlock::concat(results)?;
     Ok(block.to_string())
 }
 
@@ -50,6 +50,14 @@ pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[
 /// Sorted assert.
 pub fn assert_blocks_sorted_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
     assert_blocks_sorted_eq_with_name("", expect, blocks)
+}
+
+pub fn assert_block_value_eq(a: &DataBlock, b: &DataBlock) {
+    assert!(a.num_columns() == b.num_columns());
+    assert!(a.num_rows() == b.num_rows());
+    for i in 0..a.num_columns() {
+        assert!(a.columns()[i].eq(&b.columns()[i]));
+    }
 }
 
 /// Assert with order insensitive.

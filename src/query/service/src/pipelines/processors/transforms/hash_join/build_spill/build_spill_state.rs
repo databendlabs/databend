@@ -19,14 +19,13 @@ use std::sync::Arc;
 
 use byte_unit::Byte;
 use byte_unit::ByteUnit;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_hashtable::hash2bucket;
-use common_pipeline_core::query_spill_prefix;
-use common_sql::plans::JoinType;
-use common_storage::DataOperator;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::hash2bucket;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_storage::DataOperator;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
@@ -85,10 +84,12 @@ impl BuildSpillState {
             .buffer_row_size
             .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
-        let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+        let chunks = &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks;
         blocks.append(chunks);
-        let build_num_rows = unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
-        *build_num_rows = 0;
+        let build_state = unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
+        build_state.generation_state.build_num_rows = 0;
         Ok(blocks)
     }
 
@@ -133,19 +134,17 @@ impl BuildSpillState {
     // Check if need to spill.
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self) -> Result<bool> {
-        let settings = self.build_state.ctx.get_settings();
-        let spill_threshold = settings.get_join_spilling_threshold()?;
-        // If `spill_threshold` is 0, we won't limit memory.
-        let enable_spill = spill_threshold != 0
-            && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
-        if !enable_spill || self.spiller.is_all_spilled() {
+        if self.spiller.is_all_spilled() {
             return Ok(false);
         }
 
         // Check if there are rows in `RowSpace`'s buffer and `Chunks`.
         // If not, directly return false, no need to spill.
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
-        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        let chunks = &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks;
+
         if buffer.is_empty() && chunks.is_empty() {
             return Ok(false);
         }
@@ -154,6 +153,11 @@ impl BuildSpillState {
         let global_used = GLOBAL_MEM_STAT.get_memory_usage();
         let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
         let total_gb = byte.get_appropriate_unit(false).format(3);
+        let spill_threshold = self
+            .build_state
+            .ctx
+            .get_settings()
+            .get_join_spilling_threshold()?;
         if global_used as usize > spill_threshold {
             info!(
                 "need to spill due to global memory usage {:?} is greater than spill threshold",
@@ -204,13 +208,16 @@ impl BuildSpillState {
         for (id, size) in partition_sizes.into_iter() {
             if size as f64 <= memory_limit as f64 / 3.0 {
                 // Put the partition's data to chunks
-                let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+                let chunks =
+                    &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
+                        .generation_state
+                        .chunks;
                 let blocks = partition_blocks.get_mut(&id).unwrap();
                 let rows_num = blocks.iter().fold(0, |acc, block| acc + block.num_rows());
                 chunks.append(blocks);
-                let build_num_rows =
-                    unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
-                *build_num_rows += rows_num;
+                let build_state =
+                    unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
+                build_state.generation_state.build_num_rows += rows_num;
                 partition_blocks.remove(&id);
                 memory_limit -= size;
             } else {

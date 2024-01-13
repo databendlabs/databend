@@ -19,36 +19,37 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_function::TableFunction;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::type_check::check_number;
-use common_expression::types::*;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FromData;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
-use common_sql::validate_function_arg;
-use common_storages_factory::Table;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::*;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_sql::validate_function_arg;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::TableContext;
+use itertools::Itertools;
 
 pub struct RangeTable {
     table_info: TableInfo,
@@ -86,9 +87,22 @@ impl RangeTable {
 
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
-        let mut step = Scalar::Number(NumberScalar::Int64(1));
-        if table_args.positioned.len() == 3 {
-            step = table_args.positioned[2].clone();
+
+        let mut step = if table_args.positioned.len() == 3 {
+            table_args.positioned[2].clone()
+        } else {
+            Scalar::Number(NumberScalar::Int64(1))
+        };
+        if let Scalar::Timestamp(_) = start {
+            // since `to_timestamp` return value in micro seconds, we need to to change step as the same unit
+            let step_i64 = get_i64_number(&step)?;
+            if step_i64 < 1000 {
+                // treat step as seconds
+                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000000));
+            } else if step_i64 < 1000000 {
+                // treat step as mills seconds
+                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000));
+            }
         }
 
         let table_info = TableInfo {
@@ -297,16 +311,24 @@ impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
             ((self.end - current_start + (self.step + offset)) / self.step).min(MAX_BLOCK_SIZE);
 
         let column = match self.data_type {
-            DataType::Number(_) => {
-                Int64Type::from_data((0..size).map(|idx| current_start + self.step * idx))
-            }
-            DataType::Timestamp => {
-                TimestampType::from_data((0..size).map(|idx| current_start + self.step * idx))
-            }
+            DataType::Number(_) => Int64Type::from_data(
+                (0..size)
+                    .map(|idx| current_start + self.step * idx)
+                    .collect_vec(),
+            ),
+            DataType::Timestamp => TimestampType::from_data(
+                (0..size)
+                    .map(|idx| current_start + self.step * idx)
+                    .collect_vec(),
+            ),
             DataType::Date => {
                 let current_start = current_start as i32;
                 let step = self.step as i32;
-                DateType::from_data((0..size as i32).map(|idx| current_start + step * idx))
+                DateType::from_data(
+                    (0..size as i32)
+                        .map(|idx| current_start + step * idx)
+                        .collect_vec(),
+                )
             }
             _ => unreachable!(),
         };

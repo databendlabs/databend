@@ -14,17 +14,24 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ROW_ID_COL_NAME;
+use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::format_scalar;
 use crate::optimizer::SExpr;
+use crate::planner::format::display_rel_operator::FormatContext;
 use crate::plans::BoundColumnRef;
+use crate::plans::CreateTablePlan;
 use crate::plans::DeletePlan;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -46,152 +53,149 @@ impl Plan {
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
-            Plan::CopyIntoTable(plan) => Ok(format!("{:?}", plan)),
-            Plan::CopyIntoLocation(plan) => Ok(format!("{:?}", plan)),
+            Plan::CopyIntoTable(_) => Ok("CopyIntoTable".to_string()),
+            Plan::CopyIntoLocation(_) => Ok("CopyIntoLocation".to_string()),
 
             // catalog
-            Plan::ShowCreateCatalog(show_create_catalog) => {
-                Ok(format!("{:?}", show_create_catalog))
-            }
-            Plan::CreateCatalog(create_catalog) => Ok(format!("{:?}", create_catalog)),
-            Plan::DropCatalog(drop_catalog) => Ok(format!("{:?}", drop_catalog)),
+            Plan::ShowCreateCatalog(_) => Ok("ShowCreateCatalog".to_string()),
+            Plan::CreateCatalog(_) => Ok("CreateCatalog".to_string()),
+            Plan::DropCatalog(_) => Ok("DropCatalog".to_string()),
 
             // Databases
-            Plan::ShowCreateDatabase(show_create_database) => {
-                Ok(format!("{:?}", show_create_database))
-            }
-            Plan::CreateDatabase(create_database) => Ok(format!("{:?}", create_database)),
-            Plan::DropDatabase(drop_database) => Ok(format!("{:?}", drop_database)),
-            Plan::UndropDatabase(undrop_database) => Ok(format!("{:?}", undrop_database)),
-            Plan::RenameDatabase(rename_database) => Ok(format!("{:?}", rename_database)),
+            Plan::ShowCreateDatabase(_) => Ok("ShowCreateDatabase".to_string()),
+            Plan::CreateDatabase(_) => Ok("CreateDatabase".to_string()),
+            Plan::DropDatabase(_) => Ok("DropDatabase".to_string()),
+            Plan::UndropDatabase(_) => Ok("UndropDatabase".to_string()),
+            Plan::RenameDatabase(_) => Ok("RenameDatabase".to_string()),
 
             // Tables
-            Plan::ShowCreateTable(show_create_table) => Ok(format!("{:?}", show_create_table)),
-            Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
-            Plan::DropTable(drop_table) => Ok(format!("{:?}", drop_table)),
-            Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),
-            Plan::DescribeTable(describe_table) => Ok(format!("{:?}", describe_table)),
-            Plan::RenameTable(rename_table) => Ok(format!("{:?}", rename_table)),
-            Plan::SetOptions(set_options) => Ok(format!("{:?}", set_options)),
-            Plan::RenameTableColumn(rename_table_column) => {
-                Ok(format!("{:?}", rename_table_column))
-            }
-            Plan::AddTableColumn(add_table_column) => Ok(format!("{:?}", add_table_column)),
-            Plan::ModifyTableColumn(modify_table_column) => {
-                Ok(format!("{:?}", modify_table_column))
-            }
-            Plan::DropTableColumn(drop_table_column) => Ok(format!("{:?}", drop_table_column)),
-            Plan::AlterTableClusterKey(alter_table_cluster_key) => {
-                Ok(format!("{:?}", alter_table_cluster_key))
-            }
-            Plan::DropTableClusterKey(drop_table_cluster_key) => {
-                Ok(format!("{:?}", drop_table_cluster_key))
-            }
-            Plan::ReclusterTable(recluster_table) => Ok(format!("{:?}", recluster_table)),
-            Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
-            Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
-            Plan::VacuumTable(vacuum_table) => Ok(format!("{:?}", vacuum_table)),
-            Plan::VacuumDropTable(vacuum_drop_table) => Ok(format!("{:?}", vacuum_drop_table)),
-            Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
-            Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
+            Plan::CreateTable(create_table) => format_create_table(create_table),
+            Plan::ShowCreateTable(_) => Ok("ShowCreateTable".to_string()),
+            Plan::DropTable(_) => Ok("DropTable".to_string()),
+            Plan::UndropTable(_) => Ok("UndropTable".to_string()),
+            Plan::DescribeTable(_) => Ok("DescribeTable".to_string()),
+            Plan::RenameTable(_) => Ok("RenameTable".to_string()),
+            Plan::SetOptions(_) => Ok("SetOptions".to_string()),
+            Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
+            Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
+            Plan::ModifyTableColumn(_) => Ok("ModifyTableColumn".to_string()),
+            Plan::DropTableColumn(_) => Ok("DropTableColumn".to_string()),
+            Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
+            Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
+            Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
+            Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
+            Plan::OptimizeTable(_) => Ok("OptimizeTable".to_string()),
+            Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
+            Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
+            Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
+            Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
 
             // Views
-            Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
-            Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
-            Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
+            Plan::CreateView(_) => Ok("CreateView".to_string()),
+            Plan::AlterView(_) => Ok("AlterView".to_string()),
+            Plan::DropView(_) => Ok("DropView".to_string()),
+
+            // Streams
+            Plan::CreateStream(_) => Ok("CreateStream".to_string()),
+            Plan::DropStream(_) => Ok("DropStream".to_string()),
 
             // Indexes
-            Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
-            Plan::DropIndex(index) => Ok(format!("{:?}", index)),
-            Plan::RefreshIndex(index) => Ok(format!("{index:?}")),
+            Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
+            Plan::DropIndex(_) => Ok("DropIndex".to_string()),
+            Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
 
             // Virtual Columns
-            Plan::CreateVirtualColumn(create_virtual_column) => {
-                Ok(format!("{:?}", create_virtual_column))
-            }
-            Plan::AlterVirtualColumn(alter_virtual_column) => {
-                Ok(format!("{:?}", alter_virtual_column))
-            }
-            Plan::DropVirtualColumn(drop_virtual_column) => {
-                Ok(format!("{:?}", drop_virtual_column))
-            }
-            Plan::RefreshVirtualColumn(refresh_virtual_column) => {
-                Ok(format!("{:?}", refresh_virtual_column))
-            }
+            Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
+            Plan::AlterVirtualColumn(_) => Ok("AlterVirtualColumn".to_string()),
+            Plan::DropVirtualColumn(_) => Ok("DropVirtualColumn".to_string()),
+            Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
             // Insert
-            Plan::Insert(insert) => Ok(format!("{:?}", insert)),
-            Plan::Replace(replace) => Ok(format!("{:?}", replace)),
-            Plan::MergeInto(merge_into) => Ok(format!("{:?}", merge_into)),
+            Plan::Insert(_) => Ok("Insert".to_string()),
+            Plan::Replace(_) => Ok("Replace".to_string()),
+            Plan::MergeInto(merge_into) => format_merge_into(merge_into),
             Plan::Delete(delete) => format_delete(delete),
-            Plan::Update(update) => Ok(format!("{:?}", update)),
+            Plan::Update(_) => Ok("Update".to_string()),
 
             // Stages
-            Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
-            Plan::DropStage(s) => Ok(format!("{:?}", s)),
-            Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
+            Plan::CreateStage(_) => Ok("CreateStage".to_string()),
+            Plan::DropStage(_) => Ok("DropStage".to_string()),
+            Plan::RemoveStage(_) => Ok("RemoveStage".to_string()),
 
             // FileFormat
-            Plan::CreateFileFormat(create_file_format) => Ok(format!("{:?}", create_file_format)),
-            Plan::DropFileFormat(drop_file_format) => Ok(format!("{:?}", drop_file_format)),
-            Plan::ShowFileFormats(show_file_formats) => Ok(format!("{:?}", show_file_formats)),
+            Plan::CreateFileFormat(_) => Ok("CreateFileFormat".to_string()),
+            Plan::DropFileFormat(_) => Ok("DropFileFormat".to_string()),
+            Plan::ShowFileFormats(_) => Ok("ShowFileFormats".to_string()),
 
             // Account
-            Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
-            Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),
-            Plan::ShowGrants(show_grants) => Ok(format!("{:?}", show_grants)),
-            Plan::RevokePriv(revoke_priv) => Ok(format!("{:?}", revoke_priv)),
-            Plan::RevokeRole(revoke_role) => Ok(format!("{:?}", revoke_role)),
-            Plan::CreateUser(create_user) => Ok(format!("{:?}", create_user)),
-            Plan::DropUser(drop_user) => Ok(format!("{:?}", drop_user)),
-            Plan::CreateUDF(create_user_udf) => Ok(format!("{:?}", create_user_udf)),
-            Plan::AlterUDF(alter_user_udf) => Ok(format!("{alter_user_udf:?}")),
-            Plan::DropUDF(drop_udf) => Ok(format!("{drop_udf:?}")),
-            Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
-            Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
-            Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
-            Plan::Presign(presign) => Ok(format!("{:?}", presign)),
+            Plan::GrantRole(_) => Ok("GrantRole".to_string()),
+            Plan::GrantPriv(_) => Ok("GrantPrivilege".to_string()),
+            Plan::ShowGrants(_) => Ok("ShowGrants".to_string()),
+            Plan::RevokePriv(_) => Ok("RevokePrivilege".to_string()),
+            Plan::RevokeRole(_) => Ok("RevokeRole".to_string()),
+            Plan::CreateUser(_) => Ok("CreateUser".to_string()),
+            Plan::DropUser(_) => Ok("DropUser".to_string()),
+            Plan::CreateUDF(_) => Ok("CreateUDF".to_string()),
+            Plan::AlterUDF(_) => Ok("AlterUDF".to_string()),
+            Plan::DropUDF(_) => Ok("DropUDF".to_string()),
+            Plan::AlterUser(_) => Ok("AlterUser".to_string()),
+            Plan::CreateRole(_) => Ok("CreateRole".to_string()),
+            Plan::DropRole(_) => Ok("DropRole".to_string()),
+            Plan::Presign(_) => Ok("Presign".to_string()),
 
-            Plan::SetVariable(p) => Ok(format!("{:?}", p)),
-            Plan::UnSetVariable(p) => Ok(format!("{:?}", p)),
-            Plan::SetRole(p) => Ok(format!("{:?}", p)),
-            Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
-            Plan::Kill(p) => Ok(format!("{:?}", p)),
+            Plan::SetVariable(_) => Ok("SetVariable".to_string()),
+            Plan::UnSetVariable(_) => Ok("UnSetVariable".to_string()),
+            Plan::SetRole(_) => Ok("SetRole".to_string()),
+            Plan::SetSecondaryRoles(_) => Ok("SetSecondaryRoles".to_string()),
+            Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
+            Plan::Kill(_) => Ok("Kill".to_string()),
 
-            Plan::CreateShareEndpoint(p) => Ok(format!("{:?}", p)),
-            Plan::ShowShareEndpoint(p) => Ok(format!("{:?}", p)),
-            Plan::DropShareEndpoint(p) => Ok(format!("{:?}", p)),
-            Plan::CreateShare(p) => Ok(format!("{:?}", p)),
-            Plan::DropShare(p) => Ok(format!("{:?}", p)),
-            Plan::GrantShareObject(p) => Ok(format!("{:?}", p)),
-            Plan::RevokeShareObject(p) => Ok(format!("{:?}", p)),
-            Plan::AlterShareTenants(p) => Ok(format!("{:?}", p)),
-            Plan::DescShare(p) => Ok(format!("{:?}", p)),
-            Plan::ShowShares(p) => Ok(format!("{:?}", p)),
-            Plan::ShowRoles(p) => Ok(format!("{:?}", p)),
-            Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
-            Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
-            Plan::RevertTable(p) => Ok(format!("{:?}", p)),
+            Plan::CreateShareEndpoint(_) => Ok("CreateShareEndpoint".to_string()),
+            Plan::ShowShareEndpoint(_) => Ok("ShowShareEndpoint".to_string()),
+            Plan::DropShareEndpoint(_) => Ok("DropShareEndpoint".to_string()),
+            Plan::CreateShare(_) => Ok("CreateShare".to_string()),
+            Plan::DropShare(_) => Ok("DropShare".to_string()),
+            Plan::GrantShareObject(_) => Ok("GrantShareObject".to_string()),
+            Plan::RevokeShareObject(_) => Ok("RevokeShareObject".to_string()),
+            Plan::AlterShareTenants(_) => Ok("AlterShareTenants".to_string()),
+            Plan::DescShare(_) => Ok("DescShare".to_string()),
+            Plan::ShowShares(_) => Ok("ShowShares".to_string()),
+            Plan::ShowRoles(_) => Ok("ShowRoles".to_string()),
+            Plan::ShowObjectGrantPrivileges(_) => Ok("ShowObjectGrantPrivileges".to_string()),
+            Plan::ShowGrantTenantsOfShare(_) => Ok("ShowGrantTenantsOfShare".to_string()),
+            Plan::RevertTable(_) => Ok("RevertTable".to_string()),
 
             // data mask
-            Plan::CreateDatamaskPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::DropDatamaskPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::DescDatamaskPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::CreateDatamaskPolicy(_) => Ok("CreateDatamaskPolicy".to_string()),
+            Plan::DropDatamaskPolicy(_) => Ok("DropDatamaskPolicy".to_string()),
+            Plan::DescDatamaskPolicy(_) => Ok("DescDatamaskPolicy".to_string()),
 
             // network policy
-            Plan::CreateNetworkPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::AlterNetworkPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
-            Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
+            Plan::CreateNetworkPolicy(_) => Ok("CreateNetworkPolicy".to_string()),
+            Plan::AlterNetworkPolicy(_) => Ok("AlterNetworkPolicy".to_string()),
+            Plan::DropNetworkPolicy(_) => Ok("DropNetworkPolicy".to_string()),
+            Plan::DescNetworkPolicy(_) => Ok("DescNetworkPolicy".to_string()),
+            Plan::ShowNetworkPolicies(_) => Ok("ShowNetworkPolicies".to_string()),
+
+            // password policy
+            Plan::CreatePasswordPolicy(_) => Ok("CreatePasswordPolicy".to_string()),
+            Plan::AlterPasswordPolicy(_) => Ok("AlterPasswordPolicy".to_string()),
+            Plan::DropPasswordPolicy(_) => Ok("DropPasswordPolicy".to_string()),
+            Plan::DescPasswordPolicy(_) => Ok("DescPasswordPolicy".to_string()),
 
             // task
-            Plan::CreateTask(p) => Ok(format!("{:?}", p)),
-            Plan::DropTask(p) => Ok(format!("{:?}", p)),
-            Plan::AlterTask(p) => Ok(format!("{:?}", p)),
-            Plan::DescribeTask(p) => Ok(format!("{:?}", p)),
-            Plan::ExecuteTask(p) => Ok(format!("{:?}", p)),
-            Plan::ShowTasks(p) => Ok(format!("{:?}", p)),
+            Plan::CreateTask(_) => Ok("CreateTask".to_string()),
+            Plan::DropTask(_) => Ok("DropTask".to_string()),
+            Plan::AlterTask(_) => Ok("AlterTask".to_string()),
+            Plan::DescribeTask(_) => Ok("DescribeTask".to_string()),
+            Plan::ExecuteTask(_) => Ok("ExecuteTask".to_string()),
+            Plan::ShowTasks(_) => Ok("ShowTasks".to_string()),
+
+            // task
+            Plan::CreateConnection(_) => Ok("CreateConnection".to_string()),
+            Plan::DescConnection(_) => Ok("DescConnection".to_string()),
+            Plan::DropConnection(_) => Ok("DropConnection".to_string()),
+            Plan::ShowConnections(_) => Ok("ShowConnections".to_string()),
         }
     }
 }
@@ -249,4 +253,108 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
     };
     let res = s_expr.to_format_tree(&delete.metadata).format_pretty()?;
     Ok(format!("DeletePlan:\n{res}"))
+}
+
+fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
+    match &create_table.as_select {
+        Some(plan) => match plan.as_ref() {
+            Plan::Query {
+                s_expr, metadata, ..
+            } => {
+                let res = s_expr.to_format_tree(metadata);
+                FormatTreeNode::with_children(
+                    FormatContext::Text("CreateTableAsSelect".to_string()),
+                    vec![res],
+                )
+                .format_pretty()
+            }
+            _ => Err(ErrorCode::Internal("Invalid create table plan")),
+        },
+        None => Ok("CreateTable".to_string()),
+    }
+}
+
+fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
+    // add merge into target_table
+    let table_index = merge_into
+        .meta_data
+        .read()
+        .get_table_index(
+            Some(merge_into.database.as_str()),
+            merge_into.table.as_str(),
+        )
+        .unwrap();
+
+    let table_entry = merge_into.meta_data.read().table(table_index).clone();
+    let target_table_format = FormatContext::Text(format!(
+        "target_table: {}.{}.{}",
+        table_entry.catalog(),
+        table_entry.database(),
+        table_entry.name(),
+    ));
+
+    // add macthed clauses
+    let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
+    let taregt_schema = table_entry.table().schema();
+    for evaluator in &merge_into.matched_evaluators {
+        let condition_format = evaluator.condition.as_ref().map_or_else(
+            || "condition: None".to_string(),
+            |predicate| format!("condition: {}", format_scalar(predicate)),
+        );
+        if evaluator.update.is_none() {
+            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+                "matched delete: [{}]",
+                condition_format
+            ))));
+        } else {
+            let update_format = evaluator
+                .update
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|(field_idx, expr)| {
+                    format!(
+                        "{} = {}",
+                        taregt_schema.field(*field_idx).name(),
+                        format_scalar(expr)
+                    )
+                })
+                .join(",");
+            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+                "matched update: [{},update set {}]",
+                condition_format, update_format
+            ))));
+        }
+    }
+    // add unmacthed clauses
+    let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len());
+    for evaluator in &merge_into.unmatched_evaluators {
+        let condition_format = evaluator.condition.as_ref().map_or_else(
+            || "condition: None".to_string(),
+            |predicate| format!("condition: {}", format_scalar(predicate)),
+        );
+        let insert_schema_format = evaluator
+            .source_schema
+            .fields
+            .iter()
+            .map(|field| field.name())
+            .join(",");
+        let values_format = evaluator.values.iter().map(format_scalar).join(",");
+        let unmatched_format = format!(
+            "insert into ({}) values({})",
+            insert_schema_format, values_format
+        );
+        unmatched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+            "unmatched insert: [{},{}]",
+            condition_format, unmatched_format
+        ))));
+    }
+    let s_expr = merge_into.input.as_ref();
+    let input_format_child = s_expr.to_format_tree(&merge_into.meta_data);
+    let all_children = [matched_children, unmatched_children, vec![
+        input_format_child,
+    ]]
+    .concat();
+    let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
+    Ok(format!("MergeInto:\n{res}"))
 }

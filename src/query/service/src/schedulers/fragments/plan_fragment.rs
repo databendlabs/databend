@@ -15,23 +15,24 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Partitions;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_settings::ReplaceIntoShuffleStrategy;
-use common_sql::executor::CompactSource;
-use common_sql::executor::CopyIntoTable;
-use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::DeleteSource;
-use common_sql::executor::QuerySource;
-use common_sql::executor::ReclusterSource;
-use common_sql::executor::ReclusterTask;
-use common_sql::executor::ReplaceDeduplicate;
-use common_sql::executor::ReplaceInto;
-use common_storages_fuse::TableContext;
-use storages_common_table_meta::meta::BlockSlotDescription;
-use storages_common_table_meta::meta::Location;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Partitions;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_settings::ReplaceIntoShuffleStrategy;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::executor::physical_plans::ReclusterTask;
+use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::meta::BlockSlotDescription;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -39,9 +40,9 @@ use crate::schedulers::QueryFragmentAction;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::UpdateSource;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanReplacer;
-use crate::sql::executor::TableScan;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,6 +64,7 @@ pub enum FragmentType {
     ReplaceInto,
     Compact,
     Recluster,
+    Update,
 }
 
 #[derive(Clone)]
@@ -135,6 +137,9 @@ impl PlanFragment {
             FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
+            FragmentType::Update => {
+                self.redistribute_update(ctx, &mut fragment_actions)?;
+            }
         }
 
         if let Some(ref exchange) = self.exchange {
@@ -155,22 +160,30 @@ impl PlanFragment {
             ));
         }
 
-        let read_source = self.get_read_source()?;
+        let data_sources = self.collect_data_sources()?;
 
         let executors = Fragmenter::get_executors(ctx);
-        // Redistribute partitions of ReadDataSourcePlan.
-        let partitions = &read_source.parts;
-        let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
-            let mut new_read_source = read_source.clone();
-            new_read_source.parts = parts.clone();
+        let mut executor_partitions: HashMap<String, HashMap<u32, DataSourcePlan>> = HashMap::new();
+
+        for (plan_id, data_source) in data_sources.iter() {
+            // Redistribute partitions of ReadDataSourcePlan.
+            let partitions = &data_source.parts;
+            let partition_reshuffle = partitions.reshuffle(executors.clone())?;
+            for (executor, parts) in partition_reshuffle {
+                let mut source = data_source.clone();
+                source.parts = parts;
+                executor_partitions
+                    .entry(executor)
+                    .or_default()
+                    .insert(*plan_id, source);
+            }
+        }
+
+        for (executor, sources) in executor_partitions {
             let mut plan = self.plan.clone();
-
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
-            let mut replace_read_source = ReplaceReadSource {
-                source: new_read_source,
-            };
+            let mut replace_read_source = ReplaceReadSource { sources };
             plan = replace_read_source.replace(&plan)?;
 
             fragment_actions
@@ -204,6 +217,37 @@ impl PlanFragment {
 
             let mut replace_delete_source = ReplaceDeleteSource { partitions: parts };
             plan = replace_delete_source.replace(&plan)?;
+
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
+        }
+
+        Ok(())
+    }
+
+    fn redistribute_update(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::UpdateSource(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let partitions: &Partitions = &plan.parts;
+        let executors = Fragmenter::get_executors(ctx);
+
+        let partition_reshuffle = partitions.reshuffle(executors)?;
+
+        for (executor, parts) in partition_reshuffle.into_iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_update = ReplaceUpdate { partitions: parts };
+            plan = replace_update.replace(&plan)?;
 
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -374,20 +418,22 @@ impl PlanFragment {
         Ok(executor_part)
     }
 
-    fn get_read_source(&self) -> Result<DataSourcePlan> {
+    fn collect_data_sources(&self) -> Result<HashMap<u32, DataSourcePlan>> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot get read source from a non-source fragment".to_string(),
             ));
         }
 
-        let mut source = vec![];
+        let mut data_sources = HashMap::new();
 
-        let mut collect_read_source = |plan: &PhysicalPlan| match plan {
-            PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
+        let mut collect_data_source = |plan: &PhysicalPlan| match plan {
+            PhysicalPlan::TableScan(scan) => {
+                data_sources.insert(scan.plan_id, *scan.source.clone());
+            }
             PhysicalPlan::CopyIntoTable(copy) => {
                 if let Some(stage) = copy.source.as_stage().cloned() {
-                    source.push(*stage);
+                    data_sources.insert(copy.plan_id, *stage);
                 }
             }
             _ => {}
@@ -396,29 +442,30 @@ impl PlanFragment {
         PhysicalPlan::traverse(
             &self.plan,
             &mut |_| true,
-            &mut collect_read_source,
+            &mut collect_data_source,
             &mut |_| {},
         );
 
-        if source.len() != 1 {
-            Err(ErrorCode::Internal(
-                "Invalid source fragment with multiple table scan".to_string(),
-            ))
-        } else {
-            Ok(source.remove(0))
-        }
+        Ok(data_sources)
     }
 }
 
-pub struct ReplaceReadSource {
-    pub source: DataSourcePlan,
+struct ReplaceReadSource {
+    sources: HashMap<u32, DataSourcePlan>,
 }
 
 impl PhysicalPlanReplacer for ReplaceReadSource {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
+        let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Cannot find data source for table scan plan {}",
+                plan.plan_id
+            ))
+        })?;
+
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: plan.plan_id,
-            source: Box::new(self.source.clone()),
+            source: Box::new(source),
             name_mapping: plan.name_mapping.clone(),
             table_index: plan.table_index,
             stat_info: plan.stat_info.clone(),
@@ -439,8 +486,11 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
                 })))
             }
             CopyIntoTableSource::Stage(_) => {
+                let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
+                    ErrorCode::Internal("Cannot find data source for copy into plan")
+                })?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
+                    source: CopyIntoTableSource::Stage(Box::new(source)),
                     ..plan.clone()
                 })))
             }
@@ -481,6 +531,19 @@ struct ReplaceDeleteSource {
 impl PhysicalPlanReplacer for ReplaceDeleteSource {
     fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DeleteSource(Box::new(DeleteSource {
+            parts: self.partitions.clone(),
+            ..plan.clone()
+        })))
+    }
+}
+
+struct ReplaceUpdate {
+    pub partitions: Partitions,
+}
+
+impl PhysicalPlanReplacer for ReplaceUpdate {
+    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: self.partitions.clone(),
             ..plan.clone()
         })))

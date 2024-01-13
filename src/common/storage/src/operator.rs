@@ -19,40 +19,45 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_meta_app::storage::StorageAzblobConfig;
-use common_meta_app::storage::StorageCosConfig;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
 #[cfg(feature = "storage-hdfs")]
-use common_meta_app::storage::StorageHdfsConfig;
-use common_meta_app::storage::StorageHttpConfig;
-use common_meta_app::storage::StorageIpfsConfig;
-use common_meta_app::storage::StorageMokaConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageRedisConfig;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::StorageHdfsConfig;
+use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageHuggingfaceConfig;
+use databend_common_meta_app::storage::StorageIpfsConfig;
+use databend_common_meta_app::storage::StorageMokaConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_metrics::load_global_prometheus_registry;
+use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
+use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
+use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
-use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
+
+static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -72,9 +77,9 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
         StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
-        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
+        StorageParams::Huggingface(cfg) => build_operator(init_huggingface_operator(cfg)?)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -112,12 +117,19 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        //.layer(PrometheusClientLayer::new(
-        //    load_global_prometheus_registry().inner_mut(),
-        //))
+        .layer(load_prometheus_client_layer())
         .finish();
 
     Ok(op)
+}
+
+/// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
+/// multiple times. PrometheusClientLayer is not a singleton itself, but the metrics in it are singletons
+/// behind Arc, so we can safely clone it.
+fn load_prometheus_client_layer() -> PrometheusClientLayer {
+    PROMETHEUS_CLIENT_LAYER_INSTANCE
+        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
+        .clone()
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
@@ -338,26 +350,6 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
     Ok(builder)
 }
 
-/// init_redis_operator will init a reids operator.
-fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Builder> {
-    let mut builder = services::Redis::default();
-
-    builder.endpoint(&v.endpoint_url);
-    builder.root(&v.root);
-    builder.db(v.db);
-    if let Some(v) = v.default_ttl {
-        builder.default_ttl(Duration::from_secs(v as u64));
-    }
-    if let Some(v) = &v.username {
-        builder.username(v);
-    }
-    if let Some(v) = &v.password {
-        builder.password(v);
-    }
-
-    Ok(builder)
-}
-
 /// init_webhdfs_operator will init a WebHDFS operator
 fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
     let mut builder = services::Webhdfs::default();
@@ -378,6 +370,20 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .secret_id(&cfg.secret_id)
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
+        .root(&cfg.root);
+
+    Ok(builder)
+}
+
+/// init_huggingface_operator will init an opendal operator with input config.
+fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Builder> {
+    let mut builder = services::Huggingface::default();
+
+    builder
+        .repo_type(&cfg.repo_type)
+        .repo_id(&cfg.repo_id)
+        .revision(&cfg.revision)
+        .token(&cfg.token)
         .root(&cfg.root);
 
     Ok(builder)
@@ -405,14 +411,14 @@ impl DataOperator {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+    pub async fn init(conf: &StorageConfig) -> databend_common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
 
     /// Create a new data operator without check.
-    pub fn try_new(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+    pub fn try_new(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         Ok(DataOperator {
@@ -422,7 +428,7 @@ impl DataOperator {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+    pub async fn try_create(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
         let sp = sp.clone();
 
         let operator = init_operator(&sp)?;
@@ -451,7 +457,7 @@ impl DataOperator {
     }
 
     /// Check license must be run after license manager setup.
-    pub async fn check_license(&self) -> common_exception::Result<()> {
+    pub async fn check_license(&self) -> databend_common_exception::Result<()> {
         if self.params.need_encryption_feature() {
             get_storage_encryption_handler().check_license().await?;
         }

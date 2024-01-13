@@ -15,19 +15,19 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
-use common_config::CacheConfig;
-use common_config::CacheStorageTypeInnerConfig;
-use common_exception::Result;
+use databend_common_base::base::GlobalInstance;
+use databend_common_cache::CountableMeter;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_config::CacheConfig;
+use databend_common_config::CacheStorageTypeInnerConfig;
+use databend_common_exception::Result;
+use databend_storages_common_cache::InMemoryCacheBuilder;
+use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::Named;
+use databend_storages_common_cache::NamedCache;
+use databend_storages_common_cache::TableDataCache;
+use databend_storages_common_cache::TableDataCacheBuilder;
 use log::info;
-use storages_common_cache::InMemoryCacheBuilder;
-use storages_common_cache::InMemoryItemCacheHolder;
-use storages_common_cache::Named;
-use storages_common_cache::NamedCache;
-use storages_common_cache::TableDataCache;
-use storages_common_cache::TableDataCacheBuilder;
 
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;

@@ -1,0 +1,6 @@
+onlyif mysql
+query TT
+SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2
+----
+FUSE FUSE Storage Engine
+ICEBERG ICEBERG Storage Engine

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
 mod memory_part;
 mod memory_table;

@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -40,7 +40,7 @@ fn test_md5(file: &mut impl Write) {
     run_ast(file, "md5(NULL)", &[]);
     run_ast(file, "md5(a)", &[(
         "a",
-        StringType::from_data(&["Abc", "Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -49,7 +49,7 @@ fn test_sha(file: &mut impl Write) {
     run_ast(file, "sha(NULL)", &[]);
     run_ast(file, "sha1(a)", &[(
         "a",
-        StringType::from_data(&["Abc", "Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -58,7 +58,7 @@ fn test_blake3(file: &mut impl Write) {
     run_ast(file, "blake3(NULL)", &[]);
     run_ast(file, "blake3(a)", &[(
         "a",
-        StringType::from_data(&["Abc", "Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -67,7 +67,10 @@ fn test_sha2(file: &mut impl Write) {
     run_ast(file, "sha2('Abc',256)", &[]);
     run_ast(file, "sha2(NULL,0)", &[]);
     run_ast(file, "sha2(a,b)", &[
-        ("a", StringType::from_data(&["Abc", "Dobrý den", "ß😀山"])),
+        (
+            "a",
+            StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
+        ),
         ("b", UInt16Type::from_data(vec![224u16, 384, 512])),
     ]);
 }
@@ -84,7 +87,10 @@ fn test_city64withseed(file: &mut impl Write) {
     run_ast(file, "city64withseed(to_date(100000), 1234)", &[]);
     run_ast(file, "city64withseed(NULL,0)", &[]);
     run_ast(file, "city64withseed(a,b)", &[
-        ("a", StringType::from_data(&["Abc", "Dobrý den", "ß😀山"])),
+        (
+            "a",
+            StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
+        ),
         ("b", UInt16Type::from_data(vec![10u16, 11, 12])),
     ]);
 }
@@ -100,7 +106,7 @@ fn test_siphash64(file: &mut impl Write) {
     run_ast(file, "siphash(true)", &[]);
     run_ast(file, "siphash64(a)", &[(
         "a",
-        StringType::from_data(&["Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -115,7 +121,7 @@ fn test_xxhash64(file: &mut impl Write) {
     run_ast(file, "xxhash64(true)", &[]);
     run_ast(file, "xxhash64(a)", &[(
         "a",
-        StringType::from_data(&["Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -130,6 +136,6 @@ fn test_xxhash32(file: &mut impl Write) {
     run_ast(file, "xxhash32(true)", &[]);
     run_ast(file, "xxhash32(a)", &[(
         "a",
-        StringType::from_data(&["Dobrý den", "ß😀山"]),
+        StringType::from_data(vec!["Dobrý den", "ß😀山"]),
     )]);
 }

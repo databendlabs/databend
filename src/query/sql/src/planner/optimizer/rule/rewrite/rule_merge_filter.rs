@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -77,7 +77,7 @@ impl Rule for RuleMergeFilter {
         let predicates = up_filter
             .predicates
             .into_iter()
-            .chain(down_filter.predicates.into_iter())
+            .chain(down_filter.predicates)
             .collect();
         let merged = Filter { predicates };
 

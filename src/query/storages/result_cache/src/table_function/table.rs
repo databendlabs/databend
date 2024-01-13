@@ -16,29 +16,29 @@ use std::any::Any;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::{self as pread};
-use common_arrow::parquet::read::read_metadata;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ResultScanTableInfo;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::EmptySource;
-use common_pipeline_sources::OneBlockSource;
+use databend_common_arrow::arrow::io::parquet::read::infer_schema;
+use databend_common_arrow::arrow::io::parquet::read::{self as pread};
+use databend_common_arrow::parquet::read::read_metadata;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ResultScanTableInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::OneBlockSource;
 
 const RESULT_SCAN: &str = "result_scan";
 
@@ -133,8 +133,7 @@ impl Table for ResultScan {
             let mut reader = Cursor::new(self.block_raw_data.clone());
             let meta = read_metadata(&mut reader)?;
             let arrow_schema = infer_schema(&meta)?;
-            let table_schema = TableSchema::from(&arrow_schema);
-            let schema = DataSchema::from(&table_schema);
+            let schema = DataSchema::try_from(&arrow_schema).unwrap();
 
             // Read the parquet file into one block.
             let chunks_iter =

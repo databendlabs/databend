@@ -14,13 +14,50 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::LazyLock;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use num_derive::FromPrimitive;
 use num_derive::ToPrimitive;
 
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
+
+pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
+    vec![
+        RuleID::NormalizeDisjunctiveFilter,
+        RuleID::NormalizeScalarFilter,
+        RuleID::NormalizeAggregate,
+        RuleID::EliminateFilter,
+        RuleID::EliminateSort,
+        RuleID::MergeFilter,
+        RuleID::InferFilter,
+        RuleID::MergeEvalScalar,
+        RuleID::PushDownFilterUnion,
+        RuleID::PushDownFilterAggregate,
+        RuleID::PushDownFilterWindow,
+        RuleID::PushDownLimitUnion,
+        RuleID::PushDownLimitExpression,
+        RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitAggregate,
+        RuleID::PushDownLimitOuterJoin,
+        RuleID::PushDownLimitScan,
+        RuleID::PushDownFilterSort,
+        RuleID::PushDownFilterEvalScalar,
+        RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
+        RuleID::SemiToInnerJoin,
+        RuleID::FoldCountAggregate,
+        RuleID::TryApplyAggIndex,
+        RuleID::SplitAggregate,
+        RuleID::PushDownFilterScan,
+        RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
+        RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
+    ]
+});
+
+pub static RESIDUAL_RULES: LazyLock<Vec<RuleID>> =
+    LazyLock::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
 
 pub type RulePtr = Box<dyn Rule>;
 
@@ -52,6 +89,7 @@ pub enum RuleID {
     PushDownFilterScan,
     PushDownFilterSort,
     PushDownFilterProjectSet,
+    PushDownFilterWindow,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
     PushDownLimitExpression,
@@ -59,8 +97,10 @@ pub enum RuleID {
     PushDownLimitAggregate,
     PushDownLimitScan,
     PushDownSortScan,
+    SemiToInnerJoin,
     EliminateEvalScalar,
     EliminateFilter,
+    EliminateSort,
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
@@ -92,8 +132,10 @@ impl Display for RuleID {
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
+            RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
+            RuleID::EliminateSort => write!(f, "EliminateSort"),
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
@@ -109,6 +151,7 @@ impl Display for RuleID {
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
+            RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
         }
     }
 }

@@ -1,0 +1,11 @@
+statement ok
+DROP SHARE ENDPOINT IF EXISTS t;
+
+statement ok
+CREATE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file='https://eks.public/keys,ssl_cert=cert.pem',) COMMENT = 'share endpoint comment';
+
+statement ok
+SHOW SHARE  ENDPOINT;
+
+statement ok
+DROP SHARE ENDPOINT t;

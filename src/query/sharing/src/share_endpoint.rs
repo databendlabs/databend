@@ -15,19 +15,19 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use common_auth::RefreshableToken;
-use common_base::base::GlobalInstance;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_api::ShareApi;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::share::GetShareEndpointReq;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_app::share::ShareSpec;
-use common_meta_app::share::TableInfoMap;
-use common_storage::ShareTableConfig;
-use common_users::UserApiProvider;
+use databend_common_auth::RefreshableToken;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::share::GetShareEndpointReq;
+use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::ShareSpec;
+use databend_common_meta_app::share::TableInfoMap;
+use databend_common_storage::ShareTableConfig;
+use databend_common_users::UserApiProvider;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
@@ -113,7 +113,7 @@ impl ShareEndpointManager {
         let endpoint_meta_config_vec = self
             .get_share_endpoint_config(from_tenant, Some(to_tenant.clone()))
             .await?;
-        let endpoint_config = match endpoint_meta_config_vec.get(0) {
+        let endpoint_config = match endpoint_meta_config_vec.first() {
             Some(endpoint_meta_config) => endpoint_meta_config,
             None => {
                 return Err(ErrorCode::UnknownShareEndpoint(format!(
@@ -140,10 +140,24 @@ impl ShareEndpointManager {
         let resp = self.client.send(req).await;
         match resp {
             Ok(resp) => {
+                if !resp.status().is_success() {
+                    return Err(ErrorCode::ShareStorageError(format!(
+                        "share {:?} storage error: HTTP status {:?}",
+                        share_name,
+                        match resp.status().canonical_reason() {
+                            Some(reason) => reason.to_string(),
+                            None => resp.status().to_string(),
+                        }
+                    )));
+                }
                 let bs = resp.into_body().bytes().await?;
-                let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
-
-                Ok(table_info_map)
+                match serde_json::from_slice(&bs) {
+                    Ok(table_info_map) => Ok(table_info_map),
+                    Err(e) => Err(ErrorCode::ShareStorageError(format!(
+                        "share {:?} storage error: deser json file error: {:?}",
+                        share_name, e
+                    ))),
+                }
             }
             Err(err) => Err(err.into()),
         }

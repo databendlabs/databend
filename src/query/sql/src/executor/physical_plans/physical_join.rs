@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
@@ -85,7 +85,7 @@ fn check_condition(
             match join_predicate {
                 JoinPredicate::Left(_) => left = true,
                 JoinPredicate::Right(_) => right = true,
-                JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
+                JoinPredicate::Both { .. } | JoinPredicate::Other(_) | JoinPredicate::ALL(_) => {
                     return;
                 }
             }

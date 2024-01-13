@@ -25,6 +25,9 @@ for bin in databend-query databend-meta; do
 	fi
 done
 
+# Wait for killed process to cleanup resources
+sleep 1
+
 echo 'Start Meta service HA cluster(3 nodes)...'
 
 mkdir -p ./.databend/

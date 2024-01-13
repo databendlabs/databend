@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::KVStream;
-use common_meta_kvapi::kvapi::MGetKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::AppliedState;
-use common_meta_types::Cmd;
-use common_meta_types::MetaError;
-use common_meta_types::SeqV;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKV;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
-use log::debug;
 
 use crate::state_machine::StateMachine;
 
@@ -62,10 +59,7 @@ impl kvapi::KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
-            // TODO(xp): unwrap???
-            let r = self
-                .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
-                .unwrap();
+            let r = self.apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())?;
             Ok(r)
         })?;
 
@@ -77,29 +71,19 @@ impl kvapi::KVApi for StateMachine {
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        // TODO(xp) refine get(): a &str is enough for key
-        let sv = self.kvs().get(&key.to_string())?;
-        debug!("get_kv sv:{:?}", sv);
-
-        let local_now_ms = SeqV::<()>::now_ms();
-        let (_expired, res) = Self::expire_seq_v(sv, local_now_ms);
-        Ok(res)
-    }
-
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let kvs = self.kvs();
-        let mut res = vec![];
+        let mut items = vec![];
 
         let local_now_ms = SeqV::<()>::now_ms();
 
-        for x in keys.iter() {
-            let v = kvs.get(x)?;
+        for k in keys.iter() {
+            let v = kvs.get(k)?;
             let (_, v) = Self::expire_seq_v(v, local_now_ms);
-            res.push(v)
+            items.push(Ok(StreamItem::from((k.clone(), v))))
         }
 
-        Ok(res)
+        Ok(futures::stream::iter(items).boxed())
     }
 
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {

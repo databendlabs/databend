@@ -14,16 +14,19 @@
 
 use std::sync::Arc;
 
-use common_exception::{ErrorCode, Result};
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::{AsyncTransform, AsyncTransformer};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_pipeline_transforms::processors::AsyncTransformer;
 
 use crate::api::ExchangeShuffleMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_exchange_group_by_serializer::{FlightSerialized, FlightSerializedMeta};
+use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
+use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 
 pub struct TransformExchangeAsyncBarrier;
 
@@ -49,7 +52,7 @@ impl AsyncTransform for TransformExchangeAsyncBarrier {
             let mut futures = Vec::with_capacity(meta.serialized_blocks.len());
 
             for serialized_block in meta.serialized_blocks {
-                futures.push(common_base::base::tokio::spawn(async move {
+                futures.push(databend_common_base::base::tokio::spawn(async move {
                     match serialized_block {
                         FlightSerialized::DataBlock(v) => Ok(v),
                         FlightSerialized::Future(f) => f.await,

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,25 +16,27 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_meta_client::to_digit_ver;
-use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::meta_service_server::MetaService;
-use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
-use common_meta_types::protobuf::ClientInfo;
-use common_meta_types::protobuf::ClusterStatus;
-use common_meta_types::protobuf::Empty;
-use common_meta_types::protobuf::ExportedChunk;
-use common_meta_types::protobuf::HandshakeResponse;
-use common_meta_types::protobuf::MemberListReply;
-use common_meta_types::protobuf::MemberListRequest;
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::protobuf::TxnReply;
-use common_meta_types::protobuf::TxnRequest;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::protobuf::WatchResponse;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::oneshot;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_types::protobuf::meta_service_server::MetaService;
+use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use databend_common_meta_types::protobuf::ClientInfo;
+use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::Empty;
+use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::HandshakeResponse;
+use databend_common_meta_types::protobuf::MemberListReply;
+use databend_common_meta_types::protobuf::MemberListRequest;
+use databend_common_meta_types::protobuf::RaftReply;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::protobuf::TxnReply;
+use databend_common_meta_types::protobuf::TxnRequest;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
 use futures::Stream;
 use rand::Rng;
 use tonic::codegen::BoxStream;
@@ -54,7 +56,7 @@ impl MetaService for GrpcServiceForTestImpl {
 
     async fn handshake(
         &self,
-        _request: Request<Streaming<common_meta_types::protobuf::HandshakeRequest>>,
+        _request: Request<Streaming<databend_common_meta_types::protobuf::HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         tokio::time::sleep(Duration::from_secs(2)).await;
         let output = futures::stream::once(async {
@@ -78,7 +80,9 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
-        todo!()
+        let itm = StreamItem::new("kv_read_v1".to_string(), None);
+        let output = futures::stream::once(async { Ok(itm) });
+        Ok(Response::new(Box::pin(output)))
     }
 
     type ExportStream =
@@ -86,9 +90,9 @@ impl MetaService for GrpcServiceForTestImpl {
 
     async fn export(
         &self,
-        _request: Request<common_meta_types::protobuf::Empty>,
+        _request: Request<databend_common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     type WatchStream =
@@ -98,57 +102,72 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn transaction(
         &self,
         _request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn member_list(
         &self,
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn get_cluster_status(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClusterStatus>, Status> {
-        todo!()
+        unimplemented!()
     }
 
     async fn get_client_info(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
-        todo!()
+        unimplemented!()
     }
 }
 
-pub fn start_grpc_server() -> String {
-    let service = GrpcServiceForTestImpl {};
-    start_grpc_server_with_service(service)
+/// Start a grpc server and return its address and task control handle.
+pub fn start_grpc_server() -> (String, oneshot::Sender<()>, JoinHandle<()>) {
+    let addr = rand_local_addr();
+    let (shutdown, task_handle) = start_grpc_server_addr(&addr);
+    (addr, shutdown, task_handle)
 }
 
-pub fn start_grpc_server_with_service(svc: impl MetaService) -> String {
-    let mut rng = rand::thread_rng();
-    let port = rng.gen_range(10000..20000);
-    let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+/// Returns a shutdown tx and a task handle.
+pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, JoinHandle<()>) {
+    let addr = addr.to_string().parse().unwrap();
 
-    let svc = MetaServiceServer::new(svc);
+    let service = GrpcServiceForTestImpl {};
+    let svc = MetaServiceServer::new(service);
 
-    tokio::spawn(async move {
+    let (tx, rx) = oneshot::channel::<()>();
+
+    let h = tokio::spawn(async move {
         Server::builder()
             .add_service(svc)
-            .serve(addr)
+            .serve_with_shutdown(addr, async move {
+                let _ = rx.await;
+            })
             .await
             .unwrap();
     });
+
+    // Wait for server to be ready
     sleep(Duration::from_secs(1));
-    addr.to_string()
+
+    (tx, h)
+}
+
+pub fn rand_local_addr() -> String {
+    let mut rng = rand::thread_rng();
+    let port = rng.gen_range(10000..20000);
+    format!("127.0.0.1:{}", port)
 }

@@ -1,0 +1,10 @@
+# From sklearn.metrics.pairwise import cosine_similarity
+query F
+select cosine_distance([3.0, 45.0, 7.0, 2.0, 5.0, 20.0, 13.0, 12.0], [2.0, 54.0, 13.0, 15.0, 22.0, 34.0, 50.0, 1.0]) as sim
+----
+0.12641934893868967
+
+query F
+select  [1, 2] <-> [2, 3] as sim
+----
+1.4142135

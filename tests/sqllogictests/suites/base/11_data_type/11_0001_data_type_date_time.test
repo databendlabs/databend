@@ -1,0 +1,286 @@
+statement ok
+set timezone = 'UTC'
+
+query TTTT
+select to_uint64(a), to_int64(a), to_uint64(b),  to_int64(b) from (select '2200-01-01 00:00:00.868894'::TIMESTAMP a , '2200-01-01'::DATE b)
+----
+7258118400868894 7258118400868894 84006 84006
+
+query T
+select '0000-00-00 00:00:00.868894'::TIMESTAMP
+----
+1970-01-01 00:00:00.868894
+
+query T
+select '0099-05-16T03:25:02.868894'::TIMESTAMP
+----
+1000-01-01 00:00:00.000000
+
+query T
+select '1022-05-16 03:25:02.868894'::TIMESTAMP
+----
+1022-05-16 03:25:02.868894
+
+query T
+select '1022-05-16 03:25:02.000000'::TIMESTAMP
+----
+1022-05-16 03:25:02.000000
+
+query T
+select '1000-01-01 03:25:02.868894'::TIMESTAMP
+----
+1000-01-01 03:25:02.868894
+
+query T
+select '9999-05-06 03:25:02.868894'::TIMESTAMP
+----
+9999-05-06 03:25:02.868894
+
+query T
+select '9999-12-12 03:25:02.868894'::TIMESTAMP
+----
+9999-12-12 03:25:02.868894
+
+query T
+select '0099-05-16T03:25:02.868894+08:00'::TIMESTAMP
+----
+1970-01-01 00:00:00.000000
+
+query T
+select '1022-05-16T03:25:02.868894+08:00'::TIMESTAMP
+----
+1970-01-01 00:00:00.000000
+
+query T
+select '1022-05-16T03:25:02.000000+08:00'::TIMESTAMP
+----
+1970-01-01 00:00:00.000000
+
+query T
+select '1000-01-01T03:25:02.868894-07:00'::TIMESTAMP
+----
+1970-01-01 00:00:00.000000
+
+query T
+select '2044-05-06T03:25:02.868894-07:00'::TIMESTAMP
+----
+2044-05-06 10:25:02.868894
+
+query T
+select '2044-12-12T03:25:02.868894+00:00'::TIMESTAMP
+----
+2044-12-12 03:25:02.868894
+
+query T
+select '9999-12-12'::TIMESTAMP
+----
+9999-12-12 00:00:00.000000
+
+query B
+select '2021-01-01T00:00:00+00:00'::timestamp = '2021-01-01T01:00:00+01:00'::timestamp
+----
+1
+
+statement ok
+drop database if exists db1
+
+statement ok
+create database db1
+
+statement ok
+use db1
+
+statement ok
+create table db1.t1(id int, a datetime)
+
+statement ok
+insert into db1.t1 values(1, '2022-01-01 02:00:11'), (2, '2022-01-02T02:00:22'), (3, '2022-02-02T04:00:03+00:00'), (4, '2022-03-02T01:12:00-07:00')
+
+query IT
+select * from db1.t1
+----
+1  2022-01-01 02:00:11.000000
+2  2022-01-02 02:00:22.000000
+3  2022-02-02 04:00:03.000000
+4  2022-03-02 08:12:00.000000
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query IT
+select * from db1.t1
+----
+1  2022-01-01 10:00:11.000000
+2  2022-01-02 10:00:22.000000
+3  2022-02-02 12:00:03.000000
+4  2022-03-02 16:12:00.000000
+
+statement ok
+set timezone='UTC'
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(id int, t datetime)
+
+statement ok
+set timezone='UTC'
+
+statement ok
+delete from t
+
+statement ok
+insert into t values(1, '2022-02-03T03:00:00'), (2, '2022-02-03T03:00:00+08:00'), (3, '2022-02-03T03:00:00-08:00'), (4, '2022-02-03'), (5, '2022-02-03T03:00:00+09:00'), (6, '2022-02-03T03:00:00+06:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 03:00:00.000000
+2  2022-02-02 19:00:00.000000
+3  2022-02-03 11:00:00.000000
+4  2022-02-03 00:00:00.000000
+5  2022-02-02 18:00:00.000000
+6  2022-02-02 21:00:00.000000
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 11:00:00.000000
+2  2022-02-03 03:00:00.000000
+3  2022-02-03 19:00:00.000000
+4  2022-02-03 08:00:00.000000
+5  2022-02-03 02:00:00.000000
+6  2022-02-03 05:00:00.000000
+
+statement ok
+delete from t
+
+statement ok
+insert into t values(1, '2022-02-03T03:00:00'), (2, '2022-02-03T03:00:00+08:00'), (3, '2022-02-03T03:00:00-08:00'), (4, '2022-02-03'), (5, '2022-02-03T03:00:00+09:00'), (6, '2022-02-03T03:00:00+06:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 03:00:00.000000
+2  2022-02-03 03:00:00.000000
+3  2022-02-03 19:00:00.000000
+4  2022-02-03 00:00:00.000000
+5  2022-02-03 02:00:00.000000
+6  2022-02-03 05:00:00.000000
+
+statement ok
+set timezone='America/Los_Angeles'
+
+query IT
+select * from t order by id
+----
+1  2022-02-02 11:00:00.000000
+2  2022-02-02 11:00:00.000000
+3  2022-02-03 03:00:00.000000
+4  2022-02-02 08:00:00.000000
+5  2022-02-02 10:00:00.000000
+6  2022-02-02 13:00:00.000000
+
+statement ok
+delete from t
+
+statement ok
+insert into t values(1, '2022-02-03T03:00:00'), (2, '2022-02-03T03:00:00+08:00'), (3, '2022-02-03T03:00:00-08:00'), (4, '2022-02-03'), (5, '2022-02-03T03:00:00-09:00'), (6, '2022-02-03T03:00:00-06:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 03:00:00.000000
+2  2022-02-02 11:00:00.000000
+3  2022-02-03 03:00:00.000000
+4  2022-02-03 00:00:00.000000
+5  2022-02-03 04:00:00.000000
+6  2022-02-03 01:00:00.000000
+
+statement ok
+set timezone='UTC'
+
+statement ok
+delete from t
+
+statement ok
+insert into t values(1, '2022-02-03T03:00:00Z'),(2, '2022-02-03T03:00:00+00:00'),(3, '2022-02-03 3:2:1.123-00:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 03:00:00.000000
+2  2022-02-03 03:00:00.000000
+3  2022-02-03 03:02:01.123000
+
+statement ok
+delete from t
+
+statement ok
+set timezone='America/Los_Angeles'
+
+statement ok
+insert into t values(1, '2022-02-03T03:00:00Z'),(2, '2022-02-03T03:00:00+00:00'),(3, '2022-02-03T3:2:1.123456-00:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-02 19:00:00.000000
+2  2022-02-02 19:00:00.000000
+3  2022-02-02 19:02:01.123456
+
+statement ok
+delete from t
+
+statement ok
+set timezone='Asia/Shanghai'
+
+statement ok
+insert into t values(1, '2022-02-03T3:00:00Z'),(2, '2022-02-03T03:00:00+00:00'),(3, '2022-02-03 3:2:1.123456789-00:00')
+
+query IT
+select * from t order by id
+----
+1  2022-02-03 11:00:00.000000
+2  2022-02-03 11:00:00.000000
+3  2022-02-03 11:02:01.123456
+
+statement error 1006
+insert into t values(1, '2022-02-03 003:02:02')
+
+statement error 1006
+insert into t values(1, '2022-02-03 03:002:02')
+
+statement error 1006
+insert into t values(1, '2022-02-03T03:02:000')
+
+statement error 1006
+insert into t values(1, '2022-02-03 03:02:000')
+
+statement error 1006
+insert into t values(1, '2022-02-03 03:02:00Z.123')
+
+statement error 1006
+insert into t values(1, '2022-02-03 03:02:00Z+08:00')
+
+statement ok
+insert into t values(1, '2022-02-03 03:02:00+0800')
+
+statement ok
+insert into t values(1, '2022-02-03T03:02:00+0800')
+
+statement ok
+drop table t
+
+statement ok
+set timezone='UTC'
+
+statement ok
+drop database db1
+
+statement error 1078
+set timezone = 'Asia/Test'

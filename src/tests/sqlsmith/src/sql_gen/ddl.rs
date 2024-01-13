@@ -14,14 +14,14 @@
 
 use std::collections::BTreeMap;
 
-use common_ast::ast::ColumnDefinition;
-use common_ast::ast::CreateTableSource;
-use common_ast::ast::CreateTableStmt;
-use common_ast::ast::DropTableStmt;
-use common_ast::ast::Engine;
-use common_ast::ast::Identifier;
-use common_ast::ast::NullableConstraint;
-use common_ast::ast::TypeName;
+use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::CreateTableSource;
+use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::NullableConstraint;
+use databend_common_ast::ast::TypeName;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
@@ -66,14 +66,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 if_exists: true,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name.clone()),
+                table: Identifier::from_name(table_name),
                 all: false,
             };
             let create_table = CreateTableStmt {
                 if_not_exists: true,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name.clone()),
+                table: Identifier::from_name(table_name),
                 source: Some(source),
                 engine: Some(Engine::Fuse),
                 uri_location: None,

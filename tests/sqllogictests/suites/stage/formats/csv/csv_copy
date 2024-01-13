@@ -1,9 +1,0 @@
-statement ok
-drop table if exists it
-
-statement ok
-create table it(a int not null, b string not null)
-
-query TIITI
-copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
-----

@@ -16,76 +16,14 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_metrics::register_counter_family;
-use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::Counter;
-use common_metrics::Family;
-use common_metrics::Histogram;
-use common_metrics::VecLabels;
-use lazy_static::lazy_static;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_metrics::interpreter::*;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct InterpreterMetrics;
-
-const METRIC_QUERY_START: &str = "query_start";
-const METRIC_QUERY_ERROR: &str = "query_error";
-const METRIC_QUERY_SUCCESS: &str = "query_success";
-const METRIC_QUERY_FAILED: &str = "query_failed";
-
-const METRIC_QUERY_DURATION_MS: &str = "query_duration_ms";
-const METRIC_QUERY_WRITE_ROWS: &str = "query_write_rows";
-const METRIC_QUERY_WRITE_BYTES: &str = "query_write_bytes";
-const METRIC_QUERY_WRITE_IO_BYTES: &str = "query_write_io_bytes";
-const METRIC_QUERY_WRITE_IO_BYTES_COST_MS: &str = "query_write_io_bytes_cost_ms";
-const METRIC_QUERY_SCAN_ROWS: &str = "query_scan_rows";
-const METRIC_QUERY_SCAN_BYTES: &str = "query_scan_bytes";
-const METRIC_QUERY_SCAN_IO_BYTES: &str = "query_scan_io_bytes";
-const METRIC_QUERY_SCAN_IO_BYTES_COST_MS: &str = "query_scan_io_bytes_cost_ms";
-const METRIC_QUERY_SCAN_PARTITIONS: &str = "query_scan_partitions";
-const METRIC_QUERY_TOTAL_PARTITIONS: &str = "query_total_partitions";
-const METRIC_QUERY_RESULT_ROWS: &str = "query_result_rows";
-const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
-
-lazy_static! {
-    static ref QUERY_START: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_START);
-    static ref QUERY_ERROR: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_ERROR);
-    static ref QUERY_SUCCESS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SUCCESS);
-    static ref QUERY_FAILED: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_FAILED);
-    static ref QUERY_DURATION_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_DURATION_MS);
-    static ref QUERY_WRITE_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_ROWS);
-    static ref QUERY_WRITE_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_BYTES);
-    static ref QUERY_WRITE_IO_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_WRITE_IO_BYTES);
-    static ref QUERY_WRITE_IO_BYTES_COST_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_WRITE_IO_BYTES_COST_MS);
-    static ref QUERY_SCAN_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_ROWS);
-    static ref QUERY_SCAN_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_BYTES);
-    static ref QUERY_SCAN_IO_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_IO_BYTES);
-    static ref QUERY_SCAN_IO_BYTES_COST_MS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds(METRIC_QUERY_SCAN_IO_BYTES_COST_MS);
-    static ref QUERY_SCAN_PARTITIONS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_SCAN_PARTITIONS);
-    static ref QUERY_TOTAL_PARTITIONS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_TOTAL_PARTITIONS);
-    static ref QUERY_RESULT_ROWS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_RESULT_ROWS);
-    static ref QUERY_RESULT_BYTES: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_QUERY_RESULT_BYTES);
-}
 
 const LABEL_HANDLER: &str = "handler";
 const LABEL_KIND: &str = "kind";

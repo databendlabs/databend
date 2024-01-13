@@ -18,34 +18,35 @@ use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::base::uuid;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StageTableInfo;
-use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_compress::CompressAlgorithm;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::input_formats::InputContext;
-use common_pipeline_sources::input_formats::SplitInfo;
-use common_storage::init_stage_operator;
-use common_storage::StageFileInfo;
-use common_storage::STDIN_FD;
 use dashmap::DashMap;
+use databend_common_base::base::uuid;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::input_formats::InputContext;
+use databend_common_pipeline_sources::input_formats::SplitInfo;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::STDIN_FD;
+use databend_common_storages_parquet::ParquetTableForCopy;
 use log::debug;
 use opendal::Operator;
 use opendal::Scheme;
@@ -65,7 +66,16 @@ pub struct StageTable {
 
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
-        let table_info_placeholder = TableInfo::default().set_schema(table_info.schema());
+        let table_info_placeholder = TableInfo {
+            ident: Default::default(),
+            desc: "".to_string(),
+            // `system.stage` is used to forbidden the user to select * from text files.
+            name: "stage".to_string(),
+            meta: Default::default(),
+            tenant: "".to_string(),
+            db_type: Default::default(),
+        }
+        .set_schema(table_info.schema());
 
         Ok(Arc::new(Self {
             table_info,
@@ -116,6 +126,12 @@ impl Table for StageTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;
+        if matches!(
+            stage_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(_)
+        ) {
+            return ParquetTableForCopy::do_read_partitions(stage_info, ctx, _push_downs).await;
+        }
         // User set the files.
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
@@ -153,6 +169,20 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let stage_table_info =
+            if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
+                stage_table_info
+            } else {
+                return Err(ErrorCode::Internal(""));
+            };
+
+        if matches!(
+            stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(_)
+        ) {
+            return ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache);
+        }
+
         let projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),
             ..
@@ -162,12 +192,6 @@ impl Table for StageTable {
         } else {
             None
         };
-        let stage_table_info =
-            if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
-                stage_table_info
-            } else {
-                return Err(ErrorCode::Internal(""));
-            };
 
         let mut splits = vec![];
         for part in &plan.parts.partitions {

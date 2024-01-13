@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(coroutines)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(return_position_impl_trait_in_trait)]
+#![feature(lazy_cell)]
+#![allow(clippy::diverging_sub_expression)]
 
 // #![allow(incomplete_features)]
 

@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::CreateTaskRequest;
-use common_cloud_control::task_client::make_request;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::CreateTaskPlan;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::CreateTaskRequest;
+use databend_common_cloud_control::task_client::make_request;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::CreateTaskPlan;
 
 use crate::interpreters::common::get_client_config;
 use crate::interpreters::common::make_schedule_options;
@@ -57,10 +57,12 @@ impl CreateTaskInterpreter {
             query_text: plan.sql,
             owner,
             comment: Some(plan.comment),
-            schedule_options: Some(make_schedule_options(plan.schedule_opts)),
+            schedule_options: plan.schedule_opts.map(make_schedule_options),
             warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
             suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),
             if_not_exist: plan.if_not_exists,
+            after: plan.after,
+            when_condition: plan.when_condition,
         }
     }
 }

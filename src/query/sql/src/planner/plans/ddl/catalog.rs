@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::DataSchemaRef;
-use common_meta_app::schema::CatalogMeta;
-use common_meta_app::schema::CatalogNameIdent;
-use common_meta_app::schema::CreateCatalogReq;
-use common_meta_app::schema::DropCatalogReq;
+use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
+use databend_common_meta_app::schema::CreateCatalogReq;
+use databend_common_meta_app::schema::DropCatalogReq;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogPlan {

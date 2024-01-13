@@ -14,39 +14,54 @@
 
 use std::sync::Arc;
 
+use http::StatusCode;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
 use poem::Result as PoemResult;
 
 use crate::sessions::Session;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
     session: Arc<Session>,
     pub query_id: String,
+    pub node_id: String,
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
+    pub http_method: String,
+    pub uri: String,
 }
 
 impl HttpQueryContext {
     pub fn new(
         session: Arc<Session>,
         query_id: String,
+        node_id: String,
         deduplicate_label: Option<String>,
         user_agent: Option<String>,
+        http_method: String,
+        uri: String,
     ) -> Self {
         HttpQueryContext {
             session,
             query_id,
+            node_id,
             deduplicate_label,
             user_agent,
+            http_method,
+            uri,
         }
     }
 
-    pub fn get_session(&self, session_type: SessionType) -> Arc<Session> {
-        self.session.set_type(session_type);
-        self.session.clone()
+    pub fn upgrade_session(&self, session_type: SessionType) -> Result<Arc<Session>, poem::Error> {
+        SessionManager::instance()
+            .try_upgrade_session(self.session.clone(), session_type.clone())
+            .map_err(|err| {
+                poem::Error::from_string(err.message(), StatusCode::TOO_MANY_REQUESTS)
+            })?;
+        Ok(self.session.clone())
     }
 }
 

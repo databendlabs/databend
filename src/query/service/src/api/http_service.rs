@@ -16,17 +16,17 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_http::health_handler;
-use common_http::home::debug_home_handler;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_http::health_handler;
+use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
-use common_http::jeprof::debug_jeprof_dump_handler;
-use common_http::pprof::debug_pprof_handler;
-use common_http::stack::debug_dump_stack;
-use common_http::HttpError;
-use common_http::HttpShutdownHandler;
-use common_meta_types::anyerror::AnyError;
+use databend_common_http::jeprof::debug_jeprof_dump_handler;
+use databend_common_http::pprof::debug_pprof_handler;
+use databend_common_http::stack::debug_dump_stack;
+use databend_common_http::HttpError;
+use databend_common_http::HttpShutdownHandler;
+use databend_common_meta_types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::get;
@@ -80,10 +80,15 @@ impl HttpService {
                 get(super::http::v1::background_tasks::list_background_tasks),
             );
         if self.config.query.management_mode {
-            route = route.at(
-                "/v1/tenants/:tenant/tables",
-                get(super::http::v1::tenant_tables::list_tenant_tables_handler),
-            );
+            route = route
+                .at(
+                    "/v1/tenants/:tenant/tables",
+                    get(super::http::v1::tenant_tables::list_tenant_tables_handler),
+                )
+                .at(
+                    "v1/tenants/:tenant/stream_status",
+                    get(super::http::v1::stream_status::stream_status_handler),
+                );
         }
 
         #[cfg(feature = "memory-profiling")]
@@ -156,8 +161,10 @@ impl HttpService {
 #[async_trait::async_trait]
 impl Server for HttpService {
     #[async_backtrace::framed]
-    async fn shutdown(&mut self, graceful: bool) {
-        self.shutdown_handler.shutdown(graceful).await;
+    async fn shutdown(&mut self, _graceful: bool) {
+        // intendfully do nothing: sometimes we hope to diagnose the backtraces or metrics after
+        // the process got the sigterm signal, we can still leave the admin service port open until
+        // the process exited. it's not an user facing service, it's allowed to shutdown forcely.
     }
 
     #[async_backtrace::framed]

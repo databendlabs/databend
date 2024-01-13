@@ -1,0 +1,47 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+drop database if exists test_index
+
+statement ok
+create database test_index
+
+statement ok
+use test_index
+
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi;
+
+statement ok
+CREATE TABLE t (a int, b int, c int)
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
+
+statement ok
+CREATE AGGREGATING INDEX testi AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b
+
+query I
+SELECT b from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1
+2
+
+query II
+SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 1
+2 3

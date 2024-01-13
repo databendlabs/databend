@@ -16,19 +16,20 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_hashtable::FastHash;
-use common_hashtable::HashtableEntryMutRefLike;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::query_spill_prefix;
-use common_pipeline_core::Pipeline;
-use common_storage::DataOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::FastHash;
+use databend_common_hashtable::HashtableEntryMutRefLike;
+use databend_common_hashtable::HashtableEntryRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::FlightCompression;
+use databend_common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
 use crate::api::DataExchange;
@@ -42,18 +43,18 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupByDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupBySerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::HashTableCell;
-use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
-use crate::pipelines::processors::transforms::TransformGroupBySerializer;
-use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -241,6 +242,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_merge_serializer(
         &self,
         _: &MergeExchangeParams,
+        _compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -289,6 +291,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_shuffle_serializer(
         &self,
         shuffle_params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -316,6 +319,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         location_prefix.clone(),
                         schema.clone(),
                         local_pos,
+                        compression,
                     ),
                     false => TransformExchangeAggregateSerializer::create(
                         self.ctx.clone(),
@@ -325,6 +329,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         operator.clone(),
                         location_prefix.clone(),
                         params.clone(),
+                        compression,
                         schema.clone(),
                         local_pos,
                     ),

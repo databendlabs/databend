@@ -1,0 +1,260 @@
+statement ok
+drop database if exists db
+
+
+statement ok
+drop table if exists default.t
+
+
+statement ok
+drop table if exists default.t1
+
+
+statement ok
+create table default.t (id int not null, c1 tuple(int, int) not null)
+
+
+statement ok
+create table default.t1 (id int not null, c2 tuple(int, int) not null)
+
+
+statement ok
+create database db
+
+
+statement ok
+create table db.t (id int not null, c1 tuple(int, int) not null)
+
+statement ok
+create table db.t1 (id int not null, c1 tuple(int, int) not null)
+
+statement ok
+create table db.t2 (id2 int not null, c1 tuple(int, int) not null)
+
+statement error 1006
+insert into db.t(id) values(1)
+
+statement ok
+insert into db.t(id,c1) values(1,(0,0))
+
+statement error 1006
+insert into db.t1(id) values(2)
+
+statement ok
+insert into db.t1(id,c1) values(2,(0,0))
+
+statement error 1006
+insert into db.t2(id2) values(3)
+
+statement ok
+insert into db.t2(id2,c1) values(3,(0,0))
+
+
+statement ok
+insert into default.t values(1, (100,100))
+
+
+statement ok
+insert into default.t1 values(2, (200,200))
+
+
+query II
+select * exclude c1,  columns(* exclude c1) from db.t
+----
+1 1
+
+
+query T
+select * exclude (id) from db.t
+----
+(0,0)
+
+
+query T
+select t.* exclude (id) from db.t
+----
+(0,0)
+
+
+query T
+select db.t.* exclude (id) from db.t
+----
+(0,0)
+
+
+statement error 1065
+select db.t.* exclude (id, c1) from db.t
+
+
+query T
+select c.* exclude (id) from db.t as c
+----
+(0,0)
+
+
+statement error 1065
+select db.c.* exclude (id) from db.t as c
+
+
+statement error 1065
+select * exclude id from (select t.id as id, t.c1 as id from db.t) t1
+
+
+statement error 1065
+select t1.* exclude id from (select t.id as id, t.c1 as id from db.t) t1
+
+
+query ITITITIIT
+select *, t.* exclude c1, t1.* exclude (c1), t2.* exclude id from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id
+----
+1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
+
+
+query IT
+select db.t.* exclude (c1), default.t1.* exclude id from db.t join default.t1
+----
+1 (200,200)
+
+
+query TT
+select * exclude id from default.t1 join db.t
+----
+(200,200) (0,0)
+
+statement error 1065
+select db.t.* exclude (c1), default.t1.* exclude idcc from db.t join default.t1
+
+
+statement error 1065
+select * exclude c10 from (select * from db.t) t1
+
+
+statement error 1065
+select * exclude (id, c1) from (select * from db.t) t1
+
+
+statement error 1065
+select t1.* exclude (id, c1) from (select * from db.t) t1
+
+
+statement error 1065
+select * exclude (c1, c1) from db.t
+
+
+statement error 1065
+select * exclude (id, id) from db.t
+
+
+query I
+select * exclude C1 from db.t
+----
+1
+
+
+query T
+select * exclude (ID) from db.t
+----
+(0,0)
+
+
+query T
+select t.* exclude (ID) from db.t
+----
+(0,0)
+
+
+query T
+select db.t.* exclude (ID) from db.t
+----
+(0,0)
+
+
+statement error 1065
+select db.t.* exclude (ID, C1) from db.t
+
+
+query T
+select c.* exclude (ID) from db.t as c
+----
+(0,0)
+
+
+query ITIT
+select columns(* exclude c1), columns(* exclude id) from db.t
+----
+1 (0,0)
+
+
+query ITIT
+select columns(a -> length(a) = 2), columns('i.*'), columns(a -> a like '%c%') from db.t
+----
+1 (0,0) 1 (0,0)
+
+statement ok
+create table db.abc(score int, age int, name string, issues int, father string) as select 1,2,'jack',3,'frank';
+
+query ITITI
+select columns(a -> a like '%re%' or a like '%er%'), columns(a -> a = 'age' or a in ('issues', 'name'))  from db.abc;
+----
+1 frank 2 jack 3
+
+
+statement error 1065
+select db.c.* exclude (ID) from db.t as c
+
+
+statement error 1065
+select * exclude ID from (select t.id as id, t.c1 as id from db.t) t1
+
+
+statement error 1065
+select t1.* exclude ID from (select t.id as id, t.c1 as id from db.t) t1
+
+
+query ITITITIIT
+select *, t.* exclude C1, t1.* exclude (C1), t2.* exclude ID from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id
+----
+1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
+
+
+query IT
+select db.t.* exclude (C1), default.t1.* exclude ID from db.t join default.t1
+----
+1 (200,200)
+
+
+
+statement error 1065
+select db.t.* exclude (C1), default.t1.* exclude IDCC from db.t join default.t1
+
+
+statement error 1065
+select * exclude C10 from (select * from db.t) t1
+
+
+statement error 1065
+select * exclude (ID, C1) from (select * from db.t) t1
+
+
+statement error 1065
+select t1.* exclude (ID, C1) from (select * from db.t) t1
+
+
+statement error 1065
+select * exclude (C1, C1) from db.t
+
+
+statement error 1065
+select * exclude (ID, ID) from db.t
+
+
+statement ok
+drop database if exists db
+
+
+statement ok
+drop table default.t
+
+
+statement ok
+drop table default.t1

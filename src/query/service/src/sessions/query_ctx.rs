@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::min;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -29,58 +30,68 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use chrono_tz::Tz;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::StageTableInfo;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::MaterializedCtesBlocks;
-use common_catalog::table_context::StageAttachment;
-use common_config::GlobalConfig;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::date_helper::TzFactory;
-use common_expression::DataBlock;
-use common_expression::FunctionContext;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
-use common_settings::Settings;
-use common_sql::IndexType;
-use common_storage::metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::FileStatus;
-use common_storage::StageFileInfo;
-use common_storage::StorageMetrics;
-use common_storages_fuse::TableContext;
-use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetRSTable;
-use common_storages_result_cache::ResultScan;
-use common_storages_stage::StageTable;
-use common_users::GrantObjectVisibilityChecker;
-use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::MaterializedCtesBlocks;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_config::GlobalConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::date_helper::TzFactory;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::FileStatus;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StorageMetrics;
+use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_fuse::TableContext;
+use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_parquet::Parquet2Table;
+use databend_common_storages_parquet::ParquetRSTable;
+use databend_common_storages_result_cache::ResultScan;
+use databend_common_storages_stage::StageTable;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
+use xorf::BinaryFuse16;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -92,11 +103,12 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
-const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -191,8 +203,8 @@ impl QueryContext {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot USE '{}', because the '{}' doesn't exist",
-                    new_database_name, new_database_name
+                    "Cannot use database '{}': It does not exist.",
+                    new_database_name
                 )));
             }
         };
@@ -235,6 +247,10 @@ impl QueryContext {
 
     pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
         self.shared.get_affect()
+    }
+
+    pub fn pop_warnings(&self) -> Vec<String> {
+        self.shared.pop_warnings()
     }
 
     pub fn get_data_metrics(&self) -> StorageMetrics {
@@ -450,6 +466,17 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
+    // Need compact after write, over the threshold.
+    fn get_need_compact_after_write(&self) -> bool {
+        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    }
+
+    fn set_need_compact_after_write(&self, enable: bool) {
+        self.shared
+            .auto_compact_after_write
+            .store(enable, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: QueryKind, query: String) {
         self.shared.attach_query_str(kind, query);
     }
@@ -491,6 +518,10 @@ impl TableContext for QueryContext {
         self.shared.get_error()
     }
 
+    fn push_warning(&self, warn: String) {
+        self.shared.push_warning(warn)
+    }
+
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
@@ -504,6 +535,10 @@ impl TableContext for QueryContext {
     }
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_available_roles().await
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_effective_roles().await
     }
 
     fn get_current_session_id(&self) -> String {
@@ -541,6 +576,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
+        let external_server_connect_timeout_secs = self
+            .get_settings()
+            .get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs = self
+            .get_settings()
+            .get_external_server_request_timeout_secs()?;
+
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
@@ -558,6 +600,9 @@ impl TableContext for QueryContext {
             openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+
+            external_server_connect_timeout_secs,
+            external_server_request_timeout_secs,
         })
     }
 
@@ -566,12 +611,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
+        if !self.query_settings.is_changed() {
             unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
+                self.query_settings
+                    .unchecked_apply_changes(&self.shared.get_settings());
             }
         }
+
         self.query_settings.clone()
     }
 
@@ -648,20 +694,6 @@ impl TableContext for QueryContext {
         None
     }
 
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.shared.apply_changed_settings(changes)
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_changed_settings();
-            unsafe {
-                self.query_settings.unchecked_apply_changes(session_change);
-            }
-        }
-        self.query_settings.get_changes()
-    }
-
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
@@ -681,6 +713,9 @@ impl TableContext for QueryContext {
             }
         }
     }
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        self.shared.get_connection(name).await
+    }
 
     /// Fetch a Table by db and table name.
     ///
@@ -696,7 +731,23 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(catalog, database, table).await
+        let table = self.shared.get_table(catalog, database, table).await?;
+        // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
+        // but there is no way to access dyn TableContext.
+        let table: Arc<dyn Table> = if table.engine() == "ICEBERG" {
+            let sp = get_storage_params_from_options(self, table.options()).await?;
+            let mut info = table.get_table_info().to_owned();
+            info.meta.storage_params = Some(sp);
+            IcebergTable::try_create(info.to_owned())?.into()
+        } else if table.engine() == "DELTA" {
+            let sp = get_storage_params_from_options(self, table.options()).await?;
+            let mut info = table.get_table_info().to_owned();
+            info.meta.storage_params = Some(sp);
+            DeltaTable::try_create(info.to_owned())?.into()
+        } else {
+            table
+        };
+        Ok(table)
     }
 
     #[async_backtrace::framed]
@@ -715,9 +766,9 @@ impl TableContext for QueryContext {
             .await?;
         let table_id = table.get_id();
 
-        let mut limit: usize = 0;
+        let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
-        let batch_size = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
+        let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
 
         let mut results = Vec::with_capacity(files.len());
 
@@ -730,16 +781,19 @@ impl TableContext for QueryContext {
                 .await?
                 .file_info;
 
-            metrics_inc_filter_out_copied_files_request_milliseconds(
+            metrics_inc_copy_filter_out_copied_files_request_milliseconds(
                 Instant::now().duration_since(start_request).as_millis() as u64,
             );
             // Colored
             for file in chunk {
                 if !copied_files.contains_key(&file.path) {
                     results.push(file.clone());
-                    limit += 1;
-                    if limit == max_files {
+                    result_size += 1;
+                    if result_size == max_files {
                         return Ok(results);
+                    }
+                    if result_size > COPY_MAX_FILES_PER_COMMIT {
+                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
                 }
             }
@@ -775,6 +829,12 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
+    fn clear_segment_locations(&self) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.clear();
+        Ok(())
+    }
+
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self
             .inserted_segment_locs
@@ -795,10 +855,114 @@ impl TableContext for QueryContext {
         self.shared.copy_status.clone()
     }
 
+    fn add_merge_status(&self, merge_status: MergeStatus) {
+        self.shared.merge_status.write().merge_status(merge_status)
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        self.shared.merge_status.clone()
+    }
+
     fn get_license_key(&self) -> String {
-        self.get_settings()
-            .get_enterprise_license()
-            .unwrap_or_default()
+        unsafe {
+            self.get_settings()
+                .get_enterprise_license()
+                .unwrap_or_default()
+        }
+    }
+
+    fn add_query_profiles(&self, profiles: &[PlanProfile]) {
+        let mut merged_profiles = self.shared.query_profiles.write();
+
+        for query_profile in profiles {
+            match merged_profiles.entry(query_profile.id) {
+                Entry::Vacant(v) => {
+                    v.insert(query_profile.clone());
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().merge(query_profile);
+                }
+            };
+        }
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        self.shared
+            .query_profiles
+            .read()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>()
+    }
+
+    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        let mut queries_profile = SessionManager::instance().get_queries_profile();
+
+        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
+
+        for (query_id, profiles) in exchange_profiles {
+            match queries_profile.entry(query_id) {
+                Entry::Vacant(v) => {
+                    v.insert(profiles);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(profiles);
+                }
+            }
+        }
+
+        queries_profile
+    }
+
+    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        match runtime_filters.entry(filters.0) {
+            Entry::Vacant(v) => {
+                v.insert(filters.1);
+            }
+            Entry::Occupied(mut v) => {
+                for filter in filters.1.get_inlist() {
+                    v.get_mut().add_inlist(filter.clone());
+                }
+                for filter in filters.1.get_min_max() {
+                    v.get_mut().add_min_max(filter.clone());
+                }
+                for filter in filters.1.blooms() {
+                    v.get_mut().add_bloom(filter);
+                }
+            }
+        }
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_bloom()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_inlist()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => (v.get_min_max()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool {
+        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
+            return !runtime_filter.get_bloom().is_empty();
+        }
+        false
     }
 }
 

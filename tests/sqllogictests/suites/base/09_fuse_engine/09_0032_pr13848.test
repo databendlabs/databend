@@ -1,0 +1,7 @@
+statement ok
+set enable_distributed_merge_into = 1;
+
+include ./09_0034_pr13848_without_distributed_enable.test
+
+statement ok
+set enable_distributed_merge_into = 0;

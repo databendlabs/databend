@@ -18,25 +18,25 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableSchema;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_sql::executor::OnConflictField;
-use storages_common_table_meta::meta::ColumnStatistics;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchema;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
-use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
+use crate::operations::replace_into::mutator::ReplaceIntoMutator;
 
 pub struct UnbranchedReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,
@@ -53,6 +53,7 @@ pub struct UnbranchedReplaceIntoProcessor {
 }
 
 impl UnbranchedReplaceIntoProcessor {
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: &dyn TableContext,
@@ -86,11 +87,13 @@ impl UnbranchedReplaceIntoProcessor {
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe(self) -> Pipe {
         let pipe_item = self.into_pipe_item();
         Pipe::create(1, 1, vec![pipe_item])
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port_merge_into_action = self.output_port_merge_into_action.clone();

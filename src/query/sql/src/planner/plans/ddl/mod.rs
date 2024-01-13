@@ -14,10 +14,12 @@
 
 mod account;
 mod catalog;
+mod connection;
 mod database;
 mod file_format;
 mod index;
 mod stage;
+mod stream;
 mod table;
 mod task;
 mod udf;
@@ -26,10 +28,12 @@ mod virtual_column;
 
 pub use account::*;
 pub use catalog::*;
+pub use connection::*;
 pub use database::*;
 pub use file_format::*;
 pub use index::*;
 pub use stage::*;
+pub use stream::*;
 pub use table::*;
 pub use task::*;
 pub use udf::*;

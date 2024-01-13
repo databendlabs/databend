@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_expression::ColumnId;
+use databend_common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 

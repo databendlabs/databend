@@ -17,39 +17,39 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_base::base::tokio;
-use common_cache::Cache;
-use common_expression::types::Int32Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::statistics::gen_columns_statistics;
-use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
-use common_storages_fuse::FuseStorageFormat;
-use databend_query::test_kits::block_writer::BlockWriter;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
+use databend_common_base::base::tokio;
+use databend_common_cache::Cache;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::statistics::gen_columns_statistics;
+use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_query::test_kits::*;
+use databend_storages_common_cache::InMemoryCacheBuilder;
+use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use storages_common_cache::InMemoryCacheBuilder;
-use storages_common_cache::InMemoryItemCacheHolder;
-use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::Compression;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SingleColumnMeta;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::Versioned;
 use sysinfo::get_current_pid;
 use sysinfo::ProcessExt;
 use sysinfo::System;
@@ -67,7 +67,7 @@ use uuid::Uuid;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result<()> {
+async fn test_index_meta_cache_size_file_meta_data() -> databend_common_exception::Result<()> {
     let thrift_file_meta = setup().await?;
 
     let cache_number = 300_000;
@@ -97,7 +97,7 @@ async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()> {
+async fn test_index_meta_cache_size_bloom_meta() -> databend_common_exception::Result<()> {
     let thrift_file_meta = setup().await?;
 
     let cache_number = 300_000;
@@ -127,7 +127,7 @@ async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()>
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_random_location_memory_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_random_location_memory_size() -> common_exception::Result<()> {
+async fn test_random_location_memory_size() -> databend_common_exception::Result<()> {
     // generate random location of Type Location
     let location_gen = TableMetaLocationGenerator::with_prefix("/root".to_string());
 
@@ -160,7 +160,7 @@ async fn test_random_location_memory_size() -> common_exception::Result<()> {
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_info_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_info_size() -> common_exception::Result<()> {
+async fn test_segment_info_size() -> databend_common_exception::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
@@ -203,7 +203,7 @@ async fn test_segment_info_size() -> common_exception::Result<()> {
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_raw_bytes_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
+async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
@@ -247,7 +247,7 @@ async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_raw_repr_bytes_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
+async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
@@ -286,7 +286,9 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
     Ok(())
 }
 
-fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Result<SegmentInfo> {
+fn build_test_segment_info(
+    num_blocks_per_seg: usize,
+) -> databend_common_exception::Result<SegmentInfo> {
     let col_meta = ColumnMeta::Parquet(SingleColumnMeta {
         offset: 0,
         len: 0,
@@ -373,7 +375,7 @@ where T: Clone {
     }
 }
 
-async fn setup() -> common_exception::Result<ThriftFileMetaData> {
+async fn setup() -> databend_common_exception::Result<ThriftFileMetaData> {
     let fields = (0..23)
         .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
         .collect::<Vec<_>>();

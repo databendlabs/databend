@@ -15,24 +15,24 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_catalog::table::AppendMode;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_meta_app::principal::StageFileFormatType;
-use common_pipeline_sources::AsyncSourcer;
-use common_sql::executor::DistributedInsertSelect;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::Insert;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::NameResolutionContext;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans::Insert;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::NameResolutionContext;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_refresh_agg_index;
-use crate::interpreters::common::RefreshAggIndexDesc;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -169,7 +169,7 @@ impl Interpreter for InsertInterpreter {
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
-                let (mut select_plan, select_column_bindings) = match plan.as_ref() {
+                let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                     Plan::Query {
                         s_expr,
                         metadata,
@@ -181,10 +181,14 @@ impl Interpreter for InsertInterpreter {
                         (
                             builder1.build(s_expr, bind_context.column_set()).await?,
                             bind_context.columns.clone(),
+                            metadata,
                         )
                     }
                     _ => unreachable!(),
                 };
+
+                let update_stream_meta =
+                    build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
 
                 let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
                 let catalog_info = catalog.info();
@@ -237,22 +241,24 @@ impl Interpreter for InsertInterpreter {
                     self.ctx.clone(),
                     &mut build_res.main_pipeline,
                     None,
+                    update_stream_meta,
                     self.plan.overwrite,
                     None,
+                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 )?;
 
-                let refresh_agg_index_desc = RefreshAggIndexDesc {
-                    catalog: self.plan.catalog.clone(),
-                    database: self.plan.database.clone(),
-                    table: self.plan.table.clone(),
-                };
-
-                hook_refresh_agg_index(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    refresh_agg_index_desc,
-                )
-                .await?;
+                //  Execute the hook operator.
+                {
+                    let hook_operator = HookOperator::create(
+                        self.ctx.clone(),
+                        self.plan.catalog.clone(),
+                        self.plan.database.clone(),
+                        self.plan.table.clone(),
+                        "insert_into_table".to_owned(),
+                        true,
+                    );
+                    hook_operator.execute(&mut build_res.main_pipeline).await;
+                }
 
                 return Ok(build_res);
             }
@@ -270,22 +276,24 @@ impl Interpreter for InsertInterpreter {
             table.clone(),
             self.plan.schema(),
             None,
+            vec![],
             self.plan.overwrite,
             append_mode,
+            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 
-        let refresh_agg_index_desc = RefreshAggIndexDesc {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-        };
-
-        hook_refresh_agg_index(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            refresh_agg_index_desc,
-        )
-        .await?;
+        //  Execute the hook operator.
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                "insert_into_table".to_owned(),
+                true,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
+        }
 
         Ok(build_res)
     }

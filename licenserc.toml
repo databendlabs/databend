@@ -5,8 +5,6 @@ headerPath = "Apache-2.0.txt"
 excludes = [
     "scripts",
     "docker",
-    "docs",
-    "website",
     "tests",
     "tools",
     "benchmark",

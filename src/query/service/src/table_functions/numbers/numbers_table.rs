@@ -19,40 +19,40 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::TableStatistics;
-use common_catalog::table_args::TableArgs;
-use common_exception::Result;
-use common_expression::type_check::check_number;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::NumberDataType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_sources::EmptySource;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
 
 use super::numbers_part::generate_numbers_parts;
 use super::NumbersPartInfo;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
@@ -210,7 +210,10 @@ impl Table for NumbersTable {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         Ok(Some(TableStatistics {
             num_rows: Some(self.total),
             data_size: Some(self.total * 8),

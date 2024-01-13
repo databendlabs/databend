@@ -17,54 +17,55 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::DataType;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_expression::HashMethod;
-use common_expression::HashMethodDictionarySerializer;
-use common_expression::HashMethodFixedKeys;
-use common_expression::HashMethodKeysU128;
-use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodSerializer;
-use common_expression::HashMethodSingleString;
-use common_expression::KeysState;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::DictionaryStringHashMap;
-use common_hashtable::FastHash;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableEntryMutRefLike;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
-use common_hashtable::LookupHashMap;
-use common_hashtable::PartitionedHashMap;
-use common_hashtable::ShortStringHashMap;
-use common_hashtable::StringHashMap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodDictionarySerializer;
+use databend_common_expression::HashMethodFixedKeys;
+use databend_common_expression::HashMethodKeysU128;
+use databend_common_expression::HashMethodKeysU256;
+use databend_common_expression::HashMethodSerializer;
+use databend_common_expression::HashMethodSingleBinary;
+use databend_common_expression::KeyAccessor;
+use databend_common_expression::KeysState;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::DictionaryStringHashMap;
+use databend_common_hashtable::FastHash;
+use databend_common_hashtable::HashMap;
+use databend_common_hashtable::HashtableEntryMutRefLike;
+use databend_common_hashtable::HashtableEntryRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_hashtable::LookupHashMap;
+use databend_common_hashtable::PartitionedHashMap;
+use databend_common_hashtable::ShortStringHashMap;
+use databend_common_hashtable::StringHashMap;
 use ethnum::U256;
 use log::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use super::BUCKETS_LG2;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::DictionarySerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::DictionaryStringKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::DictionarySerializedKeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::HashTableCell;
+use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
-use crate::pipelines::processors::transforms::HashTableCell;
-use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
-use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::transforms::group_by::BinaryKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::DictionaryBinaryKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::DictionarySerializedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::FixedKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::FixedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::FixedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::SerializedKeysGroupColumnsBuilder;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -78,7 +79,7 @@ use crate::pipelines::processors::AggregatorParams;
 //
 // use bumpalo::Bump;
 // use databend_query::common::HashTable;
-// use common_expression::HashMethodSerializer;
+// use databend_common_expression::HashMethodSerializer;
 // use databend_query::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 // use databend_query::pipelines::processors::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 // use databend_query::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
@@ -402,7 +403,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
+impl PolymorphicKeysHelper<HashMethodSingleBinary> for HashMethodSingleBinary {
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = ShortStringHashMap<[u8], T>;
@@ -414,18 +415,18 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         Ok(ShortStringHashMap::new(bump))
     }
 
-    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = BinaryKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_> {
-        StringKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> BinaryKeysColumnBuilder<'_> {
+        BinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -457,18 +458,18 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         Ok(StringHashMap::new(bump))
     }
 
-    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = BinaryKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_> {
-        StringKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> BinaryKeysColumnBuilder<'_> {
+        BinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+        SerializedKeysColumnIter::create(column.as_binary().ok_or_else(|| {
             ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
         })?)
     }
@@ -500,14 +501,14 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
         Ok(DictionaryStringHashMap::new(bump, self.dict_keys))
     }
 
-    type ColumnBuilder<'a> = DictionaryStringKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = DictionaryBinaryKeysColumnBuilder<'a>;
 
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
     ) -> Self::ColumnBuilder<'_> {
-        DictionaryStringKeysColumnBuilder::create(capacity, value_capacity)
+        DictionaryBinaryKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = DictionarySerializedKeysColumnIter;
@@ -515,7 +516,7 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
         DictionarySerializedKeysColumnIter::create(
             self.dict_keys,
-            column.as_string().ok_or_else(|| {
+            column.as_binary().ok_or_else(|| {
                 ErrorCode::IllegalDataType(
                     "Illegal data type for SerializedKeysColumnIter".to_string(),
                 )
@@ -618,11 +619,13 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
         self.method.build_keys_iter(keys_state)
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        self.method.build_keys_iter_and_hashes(keys_state)
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+        self.method
+            .build_keys_accessor_and_hashes(keys_state, hashes)
     }
 }
 

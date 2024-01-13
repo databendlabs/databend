@@ -15,14 +15,13 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::ValueType;
-use common_expression::ColumnBuilder;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::ColumnBuilder;
 
 // These types can downcast their builders successfully.
 // TODO(@b41sh):  Variant => VariantType can't be used because it will use Scalar::String to compare
@@ -110,7 +109,7 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
 }
 
 pub trait ScalarStateFunc<T: ValueType>:
-    Serialize + DeserializeOwned + Send + Sync + 'static
+    BorshSerialize + BorshDeserialize + Send + Sync + 'static
 {
     fn new() -> Self;
     fn mem_size() -> Option<usize> {
@@ -122,22 +121,21 @@ pub trait ScalarStateFunc<T: ValueType>:
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize)]
 pub struct ScalarState<T, C>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
     pub value: Option<T::Scalar>,
-    #[serde(skip)]
+    #[borsh(skip)]
     _c: PhantomData<C>,
 }
 
 impl<T, C> Default for ScalarState<T, C>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
@@ -150,7 +148,7 @@ where
 impl<T, C> ScalarStateFunc<T> for ScalarState<T, C>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
     C: ChangeIf<T> + Default,
 {
     fn new() -> Self {

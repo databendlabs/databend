@@ -16,52 +16,11 @@ pub use openraft::error::ChangeMembershipError;
 pub use openraft::error::EmptyMembership;
 pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::raft_types::ClientWriteError;
-use crate::raft_types::ForwardToLeader;
 use crate::MetaDataError;
 use crate::MetaOperationError;
 use crate::RaftError;
-
-// TODO: Remove this error because it has only one variant
-// ---
-/// Collection of errors that occur when writing a raft-log to local raft node.
-/// This does not include the errors raised when writing a membership log.
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum RaftWriteError {
-    #[error(transparent)]
-    ForwardToLeader(#[from] ForwardToLeader),
-}
-
-impl RaftWriteError {
-    pub fn from_raft_err(e: ClientWriteError) -> Self {
-        match e {
-            ClientWriteError::ForwardToLeader(to_leader) => to_leader.into(),
-            ClientWriteError::ChangeMembershipError(_) => {
-                unreachable!("there should not be a ChangeMembershipError for client_write")
-            }
-        }
-    }
-}
-
-/// RaftChangeMembershipError is a super set of RaftWriteError.
-impl From<RaftWriteError> for RaftChangeMembershipError {
-    fn from(e: RaftWriteError) -> Self {
-        match e {
-            RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
-        }
-    }
-}
-
-impl From<RaftWriteError> for MetaOperationError {
-    fn from(e: RaftWriteError) -> Self {
-        match e {
-            RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
-        }
-    }
-}
 
 // Collection of errors that occur when change membership on local raft node.
 pub type RaftChangeMembershipError = ClientWriteError;

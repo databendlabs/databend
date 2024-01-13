@@ -17,29 +17,29 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Filters;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::PrewhereInfo;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumnInfo;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PrewhereInfo;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -70,7 +70,6 @@ pub struct TableScan {
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
-    // Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -113,28 +112,12 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        // add virtual columns to scan
-        let mut virtual_columns = ColumnSet::new();
-        for column in self
-            .metadata
-            .read()
-            .virtual_columns_by_table_index(scan.table_index)
-            .iter()
-        {
-            match column {
-                ColumnEntry::VirtualColumn(virtual_column) => {
-                    virtual_columns.insert(virtual_column.column_index);
-                }
-                _ => unreachable!(),
-            }
-        }
-
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
-        let scan = if scan.columns.is_empty() && virtual_columns.is_empty() {
+        let scan = if scan.columns.is_empty() {
             scan.clone()
         } else {
-            let columns = scan.columns.union(&virtual_columns).cloned().collect();
+            let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
             if let Some(ref mut pw) = prewhere {
@@ -162,17 +145,21 @@ impl PhysicalPlanBuilder {
                 continue;
             }
             let column = metadata.column(*index);
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
-                if path_indices.is_some() {
-                    has_inner_column = true;
+            match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) => {
+                    if path_indices.is_some() {
+                        has_inner_column = true;
+                    }
                 }
-            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                internal_column, ..
-            }) = column
-            {
-                project_internal_columns.insert(*index, internal_column.to_owned());
-            } else if let ColumnEntry::VirtualColumn(_) = column {
-                has_virtual_column = true;
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => {
+                    project_internal_columns.insert(*index, internal_column.to_owned());
+                }
+                ColumnEntry::VirtualColumn(_) => {
+                    has_virtual_column = true;
+                }
+                _ => {}
             }
 
             if let Some(prewhere) = &scan.prewhere {
@@ -212,7 +199,7 @@ impl PhysicalPlanBuilder {
             self.ctx.set_cacheable(false);
         }
 
-        let mut table_schema = table.schema();
+        let mut table_schema = table.schema_with_stream();
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
             for internal_column in project_internal_columns.values() {
@@ -241,7 +228,7 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
-
+        source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
@@ -500,31 +487,37 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
-        let mut virtual_column_infos = Vec::new();
-        for index in columns.iter() {
+    fn build_virtual_columns(&self, indices: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
+        let mut column_and_indices = Vec::new();
+        for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
                 let virtual_column_info = VirtualColumnInfo {
                     source_name: virtual_column.source_column_name.clone(),
                     name: virtual_column.column_name.clone(),
-                    paths: virtual_column.paths.clone(),
+                    key_paths: virtual_column.key_paths.clone(),
                     data_type: Box::new(virtual_column.data_type.clone()),
                 };
-                virtual_column_infos.push(virtual_column_info);
+                column_and_indices.push((virtual_column_info, *index));
             }
         }
-        if virtual_column_infos.is_empty() {
-            None
-        } else {
-            Some(virtual_column_infos)
+        if column_and_indices.is_empty() {
+            return None;
         }
+        // Make the order of virtual columns the same as their indexes.
+        column_and_indices.sort_by_key(|(_, index)| *index);
+
+        let virtual_column_infos = column_and_indices
+            .into_iter()
+            .map(|(column, _)| column)
+            .collect::<Vec<_>>();
+        Some(virtual_column_infos)
     }
 
     pub(crate) fn build_agg_index(
         agg: &crate::plans::AggIndexInfo,
         source_fields: &[DataField],
-    ) -> Result<common_catalog::plan::AggIndexInfo> {
+    ) -> Result<databend_common_catalog::plan::AggIndexInfo> {
         // Build projection
         let used_columns = agg.used_columns();
         let mut col_indices = Vec::with_capacity(used_columns.len());
@@ -571,7 +564,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(common_catalog::plan::AggIndexInfo {
+        Ok(databend_common_catalog::plan::AggIndexInfo {
             index_id: agg.index_id,
             filter,
             selection,

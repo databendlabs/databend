@@ -14,15 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::TableSchemaRef;
-use storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::io::SegmentsIO;
-use crate::metrics::metrics_inc_bytes_segment_range_pruning_after;
-use crate::metrics::metrics_inc_bytes_segment_range_pruning_before;
-use crate::metrics::metrics_inc_segments_range_pruning_after;
-use crate::metrics::metrics_inc_segments_range_pruning_before;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Range;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Range;
+use databend_common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
 use strum::IntoEnumIterator;
@@ -72,7 +72,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(kind) if kind == TokenKind::Error => Some(Err(ErrorCode::SyntaxException(
+            Some(TokenKind::Error) => Some(Err(ErrorCode::SyntaxException(
                 "unable to recognize the rest tokens".to_string(),
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
@@ -159,7 +159,7 @@ pub enum TokenKind {
     #[regex(r"0[xX][a-fA-F0-9]+")]
     MySQLLiteralHex,
 
-    #[regex(r"[0-9]+")]
+    #[regex(r"[0-9]+(_|[0-9])*")]
     LiteralInteger,
 
     #[regex(r"[0-9]+[eE][+-]?[0-9]+")]
@@ -292,6 +292,18 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("?&")]
     QuestionAnd,
+    /// Used as JSON operator.
+    #[token("<@")]
+    ArrowAt,
+    /// Used as JSON operator.
+    #[token("@>")]
+    AtArrow,
+    /// Used as JSON operator.
+    #[token("@?")]
+    AtQuestion,
+    /// Used as JSON operator.
+    #[token("@@")]
+    AtAt,
 
     // Keywords
     //
@@ -338,6 +350,10 @@ pub enum TokenKind {
     ASC,
     #[token("ANTI", ignore(ascii_case))]
     ANTI,
+    #[token("ASYNC", ignore(ascii_case))]
+    ASYNC,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
@@ -384,6 +400,8 @@ pub enum TokenKind {
     COMPACT,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CONNECTIONS", ignore(ascii_case))]
+    CONNECTIONS,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
@@ -406,8 +424,6 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("ATTACH", ignore(ascii_case))]
-    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
@@ -466,6 +482,8 @@ pub enum TokenKind {
     DOW,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
+    #[token("DELTA", ignore(ascii_case))]
+    DELTA,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
@@ -480,6 +498,8 @@ pub enum TokenKind {
     EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
+    #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
+    EMPTY_FIELD_AS,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
@@ -628,8 +648,16 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LATERAL", ignore(ascii_case))]
+    LATERAL,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
+    #[token("LOCKS", ignore(ascii_case))]
+    LOCKS,
+    #[token("ACCOUNT", ignore(ascii_case))]
+    ACCOUNT,
+    #[token("SECONDARY", ignore(ascii_case))]
+    SECONDARY,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
     /// L2DISTANCE op, from https://github.com/pgvector/pgvector
@@ -723,6 +751,30 @@ pub enum TokenKind {
     PARTITION,
     #[token("PARQUET", ignore(ascii_case))]
     PARQUET,
+    #[token("PASSWORD", ignore(ascii_case))]
+    PASSWORD,
+    #[token("PASSWORD_MIN_LENGTH", ignore(ascii_case))]
+    PASSWORD_MIN_LENGTH,
+    #[token("PASSWORD_MAX_LENGTH", ignore(ascii_case))]
+    PASSWORD_MAX_LENGTH,
+    #[token("PASSWORD_MIN_UPPER_CASE_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_UPPER_CASE_CHARS,
+    #[token("PASSWORD_MIN_LOWER_CASE_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_LOWER_CASE_CHARS,
+    #[token("PASSWORD_MIN_NUMERIC_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_NUMERIC_CHARS,
+    #[token("PASSWORD_MIN_SPECIAL_CHARS", ignore(ascii_case))]
+    PASSWORD_MIN_SPECIAL_CHARS,
+    #[token("PASSWORD_MIN_AGE_DAYS", ignore(ascii_case))]
+    PASSWORD_MIN_AGE_DAYS,
+    #[token("PASSWORD_MAX_AGE_DAYS", ignore(ascii_case))]
+    PASSWORD_MAX_AGE_DAYS,
+    #[token("PASSWORD_MAX_RETRIES", ignore(ascii_case))]
+    PASSWORD_MAX_RETRIES,
+    #[token("PASSWORD_LOCKOUT_TIME_MINS", ignore(ascii_case))]
+    PASSWORD_LOCKOUT_TIME_MINS,
+    #[token("PASSWORD_HISTORY", ignore(ascii_case))]
+    PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
     #[token("PIPELINE", ignore(ascii_case))]
@@ -771,6 +823,10 @@ pub enum TokenKind {
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
     MATCHED,
+    #[token("MISSING_FIELD_AS", ignore(ascii_case))]
+    MISSING_FIELD_AS,
+    #[token("NULL_FIELD_AS", ignore(ascii_case))]
+    NULL_FIELD_AS,
     #[token("UNMATCHED", ignore(ascii_case))]
     UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
@@ -791,6 +847,8 @@ pub enum TokenKind {
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
     PRIVILEGES,
+    #[token("QUALIFY", ignore(ascii_case))]
+    QUALIFY,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
     #[token("RETAIN", ignore(ascii_case))]
@@ -813,6 +871,8 @@ pub enum TokenKind {
     RLIKE,
     #[token("RAW", ignore(ascii_case))]
     RAW,
+    #[token("OPTIMIZED", ignore(ascii_case))]
+    OPTIMIZED,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]
@@ -879,6 +939,10 @@ pub enum TokenKind {
     STATUS,
     #[token("STORED", ignore(ascii_case))]
     STORED,
+    #[token("STREAM", ignore(ascii_case))]
+    STREAM,
+    #[token("STREAMS", ignore(ascii_case))]
+    STREAMS,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -891,6 +955,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
+    #[token("STORAGE_TYPE", ignore(ascii_case))]
+    STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -1033,8 +1099,6 @@ pub enum TokenKind {
     WRITE,
     #[token("UDF", ignore(ascii_case))]
     UDF,
-    #[token("USAGEUDF", ignore(ascii_case))]
-    USAGEUDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
@@ -1057,6 +1121,16 @@ pub enum TokenKind {
     SUSPEND,
     #[token("RESUME", ignore(ascii_case))]
     RESUME,
+    #[token("PIPE", ignore(ascii_case))]
+    PIPE,
+    #[token("AUTO_INGEST", ignore(ascii_case))]
+    AUTO_INGEST,
+    #[token("PIPE_EXECUTION_PAUSED", ignore(ascii_case))]
+    PIPE_EXECUTION_PAUSED,
+    #[token("PREFIX", ignore(ascii_case))]
+    PREFIX,
+    #[token("MODIFIED_AFTER", ignore(ascii_case))]
+    MODIFIED_AFTER,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1160,7 +1234,7 @@ impl TokenKind {
             // | TokenKind::CURRENT_DATE
             // | TokenKind::CURRENT_ROLE
             // | TokenKind::CURRENT_TIME
-            | TokenKind::CURRENT_TIMESTAMP
+            // | TokenKind::CURRENT_TIMESTAMP
             // | TokenKind::CURRENT_USER
             // | TokenKind::DEC
             // | TokenKind::DECIMAL
@@ -1188,7 +1262,7 @@ impl TokenKind {
             | TokenKind::INT
             | TokenKind::INTEGER
             | TokenKind::INTERVAL
-            // | TokenKind::LATERAL
+            | TokenKind::LATERAL
             | TokenKind::LEADING
             // | TokenKind::LEAST
             // | TokenKind::LOCALTIME
@@ -1248,7 +1322,7 @@ impl TokenKind {
             // | TokenKind::XMLSERIALIZE
             // | TokenKind::XMLTABLE
             | TokenKind::WHEN
-            | TokenKind::ARRAY
+            // | TokenKind::ARRAY
             | TokenKind::AS
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
@@ -1269,6 +1343,7 @@ impl TokenKind {
             | TokenKind::OF
             | TokenKind::ORDER
             | TokenKind::OVER
+            | TokenKind::QUALIFY
             | TokenKind::ROWS
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
@@ -1291,6 +1366,7 @@ impl TokenKind {
             | TokenKind::ANALYZE
             | TokenKind::AND
             | TokenKind::ANY
+            | TokenKind::FUNCTION
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC
@@ -1305,6 +1381,7 @@ impl TokenKind {
             // | TokenKind::COLUMN
             // | TokenKind::CONCURRENTLY
             // | TokenKind::CONSTRAINT
+            | TokenKind::CONNECTION
             | TokenKind::CROSS
             // | TokenKind::CURRENT_CATALOG
             // | TokenKind::CURRENT_DATE
@@ -1322,6 +1399,7 @@ impl TokenKind {
             | TokenKind::FALSE
             // | TokenKind::FOREIGN
             // | TokenKind::FREEZE
+            | TokenKind::FOR
             | TokenKind::FULL
             // | TokenKind::ILIKE
             | TokenKind::IN
@@ -1329,7 +1407,7 @@ impl TokenKind {
             | TokenKind::INNER
             | TokenKind::IS
             | TokenKind::JOIN
-            // | TokenKind::LATERAL
+            | TokenKind::LATERAL
             | TokenKind::LEADING
             | TokenKind::LEFT
             | TokenKind::LIKE
@@ -1371,7 +1449,6 @@ impl TokenKind {
             | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
-            | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
             | TokenKind::GROUP
@@ -1388,11 +1465,13 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
+            | TokenKind::QUALIFY
             | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
+            | TokenKind::UDF
             | TokenKind::SHARE
             | TokenKind::SHARES
             | TokenKind::TO
@@ -1404,6 +1483,8 @@ impl TokenKind {
             | TokenKind::MASKING
             | TokenKind::POLICY
             | TokenKind::TASK
+            | TokenKind::PIPE
+            | TokenKind::STREAM
             if !after_as => true,
             _ => false
         }

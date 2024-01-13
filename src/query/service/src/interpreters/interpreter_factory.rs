@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_exception::Result;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_exception::Result;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -29,6 +29,10 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
+use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
+use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
+use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
+use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
@@ -47,7 +51,9 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::UpdateInterpreter;
@@ -232,6 +238,16 @@ impl InterpreterFactory {
                 *drop_view.clone(),
             )?)),
 
+            // Streams
+            Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
+                ctx,
+                *create_stream.clone(),
+            )?)),
+            Plan::DropStream(drop_stream) => Ok(Arc::new(DropStreamInterpreter::try_create(
+                ctx,
+                *drop_stream.clone(),
+            )?)),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
                 ctx,
@@ -302,6 +318,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_role.clone(),
             )?)),
+            Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
+                SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
+            )),
+
             Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages
@@ -451,6 +471,20 @@ impl InterpreterFactory {
             Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
+            Plan::CreatePasswordPolicy(p) => Ok(Arc::new(
+                CreatePasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterPasswordPolicy(p) => Ok(Arc::new(
+                AlterPasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropPasswordPolicy(p) => Ok(Arc::new(DropPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescPasswordPolicy(p) => Ok(Arc::new(DescPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             Plan::CreateTask(p) => Ok(Arc::new(CreateTaskInterpreter::try_create(
                 ctx,
@@ -467,6 +501,20 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
+
+            Plan::CreateConnection(p) => Ok(Arc::new(CreateConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropConnection(p) => Ok(Arc::new(DropConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescConnection(p) => Ok(Arc::new(DescConnectionInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
         }
     }
 }

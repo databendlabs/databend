@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::openraft;
-use common_meta_types::new_log_id;
-use common_meta_types::Cmd;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::LogEntry;
-use common_meta_types::RaftTxId;
-use common_meta_types::UpsertKV;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::RaftTxId;
+use databend_common_meta_types::UpsertKV;
 use maplit::btreeset;
 use openraft::Membership;
 
@@ -66,14 +66,12 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
             }),
         },
     ];
-    let want = vec![
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
+    let want = [r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":9}}}}"#,
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":5},"membership":{"configs":[[4,5,6]],"nodes":{"4":{},"5":{},"6":{}}}}}}}"#,
         r#"{"Sequences":{"key":"generic-kv","value":1}}"#,
         r#"{"Nodes":{"key":5,"value":{"name":"","endpoint":{"addr":"","port":0},"grpc_api_advertise_address":null}}}"#,
-        r#"{"GenericKV":{"key":"a","value":{"seq":1,"meta":null,"data":[65]}}}"#,
-    ]
+        r#"{"GenericKV":{"key":"a","value":{"seq":1,"meta":null,"data":[65]}}}"#]
     .iter()
     .map(|x| x.to_string())
     .collect::<Vec<_>>();

@@ -17,22 +17,22 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::time::Instant;
 
-use common_base::rangemap::RangeMerger;
-use common_base::runtime::UnlimitedFuture;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_base::runtime::UnlimitedFuture;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_metrics::storage::*;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCacheKey;
-use storages_common_cache_manager::CacheManager;
-use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
-use crate::metrics::*;
 use crate::MergeIOReadResult;
 
 impl BlockReader {
@@ -115,7 +115,7 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(||ErrorCode::Internal(format!(
                 "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
                 column_range, location, merged_ranges
             )))?;

@@ -15,8 +15,8 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::AggregateFunctionRef;
 
@@ -72,6 +72,14 @@ impl StateAddr {
         unsafe {
             let ptr = self.addr as *mut T;
             std::ptr::write(ptr, f());
+        }
+    }
+
+    #[inline]
+    pub fn write_state<T>(&self, state: T) {
+        unsafe {
+            let ptr = self.addr as *mut T;
+            std::ptr::write(ptr, state);
         }
     }
 }

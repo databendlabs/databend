@@ -17,14 +17,16 @@ use std::env;
 use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
-use common_meta_raft_store::config::get_default_raft_advertise_host;
-use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
-use common_meta_types::MetaStartupError;
-use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::QueryLogConfig;
-use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig;
+use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
+use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_tracing::Config as InnerLogConfig;
+use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::OTLPConfig;
+use databend_common_tracing::ProfileLogConfig;
+use databend_common_tracing::QueryLogConfig;
+use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -264,6 +266,7 @@ pub struct ConfigViaEnv {
     pub metasrv_log_file_level: String,
     pub metasrv_log_file_dir: String,
     pub metasrv_log_file_format: String,
+    pub metasrv_log_file_limit: usize,
     pub metasrv_log_stderr_on: bool,
     pub metasrv_log_stderr_level: String,
     pub metasrv_log_stderr_format: String,
@@ -278,7 +281,7 @@ pub struct ConfigViaEnv {
     pub config_id: String,
     pub kvsrv_listen_host: String,
     pub kvsrv_advertise_host: String,
-    pub kvsrv_api_port: u32,
+    pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
     pub kvsrv_snapshot_logs_since_last: u64,
@@ -286,6 +289,7 @@ pub struct ConfigViaEnv {
     pub kvsrv_install_snapshot_timeout: u64,
     pub kvsrv_wait_leader_timeout: u64,
     pub raft_max_applied_log_to_keep: u64,
+    pub raft_snapshot_chunk_size: u64,
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
@@ -309,6 +313,7 @@ impl From<Config> for ConfigViaEnv {
             metasrv_log_file_level: cfg.log.file.file_level,
             metasrv_log_file_dir: cfg.log.file.file_dir,
             metasrv_log_file_format: cfg.log.file.file_format,
+            metasrv_log_file_limit: cfg.log.file.file_limit,
             metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
             metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
             metasrv_log_stderr_format: cfg.log.stderr.stderr_format,
@@ -330,6 +335,7 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
             kvsrv_wait_leader_timeout: cfg.raft_config.wait_leader_timeout,
             raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
+            raft_snapshot_chunk_size: cfg.raft_config.snapshot_chunk_size,
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
@@ -355,6 +361,7 @@ impl Into<Config> for ConfigViaEnv {
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
             wait_leader_timeout: self.kvsrv_wait_leader_timeout,
             max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
+            snapshot_chunk_size: self.raft_snapshot_chunk_size,
             single: self.kvsrv_single,
             join: self.metasrv_join,
             // Do not allow to leave via environment variable
@@ -371,6 +378,7 @@ impl Into<Config> for ConfigViaEnv {
                 file_level: self.metasrv_log_file_level,
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
+                file_limit: self.metasrv_log_file_limit,
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -428,7 +436,7 @@ pub struct RaftConfig {
 
     /// The listening port for metadata communication.
     #[clap(long, default_value = "28004")]
-    pub raft_api_port: u32,
+    pub raft_api_port: u16,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long, default_value = "./.databend/meta")]
@@ -456,6 +464,10 @@ pub struct RaftConfig {
     /// The maximum number of applied logs to keep before purging
     #[clap(long, default_value = "1000")]
     pub max_applied_log_to_keep: u64,
+
+    /// The size of chunk for transmitting snapshot. The default is 4MB
+    #[clap(long, default_value = "4194304")]
+    pub snapshot_chunk_size: u64,
 
     /// Start databend-meta in single node mode.
     /// It initialize a single node cluster, if meta data is not initialized.
@@ -498,7 +510,7 @@ pub struct RaftConfig {
     pub cluster_name: String,
 
     /// Max timeout(in milli seconds) when waiting a cluster leader.
-    #[clap(long, default_value = "70000")]
+    #[clap(long, default_value = "180000")]
     pub wait_leader_timeout: u64,
 }
 
@@ -521,6 +533,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             heartbeat_interval: x.heartbeat_interval,
             install_snapshot_timeout: x.install_snapshot_timeout,
             max_applied_log_to_keep: x.max_applied_log_to_keep,
+            snapshot_chunk_size: x.snapshot_chunk_size,
             single: x.single,
             join: x.join,
             leave_via: x.leave_via,
@@ -546,6 +559,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             heartbeat_interval: inner.heartbeat_interval,
             install_snapshot_timeout: inner.install_snapshot_timeout,
             max_applied_log_to_keep: inner.max_applied_log_to_keep,
+            snapshot_chunk_size: inner.snapshot_chunk_size,
             single: inner.single,
             join: inner.join,
             leave_via: inner.leave_via,
@@ -580,11 +594,10 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
-            query: QueryLogConfig {
-                on: false,
-                dir: "".to_string(),
-            },
-            tracing: TracingConfig::from_env(),
+            otlp: OTLPConfig::default(),
+            query: QueryLogConfig::default(),
+            profile: ProfileLogConfig::default(),
+            tracing: TracingConfig::default(),
         }
     }
 }
@@ -619,6 +632,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
 }
 
 impl Default for FileLogConfig {
@@ -635,6 +653,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
         }
     }
 }
@@ -646,6 +665,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
         }
     }
 }

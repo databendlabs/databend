@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::share;
+use databend_common_meta_app::share;
 use minitrace::func_name;
 
 use crate::common;
@@ -31,7 +31,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v2_share_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -53,18 +53,17 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
             now,
         );
         let mut entries = BTreeMap::new();
-        for entry in vec![share::ShareGrantEntry::new(
+        let entry = share::ShareGrantEntry::new(
             share::ShareGrantObject::Table(19),
             share::ShareGrantObjectPrivilege::Select,
             now,
-        )] {
-            entries.insert(entry.to_string().clone(), entry);
-        }
+        );
+        entries.insert(entry.to_string().clone(), entry);
 
         share::ShareMeta {
             database: Some(db_entry),
             entries,
-            accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
+            accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
             share_from_db_ids: BTreeSet::new(),
             comment: Some(s("comment")),
             share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::principal::CsvFileFormatParams;
-use common_meta_app::principal::StageFileCompression;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use minitrace::func_name;
 
 use crate::common;
@@ -45,6 +45,7 @@ fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: false,
+            empty_field_as: Default::default(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v59.as_slice(), 0, want())?;

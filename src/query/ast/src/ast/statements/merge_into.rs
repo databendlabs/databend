@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Hint;
 use crate::ast::write_comma_separated_list;
@@ -213,6 +213,12 @@ pub enum MergeSource {
         query: Box<Query>,
         source_alias: TableAlias,
     },
+    Table {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        alias: Option<TableAlias>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -236,8 +242,24 @@ impl MergeSource {
                 source_alias,
             } => TableReference::Subquery {
                 span: None,
+                lateral: false,
                 subquery: query.clone(),
                 alias: Some(source_alias.clone()),
+            },
+            Self::Table {
+                catalog,
+                database,
+                table,
+                alias,
+            } => TableReference::Table {
+                span: None,
+                catalog: catalog.clone(),
+                database: database.clone(),
+                table: table.clone(),
+                alias: alias.clone(),
+                travel_point: None,
+                pivot: None,
+                unpivot: None,
             },
         }
     }
@@ -265,6 +287,22 @@ impl Display for MergeSource {
                 query,
                 source_alias,
             } => write!(f, "({query}) AS {source_alias}"),
+
+            MergeSource::Table {
+                catalog,
+                database,
+                table,
+                alias,
+            } => {
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(table)),
+                )?;
+                if alias.is_some() {
+                    write!(f, " AS {}", alias.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
         }
     }
 }

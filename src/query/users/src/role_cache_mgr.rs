@@ -17,12 +17,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::RoleInfo;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleInfo;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -117,7 +117,7 @@ impl RoleCacheManager {
     pub async fn find_object_owner(
         &self,
         tenant: &str,
-        object: &GrantObjectByID,
+        object: &OwnershipObject,
     ) -> Result<Option<RoleInfo>> {
         let owner = match self.user_manager.get_ownership(tenant, object).await? {
             None => return Ok(None),

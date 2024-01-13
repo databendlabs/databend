@@ -16,25 +16,26 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::flight::deserialize_dictionary;
-use common_arrow::arrow::io::ipc::read::Dictionaries;
-use common_arrow::arrow::io::ipc::IpcSchema;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_io::prelude::BinaryRead;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use common_pipeline_transforms::processors::transforms::UnknownMode;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::deserialize_batch;
+use databend_common_arrow::arrow::io::flight::deserialize_dictionary;
+use databend_common_arrow::arrow::io::ipc::read::Dictionaries;
+use databend_common_arrow::arrow::io::ipc::IpcSchema;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::BinaryRead;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -53,7 +54,7 @@ impl TransformExchangeDeserializer {
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
     ) -> ProcessorPtr {
-        let arrow_schema = Arc::new(schema.to_arrow());
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let ipc_schema = IpcSchema {
             fields: ipc_fields,
@@ -65,7 +66,7 @@ impl TransformExchangeDeserializer {
             output,
             TransformExchangeDeserializer {
                 ipc_schema,
-                arrow_schema,
+                arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
             },
         ))
@@ -74,13 +75,8 @@ impl TransformExchangeDeserializer {
     fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
-        let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
-            Ok(meta) => Ok(meta),
-            Err(_) => Err(ErrorCode::BadBytes(
-                "block meta deserialize error when exchange",
-            )),
-        }?;
-
+        let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
+            .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;
 
@@ -126,9 +122,10 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::FetchProgress => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
+            DataPacket::MergeStatus { .. } => unreachable!(),
+            DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
         }
     }

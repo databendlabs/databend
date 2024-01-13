@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-random"
+name = "databend-common-storages-random"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,17 +12,17 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-meta-app = { path = "../../../meta/app" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 serde = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../../common/building" }
+databend-common-building = { path = "../../../common/building" }

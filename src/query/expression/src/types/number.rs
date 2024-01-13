@@ -16,12 +16,13 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
 use num_traits::NumCast;
-use num_traits::Signed;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
@@ -107,11 +108,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         *scalar
     }
 
@@ -119,7 +120,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Num::try_downcast_scalar(scalar.as_number()?)
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         Num::try_downcast_column(col.as_number()?)
     }
 
@@ -127,13 +128,22 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Num::try_downcast_domain(domain.as_number()?)
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
             ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Number(num) => Num::try_downcast_owned_builder(num),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Num::try_upcast_column_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -148,26 +158,24 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Domain::Number(Num::upcast_domain(domain))
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter().cloned()
     }
 
@@ -198,6 +206,36 @@ impl<Num: Number> ValueType for NumberType<Num> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left == right
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left != right
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left <= right
     }
 }
 
@@ -247,7 +285,17 @@ pub enum NumberDataType {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum NumberScalar {
     UInt8(u8),
     UInt16(u16),
@@ -473,8 +521,8 @@ impl NumberScalar {
     pub fn is_positive(&self) -> bool {
         crate::with_integer_mapped_type!(|NUM_TYPE| match self {
             NumberScalar::NUM_TYPE(num) => *num > 0,
-            NumberScalar::Float32(num) => num.is_positive(),
-            NumberScalar::Float64(num) => num.is_positive(),
+            NumberScalar::Float32(num) => num.is_sign_positive(),
+            NumberScalar::Float64(num) => num.is_sign_positive(),
         })
     }
 
@@ -482,6 +530,14 @@ impl NumberScalar {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberScalar::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
+    }
+}
+
+impl<T> From<T> for NumberScalar
+where T: Number
+{
+    fn from(value: T) -> Self {
+        T::upcast_scalar(value)
     }
 }
 
@@ -752,11 +808,16 @@ pub trait Number:
     const MAX: Self;
 
     const FLOATING: bool;
+    const NEGATIVE: bool;
 
     fn data_type() -> NumberDataType;
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
     fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>>;
     fn try_downcast_builder(col: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>>;
+
+    fn try_downcast_owned_builder(col: NumberColumnBuilder) -> Option<Vec<Self>>;
+
+    fn try_upcast_column_builder(builder: Vec<Self>) -> Option<ColumnBuilder>;
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>>;
     fn upcast_scalar(scalar: Self) -> NumberScalar;
     fn upcast_column(col: Buffer<Self>) -> NumberColumn;
@@ -772,6 +833,7 @@ impl Number for u8 {
     const MIN: Self = u8::MIN;
     const MAX: Self = u8::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt8
@@ -787,6 +849,17 @@ impl Number for u8 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int8_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt8(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt8(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -811,6 +884,7 @@ impl Number for u16 {
     const MIN: Self = u16::MIN;
     const MAX: Self = u16::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt16
@@ -826,6 +900,17 @@ impl Number for u16 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int16_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt16(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt16(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -851,6 +936,7 @@ impl Number for u32 {
     const MIN: Self = u32::MIN;
     const MAX: Self = u32::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt32
@@ -866,6 +952,17 @@ impl Number for u32 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int32_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt32(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -891,6 +988,7 @@ impl Number for u64 {
     const MIN: Self = u64::MIN;
     const MAX: Self = u64::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt64
@@ -906,6 +1004,17 @@ impl Number for u64 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_u_int64_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::UInt64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::UInt64(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -931,6 +1040,7 @@ impl Number for i8 {
     const MIN: Self = i8::MIN;
     const MAX: Self = i8::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int8
@@ -946,6 +1056,17 @@ impl Number for i8 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_int8_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int8(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int8(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -971,6 +1092,7 @@ impl Number for i16 {
     const MIN: Self = i16::MIN;
     const MAX: Self = i16::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int16
@@ -986,6 +1108,17 @@ impl Number for i16 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_int16_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int16(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int16(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1011,6 +1144,7 @@ impl Number for i32 {
     const MIN: Self = i32::MIN;
     const MAX: Self = i32::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int32
@@ -1026,6 +1160,17 @@ impl Number for i32 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_int32_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int32(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1051,6 +1196,7 @@ impl Number for i64 {
     const MIN: Self = i64::MIN;
     const MAX: Self = i64::MAX;
     const FLOATING: bool = false;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int64
@@ -1066,6 +1212,17 @@ impl Number for i64 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_int64_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Int64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Int64(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1091,6 +1248,7 @@ impl Number for F32 {
     const MIN: Self = OrderedFloat(f32::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f32::NAN);
     const FLOATING: bool = true;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Float32
@@ -1106,6 +1264,17 @@ impl Number for F32 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_float32_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Float32(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Float32(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {
@@ -1139,6 +1308,7 @@ impl Number for F64 {
     const MIN: Self = OrderedFloat(f64::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f64::NAN);
     const FLOATING: bool = true;
+    const NEGATIVE: bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Float64
@@ -1154,6 +1324,17 @@ impl Number for F64 {
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
         builder.as_float64_mut()
+    }
+
+    fn try_downcast_owned_builder(builder: NumberColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            NumberColumnBuilder::Float64(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(v: Vec<Self>) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Number(NumberColumnBuilder::Float64(v)))
     }
 
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>> {

@@ -23,7 +23,6 @@ mod builder_exchange;
 mod builder_fill_missing_columns;
 mod builder_filter;
 mod builder_join;
-mod builder_lambda;
 mod builder_limit;
 mod builder_merge_into;
 mod builder_on_finished;
@@ -34,7 +33,10 @@ mod builder_row_fetch;
 mod builder_scalar;
 mod builder_scan;
 mod builder_sort;
+mod builder_udf;
 mod builder_union_all;
+mod builder_update;
 mod builder_window;
 
 pub use builder_replace_into::ValueSource;
+pub use builder_sort::SortPipelineBuilder;

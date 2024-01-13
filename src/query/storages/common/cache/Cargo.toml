@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-cache"
+name = "databend-storages-common-cache"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,25 +11,19 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-enable-histogram-metrics = ["metrics/enable-histogram"]
-
 [dependencies]
 bytes = { workspace = true }
-common-cache = { path = "../../../../common/cache" }
-common-exception = { path = "../../../../common/exception" }
-common-metrics = { path = "../../../../common/metrics" }
+databend-common-cache = { path = "../../../../common/cache" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-common-metrics = { path = "../../../../common/metrics" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 crc32fast = "1.3.2"
 crossbeam-channel = "0.5.6"
 hex = "0.4.3"
-lazy_static = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
-parking_lot = "0.12.1"
-prometheus-client = { workspace = true }
+parking_lot = { workspace = true }
 siphasher = "0.3.10"
 
 [dev-dependencies]

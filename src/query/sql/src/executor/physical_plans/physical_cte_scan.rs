@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
@@ -28,6 +29,7 @@ pub struct CteScan {
     pub cte_idx: (IndexType, IndexType),
     pub output_schema: DataSchemaRef,
     pub offsets: Vec<IndexType>,
+    pub stat: PlanStatsInfo,
 }
 
 impl CteScan {
@@ -62,12 +64,17 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        let plan_stat = PlanStatsInfo {
+            estimated_rows: cte_scan.stat.cardinality,
+        };
+
         // 2. Build physical plan.
         Ok(PhysicalPlan::CteScan(CteScan {
             plan_id: self.next_plan_id(),
             cte_idx: cte_scan.cte_idx,
             output_schema: DataSchemaRefExt::create(pruned_fields),
             offsets: pruned_offsets,
+            stat: plan_stat,
         }))
     }
 }

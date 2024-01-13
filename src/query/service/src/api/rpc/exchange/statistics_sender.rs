@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::base::tokio::time::sleep;
-use common_base::runtime::TrySpawn;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_storage::MergeStatus;
 use futures_util::future::Either;
 use log::warn;
 
@@ -33,7 +38,7 @@ use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
-    shutdown_flag_sender: Sender<Option<ErrorCode>>,
+    shutdown_flag_sender: Sender<(Option<ErrorCode>, Vec<Arc<Profile>>)>,
     join_handle: Option<JoinHandle<()>>,
 }
 
@@ -47,19 +52,24 @@ impl StatisticsSender {
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
-        let handle = spawner.spawn(query_id.clone(), {
+        let handle = spawner.spawn(query_id, {
             let query_id = query_id.to_string();
 
             async move {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
+                let mut query_profiles = vec![];
                 loop {
                     match futures::future::select(sleep_future, notified).await {
-                        Either::Right((Ok(None), _)) | Either::Right((Err(_), _)) => {
+                        Either::Right((Err(_), _)) => {
                             break;
                         }
-                        Either::Right((Ok(Some(error_code)), _recv)) => {
+                        Either::Right((Ok((None, profiles)), _)) => {
+                            query_profiles = profiles;
+                            break;
+                        }
+                        Either::Right((Ok((Some(error_code), _profiles)), _recv)) => {
                             let data = DataPacket::ErrorCode(error_code);
                             if let Err(error_code) = tx.send(data).await {
                                 warn!(
@@ -82,8 +92,16 @@ impl StatisticsSender {
                     }
                 }
 
+                if let Err(error) = Self::send_profile(query_profiles, &tx).await {
+                    warn!("Profiles send has error, cause: {:?}.", error);
+                }
+
                 if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
+                }
+
+                if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
+                    warn!("MergeStatus send has error, cause: {:?}.", error);
                 }
 
                 if let Err(error) = Self::send_statistics(&ctx, &tx).await {
@@ -99,12 +117,12 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
+    pub fn shutdown(&mut self, error: Option<ErrorCode>, profiles: Vec<Arc<Profile>>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
         futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(error).await {
+            if let Err(error_code) = shutdown_flag_sender.send((error, profiles)).await {
                 warn!(
                     "Cannot send data via flight exchange, cause: {:?}",
                     error_code
@@ -134,6 +152,50 @@ impl StatisticsSender {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
             flight_sender.send(data_packet).await?;
         }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn send_merge_status(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        let merge_status = {
+            let binding = ctx.get_merge_status();
+            let status = binding.read();
+            MergeStatus {
+                insert_rows: status.insert_rows,
+                deleted_rows: status.deleted_rows,
+                update_rows: status.update_rows,
+            }
+        };
+        let data_packet = DataPacket::MergeStatus(merge_status);
+        flight_sender.send(data_packet).await?;
+        Ok(())
+    }
+
+    async fn send_profile(profiles: Vec<Arc<Profile>>, flight_sender: &FlightSender) -> Result<()> {
+        let mut merged_profiles = HashMap::new();
+
+        for proc_profile in profiles {
+            if proc_profile.plan_id.is_some() {
+                match merged_profiles.entry(proc_profile.plan_id) {
+                    Entry::Vacant(v) => {
+                        v.insert(PlanProfile::create(&proc_profile));
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().accumulate(&proc_profile);
+                    }
+                };
+            }
+        }
+
+        if !merged_profiles.is_empty() {
+            let data_packet =
+                DataPacket::QueryProfiles(merged_profiles.into_values().collect::<Vec<_>>());
+            flight_sender.send(data_packet).await?;
+        }
+
         Ok(())
     }
 

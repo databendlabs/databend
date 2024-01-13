@@ -14,125 +14,63 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use std::u64::MAX;
 
-use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::lock::Lock;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::SendableDataBlockStream;
-use common_expression::ROW_NUMBER_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableInfo;
-use common_sql::bind_one_table;
-use common_sql::executor::CommitSink;
-use common_sql::executor::Exchange;
-use common_sql::executor::FragmentKind::Merge;
-use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoAppendNotMatched;
-use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationKind;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::optimizer::SExpr;
-use common_sql::plans::Aggregate;
-use common_sql::plans::AggregateFunction;
-use common_sql::plans::AggregateMode;
-use common_sql::plans::BoundColumnRef;
-use common_sql::plans::ConstantExpr;
-use common_sql::plans::EvalScalar;
-use common_sql::plans::FunctionCall;
-use common_sql::plans::JoinType;
-use common_sql::plans::MergeInto as MergePlan;
-use common_sql::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::plans::ScalarItem;
-use common_sql::plans::UpdatePlan;
-use common_sql::BindContext;
-use common_sql::ColumnBinding;
-use common_sql::ColumnBindingBuilder;
-use common_sql::IndexType;
-use common_sql::MetadataRef;
-use common_sql::NameResolutionContext;
-use common_sql::ScalarExpr;
-use common_sql::TypeCheck;
-use common_sql::TypeChecker;
-use common_sql::Visibility;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FromData;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::ROW_NUMBER_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::binder::MergeIntoType;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MergeInto;
+use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
+use databend_common_sql::executor::physical_plans::MergeIntoSource;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans;
+use databend_common_sql::plans::MergeInto as MergePlan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::UpdatePlan;
+use databend_common_sql::IndexType;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::TypeCheck;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
-use log::info;
-use storages_common_locks::LockManager;
-use storages_common_table_meta::meta::TableSnapshot;
-use tokio_stream::StreamExt;
 
-use super::Interpreter;
-use super::InterpreterPtr;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
-use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::build_update_stream_meta_seq;
+use crate::interpreters::HookOperator;
+use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::stream::DataBlockStream;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
-const DUMMY_COL_INDEX: usize = 1;
+const DUMMY_COL_INDEX: usize = MAX as usize;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
     plan: MergePlan,
-}
-
-struct MergeStyleJoin<'a> {
-    source_conditions: &'a [ScalarExpr],
-    target_conditions: &'a [ScalarExpr],
-    source_sexpr: &'a SExpr,
-    target_sexpr: &'a SExpr,
-}
-
-impl MergeStyleJoin<'_> {
-    pub fn new(join: &SExpr) -> MergeStyleJoin {
-        let join_op = match join.plan() {
-            RelOperator::Join(j) => j,
-            _ => unreachable!(),
-        };
-        assert!(matches!(join_op.join_type, JoinType::Right));
-        let source_conditions = &join_op.right_conditions;
-        let target_conditions = &join_op.left_conditions;
-        let source_sexpr = join.child(1).unwrap();
-        let target_sexpr = join.child(0).unwrap();
-        MergeStyleJoin {
-            source_conditions,
-            target_conditions,
-            source_sexpr,
-            target_sexpr,
-        }
-    }
-
-    pub fn collect_column_map(&self) -> HashMap<String, ColumnBinding> {
-        let mut column_map = HashMap::new();
-        for (t, s) in self
-            .target_conditions
-            .iter()
-            .zip(self.source_conditions.iter())
-        {
-            if let (ScalarExpr::BoundColumnRef(t_col), ScalarExpr::BoundColumnRef(s_col)) = (t, s) {
-                column_map.insert(t_col.column.column_name.clone(), s_col.column.clone());
-            }
-        }
-        column_map
-    }
 }
 
 impl MergeIntoInterpreter {
@@ -149,41 +87,36 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let start = Instant::now();
-        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info)?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
+        // let table_lock = LockManager::create_table_lock(table_info)?;
+        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        // build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        // Compact if 'enable_recluster_after_write' on.
+        // Execute hook.
         {
-            let compact_target = CompactTargetTableDescription {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
-            };
-
-            let compact_hook_trace_ctx = CompactHookTraceCtx {
-                start,
-                operation_name: "merge_into".to_owned(),
-            };
-
-            hook_compact(
+            let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                compact_target,
-                compact_hook_trace_ctx,
-                false,
-            )
-            .await;
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                "merge_into".to_owned(),
+                true,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
         }
 
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let blocks = self.get_merge_into_table_result()?;
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
@@ -202,44 +135,59 @@ impl MergeIntoInterpreter {
             unmatched_evaluators,
             target_table_idx,
             field_index_map,
+            merge_type,
+            distributed,
+            change_join_order,
             ..
         } = &self.plan;
 
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
+        // check change tracking
+        if check_table.change_tracking_enabled() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change tracking is enabled for table '{}', does not support MERGE INTO",
+                check_table.name(),
+            )));
+        }
+
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), meta_data).await?;
 
         let table_name = table_name.clone();
         let input = input.clone();
-        let (exchange, input) = if let RelOperator::Exchange(exchange) = input.plan() {
-            (Some(exchange), Box::new(input.child(0)?.clone()))
+
+        // we need to extract join plan, but we need to give this exchange
+        // back at last.
+        let (input, extract_exchange) = if let RelOperator::Exchange(_) = input.plan() {
+            (Box::new(input.child(0)?.clone()), true)
         } else {
-            (None, input)
+            (input, false)
         };
 
-        let optimized_input = self
-            .build_static_filter(&input, meta_data, self.ctx.clone(), check_table)
-            .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-
         // build source for MergeInto
-        let join_input = builder
-            .build(&optimized_input, *columns_set.clone())
-            .await?;
+        let join_input = builder.build(&input, *columns_set.clone()).await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
-        let mut row_id_idx = match meta_data
-            .read()
-            .row_id_index_by_table_index(*target_table_idx)
-        {
-            None => {
-                return Err(ErrorCode::InvalidRowIdIndex(
-                    "can't get internal row_id_idx when running merge into",
-                ));
+        let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
+
+        let mut row_id_idx = if !insert_only {
+            match meta_data
+                .read()
+                .row_id_index_by_table_index(*target_table_idx)
+            {
+                None => {
+                    return Err(ErrorCode::InvalidRowIdIndex(
+                        "can't get internal row_id_idx when running merge into",
+                    ));
+                }
+                Some(row_id_idx) => row_id_idx,
             }
-            Some(row_id_idx) => row_id_idx,
+        } else {
+            DUMMY_COL_INDEX
         };
 
         let mut found_row_id = false;
@@ -252,43 +200,59 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if exchange.is_some() {
+        if *distributed && !*change_join_order {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
-        // we can't get row_id_idx, throw an exception
-        if !found_row_id {
+        if !insert_only && !found_row_id {
+            // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));
         }
 
-        if exchange.is_some() && row_number_idx.is_none() {
+        if *distributed && row_number_idx.is_none() && !*change_join_order {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
         }
 
         let table = self.ctx.get_table(catalog, database, &table_name).await?;
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support MERGE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support MERGE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
         // datablocks.
-        let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(join_input),
-            row_id_idx: row_id_idx as u32,
-        });
+        let merge_into_source = if !*distributed && extract_exchange {
+            // if we doesn't support distributed merge into, we should give the exchange merge back.
+            let rollback_join_input = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(join_input),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+            PhysicalPlan::MergeIntoSource(MergeIntoSource {
+                input: Box::new(rollback_join_input),
+                row_id_idx: row_id_idx as u32,
+                merge_type: merge_type.clone(),
+            })
+        } else {
+            PhysicalPlan::MergeIntoSource(MergeIntoSource {
+                input: Box::new(join_input),
+                row_id_idx: row_id_idx as u32,
+                merge_type: merge_type.clone(),
+            })
+        };
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`
@@ -344,7 +308,7 @@ impl MergeIntoInterpreter {
                     database: database.clone(),
                     table: match target_alias {
                         None => table_name.clone(),
-                        Some(alias) => alias.name.to_string(),
+                        Some(alias) => alias.name.to_string().to_lowercase(),
                     },
                     update_list: update_list.clone(),
                     bind_context: bind_context.clone(),
@@ -410,7 +374,7 @@ impl MergeIntoInterpreter {
             .enumerate()
             .collect();
 
-        let commit_input = if exchange.is_none() {
+        let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
             PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -424,6 +388,8 @@ impl MergeIntoInterpreter {
                 segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
+                merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -434,25 +400,46 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments,
+                segments: segments.clone(),
                 distributed: true,
-                output_schema: DataSchemaRef::new(DataSchema::new(vec![
-                    join_output_schema.fields[row_number_idx.unwrap()].clone(),
-                ])),
+                output_schema: match *change_join_order {
+                    false => DataSchemaRef::new(DataSchema::new(vec![
+                        join_output_schema.fields[row_number_idx.unwrap()].clone(),
+                    ])),
+                    true => DataSchemaRef::new(DataSchema::new(vec![DataField::new(
+                        ROW_ID_COL_NAME,
+                        databend_common_expression::types::DataType::Number(
+                            databend_common_expression::types::NumberDataType::UInt64,
+                        ),
+                    )])),
+                },
+                merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
             }));
-
+            // if change_join_order = true, it means the target is build side,
+            // in this way, we will do matched operation and not matched operation
+            // locally in every node, and the main node just receive rowids to apply.
+            let segments = if *change_join_order {
+                segments.clone()
+            } else {
+                vec![]
+            };
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
                     input: Box::new(merge_append),
-                    kind: Merge,
+                    kind: FragmentKind::Merge,
                     keys: vec![],
+                    allow_adjust_parallelism: true,
                     ignore_exchange: false,
                 })),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
                 input_schema: merge_into_source.output_schema()?,
+                merge_type: merge_type.clone(),
+                change_join_order: *change_join_order,
+                segments,
             }))
         };
 
@@ -464,367 +451,13 @@ impl MergeIntoInterpreter {
             catalog_info: catalog_.info(),
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
+            update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
+            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         }));
 
         Ok((physical_plan, table_info))
-    }
-
-    async fn build_static_filter(
-        &self,
-        join: &SExpr,
-        metadata: &MetadataRef,
-        ctx: Arc<QueryContext>,
-        table: Arc<dyn Table>,
-    ) -> Result<Box<SExpr>> {
-        // 1. collect statistics from the source side
-        // plan of source table is extended to:
-        //
-        // AggregateFinal(min(source_join_side_expr),max(source_join_side_expr))
-        //        \
-        //     AggregatePartial(min(source_join_side_expr),max(source_join_side_expr))
-        //         \
-        //       EvalScalar(source_join_side_expr)
-        //          \
-        //         SourcePlan
-        let m_join = MergeStyleJoin::new(join);
-        let mut eval_scalar_items = Vec::with_capacity(m_join.source_conditions.len());
-        let mut min_max_binding = Vec::with_capacity(m_join.source_conditions.len() * 2);
-        let mut min_max_scalar_items = Vec::with_capacity(m_join.source_conditions.len() * 2);
-        let mut group_items = vec![];
-        if m_join.source_conditions.is_empty() {
-            return Ok(Box::new(join.clone()));
-        }
-        let column_map = m_join.collect_column_map();
-        let fuse_table =
-            table
-                .as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support MERGE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                )))?;
-        let mut group_exprs = vec![];
-        if let Some(cluster_key_str) = fuse_table.cluster_key_str() {
-            let sql_dialect = Dialect::MySQL;
-            let tokens = tokenize_sql(cluster_key_str)?;
-            let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-            let (mut bind_context, metadata) = bind_one_table(table)?;
-            if !ast_exprs.is_empty() {
-                let ast_expr = &ast_exprs[0];
-                let name_resolution_ctx =
-                    NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-                let mut type_checker = TypeChecker::new(
-                    &mut bind_context,
-                    ctx.clone(),
-                    &name_resolution_ctx,
-                    metadata.clone(),
-                    &[],
-                    false,
-                    false,
-                );
-                let (scalar_expr, _) = *type_checker.resolve(ast_expr).await?;
-                let projected = scalar_expr.try_project_column_binding(|binding| {
-                    column_map.get(&binding.column_name).cloned()
-                });
-                if let Some(p) = projected {
-                    group_exprs.push(p);
-                }
-            }
-        }
-        for group_expr in group_exprs {
-            let index = metadata
-                .write()
-                .add_derived_column("".to_string(), group_expr.data_type()?);
-            let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: ColumnBindingBuilder::new(
-                    "".to_string(),
-                    index,
-                    Box::new(group_expr.data_type()?),
-                    Visibility::Visible,
-                )
-                .build(),
-            });
-            eval_scalar_items.push(ScalarItem {
-                scalar: group_expr.clone(),
-                index,
-            });
-            group_items.push(ScalarItem {
-                scalar: evaled.clone(),
-                index,
-            });
-        }
-        for source_side_expr in m_join.source_conditions {
-            // eval source side join expr
-            let index = metadata
-                .write()
-                .add_derived_column("".to_string(), source_side_expr.data_type()?);
-            let evaled = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: ColumnBindingBuilder::new(
-                    "".to_string(),
-                    index,
-                    Box::new(source_side_expr.data_type()?),
-                    Visibility::Visible,
-                )
-                .build(),
-            });
-            eval_scalar_items.push(ScalarItem {
-                scalar: source_side_expr.clone(),
-                index,
-            });
-
-            // eval min/max of source side join expr
-            let min_display_name = format!("min({:?})", source_side_expr);
-            let max_display_name = format!("max({:?})", source_side_expr);
-            let min_index = metadata
-                .write()
-                .add_derived_column(min_display_name.clone(), source_side_expr.data_type()?);
-            let max_index = metadata
-                .write()
-                .add_derived_column(max_display_name.clone(), source_side_expr.data_type()?);
-            let min_binding = ColumnBindingBuilder::new(
-                min_display_name.clone(),
-                min_index,
-                Box::new(source_side_expr.data_type()?),
-                Visibility::Visible,
-            )
-            .build();
-            let max_binding = ColumnBindingBuilder::new(
-                max_display_name.clone(),
-                max_index,
-                Box::new(source_side_expr.data_type()?),
-                Visibility::Visible,
-            )
-            .build();
-            min_max_binding.push(min_binding);
-            min_max_binding.push(max_binding);
-            let min = ScalarItem {
-                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                    func_name: "min".to_string(),
-                    distinct: false,
-                    params: vec![],
-                    args: vec![evaled.clone()],
-                    return_type: Box::new(source_side_expr.data_type()?),
-                    display_name: min_display_name.clone(),
-                }),
-                index: min_index,
-            };
-            let max = ScalarItem {
-                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                    func_name: "max".to_string(),
-                    distinct: false,
-                    params: vec![],
-                    args: vec![evaled],
-                    return_type: Box::new(source_side_expr.data_type()?),
-                    display_name: max_display_name.clone(),
-                }),
-                index: max_index,
-            };
-            min_max_scalar_items.push(min);
-            min_max_scalar_items.push(max);
-        }
-
-        let eval_source_side_join_expr_op = EvalScalar {
-            items: eval_scalar_items,
-        };
-        let source_plan = m_join.source_sexpr;
-        let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
-        {
-            // there is another row_number operator here
-            SExpr::create_unary(
-                Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(source_plan.child(0)?.child(0)?.clone()),
-            )
-        } else {
-            SExpr::create_unary(
-                Arc::new(eval_source_side_join_expr_op.into()),
-                Arc::new(source_plan.clone()),
-            )
-        };
-
-        let mut bind_context = Box::new(BindContext::new());
-        bind_context.columns = min_max_binding;
-
-        let agg_partial_op = Aggregate {
-            mode: AggregateMode::Partial,
-            group_items: group_items.clone(),
-            aggregate_functions: min_max_scalar_items.clone(),
-            from_distinct: false,
-            limit: None,
-            grouping_sets: None,
-        };
-        let agg_partial_sexpr = SExpr::create_unary(
-            Arc::new(agg_partial_op.into()),
-            Arc::new(eval_target_side_condition_sexpr),
-        );
-        let agg_final_op = Aggregate {
-            mode: AggregateMode::Final,
-            group_items,
-            aggregate_functions: min_max_scalar_items,
-            from_distinct: false,
-            limit: None,
-            grouping_sets: None,
-        };
-        let agg_final_sexpr =
-            SExpr::create_unary(Arc::new(agg_final_op.into()), Arc::new(agg_partial_sexpr));
-        let plan = Plan::Query {
-            s_expr: Box::new(agg_final_sexpr),
-            metadata: metadata.clone(),
-            bind_context,
-            rewrite_kind: None,
-            formatted_ast: None,
-            ignore_result: false,
-        };
-        let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
-        let blocks = stream.collect::<Result<Vec<_>>>().await?;
-
-        // 2. build filter and push down to target side
-        let mut filters = Vec::with_capacity(m_join.target_conditions.len());
-
-        for (i, target_side_expr) in m_join.target_conditions.iter().enumerate() {
-            let mut filter_parts = vec![];
-            for block in blocks.iter() {
-                let block = block.convert_to_full();
-                let min_column = block.get_by_offset(i * 2).value.as_column().unwrap();
-                let max_column = block.get_by_offset(i * 2 + 1).value.as_column().unwrap();
-                for (min_scalar, max_scalar) in min_column.iter().zip(max_column.iter()) {
-                    let gte_min = ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "gte".to_string(),
-                        params: vec![],
-                        arguments: vec![
-                            target_side_expr.clone(),
-                            ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: None,
-                                value: min_scalar.to_owned(),
-                            }),
-                        ],
-                    });
-                    let lte_max = ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "lte".to_string(),
-                        params: vec![],
-                        arguments: vec![
-                            target_side_expr.clone(),
-                            ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: None,
-                                value: max_scalar.to_owned(),
-                            }),
-                        ],
-                    });
-                    let and = ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "and".to_string(),
-                        params: vec![],
-                        arguments: vec![gte_min, lte_max],
-                    });
-                    filter_parts.push(and);
-                }
-            }
-            filters.extend(Self::combine_filter_parts(&filter_parts).into_iter());
-        }
-        let mut target_plan = m_join.target_sexpr.clone();
-        Self::push_down_filters(&mut target_plan, &filters)?;
-        let new_sexpr =
-            join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
-        Ok(Box::new(new_sexpr))
-    }
-
-    fn combine_filter_parts(filter_parts: &[ScalarExpr]) -> Option<ScalarExpr> {
-        match filter_parts.len() {
-            0 => None,
-            1 => Some(filter_parts[0].clone()),
-            _ => {
-                let mid = filter_parts.len() / 2;
-                let left = Self::combine_filter_parts(&filter_parts[0..mid]);
-                let right = Self::combine_filter_parts(&filter_parts[mid..]);
-                if let Some(left) = left {
-                    if let Some(right) = right {
-                        Some(ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "or".to_string(),
-                            params: vec![],
-                            arguments: vec![left, right],
-                        }))
-                    } else {
-                        Some(left)
-                    }
-                } else {
-                    right
-                }
-            }
-        }
-    }
-
-    fn display_scalar_expr(s: &ScalarExpr) -> String {
-        match s {
-            ScalarExpr::BoundColumnRef(x) => x.column.column_name.clone(),
-            ScalarExpr::ConstantExpr(x) => x.value.to_string(),
-            ScalarExpr::WindowFunction(x) => format!("{:?}", x),
-            ScalarExpr::AggregateFunction(x) => format!("{:?}", x),
-            ScalarExpr::LambdaFunction(x) => format!("{:?}", x),
-            ScalarExpr::FunctionCall(x) => match x.func_name.as_str() {
-                "and" | "or" | "gte" | "lte" => {
-                    format!(
-                        "({} {} {})",
-                        Self::display_scalar_expr(&x.arguments[0]),
-                        x.func_name,
-                        Self::display_scalar_expr(&x.arguments[1])
-                    )
-                }
-                _ => format!("{:?}", x),
-            },
-            ScalarExpr::CastExpr(x) => format!("{:?}", x),
-            ScalarExpr::SubqueryExpr(x) => format!("{:?}", x),
-            ScalarExpr::UDFServerCall(x) => format!("{:?}", x),
-        }
-    }
-
-    fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
-        match s_expr.plan() {
-            RelOperator::Scan(s) => {
-                let mut new_scan = s.clone();
-                info!("push down {} filters:", filters.len());
-                for filter in filters {
-                    info!("{}", Self::display_scalar_expr(filter));
-                }
-                if let Some(preds) = new_scan.push_down_predicates {
-                    new_scan.push_down_predicates =
-                        Some(preds.iter().chain(filters).cloned().collect());
-                } else {
-                    new_scan.push_down_predicates = Some(filters.to_vec());
-                }
-                *s_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(new_scan)));
-            }
-            RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Aggregate(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Limit(_) => {
-                let mut new_child = s_expr.child(0)?.clone();
-                Self::push_down_filters(&mut new_child, filters)?;
-                *s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
-            }
-            RelOperator::CteScan(_) => {}
-            RelOperator::Join(_) => {}
-            RelOperator::Exchange(_) => {}
-            RelOperator::UnionAll(_) => {}
-            RelOperator::DummyTableScan(_) => {}
-            RelOperator::RuntimeFilterSource(_) => {}
-            RelOperator::Window(_) => {}
-            RelOperator::ProjectSet(_) => {}
-            RelOperator::MaterializedCte(_) => {}
-            RelOperator::Lambda(_) => {}
-            RelOperator::ConstantTableScan(_) => {}
-            RelOperator::Pattern(_) => {}
-            RelOperator::AddRowNumber(_) => {}
-        }
-        Ok(())
     }
 
     fn transform_scalar_expr2expr(
@@ -841,5 +474,27 @@ impl MergeIntoInterpreter {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
+    }
+
+    fn get_merge_into_table_result(&self) -> Result<Vec<DataBlock>> {
+        let binding = self.ctx.get_merge_status();
+        let status = binding.read();
+        let schema = self.plan.schema();
+        let mut columns = Vec::new();
+        for field in schema.as_ref().fields() {
+            match field.name().as_str() {
+                plans::INSERT_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.insert_rows as u32]))
+                }
+                plans::UPDATE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.update_rows as u32]))
+                }
+                plans::DELETE_NAME => {
+                    columns.push(UInt32Type::from_data(vec![status.deleted_rows as u32]))
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }

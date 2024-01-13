@@ -1,0 +1,28 @@
+
+query TI
+select $1, $2 from @data/tsv/escape.tsv (file_format => 'tsv')
+----
+"a 1
+"a" 2
+"a 3
+'a 4
+'a' 5
+'a 6
+'a"b' 7
+\ 8
+\i 9
+'a" b' 10
+
+
+query II
+select hex($1), hex($2) from @data/tsv/whitespace.tsv (file_format => 'tsv')
+----
+3120 3220
+2033 2034
+203520 3620
+
+query II
+select $1, $2 from @data/tsv/no_newline.tsv (file_format => 'tsv') a order by $1
+----
+1 2
+3 4

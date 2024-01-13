@@ -14,8 +14,9 @@
 
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::openai::*;
 use log::trace;
 use openai_api_rust::chat::ChatApi;
 use openai_api_rust::chat::ChatBody;
@@ -23,8 +24,6 @@ use openai_api_rust::Auth;
 use openai_api_rust::Message;
 use openai_api_rust::Role;
 
-use crate::metrics::metrics_completion_count;
-use crate::metrics::metrics_completion_token;
 use crate::OpenAI;
 
 #[derive(Debug)]
@@ -96,7 +95,7 @@ impl OpenAI {
         } else {
             let message = resp
                 .choices
-                .get(0)
+                .first()
                 .and_then(|choice| choice.message.as_ref());
 
             match message {

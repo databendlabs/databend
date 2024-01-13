@@ -19,28 +19,27 @@ use std::io::Write;
 
 use bumpalo::Bump;
 use comfy_table::Table;
-use common_exception::Result;
-use common_expression::type_check;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_expression::RawExpr;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::type_check;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;
 
-pub trait AggregationSimulator =
-    Fn(&str, Vec<Scalar>, &[Column], usize) -> common_exception::Result<(Column, DataType)> + Copy;
+pub trait AggregationSimulator = Fn(&str, Vec<Scalar>, &[Column], usize) -> databend_common_exception::Result<(Column, DataType)>
+    + Copy;
 
 /// run ast which is agg expr
 pub fn run_agg_ast(
@@ -74,9 +73,9 @@ pub fn run_agg_ast(
         .collect::<Vec<_>>();
 
     // For test only, we just support agg function call here
-    let result: common_exception::Result<(Column, DataType)> = try {
+    let result: databend_common_exception::Result<(Column, DataType)> = try {
         match raw_expr {
-            common_expression::RawExpr::FunctionCall {
+            databend_common_expression::RawExpr::FunctionCall {
                 name, params, args, ..
             } => {
                 let args: Vec<(Value<AnyType>, DataType)> = args
@@ -84,11 +83,6 @@ pub fn run_agg_ast(
                     .map(|raw_expr| run_scalar_expr(raw_expr, &block))
                     .collect::<Result<_>>()
                     .unwrap();
-
-                let params = params
-                    .iter()
-                    .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
-                    .collect();
 
                 // Convert the delimiter of string_agg to params
                 let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
@@ -182,7 +176,7 @@ pub fn simulate_two_groups_group_by(
     params: Vec<Scalar>,
     columns: &[Column],
     rows: usize,
-) -> common_exception::Result<(Column, DataType)> {
+) -> databend_common_exception::Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments: Vec<DataType> = columns.iter().map(|c| c.data_type()).collect();
     let cols: Vec<Column> = columns.to_owned();

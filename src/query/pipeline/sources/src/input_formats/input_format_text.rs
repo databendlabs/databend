@@ -16,25 +16,25 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use common_compress::DecompressDecoder;
-use common_compress::DecompressState;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::BlockMetaInfo;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_formats::FieldDecoder;
-use common_formats::FileFormatOptionsExt;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::StageInfo;
-use common_pipeline_core::Pipeline;
-use common_settings::Settings;
-use common_storage::FileStatus;
-use common_storage::StageFileInfo;
+use databend_common_compress::DecompressDecoder;
+use databend_common_compress::DecompressState;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_formats::FieldDecoder;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::Settings;
+use databend_common_storage::FileStatus;
+use databend_common_storage::StageFileInfo;
 use log::debug;
 use opendal::Operator;
 
@@ -344,6 +344,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder>;
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
@@ -577,8 +578,17 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
                 )
             })
             .collect();
-        let field_decoder =
-            T::create_field_decoder(&ctx.file_format_params, &ctx.file_format_options_ext);
+
+        let numeric_cast_option = ctx
+            .settings
+            .get_numeric_cast_option()
+            .unwrap_or("rounding".to_string());
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let field_decoder = T::create_field_decoder(
+            &ctx.file_format_params,
+            &ctx.file_format_options_ext,
+            rounding_mode,
+        );
         let projection = ctx.projection.clone();
 
         BlockBuilder {

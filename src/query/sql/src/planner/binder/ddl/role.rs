@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_ast::ast::SecondaryRolesOption;
+use databend_common_exception::Result;
 
 use crate::plans::Plan;
 use crate::plans::SetRolePlan;
+use crate::plans::SetSecondaryRolesPlan;
 use crate::BindContext;
 use crate::Binder;
 
@@ -31,5 +33,18 @@ impl Binder {
             is_default,
             role_name: role_name.to_string(),
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_set_secondary_roles(
+        &mut self,
+        _bind_context: &BindContext,
+        option: &SecondaryRolesOption,
+    ) -> Result<Plan> {
+        let plan = match option {
+            SecondaryRolesOption::None => SetSecondaryRolesPlan::None,
+            SecondaryRolesOption::All => SetSecondaryRolesPlan::All,
+        };
+        Ok(Plan::SetSecondaryRoles(Box::new(plan)))
     }
 }

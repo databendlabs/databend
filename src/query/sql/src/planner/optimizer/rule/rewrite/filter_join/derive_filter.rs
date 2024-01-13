@@ -15,13 +15,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
+use crate::plans::walk_expr_mut;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::WindowFuncType;
+use crate::plans::VisitorMut;
 use crate::ScalarExpr;
 
 /// Derive filter to push down
@@ -123,115 +124,33 @@ fn replace_column(
     scalar: &mut ScalarExpr,
     equi_conditions_map: &mut HashMap<&ScalarExpr, &ScalarExpr>,
 ) {
-    match scalar {
-        ScalarExpr::BoundColumnRef(col) => {
-            let cloned_col = col.clone();
-            if let Some(s) = equi_conditions_map.get(scalar) {
-                *scalar = (**s).clone();
-            } else {
-                for (key, val) in equi_conditions_map.iter() {
+    struct ReplaceColumn<'a> {
+        equi_conditions_map: &'a HashMap<&'a ScalarExpr, &'a ScalarExpr>,
+    }
+
+    impl<'a> VisitorMut<'_> for ReplaceColumn<'a> {
+        fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+            if let Some(e) = self.equi_conditions_map.get(expr) {
+                *expr = (**e).clone();
+                return Ok(());
+            } else if let ScalarExpr::BoundColumnRef(col) = expr {
+                for (key, val) in self.equi_conditions_map.iter() {
                     if let ScalarExpr::BoundColumnRef(key_col) = key {
-                        if key_col.column.index.eq(&cloned_col.column.index) {
-                            *scalar = (**val).clone();
-                            break;
+                        if key_col.column.index == col.column.index {
+                            *expr = (**val).clone();
+                            return Ok(());
                         }
                     }
-                }
-            }
-        }
-        ScalarExpr::WindowFunction(expr) => {
-            match &mut expr.func {
-                WindowFuncType::Aggregate(agg) => {
-                    for arg in agg.args.iter_mut() {
-                        if let Some(s) = equi_conditions_map.get(arg) {
-                            *arg = (**s).clone();
-                        } else {
-                            replace_column(arg, equi_conditions_map);
-                        }
-                    }
-                }
-                WindowFuncType::LagLead(f) => {
-                    if let Some(s) = equi_conditions_map.get(f.arg.as_ref()) {
-                        *f.arg = (**s).clone();
-                    } else {
-                        replace_column(&mut f.arg, equi_conditions_map);
-                    }
-                    if let Some(ref mut default) = &mut f.default {
-                        if let Some(s) = equi_conditions_map.get(default.as_ref()) {
-                            *default = Box::new((**s).clone());
-                        } else {
-                            replace_column(default, equi_conditions_map);
-                        }
-                    }
-                }
-                WindowFuncType::NthValue(f) => {
-                    if let Some(s) = equi_conditions_map.get(f.arg.as_ref()) {
-                        *f.arg = (**s).clone();
-                    } else {
-                        replace_column(&mut f.arg, equi_conditions_map);
-                    }
-                }
-                _ => {}
-            }
-            for arg in expr.partition_by.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(arg) {
-                    *arg = (**s).clone();
-                } else {
-                    replace_column(arg, equi_conditions_map);
                 }
             }
 
-            for arg in expr.order_by.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(&arg.expr) {
-                    arg.expr = (**s).clone();
-                } else {
-                    replace_column(&mut arg.expr, equi_conditions_map);
-                }
-            }
-        }
-        ScalarExpr::AggregateFunction(expr) => {
-            for arg in expr.args.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(arg) {
-                    *arg = (**s).clone();
-                } else {
-                    replace_column(arg, equi_conditions_map);
-                }
-            }
-        }
-        ScalarExpr::FunctionCall(expr) => {
-            for arg in expr.arguments.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(arg) {
-                    *arg = (**s).clone();
-                } else {
-                    replace_column(arg, equi_conditions_map);
-                }
-            }
-        }
-        ScalarExpr::LambdaFunction(expr) => {
-            for arg in expr.args.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(arg) {
-                    *arg = (**s).clone();
-                } else {
-                    replace_column(arg, equi_conditions_map);
-                }
-            }
-        }
-        ScalarExpr::CastExpr(expr) => {
-            if let Some(s) = equi_conditions_map.get(expr.argument.as_ref()) {
-                *expr.argument = (**s).clone();
-            } else {
-                replace_column(&mut expr.argument, equi_conditions_map);
-            }
-        }
-        ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
-        ScalarExpr::UDFServerCall(expr) => {
-            for arg in expr.arguments.iter_mut() {
-                if let Some(s) = equi_conditions_map.get(arg) {
-                    *arg = (**s).clone();
-                } else {
-                    replace_column(arg, equi_conditions_map);
-                }
-            }
+            walk_expr_mut(self, expr)
         }
     }
+
+    let mut replace_column = ReplaceColumn {
+        equi_conditions_map,
+    };
+
+    replace_column.visit(scalar).unwrap();
 }

@@ -19,12 +19,15 @@ mod grouping_check;
 mod lowering;
 mod name_resolution;
 mod type_check;
+mod udf_rewriter;
 mod view_rewriter;
+mod virtual_column_rewriter;
 mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
 pub use aggregating_index_visitor::AggregatingIndexChecker;
 pub use aggregating_index_visitor::AggregatingIndexRewriter;
+pub use aggregating_index_visitor::RefreshAggregatingIndexRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
 pub use lowering::*;
@@ -36,8 +39,10 @@ pub use type_check::resolve_type_name;
 pub use type_check::resolve_type_name_by_str;
 pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
+pub(crate) use udf_rewriter::UdfRewriter;
 pub use view_rewriter::ViewRewriter;
+pub(crate) use virtual_column_rewriter::VirtualColumnRewriter;
 pub use window_check::WindowChecker;
 
-pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 5] =
-    ["sum", "min", "max", "avg", "approx_count_distinct"];
+pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 6] =
+    ["sum", "min", "max", "avg", "count", "approx_count_distinct"];

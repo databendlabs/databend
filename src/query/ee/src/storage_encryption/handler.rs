@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_enterprise_storage_encryption::StorageEncryptionHandler;
+use databend_enterprise_storage_encryption::StorageEncryptionHandlerWrapper;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use storage_encryption::StorageEncryptionHandler;
-use storage_encryption::StorageEncryptionHandlerWrapper;
 
 pub struct RealStorageEncryptionHandler {
     cfg: InnerConfig,
@@ -38,7 +38,7 @@ impl StorageEncryptionHandler for RealStorageEncryptionHandler {
             .get_settings();
         // check for valid license
         get_license_manager().manager.check_enterprise_enabled(
-            settings.get_enterprise_license().unwrap_or_default(),
+            unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::StorageEncryption,
         )
     }

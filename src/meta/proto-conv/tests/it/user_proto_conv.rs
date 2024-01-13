@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,21 +19,21 @@ use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app as mt;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserPrivilegeType;
-use common_meta_app::storage::StorageCosConfig;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig;
-use common_proto_conv::FromToProto;
-use common_proto_conv::Incompatible;
-use common_proto_conv::VER;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::storage::StorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_proto_conv::FromToProto;
+use databend_common_proto_conv::Incompatible;
+use databend_common_proto_conv::VER;
+use databend_common_protos::pb;
 use enumflags2::make_bitflags;
 use pretty_assertions::assert_eq;
 
@@ -67,6 +67,10 @@ fn test_user_info() -> mt::principal::UserInfo {
             max_storage_in_bytes: 20480,
         },
         option,
+        history_auth_infos: vec![],
+        password_fails: vec![],
+        password_update_on: None,
+        lockout_time: None,
     }
 }
 
@@ -79,6 +83,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -102,6 +107,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
             username: "databend".to_string(),
             hostname: "databend.rs".to_string(),
         }),
+        created_on: Utc::now(),
     }
 }
 
@@ -120,6 +126,7 @@ pub(crate) fn test_s3_stage_info() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -158,6 +165,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -196,6 +204,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::principal::StageInfo {
                 ..Default::default()
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -230,6 +239,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
                 credential: "my_credential".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -268,6 +278,7 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
                 server_side_encryption_key_id: "".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -301,6 +312,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 delegation: "<delegation_token>".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -335,6 +347,7 @@ pub(crate) fn test_obs_stage_info() -> mt::principal::StageInfo {
                 bucket: "bucket".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -369,6 +382,7 @@ pub(crate) fn test_cos_stage_info() -> mt::principal::StageInfo {
                 bucket: "bucket".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -593,7 +607,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = user_info.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("user_info: {:?}", buf);
     }
 
@@ -602,7 +616,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let stage_file = test_stage_file();
         let p = stage_file.to_pb()?;
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("stage_file: {:?}", buf);
     }
 
@@ -613,7 +627,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = fs_stage_info.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("fs_stage_info: {:?}", buf);
     }
 
@@ -624,7 +638,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = s3_stage_info.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("s3_stage_info: {:?}", buf);
     }
 
@@ -635,7 +649,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = s3_stage_info.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("s3_stage_info_v16: {:?}", buf);
     }
 
@@ -646,7 +660,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = s3_stage_info.to_pb()?;
 
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("s3_stage_info_v14: {:?}", buf);
     }
 
@@ -655,7 +669,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let gcs_stage_info = test_gcs_stage_info();
         let p = gcs_stage_info.to_pb()?;
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("gcs_stage_info: {:?}", buf);
     }
 
@@ -664,7 +678,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let oss_stage_info = test_oss_stage_info();
         let p = oss_stage_info.to_pb()?;
         let mut buf = vec![];
-        common_protos::prost::Message::encode(&p, &mut buf)?;
+        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("oss_stage_info: {:?}", buf);
     }
 
@@ -686,7 +700,8 @@ fn test_load_old_user() -> anyhow::Result<()> {
             160, 6, 4, 168, 6, 1, 160, 6, 4, 168, 6, 1,
         ];
         let p: pb::UserInfo =
-            common_protos::prost::Message::decode(user_info_v4.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(user_info_v4.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         let want = test_user_info();
 
@@ -703,7 +718,8 @@ fn test_load_old_user() -> anyhow::Result<()> {
             160, 6, 1, 160, 6, 1,
         ];
         let p: pb::UserInfo =
-            common_protos::prost::Message::decode(user_info_v1.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(user_info_v1.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         assert_eq!(got.name, "test_user".to_string());
         assert_eq!(got.option.default_role().clone(), None);
@@ -719,7 +735,8 @@ fn test_load_old_user() -> anyhow::Result<()> {
             160, 6, 3, 168, 6, 1, 160, 6, 3, 168, 6, 1,
         ];
         let p: pb::UserInfo =
-            common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(user_info_v3.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         let want = test_user_info();
         assert_eq!(want, got);
@@ -736,7 +753,8 @@ fn test_load_old_user() -> anyhow::Result<()> {
             160, 6, 3, 168, 6, 1, 160, 6, 3, 168, 6, 1,
         ];
         let p: pb::UserInfo =
-            common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(user_info_v3.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         assert!(got.option.flags().is_empty());
     }
@@ -754,7 +772,8 @@ fn test_load_old_user() -> anyhow::Result<()> {
         ];
 
         let p: pb::UserInfo =
-            common_protos::prost::Message::decode(user_info_v5.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(user_info_v5.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         let mut want = test_user_info();
         want.option = want
@@ -779,7 +798,8 @@ fn test_old_stage_file() -> anyhow::Result<()> {
             168, 6, 1, 160, 6, 8, 168, 6, 1,
         ];
         let p: pb::StageFile =
-            common_protos::prost::Message::decode(stage_file_v7.as_slice()).map_err(print_err)?;
+            databend_common_protos::prost::Message::decode(stage_file_v7.as_slice())
+                .map_err(print_err)?;
         let got = mt::principal::StageFile::from_pb(p).map_err(print_err)?;
 
         let dt = NaiveDateTime::new(
@@ -811,6 +831,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -841,6 +862,7 @@ pub(crate) fn test_stage_info_v18() -> mt::principal::StageInfo {
                 root: "/dir/to/files".to_string(),
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,

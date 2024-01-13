@@ -16,15 +16,18 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::display_decimal_128;
+use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use ethnum::AsI256;
 use itertools::Itertools;
 use num_traits::NumCast;
-use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -58,11 +61,11 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         *scalar
     }
 
@@ -70,7 +73,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_scalar(scalar.as_decimal()?)
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         let down_col = Num::try_downcast_column(col);
         if let Some(col) = down_col {
             Some(col.0)
@@ -83,10 +86,16 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Num::try_downcast_builder(builder)
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Num::try_downcast_owned_builder(builder)
+    }
+
+    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        None
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -101,26 +110,24 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::upcast_domain(domain, Num::default_decimal_size())
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
         col.get(index).cloned()
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         *col.get_unchecked(index)
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter().cloned()
     }
 
@@ -151,6 +158,36 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left == right
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left != right
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left <= right
     }
 }
 
@@ -192,7 +229,17 @@ pub enum DecimalDataType {
     Decimal256(DecimalSize),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumAsInner,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub enum DecimalScalar {
     Decimal128(i128, DecimalSize),
     Decimal256(i256, DecimalSize),
@@ -237,7 +284,18 @@ pub enum DecimalDomain {
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
 pub struct DecimalSize {
     pub precision: u8,
     pub scale: u8,
@@ -279,9 +337,10 @@ pub trait Decimal:
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
-    fn from_u64(value: u64) -> Self;
-    fn from_i64(value: i64) -> Self;
+    fn from_i128<U: Into<i128>>(value: U) -> Self;
+
     fn de_binary(bytes: &mut &[u8]) -> Self;
+    fn display(self, scale: u8) -> String;
 
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
@@ -289,7 +348,9 @@ pub trait Decimal:
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U>;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>>;
 
     fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
     fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>>;
@@ -414,12 +475,8 @@ impl Decimal for i128 {
         }
     }
 
-    fn from_u64(value: u64) -> Self {
-        value.to_i128().unwrap()
-    }
-
-    fn from_i64(value: i64) -> Self {
-        value.to_i128().unwrap()
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        value.into()
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -428,6 +485,10 @@ impl Decimal for i128 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i128::from_le_bytes(bs)
+    }
+
+    fn display(self, scale: u8) -> String {
+        display_decimal_128(self, scale)
     }
 
     fn to_float32(self, scale: u8) -> f32 {
@@ -470,7 +531,14 @@ impl Decimal for i128 {
         }
     }
 
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
         match builder {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
             _ => None,
@@ -576,12 +644,8 @@ impl Decimal for i256 {
         value.as_i256()
     }
 
-    fn from_u64(value: u64) -> Self {
-        i256::from(value.to_i128().unwrap())
-    }
-
-    fn from_i64(value: i64) -> Self {
-        i256::from(value.to_i128().unwrap())
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        i256::from(value.into())
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -590,6 +654,10 @@ impl Decimal for i256 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i256::from_le_bytes(bs)
+    }
+
+    fn display(self, scale: u8) -> String {
+        display_decimal_256(self, scale)
     }
 
     fn to_float32(self, scale: u8) -> f32 {
@@ -623,7 +691,14 @@ impl Decimal for i256 {
         }
     }
 
-    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
         match builder {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
             _ => None,

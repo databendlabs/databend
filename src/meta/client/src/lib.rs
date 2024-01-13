@@ -13,28 +13,34 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
+extern crate core;
+
+pub mod endpoints;
+pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
 mod grpc_metrics;
 mod kv_api_impl;
 mod message;
 
-pub use common_meta_api::reply::reply_to_api_result;
-pub use common_meta_api::reply::reply_to_meta_result;
+use std::sync::LazyLock;
+
+pub use databend_common_meta_api::reply::reply_to_api_result;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;
+pub use grpc_client::MetaChannelManager;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
 pub use message::Streamed;
-use once_cell::sync::Lazy;
 use semver::BuildMetadata;
 use semver::Prerelease;
 use semver::Version;
 
-pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
+pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
@@ -76,6 +82,17 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// - 2023-10-20: since 1.2.176:
 ///   Meta client: call stream api: kv_read_v1(), revert to 1.1.32 if server < 1.2.163
 ///
+/// - 2023-12-16: since 1.2.258:
+///   Meta service: add: ttl to TxnPutRequest and Upsert
+///
+/// - 2024-01-02: since 1.2.279:
+///   Meta client: remove `Compatible` for KVAppError and MetaAPIError, added in `2023-02-16: since 0.9.41`
+///
+/// - 2024-01-07: since 1.2.287:
+///   client: remove calling RPC kv_api() with MetaGrpcReq::GetKV/MGetKV/ListKV, kv_api only accept Upsert;
+///   client: remove using MetaGrpcReq::GetKV/MGetKV/ListKV;
+///   client: remove falling back kv_read_v1(Streamed(List)) to kv_api(List), added in `2023-10-20: since 1.2.176`;
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
@@ -85,8 +102,9 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// ```
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
-    minor: 1,
-    patch: 32,
+    minor: 2,
+    // [1.2.163, 1.2.226) are removed from release download, due to some known bugs found in these versions.
+    patch: 226,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };

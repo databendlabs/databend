@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_expression::types::number::NumberDataType;
-use common_expression::types::DataType;
-use common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_expression::types::number::NumberDataType;
+use databend_common_expression::types::DataType;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -366,7 +366,11 @@ impl Rule for RuleEagerAggregation {
         self.id
     }
 
-    fn apply(&self, a_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+    fn apply(
+        &self,
+        a_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let mut matched_idx = 0;
         for (idx, pattern) in self.patterns.iter().enumerate() {
             if a_expr.match_pattern(pattern) {
@@ -1445,7 +1449,7 @@ fn decompose_avg(
     func_name: &mut String,
     metadata: MetadataRef,
     function_factory: &AggregateFunctionFactory,
-) -> common_exception::Result<(usize, usize, usize)> {
+) -> databend_common_exception::Result<(usize, usize, usize)> {
     *func_name = "sum".to_string();
     // Add COUNT aggregate functions.
     final_agg
@@ -1512,7 +1516,7 @@ fn update_aggregate_and_eval(
     eval_scalars: &mut Vec<&mut EvalScalar>,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
     avg_components: &HashMap<usize, usize>,
-) -> common_exception::Result<(bool, usize, usize)> {
+) -> databend_common_exception::Result<(bool, usize, usize)> {
     let final_aggregate_function = &mut final_agg.aggregate_functions[index];
 
     let old_index = final_aggregate_function.index;
@@ -1557,7 +1561,7 @@ fn create_eager_count_multiply_scalar_item(
     eager_count_index: IndexType,
     extra_eval_scalar: &EvalScalar,
     metadata: MetadataRef,
-) -> common_exception::Result<ScalarItem> {
+) -> databend_common_exception::Result<ScalarItem> {
     let new_index = metadata.write().add_derived_column(
         format!("{} * _eager_count", aggregate_function.display_name),
         aggregate_function.args[0].data_type()?,

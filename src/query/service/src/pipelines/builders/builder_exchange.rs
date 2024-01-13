@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_sql::executor::ExchangeSink;
-use common_sql::executor::ExchangeSource;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::ExchangeSink;
+use databend_common_sql::executor::physical_plans::ExchangeSource;
 
 use crate::pipelines::PipelineBuilder;
 

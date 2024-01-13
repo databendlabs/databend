@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::*;
-use common_meta_app::principal::StageFile;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::principal::StageParams;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
-use common_meta_embedded::MetaEmbedded;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::MatchSeq;
-use common_meta_types::SeqV;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::*;
+use databend_common_meta_app::principal::StageFile;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageParams;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_stage() -> Result<()> {

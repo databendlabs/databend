@@ -14,9 +14,11 @@
 
 //! Principal is a user or role that accesses an entity.
 
+mod connection;
 mod file_format;
 mod network_policy;
 mod ownership_info;
+mod password_policy;
 mod principal_identity;
 mod role_info;
 mod user_auth;
@@ -30,9 +32,11 @@ mod user_quota;
 mod user_setting;
 mod user_stage;
 
+pub use connection::*;
 pub use file_format::*;
 pub use network_policy::NetworkPolicy;
 pub use ownership_info::OwnershipInfo;
+pub use password_policy::PasswordPolicy;
 pub use principal_identity::PrincipalIdentity;
 pub use role_info::RoleInfo;
 pub use role_info::RoleInfoSerdeError;
@@ -46,7 +50,7 @@ pub use user_defined_function::UDFServer;
 pub use user_defined_function::UserDefinedFunction;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;
-pub use user_grant::GrantObjectByID;
+pub use user_grant::OwnershipObject;
 pub use user_grant::UserGrantSet;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;

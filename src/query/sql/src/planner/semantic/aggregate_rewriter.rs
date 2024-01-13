@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::Expr;
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_expr_mut;
-use common_ast::Dialect;
-use common_ast::VisitorMut;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_expr_mut;
+use databend_common_ast::Dialect;
+use databend_common_ast::VisitorMut;
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregateRewriter {

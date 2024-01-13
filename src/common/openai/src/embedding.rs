@@ -14,14 +14,13 @@
 
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::openai::*;
 use openai_api_rust::embeddings::EmbeddingsApi;
 use openai_api_rust::embeddings::EmbeddingsBody;
 use openai_api_rust::Auth;
 
-use crate::metrics::metrics_embedding_count;
-use crate::metrics::metrics_embedding_token;
 use crate::OpenAI;
 
 impl OpenAI {

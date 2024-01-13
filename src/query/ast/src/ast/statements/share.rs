@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareGrantObjectName;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use itertools::Itertools;
 
 use super::UriLocation;

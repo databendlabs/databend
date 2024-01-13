@@ -17,15 +17,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_catalog::database::Database;
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_storage::DataOperator;
+use databend_common_catalog::database::Database;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_storage::DataOperator;
 use futures::StreamExt;
 use opendal::EntryMode;
 use opendal::Metakey;
@@ -88,10 +88,10 @@ impl Database for IcebergDatabase {
         }
 
         let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
-        let table_sp = table_sp.auto_detect().await;
+        let table_sp = table_sp.auto_detect().await?;
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
-        let tbl = IcebergTable::try_create(
+        let tbl = IcebergTable::try_create_from_iceberg_catalog(
             &self.ctl_name,
             &self.info.name_ident.db_name,
             table_name,

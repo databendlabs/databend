@@ -18,10 +18,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::constants::NULL_BYTES_ESCAPE;
-use common_io::escape_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::constants::NULL_BYTES_ESCAPE;
+use databend_common_io::escape_string;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -37,6 +37,9 @@ const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
+const MISSING_FIELD_AS: &str = "missing_field_as";
+const NULL_FIELD_AS: &str = "null_field_as";
+const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -61,13 +64,12 @@ impl FileFormatOptionsAst {
     fn take_type(&mut self) -> Result<StageFileFormatType> {
         let typ = match self.options.remove("type") {
             Some(t) => t,
-            None => self
-                .options
-                .remove("format")
-                .ok_or(ErrorCode::IllegalFileFormat(format!(
+            None => self.options.remove("format").ok_or_else(|| {
+                ErrorCode::IllegalFileFormat(format!(
                     "Missing type in file format options: {:?}",
                     self.options
-                )))?,
+                ))
+            })?,
         };
         StageFileFormatType::from_str(&typ).map_err(ErrorCode::IllegalFileFormat)
     }
@@ -174,9 +176,20 @@ impl FileFormatParams {
             }
             StageFileFormatType::NdJson => {
                 let compression = ast.take_compression()?;
-                FileFormatParams::NdJson(NdJsonFileFormatParams { compression })
+                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
+                let null_field_as = ast.options.remove(NULL_FIELD_AS);
+                FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
+                    compression,
+                    missing_field_as.as_deref(),
+                    null_field_as.as_deref(),
+                )?)
             }
-            StageFileFormatType::Parquet => FileFormatParams::Parquet(ParquetFileFormatParams {}),
+            StageFileFormatType::Parquet => {
+                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = ast.take_compression()?;
@@ -188,6 +201,12 @@ impl FileFormatParams {
                 let escape = ast.take_string(OPT_ESCAPE, default.escape);
                 let quote = ast.take_string(OPT_QUOTE, default.quote);
                 let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let empty_field_as = ast
+                    .options
+                    .remove(OPT_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
                 let error_on_column_count_mismatch = ast.take_bool(
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
@@ -202,6 +221,7 @@ impl FileFormatParams {
                     escape,
                     quote,
                     error_on_column_count_mismatch,
+                    empty_field_as,
                 })
             }
             StageFileFormatType::Tsv => {
@@ -272,7 +292,9 @@ impl FileFormatParams {
 
 impl Default for FileFormatParams {
     fn default() -> Self {
-        FileFormatParams::Parquet(ParquetFileFormatParams {})
+        FileFormatParams::Parquet(ParquetFileFormatParams {
+            missing_field_as: NullAs::Error,
+        })
     }
 }
 
@@ -295,6 +317,7 @@ pub struct CsvFileFormatParams {
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    pub empty_field_as: EmptyFieldAs,
 }
 
 impl Default for CsvFileFormatParams {
@@ -309,6 +332,7 @@ impl Default for CsvFileFormatParams {
             escape: "".to_string(),
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            empty_field_as: Default::default(),
         }
     }
 }
@@ -380,6 +404,90 @@ impl Default for XmlFileFormatParams {
     }
 }
 
+/// used for both `missing_field_as` and `null_field_as`
+/// for extensibility, it is stored as PB string in meta
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum NullAs {
+    /// for `missing_field_as` only, and is default for it for safety,
+    /// in case of wrong field names when creating table.
+    #[default]
+    Error,
+    /// only valid for nullable column
+    Null,
+    /// defined when creating table
+    FieldDefault,
+    TypeDefault,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum EmptyFieldAs {
+    #[default]
+    FieldDefault,
+    Null,
+    String,
+}
+
+impl FromStr for EmptyFieldAs {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "string" => Ok(Self::String),
+            "null" => Ok(Self::Null),
+            "field_default" => Ok(Self::FieldDefault),
+            _ => Err(ErrorCode::InvalidArgument(format!(
+                "invalid value ({s}) for empty_field_as, available values field_default|null|string."
+            ))),
+        }
+    }
+}
+
+impl Display for EmptyFieldAs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FieldDefault => write!(f, "field_default"),
+            Self::Null => write!(f, "null"),
+            Self::String => write!(f, "string"),
+        }
+    }
+}
+
+impl NullAs {
+    fn parse(s: Option<&str>, option_name: &str, default: Self) -> Result<Self> {
+        match s {
+            Some(v) => v.parse::<NullAs>().map_err(|_| {
+                ErrorCode::InvalidArgument(format!("invalid value ({v}) for {option_name}"))
+            }),
+            None => Ok(default),
+        }
+    }
+}
+
+impl FromStr for NullAs {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "error" => Ok(NullAs::Error),
+            "null" => Ok(NullAs::Null),
+            "field_default" => Ok(NullAs::FieldDefault),
+            "type_default" => Ok(NullAs::TypeDefault),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for NullAs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NullAs::Error => write!(f, "error"),
+            NullAs::Null => write!(f, "null"),
+            NullAs::FieldDefault => write!(f, "field_default"),
+            NullAs::TypeDefault => write!(f, "type_default"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonFileFormatParams {
     pub compression: StageFileCompression,
@@ -405,12 +513,37 @@ impl Default for JsonFileFormatParams {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NdJsonFileFormatParams {
     pub compression: StageFileCompression,
+    pub missing_field_as: NullAs,
+    pub null_field_as: NullAs,
+}
+
+impl NdJsonFileFormatParams {
+    pub fn try_create(
+        compression: StageFileCompression,
+        missing_field_as: Option<&str>,
+        null_field_as: Option<&str>,
+    ) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::FieldDefault)?;
+        if matches!(null_field_as, NullAs::Error) {
+            return Err(ErrorCode::InvalidArgument(
+                "NULL_FIELD_AS cannot be `error`",
+            ));
+        }
+        Ok(Self {
+            compression,
+            missing_field_as,
+            null_field_as,
+        })
+    }
 }
 
 impl Default for NdJsonFileFormatParams {
     fn default() -> Self {
         NdJsonFileFormatParams {
             compression: StageFileCompression::None,
+            missing_field_as: NullAs::Error,
+            null_field_as: NullAs::FieldDefault,
         }
     }
 }
@@ -425,7 +558,21 @@ impl NdJsonFileFormatParams {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ParquetFileFormatParams {}
+pub struct ParquetFileFormatParams {
+    pub missing_field_as: NullAs,
+}
+
+impl ParquetFileFormatParams {
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        if !matches!(missing_field_as, NullAs::Error | NullAs::FieldDefault) {
+            return Err(ErrorCode::InvalidArgument(
+                "MISSING_FIELD_AS for parquet only accept ERROR|FIELD_DEFAULT for now",
+            ));
+        };
+        Ok(Self { missing_field_as })
+    }
+}
 
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -16,33 +16,34 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::native::read::batch_read::batch_read_array;
-use common_arrow::native::read::column_iter_to_arrays;
-use common_arrow::native::read::reader::NativeReader;
-use common_arrow::native::read::ArrayIter;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::metadata::Descriptor;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::parquet::schema::types::FieldInfo;
-use common_arrow::parquet::schema::types::ParquetType;
-use common_arrow::parquet::schema::types::PhysicalType;
-use common_arrow::parquet::schema::types::PrimitiveType;
-use common_arrow::parquet::schema::Repetition;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_storage::ColumnNode;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCacheKey;
-use storages_common_cache_manager::CacheManager;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::Compression;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::native::read::batch_read::batch_read_array;
+use databend_common_arrow::native::read::column_iter_to_arrays;
+use databend_common_arrow::native::read::reader::NativeReader;
+use databend_common_arrow::native::read::ArrayIter;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_arrow::parquet::metadata::Descriptor;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_arrow::parquet::schema::types::FieldInfo;
+use databend_common_arrow::parquet::schema::types::ParquetType;
+use databend_common_arrow::parquet::schema::types::PhysicalType;
+use databend_common_arrow::parquet::schema::types::PrimitiveType;
+use databend_common_arrow::parquet::schema::Repetition;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::storage::*;
+use databend_common_storage::ColumnNode;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::Compression;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
@@ -50,7 +51,6 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
 use crate::io::UncompressedBuffer;
-use crate::metrics::*;
 
 impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
@@ -112,7 +112,16 @@ impl BlockReader {
         };
 
         for column_node in &self.project_column_nodes {
-            match self.deserialize_native_field(&field_deserialization_ctx, column_node)? {
+            let deserialized_column = self
+                .deserialize_native_field(&field_deserialization_ctx, column_node)
+                .map_err(|e| {
+                    e.add_message(format!(
+                        "failed to deserialize column: {:?}, location {} ",
+                        column_node, block_path
+                    ))
+                })?;
+
+            match deserialized_column {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);

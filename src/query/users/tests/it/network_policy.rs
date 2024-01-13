@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::RpcClientConf;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::NetworkPolicy;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_users::UserApiProvider;
-use pretty_assertions::assert_eq;
+use chrono::TimeZone;
+use chrono::Utc;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_grpc::RpcClientConf;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_network_policy() -> Result<()> {
@@ -43,10 +45,12 @@ async fn test_network_policy() -> Result<()> {
         allowed_ip_list,
         blocked_ip_list,
         comment: "".to_string(),
-        create_on: Utc.with_ymd_and_hms(2023, 07, 10, 12, 0, 9).unwrap(),
+        create_on: Utc.with_ymd_and_hms(2023, 7, 10, 12, 0, 9).unwrap(),
         update_on: None,
     };
-    user_mgr.add_network_policy(tenant, network_policy, false).await?;
+    user_mgr
+        .add_network_policy(tenant, network_policy, false)
+        .await?;
 
     // add user
     let auth_info = AuthInfo::Password {
@@ -56,48 +60,74 @@ async fn test_network_policy() -> Result<()> {
 
     let mut user_info = UserInfo::new(username, hostname, auth_info.clone());
     let mut option = UserOption::empty();
-    option = option
-        .with_network_policy(Some(policy_name.clone()));
-    user_info.update_auth_option(None, Some(option))
+    option = option.with_network_policy(Some(policy_name.clone()));
+    user_info.update_auth_option(None, Some(option));
     user_mgr.add_user(tenant, user_info, false).await?;
 
     let user = UserIdentity::new(username, hostname);
 
     // check get user with client ip
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1"))
+        .await;
     assert!(res.is_ok());
 
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.10")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.10"))
+        .await;
     assert!(res.is_err());
 
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.20")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.20"))
+        .await;
     assert!(res.is_err());
 
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1"))
+        .await;
     assert!(res.is_err());
 
     // update network policy
-    let new_allowed_ip_list: vec!["127.0.0.0/24".to_string()];
-    let new_blocked_ip_list: vec!["127.0.0.10".to_string()];
-    user_mgr.update_network_policy(tenant, policy_name.as_ref(), Some(new_allowed_ip_list), Some(new_blocked_ip_list), None, false).await?;
+    let new_allowed_ip_list = vec!["127.0.0.0/24".to_string()];
+    let new_blocked_ip_list = vec!["127.0.0.10".to_string()];
+    user_mgr
+        .update_network_policy(
+            tenant,
+            policy_name.as_ref(),
+            Some(new_allowed_ip_list),
+            Some(new_blocked_ip_list),
+            None,
+            false,
+        )
+        .await?;
 
     // check get user with client ip
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1"))
+        .await;
     assert!(res.is_err());
 
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1"))
+        .await;
     assert!(res.is_ok());
 
-    let res = user_mgr.get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.10")).await;
+    let res = user_mgr
+        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.10"))
+        .await;
     assert!(res.is_err());
 
     // drop network policy
-    let res = user_mgr.drop_network_policy(tenant, policy_name.as_ref(), false).await;
+    let res = user_mgr
+        .drop_network_policy(tenant, policy_name.as_ref(), false)
+        .await;
     assert!(res.is_err());
 
     user_mgr.drop_user(tenant, user.clone(), false).await?;
 
-    let res = user_mgr.drop_network_policy(tenant, policy_name.as_ref(), false).await;
+    let res = user_mgr
+        .drop_network_policy(tenant, policy_name.as_ref(), false)
+        .await;
     assert!(res.is_ok());
 
     Ok(())

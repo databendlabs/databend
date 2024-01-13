@@ -16,9 +16,9 @@ use std::future;
 use std::io;
 use std::sync::Arc;
 
-use common_meta_types::SeqNum;
-use common_meta_types::SeqV;
-use common_meta_types::SnapshotMeta;
+use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SnapshotMeta;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 
@@ -95,7 +95,7 @@ impl SnapshotViewV002 {
         let mut data = self.compacted.newest().unwrap().new_level();
 
         // `range()` will compact tombstone internally
-        let strm = self.compacted.str_map().range::<String, _>(..).await?;
+        let strm = self.compacted.str_map().range(..).await?;
         let strm = strm.try_filter(|(_k, v)| future::ready(v.is_normal()));
 
         let bt = strm.try_collect().await?;
@@ -167,7 +167,7 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let strm = self.compacted.str_map().range::<String, _>(..).await?;
+        let strm = self.compacted.str_map().range(..).await?;
         let kv_iter = strm.try_filter_map(|(k, v)| {
             let seqv: Option<SeqV<_>> = v.into();
             let ent = seqv.map(|value| RaftStoreEntry::GenericKV { key: k, value });

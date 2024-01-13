@@ -32,7 +32,7 @@ use enumflags2::BitFlags;
     num_derive::FromPrimitive,
 )]
 pub enum UserPrivilegeType {
-    // UsagePrivilege is a synonym for “no privileges”
+    // UsagePrivilege is a synonym for “no privileges”, if object is udf, means can use this udf
     Usage = 1 << 0,
     // Privilege to select rows from tables in a database.
     Select = 1 << 2,
@@ -70,8 +70,6 @@ pub enum UserPrivilegeType {
     Read = 1 << 18,
     // Privilege to Write stage
     Write = 1 << 19,
-    // Privilege to usage UDF
-    UsageUDF = 1 << 20,
 
     // TODO: remove this later
     Set = 1 << 4,
@@ -98,7 +96,6 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Ownership
         | Read
         | Write
-        | UsageUDF
     }
 );
 
@@ -125,7 +122,6 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
-            UserPrivilegeType::UsageUDF => "UsageUDF",
         })
     }
 }
@@ -167,11 +163,11 @@ impl UserPrivilegeSet {
     }
 
     pub fn available_privileges_on_stage() -> Self {
-        make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
+        make_bitflags!(UserPrivilegeType::{  Read | Write | Ownership }).into()
     }
 
     pub fn available_privileges_on_udf() -> Self {
-        make_bitflags!(UserPrivilegeType::{ UsageUDF }).into()
+        make_bitflags!(UserPrivilegeType::{ Usage | Ownership }).into()
     }
 
     // TODO: remove this, as ALL has different meanings on different objects

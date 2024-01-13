@@ -17,8 +17,8 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::pb::schedule_options::ScheduleType;
 use crate::pb::ScheduleOptions;
@@ -40,10 +40,33 @@ impl Display for Status {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum State {
+    SCHEDULED = 0,
+    EXECUTING = 1,
+    SUCCEEDED = 2,
+    FAILED = 3,
+    CANCELLED = 4,
+}
+
+impl Display for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            State::SCHEDULED => write!(f, "SCHEDULED"),
+            State::EXECUTING => write!(f, "EXECUTING"),
+            State::SUCCEEDED => write!(f, "SUCCEEDED"),
+            State::FAILED => write!(f, "FAILED"),
+            State::CANCELLED => write!(f, "CANCELLED"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Task {
     pub task_id: u64,
     pub task_name: String,
     pub query_text: String,
+    pub condition_text: String,
+    pub after: Vec<String>,
     pub comment: Option<String>,
     pub owner: String,
     pub schedule_options: Option<String>,
@@ -67,14 +90,10 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
         }
     };
     return match schedule_type {
-        ScheduleType::IntervalType => {
-            if s.interval.is_none() {
-                return Err(ErrorCode::IllegalCloudControlMessageFormat(
-                    "interval schedule has null value",
-                ));
-            }
-            Ok(format!("INTERVAL {} MINUTE", s.interval.unwrap()))
-        }
+        ScheduleType::IntervalType => Ok(format!(
+            "INTERVAL {} SECOND",
+            s.interval.unwrap_or_default(),
+        )),
         ScheduleType::CronType => {
             if s.cron.is_none() {
                 return Err(ErrorCode::IllegalCloudControlMessageFormat(
@@ -90,6 +109,7 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
         }
     };
 }
+
 // convert from crate::pb::task to struct task
 impl TryFrom<crate::pb::Task> for Task {
     type Error = ErrorCode;
@@ -151,23 +171,28 @@ impl TryFrom<crate::pb::Task> for Task {
                     .map(|d| d.with_timezone(&Utc))
             })
             .transpose()?;
-
         let schedule = match value.schedule_options {
             None => None,
             Some(ref s) => {
-                let r = format_schedule_options(s).map_err(|e| {
-                    ErrorCode::IllegalCloudControlMessageFormat(format!(
-                        "illegal schedule options {:?}, {e}",
-                        value.schedule_options
-                    ))
-                })?;
-                Some(r)
+                if !value.after.is_empty() {
+                    None
+                } else {
+                    let r = format_schedule_options(s).map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal schedule options {:?}, {e}",
+                            value.schedule_options
+                        ))
+                    })?;
+                    Some(r)
+                }
             }
         };
         let t = Task {
             task_id: value.task_id,
             task_name: value.task_name,
             query_text: value.query_text,
+            condition_text: value.when_condition.unwrap_or_default(),
+            after: value.after,
             comment: value.comment,
             owner: value.owner,
             schedule_options: schedule,
@@ -180,5 +205,107 @@ impl TryFrom<crate::pb::Task> for Task {
             updated_at,
         };
         Ok(t)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskRun {
+    pub task_id: u64,
+    pub task_name: String,
+    pub query_text: String,
+    pub condition_text: String,
+    pub comment: Option<String>,
+    pub owner: String,
+    pub run_id: String,
+    pub query_id: String,
+    pub schedule_options: Option<String>,
+    pub warehouse_options: Option<WarehouseOptions>,
+    pub attempt_number: i32,
+    pub state: State,
+    pub scheduled_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub error_code: i64,
+    pub error_message: Option<String>,
+    pub root_task_id: String,
+}
+
+// convert from crate::pb::taskRun to struct taskRun
+impl TryFrom<crate::pb::TaskRun> for TaskRun {
+    type Error = ErrorCode;
+
+    fn try_from(value: crate::pb::TaskRun) -> Result<Self> {
+        let state = match value.state {
+            0 => State::SCHEDULED,
+            1 => State::EXECUTING,
+            2 => State::SUCCEEDED,
+            3 => State::FAILED,
+            4 => State::CANCELLED,
+            s => {
+                return Err(ErrorCode::IllegalCloudControlMessageFormat(format!(
+                    "Illegal state code {s}"
+                )));
+            }
+        };
+
+        let scheduled_at = DateTime::parse_from_rfc3339(&value.scheduled_time)
+            .map_err(|e| {
+                ErrorCode::IllegalCloudControlMessageFormat(format!(
+                    "illegal scheduled_at message {}, {e}",
+                    value.scheduled_time
+                ))
+            })?
+            .with_timezone(&Utc);
+
+        let completed_at = value
+            .completed_time
+            .as_ref()
+            .map(|s| {
+                DateTime::parse_from_rfc3339(s)
+                    .map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal completed_time message {:?}, {e}",
+                            value.completed_time
+                        ))
+                    })
+                    .map(|d| d.with_timezone(&Utc))
+            })
+            .transpose()?;
+
+        let schedule = match value.schedule_options {
+            None => None,
+            Some(ref s) => {
+                if value.task_id.to_string() != value.root_task_id {
+                    None
+                } else {
+                    let r = format_schedule_options(s).map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal schedule options {:?}, {e}",
+                            value.schedule_options
+                        ))
+                    })?;
+                    Some(r)
+                }
+            }
+        };
+        let tr = TaskRun {
+            task_id: value.task_id,
+            task_name: value.task_name,
+            query_text: value.query_text,
+            condition_text: value.condition_text,
+            comment: value.comment,
+            owner: value.owner,
+            error_code: value.error_code,
+            error_message: value.error_message,
+            run_id: value.run_id,
+            query_id: value.query_id,
+            attempt_number: value.attempt_number,
+            schedule_options: schedule,
+            warehouse_options: value.warehouse_options,
+            state,
+            scheduled_at,
+            completed_at,
+            root_task_id: value.root_task_id,
+        };
+        Ok(tr)
     }
 }

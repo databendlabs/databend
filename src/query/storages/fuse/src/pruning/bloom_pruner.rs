@@ -16,20 +16,20 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_sql::BloomIndexColumns;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::FilterEvalResult;
+use databend_storages_common_table_meta::meta::Location;
 use log::warn;
 use opendal::Operator;
-use storages_common_index::BloomIndex;
-use storages_common_index::FilterEvalResult;
-use storages_common_table_meta::meta::Location;
 
 use crate::io::BloomBlockFilterReader;
 

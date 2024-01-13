@@ -15,14 +15,14 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
 // TODO Shuffle?
 pub struct BroadcastProcessor {
     input_port: Arc<InputPort>,
@@ -32,6 +32,7 @@ pub struct BroadcastProcessor {
 }
 
 impl BroadcastProcessor {
+    #[allow(dead_code)]
     pub fn new(num_outputs: usize) -> Self {
         let mut output_ports = Vec::with_capacity(num_outputs);
         for _ in 0..num_outputs {
@@ -47,6 +48,7 @@ impl BroadcastProcessor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let outputs = self.output_ports.clone();

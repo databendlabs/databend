@@ -14,14 +14,13 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::planner::plans::operator::Operator;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
@@ -65,9 +64,6 @@ impl Rule for RuleCommuteJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut join: Join = s_expr.plan().clone().try_into()?;
         let left_child = s_expr.child(0)?;
-        if left_child.plan.rel_op() == RelOp::RuntimeFilterSource {
-            return Ok(());
-        }
         let right_child = s_expr.child(1)?;
         let left_rel_expr = RelExpr::with_s_expr(left_child);
         let right_rel_expr = RelExpr::with_s_expr(right_child);

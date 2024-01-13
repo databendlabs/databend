@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -102,6 +104,8 @@ pub struct InMemoryRowGroup<'a> {
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
     row_count: usize,
+    max_gap_size: u64,
+    max_range_size: u64,
 }
 
 impl<'a> InMemoryRowGroup<'a> {
@@ -110,6 +114,8 @@ impl<'a> InMemoryRowGroup<'a> {
         op: Operator,
         rg: &'a RowGroupMetaData,
         page_locations: Option<&'a [Vec<PageLocation>]>,
+        max_gap_size: u64,
+        max_range_size: u64,
     ) -> Self {
         Self {
             location,
@@ -118,6 +124,8 @@ impl<'a> InMemoryRowGroup<'a> {
             page_locations,
             column_chunks: vec![None; rg.num_columns()],
             row_count: rg.num_rows() as usize,
+            max_gap_size,
+            max_range_size,
         }
     }
 
@@ -143,36 +151,36 @@ impl<'a> InMemoryRowGroup<'a> {
                 .iter()
                 .zip(self.metadata.columns())
                 .enumerate()
-                .filter_map(|(idx, (chunk, chunk_meta))| {
-                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
-                        // If the first page does not start at the beginning of the column,
-                        // then we need to also fetch a dictionary page.
-                        let mut ranges = vec![];
-                        let (start, _len) = chunk_meta.byte_range();
-                        match page_locations[idx].first() {
-                            Some(first) if first.offset as u64 != start => {
-                                ranges.push(start..first.offset as u64);
-                            }
-                            _ => (),
-                        }
-
-                        ranges.extend(
-                            selection
-                                .scan_ranges(&page_locations[idx])
-                                .iter()
-                                .map(|r| r.start as u64..r.end as u64),
-                        );
-                        page_start_offsets
-                            .push(ranges.iter().map(|range| range.start as usize).collect());
-
-                        ranges
-                    })
+                .filter(|&(idx, (chunk, _chunk_meta))| {
+                    chunk.is_none() && projection.leaf_included(idx)
                 })
-                .flatten()
+                .flat_map(|(idx, (_chunk, chunk_meta))| {
+                    // If the first page does not start at the beginning of the column,
+                    // then we need to also fetch a dictionary page.
+                    let mut ranges = vec![];
+                    let (start, _len) = chunk_meta.byte_range();
+                    match page_locations[idx].first() {
+                        Some(first) if first.offset as u64 != start => {
+                            ranges.push(start..first.offset as u64);
+                        }
+                        _ => (),
+                    }
+
+                    ranges.extend(
+                        selection
+                            .scan_ranges(&page_locations[idx])
+                            .iter()
+                            .map(|r| r.start as u64..r.end as u64),
+                    );
+                    page_start_offsets
+                        .push(ranges.iter().map(|range| range.start as usize).collect());
+
+                    ranges
+                })
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
             let mut chunk_iter = chunk_data.into_iter();
             let mut page_start_offsets = page_start_offsets.into_iter();
 
@@ -198,17 +206,16 @@ impl<'a> InMemoryRowGroup<'a> {
                 .column_chunks
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, chunk)| {
-                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
-                        let column = self.metadata.column(idx);
-                        let (start, length) = column.byte_range();
-                        start..(start + length)
-                    })
+                .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
+                .map(|(idx, _chunk)| {
+                    let column = self.metadata.column(idx);
+                    let (start, length) = column.byte_range();
+                    start..(start + length)
                 })
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
             let mut chunk_iter = chunk_data.into_iter();
 
             for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
@@ -228,35 +235,58 @@ impl<'a> InMemoryRowGroup<'a> {
         Ok(())
     }
 
-    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
-        if self.op.info().full_capability().blocking {
-            let blocking_op = self.op.blocking();
-            let ranges = ranges.to_vec();
-            let location = self.location.to_owned();
+    pub async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
+        let raw_ranges = ranges.to_vec();
+        let range_merger =
+            RangeMerger::from_iter(raw_ranges.clone(), self.max_gap_size, self.max_range_size);
+        let merged_ranges = range_merger.ranges();
+        let blocking_op = self.op.blocking();
+        let location = self.location.to_owned();
+        let merged = merged_ranges.len() < raw_ranges.len();
+        let chunks = match self.op.info().full_capability().blocking {
+            true => {
+                // Read merged range data.
+                let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
+                    merged_ranges
+                        .into_iter()
+                        .map(|range| {
+                            let data = blocking_op
+                                .read_with(&location)
+                                .range(range.clone())
+                                .call()?;
+                            Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                        })
+                        .collect::<Result<_>>()
+                };
 
-            let f = move || -> Result<Vec<Bytes>> {
-                ranges
-                    .into_iter()
-                    .map(|range| {
-                        let data = blocking_op.read_with(&location).range(range).call()?;
-                        Ok::<_, ErrorCode>(Bytes::from(data))
-                    })
-                    .collect::<Result<Vec<_>>>()
-            };
-
-            maybe_spawn_blocking(f).await
-        } else {
-            let mut handles = Vec::with_capacity(ranges.len());
-            for range in ranges {
-                let fut_read = self.op.read_with(self.location);
-                handles.push(async move {
-                    let data = fut_read.range(range.start..range.end).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
+                maybe_spawn_blocking(f).await?
             }
-            let chunk_data = futures::future::try_join_all(handles).await?;
-            Ok(chunk_data)
-        }
+            false => {
+                let mut handles = Vec::with_capacity(merged_ranges.len());
+                for range in merged_ranges {
+                    let fut_read = self.op.read_with(self.location);
+                    handles.push(async move {
+                        let data = fut_read.range(range.start..range.end).await?;
+                        Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                    });
+                }
+                let chunk_data = futures::future::try_join_all(handles).await?;
+                chunk_data.into_iter().collect()
+            }
+        };
+        Ok((
+            raw_ranges
+                .into_iter()
+                .map(|raw_range| {
+                    let range = range_merger.get(raw_range.clone()).unwrap().1;
+                    let chunk = chunks.get(&range).unwrap();
+                    let start = (raw_range.start - range.start) as usize;
+                    let end = (raw_range.end - range.start) as usize;
+                    chunk.clone().slice(start..end)
+                })
+                .collect::<Vec<_>>(),
+            merged,
+        ))
     }
 }
 

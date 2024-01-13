@@ -1,0 +1,33 @@
+query T
+SELECT TO_BASE64('abc')
+----
+YWJj
+
+query T
+SELECT FROM_BASE64(TO_BASE64('abc'))::STRING
+----
+abc
+
+query T
+SELECT TO_BASE64(NULL)
+----
+NULL
+
+query T
+SELECT FROM_BASE64(NULL)
+----
+NULL
+
+
+statement error 1006
+SELECT FROM_BASE64('1')
+
+query T
+SELECT TO_BASE64(to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+MA==
+MQ==
+Mg==
+Mw==
+NA==
+

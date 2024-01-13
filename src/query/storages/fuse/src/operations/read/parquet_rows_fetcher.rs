@@ -16,21 +16,21 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::plan::block_idx_in_segment;
-use common_catalog::plan::split_prefix;
-use common_catalog::plan::split_row_id;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Projection;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::TableSchemaRef;
-use common_storage::ColumnNodes;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::plan::block_idx_in_segment;
+use databend_common_catalog::plan::split_prefix;
+use databend_common_catalog::plan::split_row_id;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_storage::ColumnNodes;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use super::fuse_rows_fetcher::RowsFetcher;
 use crate::io::BlockReader;
@@ -179,7 +179,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     async fn prepare_part_map(&mut self, row_ids: &[u64]) -> Result<()> {
         let snapshot = self.snapshot.as_ref().unwrap();
 
-        let arrow_schema = self.schema.to_arrow();
+        let arrow_schema = self.schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
         for row_id in row_ids {

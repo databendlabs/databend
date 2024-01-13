@@ -28,7 +28,6 @@ runs:
         target: ${{ inputs.target }}
         artifacts: sqllogictests,meta,query
     - name: Minio Setup for (ubuntu-latest only)
-      if: inputs.storage == 's3'
       shell: bash
       run: |
         docker run -d --network host --name minio \

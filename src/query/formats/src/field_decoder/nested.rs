@@ -17,38 +17,39 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::serialize::read_decimal_with_size;
-use common_expression::serialize::uniform_date;
-use common_expression::types::array::ArrayColumnBuilder;
-use common_expression::types::date::check_date;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalColumnBuilder;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::number::Number;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::timestamp::check_timestamp;
-use common_expression::types::AnyType;
-use common_expression::types::NumberColumnBuilder;
-use common_expression::with_decimal_type;
-use common_expression::with_number_mapped_type;
-use common_expression::ColumnBuilder;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_UPPER;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::BufferReadStringExt;
-use common_io::cursor_ext::DateTimeResType;
-use common_io::cursor_ext::ReadBytesExt;
-use common_io::cursor_ext::ReadCheckPointExt;
-use common_io::cursor_ext::ReadNumberExt;
-use common_io::parse_bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::serialize::uniform_date;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalColumnBuilder;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::ColumnBuilder;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::cursor_ext::BufferReadDateTimeExt;
+use databend_common_io::cursor_ext::BufferReadStringExt;
+use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::cursor_ext::ReadBytesExt;
+use databend_common_io::cursor_ext::ReadCheckPointExt;
+use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::parse_bitmap;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
@@ -125,6 +126,7 @@ impl NestedValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader),
             ColumnBuilder::Array(c) => self.read_array(c, reader),
             ColumnBuilder::Map(c) => self.read_map(c, reader),
@@ -262,7 +264,7 @@ impl NestedValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
@@ -275,7 +277,7 @@ impl NestedValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();

@@ -96,10 +96,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Medium }
-          - { dataset: hits, size: XLarge }
-          - { dataset: tpch, size: Medium }
-          - { dataset: tpch, size: XLarge }
+          - { dataset: hits, size: Small }
+          - { dataset: hits, size: Large }
+          - { dataset: tpch, size: Small }
+          - { dataset: tpch, size: Large }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -171,7 +171,7 @@ jobs:
           number: ${{ inputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Small&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/hits.html
             * **tpch**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html

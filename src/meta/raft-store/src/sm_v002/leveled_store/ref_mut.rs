@@ -15,8 +15,9 @@
 use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
+use std::sync::Arc;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
@@ -57,6 +58,12 @@ impl<'d> RefMut<'d> {
             .into_iter()
             .chain(self.frozen.iter_levels())
     }
+
+    pub(in crate::sm_v002) fn iter_shared_levels(
+        &self,
+    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
+        (Some(self.writable), self.frozen.iter_arc_levels())
+    }
 }
 
 // Because `LeveledRefMut` has a mut ref of lifetime 'd,
@@ -66,6 +73,7 @@ impl<'d, K> MapApiRO<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -76,14 +84,10 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-    {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
+        let (top, levels) = self.iter_shared_levels();
+        compacted_range(range, top, levels).await
     }
 }
 
@@ -92,6 +96,7 @@ impl<'d, K> MapApi<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApi<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn set(
         &mut self,
@@ -106,7 +111,7 @@ where
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.not_found() && value.is_none() {
-            return Ok((prev, Marked::new_tomb_stone(0)));
+            return Ok((prev, Marked::new_tombstone(0)));
         }
 
         // `writeable` is a single level map and the returned `_prev` is only from that level.

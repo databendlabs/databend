@@ -14,17 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSetting;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::IntoSeqV;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::IntoSeqV;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 
@@ -58,12 +59,9 @@ impl SettingApi for SettingMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert.await?.added_or_else(|v| v);
-
-        match res {
-            Ok(added) => Ok(added.seq),
-            Err(existing) => Ok(existing.seq),
-        }
+        let (_prev, curr) = upsert.await?.unpack();
+        let res_seq = curr.seq();
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]
@@ -86,13 +84,14 @@ impl SettingApi for SettingMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {}", name)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownVariable(format!("Setting '{}' does not exist.", name))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown setting {}",
+                "Setting '{}' does not exist.",
                 name
             ))),
         }

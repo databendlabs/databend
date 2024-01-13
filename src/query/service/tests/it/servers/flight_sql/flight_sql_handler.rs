@@ -23,14 +23,14 @@ use arrow_flight::sql::client::FlightSqlServiceClient;
 use arrow_flight::utils::flight_data_to_batches;
 use arrow_flight::FlightData;
 use arrow_schema::ArrowError;
-use common_base::base::tokio;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::PasswordHashMethod;
+use databend_common_base::base::tokio;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use log::debug;
@@ -90,7 +90,7 @@ fn prepare_config() -> InnerConfig {
 
 #[tokio::test]
 async fn test_query() -> Result<()> {
-    let _guard = TestGlobalServices::setup(prepare_config()).await?;
+    let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
 
     let file = NamedTempFile::new().unwrap();
     let path = file.into_temp_path().to_str().unwrap().to_string();

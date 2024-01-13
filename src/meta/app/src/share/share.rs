@@ -590,7 +590,7 @@ impl ShareMeta {
     }
 
     pub fn get_accounts(&self) -> Vec<String> {
-        Vec::<String>::from_iter(self.accounts.clone().into_iter())
+        Vec::<String>::from_iter(self.accounts.clone())
     }
 
     pub fn has_account(&self, account: &String) -> bool {
@@ -746,7 +746,7 @@ pub struct ShareSpec {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use super::ShareEndpointId;
     use crate::share::ShareAccountNameIdent;

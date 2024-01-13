@@ -13,23 +13,26 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Not;
 
-use common_exception::Result;
-use common_expression::eval_function;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+
+use super::utils::expr2prdicate;
+use super::utils::get_and;
+use super::utils::get_not;
+use super::utils::get_or;
 
 #[derive(Clone)]
 pub struct UpdateByExprMutator {
@@ -42,6 +45,7 @@ pub struct UpdateByExprMutator {
 }
 
 impl UpdateByExprMutator {
+    #[allow(dead_code)]
     pub fn create(
         expr: Option<Expr>,
         func_ctx: FunctionContext,
@@ -61,7 +65,7 @@ impl UpdateByExprMutator {
     pub fn update_by_expr(&self, data_block: DataBlock) -> Result<DataBlock> {
         let const_expr = Expr::Constant {
             span: None,
-            scalar: common_expression::Scalar::Boolean(true),
+            scalar: databend_common_expression::Scalar::Boolean(true),
             data_type: DataType::Boolean,
         };
         let mut expr = if self.expr.is_none() {
@@ -88,36 +92,27 @@ impl UpdateByExprMutator {
         has_filter: bool,
     ) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut predicates = evaluator
-            .run(&expr)
-            .map_err(|e| e.add_message("eval filter failed:"))?
-            .try_downcast::<BooleanType>()
-            .unwrap();
+        let mut predicates = expr2prdicate(&evaluator, &expr)?;
 
         let mut data_block = data_block.clone();
         let (last_filter, origin_block) = if has_filter {
             let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
             let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
             // pop filter
-            data_block = data_block.pop_columns(1)?;
+            data_block.pop_columns(1);
             // has pop old filter
             let origin_block = data_block.clone();
             // add filter
-            let old_predicate = old_filter.clone().into_column().unwrap();
+            let (old_filter_not, _) =
+                get_not(old_filter.clone(), &self.func_ctx, data_block.num_rows())?;
 
-            let filter_not = old_predicate.not();
-            let old_filter_not: Value<BooleanType> = Value::Column(filter_not);
+            let old_filter_not: Value<BooleanType> = old_filter_not.try_downcast().unwrap();
 
-            let (res, _) = eval_function(
-                None,
-                "and",
-                [
-                    (old_filter_not.upcast(), DataType::Boolean),
-                    (predicates.upcast(), DataType::Boolean),
-                ],
+            let (res, _) = get_and(
+                old_filter_not,
+                predicates,
                 &self.func_ctx,
                 data_block.num_rows(),
-                &BUILTIN_FUNCTIONS,
             )?;
 
             predicates = res.try_downcast().unwrap();
@@ -126,17 +121,13 @@ impl UpdateByExprMutator {
                 DataType::Boolean,
                 Value::upcast(predicates.clone()),
             ));
-            let (last_filter, _) = eval_function(
-                None,
-                "or",
-                [
-                    (old_filter.upcast(), DataType::Boolean),
-                    (predicates.upcast(), DataType::Boolean),
-                ],
+            let (last_filter, _) = get_or(
+                old_filter,
+                predicates,
                 &self.func_ctx,
                 data_block.num_rows(),
-                &BUILTIN_FUNCTIONS,
             )?;
+
             (last_filter, origin_block)
         } else {
             let origin_block = data_block.clone();
@@ -152,6 +143,7 @@ impl UpdateByExprMutator {
             .iter()
             .map(|item| item.1.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
+
         // get filter and updated columns
         let op = BlockOperator::Map {
             exprs,
@@ -162,7 +154,9 @@ impl UpdateByExprMutator {
             ),
         };
         let data_block = op.execute(&self.func_ctx, data_block)?;
+        // input_schema column position -> field_index
         let mut updated_column_position = HashMap::new();
+        // field_index -> position_in_block (this block is arrived by op.execute above)
         let mut field_index2position = HashMap::new();
         for (idx, (field_index, _)) in self.update_lists.iter().enumerate() {
             updated_column_position.insert(
@@ -188,6 +182,7 @@ impl UpdateByExprMutator {
             data_type: DataType::Boolean,
             value: last_filter,
         });
+
         Ok(DataBlock::new(block_entries, data_block.num_rows()))
     }
 }

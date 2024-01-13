@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_meta_app::principal::OnErrorMode;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::OnErrorMode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -117,6 +117,21 @@ pub enum FileParseError {
         column_type: String,
         decode_error: String,
         column_data: String,
+    },
+    #[error("Missing value for column {column_index} ({column_name} {column_type})")]
+    ColumnMissingError {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+    },
+    #[error(
+        "Empty value for column {column_index} ({column_name} {column_type}), when option empty_field_as='{empty_field_as}'"
+    )]
+    ColumnEmptyError {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+        empty_field_as: String,
     },
     #[error(
         "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char at {error_pos} is {next_char}"

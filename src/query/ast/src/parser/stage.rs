@@ -38,7 +38,7 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
-fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
+pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
     move |i| {
         let string_options = map(
             rule! {
@@ -93,7 +93,10 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | QUOTE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
+                | EMPTY_FIELD_AS
                 | ESCAPE
+                | NULL_FIELD_AS
+                | MISSING_FIELD_AS
                 | ROW_TAG) ~ ^"=" ~ ^#literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),
@@ -163,13 +166,17 @@ pub fn file_location(i: Input) -> IResult<FileLocation> {
 pub fn stage_location(i: Input) -> IResult<String> {
     map_res(file_location, |location| match location {
         FileLocation::Stage(s) => Ok(s),
-        FileLocation::Uri(_) => Err(ErrorKind::Other("expect stage location, got uri location")),
+        FileLocation::Uri(_) => Err(nom::Err::Failure(ErrorKind::Other(
+            "expect stage location, got uri location",
+        ))),
     })(i)
 }
 
 pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(string_location, |location| match location {
-        FileLocation::Stage(_) => Err(ErrorKind::Other("uri location should not start with '@'")),
+        FileLocation::Stage(_) => Err(nom::Err::Failure(ErrorKind::Other(
+            "uri location should not start with '@'",
+        ))),
         FileLocation::Uri(u) => Ok(u),
     })(i)
 }
@@ -190,7 +197,9 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
-                    Err(ErrorKind::Other("uri location should not start with '@'"))
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "uri location should not start with '@'",
+                    )))
                 }
             } else {
                 let part_prefix = if let Some((_, _, p, _)) = location_prefix {
@@ -205,7 +214,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 conns.extend(credentials_opts.map(|v| v.2).unwrap_or_default());
 
                 let uri = UriLocation::from_uri(location, part_prefix, conns)
-                    .map_err(|_| ErrorKind::Other("invalid uri"))?;
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;
                 Ok(FileLocation::Uri(uri))
             }
         },

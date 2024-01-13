@@ -1,0 +1,30 @@
+statement ok
+drop database if exists window_subquery
+
+statement ok
+create database window_subquery
+
+statement ok
+use window_subquery
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values(1),(2),(3)
+
+query III
+select * from t, (select a, sum(a) over (order by a) from t) t1
+----
+1 1 1
+1 2 3
+1 3 6
+2 1 1
+2 2 3
+2 3 6
+3 1 1
+3 2 3
+3 3 6
+
+statement ok
+drop database window_subquery

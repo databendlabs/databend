@@ -14,20 +14,22 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 
 /// TransformRuntimeCastSchema is used to cast block to the specified schema.
 /// Different from `TransformCastSchema`, it is used at the runtime
@@ -72,11 +74,19 @@ impl Transform for TransformRuntimeCastSchema {
                     display_name: to.name().clone(),
                 };
                 if &from.data_type != to.data_type() {
-                    Expr::Cast {
-                        span: None,
-                        is_try: false,
-                        expr: Box::new(expr),
-                        dest_type: to.data_type().clone(),
+                    if from.data_type.remove_nullable() == DataType::String
+                        && to.data_type().remove_nullable() == DataType::Variant
+                    {
+                        // parse string to JSON value, avoid cast string to JSON string
+                        check_function(None, "parse_json", &[], &[expr], &BUILTIN_FUNCTIONS)
+                            .unwrap()
+                    } else {
+                        Expr::Cast {
+                            span: None,
+                            is_try: false,
+                            expr: Box::new(expr),
+                            dest_type: to.data_type().clone(),
+                        }
                     }
                 } else {
                     expr

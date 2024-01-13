@@ -20,8 +20,8 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -32,7 +32,9 @@ use tonic::Request;
 use crate::types::DataType;
 use crate::DataSchema;
 
-const UDF_REQUEST_TIMEOUT_SEC: u64 = 180; // 180 seconds
+const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
+const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
+const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
@@ -41,12 +43,22 @@ pub struct UDFFlightClient {
 
 impl UDFFlightClient {
     #[async_backtrace::framed]
-    pub async fn connect(addr: &str) -> Result<UDFFlightClient> {
+    pub async fn connect(
+        addr: &str,
+        conn_timeout: u64,
+        request_timeout: u64,
+    ) -> Result<UDFFlightClient> {
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
             })?
-            .connect_timeout(Duration::from_secs(UDF_REQUEST_TIMEOUT_SEC));
+            .connect_timeout(Duration::from_secs(conn_timeout))
+            .timeout(Duration::from_secs(request_timeout))
+            .tcp_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)))
+            .http2_keep_alive_interval(Duration::from_secs(UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC))
+            .keep_alive_timeout(Duration::from_secs(UDF_KEEP_ALIVE_TIMEOUT_SEC))
+            .keep_alive_while_idle(true);
+
         let inner = FlightServiceClient::connect(endpoint)
             .await
             .map_err(|err| {
@@ -58,9 +70,7 @@ impl UDFFlightClient {
     }
 
     fn make_request<T>(&self, t: T) -> Request<T> {
-        let mut request = Request::new(t);
-        request.set_timeout(Duration::from_secs(UDF_REQUEST_TIMEOUT_SEC));
-        request
+        Request::new(t)
     }
 
     #[async_backtrace::framed]
@@ -75,8 +85,8 @@ impl UDFFlightClient {
         let flight_info = self.inner.get_flight_info(request).await?.into_inner();
         let schema = flight_info
             .try_decode_schema()
-            .and_then(|schema| DataSchema::try_from(&schema))
-            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))?;
+            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))
+            .and_then(|schema| DataSchema::try_from(&schema))?;
 
         let fields_num = schema.fields().len();
         if fields_num == 0 {

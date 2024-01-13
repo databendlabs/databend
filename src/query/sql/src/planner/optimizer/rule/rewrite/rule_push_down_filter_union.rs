@@ -15,30 +15,20 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
-use crate::plans::LagLeadFunction;
-use crate::plans::LambdaFunc;
-use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::plans::UDFServerCall;
 use crate::plans::UnionAll;
-use crate::plans::WindowFunc;
-use crate::plans::WindowFuncType;
-use crate::plans::WindowOrderBy;
+use crate::plans::VisitorMut;
 use crate::IndexType;
 use crate::Visibility;
 
@@ -141,151 +131,32 @@ impl Rule for RulePushDownFilterUnion {
 
 fn replace_column_binding(
     index_pairs: &HashMap<IndexType, IndexType>,
-    scalar: ScalarExpr,
+    mut scalar: ScalarExpr,
 ) -> Result<ScalarExpr> {
-    match scalar {
-        ScalarExpr::BoundColumnRef(column) => {
+    struct ReplaceColumnVisitor<'a> {
+        index_pairs: &'a HashMap<IndexType, IndexType>,
+    }
+
+    impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
+        fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
             let index = column.column.index;
-            if index_pairs.contains_key(&index) {
+            if self.index_pairs.contains_key(&index) {
                 let new_column = ColumnBindingBuilder::new(
                     column.column.column_name.clone(),
-                    *index_pairs.get(&index).unwrap(),
-                    column.column.data_type,
+                    *self.index_pairs.get(&index).unwrap(),
+                    column.column.data_type.clone(),
                     Visibility::Visible,
                 )
                 .virtual_computed_expr(column.column.virtual_computed_expr.clone())
                 .build();
-                return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: column.span,
-                    column: new_column,
-                }));
+                column.column = new_column;
             }
-            Ok(ScalarExpr::BoundColumnRef(column))
-        }
-        constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
-        ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
-            span: expr.span,
-            display_name: expr.display_name,
-            func: match expr.func {
-                WindowFuncType::Aggregate(arg) => WindowFuncType::Aggregate(AggregateFunction {
-                    display_name: arg.display_name,
-                    func_name: arg.func_name,
-                    distinct: arg.distinct,
-                    params: arg.params,
-                    args: arg
-                        .args
-                        .into_iter()
-                        .map(|arg| replace_column_binding(index_pairs, arg))
-                        .collect::<Result<Vec<_>>>()?,
-                    return_type: arg.return_type,
-                }),
-                WindowFuncType::LagLead(ll) => {
-                    let new_arg = replace_column_binding(index_pairs, *ll.arg)?;
-                    let new_default = match &ll.default {
-                        None => None,
-                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
-                    };
-                    WindowFuncType::LagLead(LagLeadFunction {
-                        is_lag: ll.is_lag,
-                        arg: Box::new(new_arg),
-                        offset: ll.offset,
-                        default: new_default,
-                        return_type: ll.return_type.clone(),
-                    })
-                }
-                WindowFuncType::NthValue(func) => {
-                    let new_arg = replace_column_binding(index_pairs, *func.arg)?;
-                    WindowFuncType::NthValue(NthValueFunction {
-                        n: func.n,
-                        arg: Box::new(new_arg),
-                        return_type: func.return_type.clone(),
-                    })
-                }
-                t => t,
-            },
-            partition_by: expr
-                .partition_by
-                .into_iter()
-                .map(|p| replace_column_binding(index_pairs, p))
-                .collect::<Result<Vec<_>>>()?,
-            order_by: expr
-                .order_by
-                .into_iter()
-                .map(|p| {
-                    Ok(WindowOrderBy {
-                        expr: replace_column_binding(index_pairs, p.expr)?,
-                        asc: p.asc,
-                        nulls_first: p.nulls_first,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?,
-            frame: expr.frame,
-        })),
-        ScalarExpr::AggregateFunction(expr) => {
-            Ok(ScalarExpr::AggregateFunction(AggregateFunction {
-                display_name: expr.display_name,
-                func_name: expr.func_name,
-                distinct: expr.distinct,
-                params: expr.params,
-                args: expr
-                    .args
-                    .into_iter()
-                    .map(|arg| replace_column_binding(index_pairs, arg))
-                    .collect::<Result<Vec<_>>>()?,
-                return_type: expr.return_type,
-            }))
-        }
-        ScalarExpr::FunctionCall(expr) => Ok(ScalarExpr::FunctionCall(FunctionCall {
-            span: expr.span,
-            func_name: expr.func_name,
-            params: expr.params,
-            arguments: expr
-                .arguments
-                .into_iter()
-                .map(|arg| replace_column_binding(index_pairs, arg))
-                .collect::<Result<Vec<_>>>()?,
-        })),
-        ScalarExpr::LambdaFunction(lambda_func) => {
-            let args = lambda_func
-                .args
-                .into_iter()
-                .map(|arg| replace_column_binding(index_pairs, arg))
-                .collect::<Result<Vec<ScalarExpr>>>()?;
-
-            Ok(ScalarExpr::LambdaFunction(LambdaFunc {
-                span: lambda_func.span,
-                func_name: lambda_func.func_name.clone(),
-                display_name: lambda_func.display_name.clone(),
-                args,
-                params: lambda_func.params.clone(),
-                lambda_expr: lambda_func.lambda_expr.clone(),
-                return_type: lambda_func.return_type,
-            }))
-        }
-        ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
-            span: expr.span,
-            is_try: expr.is_try,
-            argument: Box::new(replace_column_binding(index_pairs, *(expr.argument))?),
-            target_type: expr.target_type,
-        })),
-        ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
-            "replace_column_binding: don't support subquery",
-        )),
-        ScalarExpr::UDFServerCall(udf) => {
-            let arguments = udf
-                .arguments
-                .into_iter()
-                .map(|arg| replace_column_binding(index_pairs, arg))
-                .collect::<Result<Vec<_>>>()?;
-
-            Ok(ScalarExpr::UDFServerCall(UDFServerCall {
-                span: udf.span,
-                func_name: udf.func_name,
-                server_addr: udf.server_addr,
-                arg_types: udf.arg_types,
-                return_type: udf.return_type,
-                arguments,
-            }))
+            Ok(())
         }
     }
+
+    let mut visitor = ReplaceColumnVisitor { index_pairs };
+    visitor.visit(&mut scalar)?;
+
+    Ok(scalar)
 }

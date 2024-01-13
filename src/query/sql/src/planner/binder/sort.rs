@@ -16,11 +16,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;
@@ -41,6 +41,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -114,7 +115,6 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
@@ -195,14 +195,15 @@ impl Binder {
 
         for order in order_by.items {
             if from_context.in_grouping {
-                let group_checker = GroupingChecker::new(from_context);
+                let mut group_checker = GroupingChecker::new(from_context);
                 // Perform grouping check on original scalar expression if order item is alias.
                 if let Some(scalar_item) = select_list
                     .items
                     .iter()
                     .find(|item| item.alias == order.name)
                 {
-                    group_checker.resolve(&scalar_item.scalar, None)?;
+                    let mut scalar = scalar_item.scalar.clone();
+                    group_checker.visit(&mut scalar)?;
                 }
             }
 
@@ -213,11 +214,11 @@ impl Binder {
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
                     if from_context.in_grouping {
-                        let group_checker = GroupingChecker::new(from_context);
-                        scalar = group_checker.resolve(&scalar, None)?;
+                        let mut group_checker = GroupingChecker::new(from_context);
+                        group_checker.visit(&mut scalar)?;
                     } else if !from_context.windows.window_functions.is_empty() {
-                        let window_checker = WindowChecker::new(from_context);
-                        scalar = window_checker.resolve(&scalar)?;
+                        let mut window_checker = WindowChecker::new(from_context);
+                        window_checker.visit(&mut scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }
@@ -242,7 +243,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
-            after_exchange: false,
+            after_exchange: None,
             pre_projection: None,
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
@@ -265,7 +266,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {
@@ -297,7 +297,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
-            after_exchange: false,
+            after_exchange: None,
             pre_projection: None,
         };
         Ok(SExpr::create_unary(
@@ -321,8 +321,10 @@ impl Binder {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
                 aggregate @ ScalarExpr::AggregateFunction(_) => {
+                    let mut aggregate = aggregate.clone();
                     let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(aggregate)
+                    rewriter.visit(&mut aggregate)?;
+                    Ok(aggregate)
                 }
                 ScalarExpr::LambdaFunction(lambda_func) => {
                     let args = lambda_func
@@ -335,16 +337,17 @@ impl Binder {
                     Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                         span: lambda_func.span,
                         func_name: lambda_func.func_name.clone(),
-                        display_name: lambda_func.display_name.clone(),
                         args,
-                        params: lambda_func.params.clone(),
                         lambda_expr: lambda_func.lambda_expr.clone(),
+                        lambda_display: lambda_func.lambda_display.clone(),
                         return_type: lambda_func.return_type.clone(),
                     }))
                 }
                 window @ ScalarExpr::WindowFunction(_) => {
+                    let mut window = window.clone();
                     let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(window)
+                    rewriter.visit(&mut window)?;
+                    Ok(window)
                 }
                 ScalarExpr::FunctionCall(func) => {
                     let arguments = func
@@ -389,7 +392,9 @@ impl Binder {
                         .collect::<Result<Vec<_>>>()?;
                     Ok(UDFServerCall {
                         span: udf.span,
+                        name: udf.name.clone(),
                         func_name: udf.func_name.clone(),
+                        display_name: udf.display_name.clone(),
                         server_addr: udf.server_addr.clone(),
                         arg_types: udf.arg_types.clone(),
                         return_type: udf.return_type.clone(),

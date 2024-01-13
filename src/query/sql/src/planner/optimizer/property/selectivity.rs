@@ -16,13 +16,13 @@ use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::Scalar;
-use common_storage::Datum;
-use common_storage::F64;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_storage::Datum;
+use databend_common_storage::F64;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
@@ -38,6 +38,7 @@ use crate::IndexType;
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
 pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
+pub const SMALL_SELECTIVITY: f64 = 1f64 / 2500f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
@@ -122,7 +123,10 @@ impl<'a> SelectivityEstimator<'a> {
             {
                 stat
             } else {
-                return Ok(DEFAULT_SELECTIVITY);
+                // The column is derived column, give a small selectivity currently.
+                // Need to improve it later.
+                // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
+                return Ok(SMALL_SELECTIVITY);
             };
             let const_datum = if let Some(datum) = Datum::from_scalar(constant.value.clone()) {
                 datum
@@ -331,7 +335,9 @@ fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
             | NumberDataType::Float32
             | NumberDataType::Float64 => compare_equal(&constant_datum, column_stat),
         },
-        DataType::Boolean | DataType::String => compare_equal(&constant_datum, column_stat),
+        DataType::Boolean | DataType::Binary | DataType::String => {
+            compare_equal(&constant_datum, column_stat)
+        }
         _ => {
             if column_stat.ndv == 0.0 {
                 0.0

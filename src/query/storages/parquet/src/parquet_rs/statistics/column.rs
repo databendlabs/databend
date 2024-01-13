@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use ethnum::I256;
 use parquet::data_type::AsBytes;
 use parquet::file::statistics::Statistics;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use super::utils::decode_decimal128_from_bytes;
 use super::utils::decode_decimal256_from_bytes;
@@ -58,14 +58,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(max as i64),
-                            *size,
-                        )),
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(min as i64),
-                            *size,
-                        )),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }
@@ -95,8 +89,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }

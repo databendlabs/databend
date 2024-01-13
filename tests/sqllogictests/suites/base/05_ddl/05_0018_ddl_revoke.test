@@ -1,0 +1,102 @@
+statement ok
+DROP USER IF EXISTS 'test-user'
+
+statement ok
+DROP USER IF EXISTS 'test-priv'
+
+statement ok
+DROP DATABASE IF EXISTS a
+
+statement ok
+DROP DATABASE IF EXISTS b
+
+statement ok
+DROP ROLE IF EXISTS `test-role`
+
+statement ok
+DROP ROLE IF EXISTS test
+
+statement ok
+DROP USER IF EXISTS 'test-user'
+
+statement ok
+DROP USER IF EXISTS 'test-priv'
+
+statement ok
+CREATE DATABASE a
+
+statement ok
+CREATE DATABASE b
+
+statement error 2201
+REVOKE ROLE test FROM 'test-user'
+
+statement ok
+CREATE USER 'test-user' IDENTIFIED BY 'password'
+
+statement ok
+REVOKE ROLE test FROM 'test-user'
+
+statement ok
+CREATE ROLE test
+
+statement error 2204
+REVOKE ROLE test FROM ROLE `test-role`
+
+statement ok
+CREATE ROLE `test-role`
+
+statement ok
+REVOKE ROLE test FROM ROLE `test-role`
+
+statement ok
+CREATE USER 'test-priv' IDENTIFIED BY 'A'
+
+statement ok
+GRANT SELECT ON b.* TO 'test-priv'
+
+query T
+SHOW GRANTS FOR 'test-priv'
+----
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
+
+statement ok
+REVOKE SELECT ON a.* FROM 'test-priv'
+
+query T
+SHOW GRANTS FOR 'test-priv'
+----
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
+
+statement ok
+REVOKE CREATE ON a.* FROM 'test-priv'
+
+query T
+SHOW GRANTS FOR 'test-priv'
+----
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
+
+statement ok
+REVOKE SELECT ON b.* FROM 'test-priv'
+
+statement ok
+SHOW GRANTS FOR 'test-priv'
+
+statement ok
+DROP ROLE test
+
+statement ok
+DROP ROLE `test-role`
+
+statement ok
+DROP USER 'test-user'
+
+statement ok
+DROP USER 'test-priv'
+
+statement ok
+DROP DATABASE a
+
+statement ok
+DROP DATABASE b
+

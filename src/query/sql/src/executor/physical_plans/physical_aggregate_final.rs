@@ -14,20 +14,20 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plans::common::AggregateFunctionDesc;
-use crate::executor::physical_plans::common::AggregateFunctionSignature;
-use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
-use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
-use crate::executor::physical_plans::physical_exchange::Exchange;
+use crate::executor::physical_plans::AggregateExpand;
+use crate::executor::physical_plans::AggregateFunctionDesc;
+use crate::executor::physical_plans::AggregateFunctionSignature;
+use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
@@ -214,6 +214,7 @@ impl PhysicalPlanBuilder {
                         PhysicalPlan::Exchange(Exchange {
                             plan_id: self.next_plan_id(),
                             kind,
+                            allow_adjust_parallelism: true,
                             ignore_exchange: false,
                             input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
                             keys: vec![RemoteExpr::ColumnRef {

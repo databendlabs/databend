@@ -4,7 +4,7 @@ set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
-BENCHMARK_SIZE=${BENCHMARK_SIZE:-Medium}
+BENCHMARK_SIZE=${BENCHMARK_SIZE:-Small}
 BENCHMARK_CACHE_SIZE=${BENCHMARK_CACHE_SIZE:-0}
 BENCHMARK_VERSION=${BENCHMARK_VERSION:-}
 BENCHMARK_DATABASE=${BENCHMARK_DATABASE:-default}
@@ -34,13 +34,13 @@ echo '{}' >result.json
 yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
 yq -i '.tags = ["s3"]' -o json result.json
 case ${BENCHMARK_SIZE} in
-Medium)
+Small)
     yq -i '.cluster_size = "16"' -o json result.json
-    yq -i '.machine = "Medium"' -o json result.json
+    yq -i '.machine = "Small"' -o json result.json
     ;;
-XLarge)
+Large)
     yq -i '.cluster_size = "64"' -o json result.json
-    yq -i '.machine = "XLarge"' -o json result.json
+    yq -i '.machine = "Large"' -o json result.json
     ;;
 *)
     echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"

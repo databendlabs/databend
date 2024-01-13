@@ -14,36 +14,35 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
-use common_arrow::parquet::compression::Compression;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::metadata::Descriptor;
-use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageMetaData;
-use common_arrow::parquet::read::PageReader;
-use common_arrow::parquet::schema::types::FieldInfo;
-use common_arrow::parquet::schema::types::ParquetType;
-use common_arrow::parquet::schema::types::PhysicalType;
-use common_arrow::parquet::schema::types::PrimitiveType;
-use common_arrow::parquet::schema::Repetition;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::ColumnId;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use databend_common_arrow::parquet::compression::Compression;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_arrow::parquet::metadata::Descriptor;
+use databend_common_arrow::parquet::read::BasicDecompressor;
+use databend_common_arrow::parquet::read::PageMetaData;
+use databend_common_arrow::parquet::read::PageReader;
+use databend_common_arrow::parquet::schema::types::FieldInfo;
+use databend_common_arrow::parquet::schema::types::ParquetType;
+use databend_common_arrow::parquet::schema::types::PhysicalType;
+use databend_common_arrow::parquet::schema::types::PrimitiveType;
+use databend_common_arrow::parquet::schema::Repetition;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_metrics::storage::*;
+use databend_storages_common_cache::CacheKey;
+use databend_storages_common_cache::InMemoryCacheReader;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Loader;
+use databend_storages_common_cache_manager::BloomIndexFilterMeter;
+use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_index::filters::Filter;
+use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
-use storages_common_cache::CacheKey;
-use storages_common_cache::InMemoryCacheReader;
-use storages_common_cache::LoadParams;
-use storages_common_cache::Loader;
-use storages_common_cache_manager::BloomIndexFilterMeter;
-use storages_common_cache_manager::CachedObject;
-use storages_common_index::filters::Filter;
-use storages_common_index::filters::Xor8Filter;
-use storages_common_table_meta::meta::SingleColumnMeta;
-
-use crate::metrics::metrics_inc_block_index_read_bytes;
 
 type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, BloomIndexFilterMeter>;
 
@@ -160,18 +159,16 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             column_iter_to_arrays(vec![decompressor], vec![&column_type], field, None, 1)?;
         if let Some(array) = array_iter.next() {
             let array = array?;
-            let col =
-                Column::from_arrow(array.as_ref(), &common_expression::types::DataType::String);
+            let col = Column::from_arrow(
+                array.as_ref(),
+                &databend_common_expression::types::DataType::Binary,
+            )?;
 
             let filter_bytes = col
-                .as_string()
-                .map(|str| unsafe { str.index_unchecked(0) })
-                .ok_or_else(|| {
-                    // BloomPruner will log and handle this exception
-                    ErrorCode::Internal(
-                        "unexpected exception: load bloom filter raw data as string failed",
-                    )
-                })?;
+                .as_binary()
+                .expect("load bloom filter raw data as binary failed")
+                .index(0)
+                .unwrap();
             metrics_inc_block_index_read_bytes(filter_bytes.len() as u64);
             let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
             Ok(filter)

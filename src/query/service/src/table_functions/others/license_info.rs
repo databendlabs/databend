@@ -20,37 +20,37 @@ use std::time::Duration;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_catalog::table_function::TableFunction;
-use common_exception::ErrorCode;
-pub use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_expression::Value;
-use common_license::license::Feature;
-use common_license::license::LicenseInfo;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_storages_factory::Table;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::ErrorCode;
+pub use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::Value;
+use databend_common_license::license::Feature;
+use databend_common_license::license::LicenseInfo;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_storages_factory::Table;
 use humantime::Duration as HumanDuration;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
@@ -229,11 +229,13 @@ impl AsyncSource for LicenseInfoSource {
         let settings = self.ctx.get_settings();
         // sync global changes on distributed node cluster.
         settings.load_global_changes().await?;
-        let license = settings
-            .get_enterprise_license()
-            .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
-                format!("failed to get license for {}", self.ctx.get_tenant())
-            })?;
+        let license = unsafe {
+            settings
+                .get_enterprise_license()
+                .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
+                    format!("failed to get license for {}", self.ctx.get_tenant())
+                })?
+        };
 
         get_license_manager()
             .manager

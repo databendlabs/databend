@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
+use std::sync::Arc;
+
+use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
-use crate::executor::PhysicalPlanBuilder;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
+use crate::plans::FunctionCall;
+use crate::plans::ProjectSet;
+use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
 use crate::IndexType;
 use crate::TypeCheck;
 
@@ -91,13 +97,23 @@ impl PhysicalPlanBuilder {
         if used.is_empty() {
             self.build(s_expr.child(0)?, required).await
         } else {
-            let input = self.build(s_expr.child(0)?, required).await?;
+            let child = s_expr.child(0)?;
+            let input = if let RelOperator::ProjectSet(project_set) = child.plan() {
+                let new_project_set =
+                    self.prune_flatten_columns(eval_scalar, project_set, &required);
+                let mut new_child = child.clone();
+                new_child.plan = Arc::new(new_project_set.into());
+                self.build(&new_child, required).await?
+            } else {
+                self.build(child, required).await?
+            };
+
             let eval_scalar = crate::plans::EvalScalar { items: used };
-            self.crate_eval_scalar(&eval_scalar, column_projections, input, stat_info)
+            self.create_eval_scalar(&eval_scalar, column_projections, input, stat_info)
         }
     }
 
-    pub(crate) fn crate_eval_scalar(
+    pub(crate) fn create_eval_scalar(
         &mut self,
         eval_scalar: &crate::plans::EvalScalar,
         column_projections: Vec<IndexType>,
@@ -131,7 +147,7 @@ impl PhysicalPlanBuilder {
 
         let mut projections = ColumnSet::new();
         for column in column_projections.iter() {
-            if let Ok(index) = input_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
         }
@@ -148,5 +164,47 @@ impl PhysicalPlanBuilder {
             exprs,
             stat_info: Some(stat_info),
         }))
+    }
+
+    // The flatten function returns a tuple, which contains 6 columns.
+    // Only keep columns required by parent plan, other columns can be pruned
+    // to reduce the memory usage.
+    fn prune_flatten_columns(
+        &mut self,
+        eval_scalar: &crate::plans::EvalScalar,
+        project_set: &ProjectSet,
+        required: &ColumnSet,
+    ) -> ProjectSet {
+        let mut project_set = project_set.clone();
+        for srf_item in &mut project_set.srfs {
+            if let ScalarExpr::FunctionCall(srf_func) = &srf_item.scalar {
+                if srf_func.func_name == "flatten" {
+                    // Store the columns required by the parent plan in params.
+                    let mut params = Vec::new();
+                    for item in &eval_scalar.items {
+                        if !required.contains(&item.index) {
+                            continue;
+                        }
+                        if let ScalarExpr::FunctionCall(func) = &item.scalar {
+                            if func.func_name == "get" && !func.arguments.is_empty() {
+                                if let ScalarExpr::BoundColumnRef(column_ref) = &func.arguments[0] {
+                                    if column_ref.column.index == srf_item.index {
+                                        params.push(func.params[0].clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
+                        span: srf_func.span,
+                        func_name: srf_func.func_name.clone(),
+                        params,
+                        arguments: srf_func.arguments.clone(),
+                    });
+                }
+            }
+        }
+        project_set
     }
 }

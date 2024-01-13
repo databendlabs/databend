@@ -18,7 +18,7 @@ use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
 
-use common_meta_types::LogId;
+use databend_common_meta_types::LogId;
 use futures::Stream;
 use futures_util::StreamExt;
 use log::as_debug;

@@ -14,42 +14,43 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::tokenize_sql;
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::Scalar;
-use common_formats::FastFieldDecoderValues;
-use common_formats::FastValuesDecodeFallback;
-use common_formats::FastValuesDecoder;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_pipeline_transforms::processors::transforms::create_dummy_item;
-use common_sql::executor::ReplaceAsyncSourcer;
-use common_sql::executor::ReplaceDeduplicate;
-use common_sql::executor::ReplaceInto;
-use common_sql::executor::SelectCtx;
-use common_sql::BindContext;
-use common_sql::Metadata;
-use common_sql::MetadataRef;
-use common_sql::NameResolutionContext;
-use common_storages_fuse::operations::common::TransformSerializeSegment;
-use common_storages_fuse::operations::replace_into::BroadcastProcessor;
-use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
-use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
-use common_storages_fuse::operations::TransformSerializeBlock;
-use common_storages_fuse::FuseTable;
+use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+use databend_common_formats::FastFieldDecoderValues;
+use databend_common_formats::FastValuesDecodeFallback;
+use databend_common_formats::FastValuesDecoder;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
+use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
+use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
+use databend_common_sql::BindContext;
+use databend_common_sql::Metadata;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::NameResolutionContext;
+use databend_common_storages_fuse::operations::common::TransformSerializeSegment;
+use databend_common_storages_fuse::operations::processors::BroadcastProcessor;
+use databend_common_storages_fuse::operations::processors::ReplaceIntoProcessor;
+use databend_common_storages_fuse::operations::processors::UnbranchedReplaceIntoProcessor;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::TransformCastSchema;
@@ -116,6 +117,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             cluster_stats_gen,
+            MutationKind::Replace,
         )?;
         let block_builder = serialize_block_transform.get_block_builder();
 
@@ -268,7 +270,7 @@ impl PipelineBuilder {
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
         let mut opt_modified_schema = None;
-        if let Some(SelectCtx {
+        if let Some(ReplaceSelectCtx {
             select_column_bindings,
             select_schema,
         }) = select_ctx
@@ -405,7 +407,13 @@ impl AsyncSource for ValueSource {
         }
 
         let format = self.ctx.get_format_settings()?;
-        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
+        let numeric_cast_option = self
+            .ctx
+            .get_settings()
+            .get_numeric_cast_option()
+            .unwrap_or("rounding".to_string());
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format, rounding_mode);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
         let estimated_rows = values_decoder.estimated_rows();

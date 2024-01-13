@@ -17,80 +17,82 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::catalog::Catalog;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_meta_api::SchemaApi;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::CountTablesReply;
-use common_meta_app::schema::CountTablesReq;
-use common_meta_app::schema::CreateDatabaseReply;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateIndexReply;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateLockRevReply;
-use common_meta_app::schema::CreateLockRevReq;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::CreateVirtualColumnReply;
-use common_meta_app::schema::CreateVirtualColumnReq;
-use common_meta_app::schema::DatabaseIdent;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::DeleteLockRevReq;
-use common_meta_app::schema::DropDatabaseReply;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropIndexReply;
-use common_meta_app::schema::DropIndexReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropVirtualColumnReply;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::ExtendLockRevReq;
-use common_meta_app::schema::GcDroppedTableReq;
-use common_meta_app::schema::GcDroppedTableResp;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetIndexReply;
-use common_meta_app::schema::GetIndexReq;
-use common_meta_app::schema::GetTableCopiedFileReply;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListDroppedTableReq;
-use common_meta_app::schema::ListIndexesByIdReq;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::LockMeta;
-use common_meta_app::schema::RenameDatabaseReply;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::RenameTableReply;
-use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::SetTableColumnMaskPolicyReply;
-use common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TruncateTableReply;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UndropDatabaseReply;
-use common_meta_app::schema::UndropDatabaseReq;
-use common_meta_app::schema::UndropTableReply;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::schema::UpdateIndexReply;
-use common_meta_app::schema::UpdateIndexReq;
-use common_meta_app::schema::UpdateTableMetaReply;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateVirtualColumnReply;
-use common_meta_app::schema::UpdateVirtualColumnReq;
-use common_meta_app::schema::UpsertTableOptionReply;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_store::MetaStoreProvider;
-use common_meta_types::MetaId;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CountTablesReply;
+use databend_common_meta_app::schema::CountTablesReq;
+use databend_common_meta_app::schema::CreateDatabaseReply;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateIndexReply;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::CreateLockRevReply;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateVirtualColumnReply;
+use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DropDatabaseReply;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropIndexReply;
+use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropVirtualColumnReply;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GcDroppedTableResp;
+use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetIndexReply;
+use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::LockInfo;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RenameDatabaseReply;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameTableReply;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TruncateTableReply;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UndropDatabaseReply;
+use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableReply;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateIndexReply;
+use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateTableMetaReply;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateVirtualColumnReq;
+use databend_common_meta_app::schema::UpsertTableOptionReply;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::MetaId;
 use log::info;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
@@ -346,8 +348,23 @@ impl Catalog for MutableCatalog {
     async fn get_table_meta_by_id(
         &self,
         table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+    ) -> databend_common_exception::Result<(TableIdent, Arc<TableMeta>)> {
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
+        let res = self.ctx.meta.get_table_name_by_id(table_id).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+        let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
         Ok(res)
     }
 
@@ -387,6 +404,7 @@ impl Catalog for MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
+
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();
@@ -531,6 +549,11 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
         Ok(self.ctx.meta.delete_lock_revision(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        Ok(self.ctx.meta.list_locks(req).await?)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

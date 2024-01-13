@@ -12,34 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_ast::ast::CreateIndexStmt;
-use common_ast::ast::DropIndexStmt;
-use common_ast::ast::ExplainKind;
-use common_ast::ast::Identifier;
-use common_ast::ast::Query;
-use common_ast::ast::RefreshIndexStmt;
-use common_ast::ast::SetExpr;
-use common_ast::ast::Statement;
-use common_ast::ast::TableReference;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::walk_statement_mut;
-use common_ast::Dialect;
-use common_ast::Visitor;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_license::license::Feature::AggregateIndex;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::GetIndexReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use storages_common_table_meta::meta::Location;
+use databend_common_ast::ast::CreateIndexStmt;
+use databend_common_ast::ast::DropIndexStmt;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::RefreshIndexStmt;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::walk_statement_mut;
+use databend_common_ast::Visitor;
+use databend_common_ast::VisitorMut;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_license::license::Feature::AggregateIndex;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
@@ -49,6 +46,7 @@ use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 impl Binder {
@@ -98,7 +96,7 @@ impl Binder {
                     .get_enable_aggregating_index_scan()?
                 && !bind_context.planning_agg_index
                 && table.support_index()
-                && table.engine() != "VIEW"
+                && !matches!(table.engine(), "VIEW" | "STREAM")
             {
                 let license_manager = get_license_manager();
                 if license_manager
@@ -117,7 +115,7 @@ impl Binder {
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
                         let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
@@ -170,10 +168,19 @@ impl Binder {
                 )));
             }
         }
+        let mut original_query = query.clone();
+        // pass checker, rewrite aggregate function
+        // we will extract all agg function that select targets have
+        // and rewrite some agg functions like `avg`.
+        let mut query = query.clone();
+        // TODO(ariesdevil): unify the checker and rewriter.
+        let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
+        agg_index_rewritter.visit_query(&mut query);
+
         let index_name = self.normalize_object_identifier(index_name);
 
         bind_context.planning_agg_index = true;
-        self.bind_query(bind_context, query).await?;
+        self.bind_query(bind_context, &query).await?;
         bind_context.planning_agg_index = false;
 
         let tables = self.metadata.read().tables().to_vec();
@@ -195,13 +202,14 @@ impl Binder {
         }
 
         let table_id = table.get_id();
-        let mut query = *query.clone();
+        Self::rewrite_query_with_database(&mut original_query, table_entry.database());
         Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
             if_not_exists: *if_not_exists,
             index_type: *index_type,
             index_name,
+            original_query: original_query.to_string(),
             query: query.to_string(),
             table_id,
             sync_creation: *sync_creation,
@@ -272,9 +280,8 @@ impl Binder {
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
-        let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
 
-        // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,
         // after multiple transformations, this correspondence does not exist,
         // aggregating index needs to know which file the data comes from at the time of final sink
@@ -284,16 +291,16 @@ impl Binder {
 
         // NOTE: if user already use the `_block_name` in their sql
         // we no need add it and **MUST NOT** drop this column in sink phase.
-        let mut index_rewriter = AggregatingIndexRewriter::default();
+
+        // And we will rewrite the agg function to agg state func in this rewriter.
+        let mut index_rewriter = RefreshAggregatingIndexRewriter::default();
         walk_statement_mut(&mut index_rewriter, &mut stmt);
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
-            }));
-            Ok(optimize(self.ctx.clone(), opt_ctx, select_plan)?)
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            Ok(optimize(opt_ctx, select_plan)?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
@@ -319,8 +326,8 @@ impl Binder {
             limit,
             table_info: table.get_table_info().clone(),
             query_plan: Box::new(plan),
-            user_defined_block_name: index_rewriter.user_defined_block_name,
             segment_locs,
+            user_defined_block_name: index_rewriter.user_defined_block_name,
         };
 
         Ok(plan)

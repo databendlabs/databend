@@ -15,24 +15,32 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use common_ast::ast::AlterVirtualColumnStmt;
-use common_ast::ast::CreateVirtualColumnStmt;
-use common_ast::ast::DropVirtualColumnStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::RefreshVirtualColumnStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::TableDataType;
-use common_expression::TableSchemaRef;
+use databend_common_ast::ast::AlterVirtualColumnStmt;
+use databend_common_ast::ast::CreateVirtualColumnStmt;
+use databend_common_ast::ast::DropVirtualColumnStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::RefreshVirtualColumnStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowVirtualColumnsStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use log::debug;
 
 use crate::binder::Binder;
+use crate::normalize_identifier;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshVirtualColumnPlan;
+use crate::plans::RewriteKind;
+use crate::BindContext;
+use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -41,6 +49,7 @@ impl Binder {
         stmt: &CreateVirtualColumnStmt,
     ) -> Result<Plan> {
         let CreateVirtualColumnStmt {
+            if_not_exists,
             catalog,
             database,
             table,
@@ -64,6 +73,7 @@ impl Binder {
 
         Ok(Plan::CreateVirtualColumn(Box::new(
             CreateVirtualColumnPlan {
+                if_not_exists: *if_not_exists,
                 catalog,
                 database,
                 table,
@@ -78,6 +88,7 @@ impl Binder {
         stmt: &AlterVirtualColumnStmt,
     ) -> Result<Plan> {
         let AlterVirtualColumnStmt {
+            if_exists,
             catalog,
             database,
             table,
@@ -100,6 +111,7 @@ impl Binder {
             .await?;
 
         Ok(Plan::AlterVirtualColumn(Box::new(AlterVirtualColumnPlan {
+            if_exists: *if_exists,
             catalog,
             database,
             table,
@@ -113,6 +125,7 @@ impl Binder {
         stmt: &DropVirtualColumnStmt,
     ) -> Result<Plan> {
         let DropVirtualColumnStmt {
+            if_exists,
             catalog,
             database,
             table,
@@ -129,6 +142,7 @@ impl Binder {
         }
 
         Ok(Plan::DropVirtualColumn(Box::new(DropVirtualColumnPlan {
+            if_exists: *if_exists,
             catalog,
             database,
             table,
@@ -150,17 +164,28 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
-        if table_info.engine() != "FUSE" {
-            return Err(ErrorCode::SemanticError(
-                "Virtual Column only support FUSE engine",
-            ));
-        }
+
+        let catalog_info = self.ctx.get_catalog(&catalog).await?;
+        let res = catalog_info
+            .list_virtual_columns(ListVirtualColumnsReq {
+                tenant: self.ctx.get_tenant(),
+                table_id: Some(table_info.get_id()),
+            })
+            .await?;
+
+        let virtual_columns = if res.is_empty() {
+            vec![]
+        } else {
+            res[0].virtual_columns.clone()
+        };
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
                 catalog,
                 database,
                 table,
+                virtual_columns,
+                segment_locs: None,
             },
         )))
     }
@@ -186,9 +211,7 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { lit, .. },
                     } => lit.clone(),
-                    MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
-                        Literal::String(key.name.clone())
-                    }
+                    MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
@@ -213,19 +236,20 @@ impl Binder {
                     }
                     let mut virtual_name = String::new();
                     virtual_name.push_str(column.name());
-                    while let Some(path) = paths.pop_front() {
+                    for path in paths {
+                        virtual_name.push('[');
                         match path {
                             Literal::UInt64(idx) => {
-                                virtual_name.push('[');
                                 virtual_name.push_str(&idx.to_string());
-                                virtual_name.push(']');
                             }
                             Literal::String(field) => {
-                                virtual_name.push(':');
+                                virtual_name.push('\'');
                                 virtual_name.push_str(field.as_ref());
+                                virtual_name.push('\'');
                             }
                             _ => unreachable!(),
                         }
+                        virtual_name.push(']');
                     }
                     virtual_names.insert(virtual_name);
                 } else {
@@ -245,5 +269,67 @@ impl Binder {
         virtual_columns.sort();
 
         Ok(virtual_columns)
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_virtual_columns(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowVirtualColumnsStmt,
+    ) -> Result<Plan> {
+        let ShowVirtualColumnsStmt {
+            catalog,
+            database,
+            table,
+            limit,
+        } = stmt;
+
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        let database = match database {
+            None => self.ctx.get_current_database(),
+            Some(ident) => {
+                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                catalog
+                    .get_database(&self.ctx.get_tenant(), &database)
+                    .await?;
+                database
+            }
+        };
+
+        let mut select_builder = SelectBuilder::from("system.virtual_columns");
+        select_builder
+            .with_column("database")
+            .with_column("table")
+            .with_column("virtual_columns");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+        if let Some(table) = table {
+            let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("table = '{table}'"));
+        }
+
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("virtual_columns LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+        debug!("show virtual columns rewrite to: {:?}", query);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
+            .await
     }
 }

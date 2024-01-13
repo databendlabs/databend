@@ -15,13 +15,14 @@
 mod common;
 mod simple;
 
-use std::sync::Arc;
-
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataSchemaRef;
-use common_expression::SortColumnDescription;
+pub use common::*;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SortColumnDescription;
 pub use simple::*;
 
 /// Convert columns to rows.
@@ -29,7 +30,7 @@ pub trait RowConverter<T: Rows>
 where Self: Sized
 {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
     fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
@@ -45,25 +46,21 @@ where Self: Sized + Clone
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
     fn to_column(&self) -> Column;
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self>;
-}
 
-impl<T: Rows> Rows for Arc<T> {
-    type Item<'a> = T::Item<'a> where Self: 'a;
-
-    fn len(&self) -> usize {
-        self.as_ref().len()
+    fn from_column(col: &Column, desc: &[SortColumnDescription]) -> Result<Self> {
+        Self::try_from_column(col, desc).ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!(
+                "Order column type mismatched. Expecetd {} but got {}",
+                Self::data_type(),
+                col.data_type()
+            ))
+        })
     }
+    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self>;
 
-    fn row(&self, index: usize) -> Self::Item<'_> {
-        self.as_ref().row(index)
-    }
+    fn data_type() -> DataType;
 
-    fn to_column(&self) -> Column {
-        self.as_ref().to_column()
-    }
-
-    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
-        Some(Arc::new(T::from_column(col, desc)?))
+    fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

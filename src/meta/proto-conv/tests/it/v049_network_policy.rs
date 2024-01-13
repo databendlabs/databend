@@ -27,7 +27,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v49_network_policy() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -39,7 +39,7 @@ fn test_decode_v49_network_policy() -> anyhow::Result<()> {
         49, 168, 6, 24,
     ];
 
-    let want = || common_meta_app::principal::NetworkPolicy {
+    let want = || databend_common_meta_app::principal::NetworkPolicy {
         name: "testpolicy1".to_string(),
         allowed_ip_list: vec!["192.168.1.0/24".to_string()],
         blocked_ip_list: vec!["192.168.1.10".to_string()],

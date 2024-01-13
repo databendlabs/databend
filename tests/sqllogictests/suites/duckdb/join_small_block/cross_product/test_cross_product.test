@@ -1,0 +1,36 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists test;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2);
+
+query IIII
+SELECT * FROM test t1, test t2 ORDER BY 1, 2, 3, 4;
+----
+11 1 11	1
+11 1 12	2
+12 2 11	1
+12 2 12	2
+
+# big cross product
+query I
+SELECT COUNT(*) FROM test t1, numbers(2000) t2;
+----
+4000
+
+query I
+SELECT COUNT(*) FROM numbers(2000) t1, test t2;
+----
+4000
+
+statement ok
+drop table if exists test;
+
+statement ok
+set max_block_size = 65536;

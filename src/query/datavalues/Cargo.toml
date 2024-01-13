@@ -1,5 +1,5 @@
 [package]
-name = "common-datavalues"
+name = "databend-common-datavalues"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,7 +14,7 @@ test = false
 # Crates.io dependencies
 enum-as-inner = "0.5"
 enum_dispatch = "0.3.8"
-serde = { version = "1.0.145" }
-serde_json = { version = "1.0.85", default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]

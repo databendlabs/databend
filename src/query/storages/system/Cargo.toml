@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-system"
+name = "databend-common-storages-system"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,52 +11,51 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-enable-histogram-metrics = ["common-metrics/enable-histogram"]
-
 [dependencies]
-common-ast = { path = "../../ast" }
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-cloud-control = { path = "../../../common/cloud_control" }
-common-config = { path = "../../config" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
-common-meta-api = { path = "../../../meta/api" }
-common-meta-app = { path = "../../../meta/app" }
-common-metrics = { path = "../../../common/metrics" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-profile = { path = "../../profile" }
-common-sql = { path = "../../sql" }
-common-storage = { path = "../../../common/storage" }
-common-storages-fuse = { path = "../fuse" }
-common-storages-result-cache = { path = "../result_cache" }
-common-storages-view = { path = "../view" }
-common-users = { path = "../../users" }
+databend-common-ast = { path = "../../ast" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-cloud-control = { path = "../../../common/cloud_control" }
+databend-common-config = { path = "../../config" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-functions = { path = "../../functions" }
+databend-common-meta-api = { path = "../../../meta/api" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-meta-types = { path = "../../../meta/types" }
+databend-common-metrics = { path = "../../../common/metrics" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-profile = { path = "../../profile" }
+databend-common-sql = { path = "../../sql" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-common-storages-fuse = { path = "../fuse" }
+databend-common-storages-result-cache = { path = "../result_cache" }
+databend-common-storages-stream = { path = "../stream" }
+databend-common-storages-view = { path = "../view" }
+databend-common-users = { path = "../../users" }
+databend-storages-common-cache = { path = "../common/cache" }
+databend-storages-common-cache-manager = { path = "../common/cache_manager" }
 jsonb = { workspace = true }
-storages-common-cache = { path = "../common/cache" }
-storages-common-cache-manager = { path = "../common/cache_manager" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-itertools = "0.10.5"
+itertools = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }
 opendal = { workspace = true }
-parking_lot = "0.12.1"
-regex = "1.8.1"
+parking_lot = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
-typetag = "0.2.3"
-walkdir = "2.3.2"
+typetag = { workspace = true }
+walkdir = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../../common/building" }
+databend-common-building = { path = "../../../common/building" }

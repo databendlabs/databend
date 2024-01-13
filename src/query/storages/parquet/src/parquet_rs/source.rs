@@ -15,26 +15,27 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::TopK;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::TopKSorter;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_storage::CopyStatus;
-use common_storage::FileStatus;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TopKSorter;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
 
 use super::parquet_reader::policy::ReadPolicyImpl;
 use crate::ParquetPart;
 use crate::ParquetRSFullReader;
 use crate::ParquetRSRowGroupReader;
+use crate::ReadSettings;
 
 enum State {
     Init,
@@ -197,7 +198,11 @@ impl Processor for ParquetSource {
                         ParquetPart::ParquetRSRowGroup(part) => {
                             if let Some(reader) = self
                                 .row_group_reader
-                                .create_read_policy(part, &mut self.topk_sorter)
+                                .create_read_policy(
+                                    &ReadSettings::from_ctx(&self.ctx)?,
+                                    part,
+                                    &mut self.topk_sorter,
+                                )
                                 .await?
                             {
                                 self.state = State::ReadRowGroup(reader);

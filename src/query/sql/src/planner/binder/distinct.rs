@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -28,6 +28,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -46,11 +47,11 @@ impl Binder {
             .map(|(_, item)| {
                 let mut scalar = item.scalar;
                 if bind_context.in_grouping {
-                    let group_checker = GroupingChecker::new(bind_context);
-                    scalar = group_checker.resolve(&scalar, None)?;
+                    let mut group_checker = GroupingChecker::new(bind_context);
+                    group_checker.visit(&mut scalar)?;
                 } else if !bind_context.windows.window_functions.is_empty() {
-                    let window_checker = WindowChecker::new(bind_context);
-                    scalar = window_checker.resolve(&scalar)?;
+                    let mut window_checker = WindowChecker::new(bind_context);
+                    window_checker.visit(&mut scalar)?;
                 }
                 Ok(ScalarItem {
                     scalar,

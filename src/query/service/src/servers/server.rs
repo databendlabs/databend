@@ -17,11 +17,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::signal_stream;
-use common_base::base::DummySignalStream;
-use common_base::base::SignalStream;
-use common_base::base::SignalType;
-use common_exception::Result;
+use databend_common_base::base::signal_stream;
+use databend_common_base::base::DummySignalStream;
+use databend_common_base::base::SignalStream;
+use databend_common_base::base::SignalType;
+use databend_common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
 use log::error;
@@ -42,7 +42,7 @@ pub trait Server: Send {
 pub struct ShutdownHandle {
     shutdown: Arc<AtomicBool>,
     sessions: Arc<SessionManager>,
-    services: Vec<Box<dyn Server>>,
+    services: Vec<(&'static str, Box<dyn Server>)>,
 }
 
 impl ShutdownHandle {
@@ -56,8 +56,12 @@ impl ShutdownHandle {
     #[async_backtrace::framed]
     async fn shutdown_services(&mut self, graceful: bool) {
         let mut shutdown_jobs = vec![];
-        for service in &mut self.services {
-            shutdown_jobs.push(service.shutdown(graceful));
+        for (name, service) in &mut self.services {
+            shutdown_jobs.push(async move {
+                info!("Stop {} service", name);
+                service.shutdown(graceful).await;
+                info!("Stopped {} service", name);
+            });
         }
         futures::future::join_all(shutdown_jobs).await;
     }
@@ -94,8 +98,8 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn add_service(&mut self, service: Box<dyn Server>) {
-        self.services.push(service);
+    pub fn add_service(&mut self, name: &'static str, service: Box<dyn Server>) {
+        self.services.push((name, service));
     }
 }
 

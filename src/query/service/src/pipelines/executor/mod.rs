@@ -24,10 +24,18 @@ mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
 mod processor_async_task;
 
+pub use databend_common_base::base::WatchNotify;
+pub use executor_condvar::WorkersCondvar;
+pub use executor_condvar::WorkersWaitingStatus;
 pub use executor_graph::RunningGraph;
 pub use executor_settings::ExecutorSettings;
+pub use executor_tasks::CompletedAsyncTask;
+pub use executor_tasks::ExecutorTasksQueue;
+pub use executor_worker_context::ExecutorTask;
+pub use executor_worker_context::ExecutorWorkerContext;
 pub use pipeline_complete_executor::PipelineCompleteExecutor;
 pub use pipeline_executor::FinishedCallback;
 pub use pipeline_executor::PipelineExecutor;
 pub use pipeline_pulling_executor::PipelinePullingExecutor;
 pub use pipeline_pushing_executor::PipelinePushingExecutor;
+pub use processor_async_task::ProcessorAsyncTask;

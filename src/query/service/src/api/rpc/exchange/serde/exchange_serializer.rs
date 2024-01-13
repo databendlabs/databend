@@ -14,27 +14,34 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::flight::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::DataBlock;
-use common_io::prelude::BinaryWrite;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
-use common_pipeline_transforms::processors::transforms::UnknownMode;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::flight::default_ipc_fields;
+use databend_common_arrow::arrow::io::flight::serialize_batch;
+use databend_common_arrow::arrow::io::flight::WriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
+use databend_common_arrow::arrow::io::ipc::IpcField;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::BinaryWrite;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_settings::FlightCompression;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -92,6 +99,7 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
 pub struct TransformExchangeSerializer {
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
+    exchange_rows: AtomicUsize,
 }
 
 impl TransformExchangeSerializer {
@@ -99,15 +107,25 @@ impl TransformExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &MergeExchangeParams,
+        compression: Option<FlightCompression>,
     ) -> Result<ProcessorPtr> {
-        let arrow_schema = params.schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
+
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             TransformExchangeSerializer {
                 ipc_fields,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
+                exchange_rows: AtomicUsize::new(0),
             },
         )))
     }
@@ -117,7 +135,16 @@ impl Transform for TransformExchangeSerializer {
     const NAME: &'static str = "ExchangeSerializerTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        self.exchange_rows
+            .fetch_add(data_block.num_rows(), Ordering::Relaxed);
         serialize_block(0, data_block, &self.ipc_fields, &self.options)
+    }
+
+    fn record_profile(&self, profile: &Profile) {
+        profile.exchange_rows.fetch_add(
+            self.exchange_rows.swap(0, Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
     }
 }
 
@@ -131,17 +158,26 @@ impl TransformScatterExchangeSerializer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        compression: Option<FlightCompression>,
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
-        let arrow_schema = params.schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(params.schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        let compression = match compression {
+            None => None,
+            Some(compression) => match compression {
+                FlightCompression::Lz4 => Some(Compression::LZ4),
+                FlightCompression::Zstd => Some(Compression::ZSTD),
+            },
+        };
+
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformScatterExchangeSerializer {
                 ipc_fields,
-                options: WriteOptions { compression: None },
+                options: WriteOptions { compression },
                 local_pos: params
                     .destination_ids
                     .iter()
@@ -191,7 +227,7 @@ pub fn serialize_block(
 
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
-    bincode::serialize_into(&mut meta, &data_block.get_meta())
+    bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
     let (dict, values) = match data_block.is_empty() {

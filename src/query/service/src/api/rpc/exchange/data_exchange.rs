@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::RemoteExpr;
+use databend_common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
@@ -27,14 +27,6 @@ impl DataExchange {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
-        }
-    }
-
-    pub fn from_multiple_nodes(&self) -> bool {
-        match self {
-            DataExchange::Merge(_) => true,
-            DataExchange::ShuffleDataExchange(_) => true,
-            DataExchange::Broadcast(exchange) => exchange.from_multiple_nodes,
         }
     }
 }
@@ -58,28 +50,30 @@ impl ShuffleDataExchange {
 pub struct MergeExchange {
     pub destination_id: String,
     pub ignore_exchange: bool,
+    pub allow_adjust_parallelism: bool,
 }
 
 impl MergeExchange {
-    pub fn create(destination_id: String, ignore_exchange: bool) -> DataExchange {
+    pub fn create(
+        destination_id: String,
+        ignore_exchange: bool,
+        allow_adjust_parallelism: bool,
+    ) -> DataExchange {
         DataExchange::Merge(MergeExchange {
             destination_id,
             ignore_exchange,
+            allow_adjust_parallelism,
         })
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastExchange {
-    pub from_multiple_nodes: bool,
     pub destination_ids: Vec<String>,
 }
 
 impl BroadcastExchange {
-    pub fn create(from_multiple_nodes: bool, destination_ids: Vec<String>) -> DataExchange {
-        DataExchange::Broadcast(BroadcastExchange {
-            from_multiple_nodes,
-            destination_ids,
-        })
+    pub fn create(destination_ids: Vec<String>) -> DataExchange {
+        DataExchange::Broadcast(BroadcastExchange { destination_ids })
     }
 }

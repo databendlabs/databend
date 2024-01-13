@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::ArrayRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::ArrayRef;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -46,7 +46,7 @@ pub struct DataBlock {
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,
@@ -56,6 +56,9 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
+            if let crate::ValueRef::Column(c) = value.as_ref() {
+                c.check_valid().unwrap();
+            }
             check_type(&data_type, &value);
         }
 
@@ -110,16 +113,34 @@ impl DataBlock {
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        debug_assert!(columns.iter().all(|entry| match &entry.value {
-            Value::Scalar(_) => true,
-            Value::Column(c) => c.len() == num_rows && c.data_type() == entry.data_type,
-        }));
+        #[cfg(debug_assertions)]
+        Self::check_columns_valid(&columns, num_rows).unwrap();
 
         Self {
             columns,
             num_rows,
             meta,
         }
+    }
+
+    fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
+        for entry in columns.iter() {
+            if let Value::Column(c) = &entry.value {
+                c.check_valid()?;
+                if c.len() != num_rows {
+                    return Err(ErrorCode::Internal(format!(
+                        "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
+                        c.len(),
+                        num_rows
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        Self::check_columns_valid(&self.columns, self.num_rows)
     }
 
     #[inline]
@@ -195,6 +216,12 @@ impl DataBlock {
         self.num_rows() == 0
     }
 
+    // Full empty means no row, no column, no meta
+    #[inline]
+    pub fn is_full_empty(&self) -> bool {
+        self.is_empty() && self.meta.is_none() && self.columns.is_empty()
+    }
+
     #[inline]
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
@@ -253,7 +280,7 @@ impl DataBlock {
     }
 
     pub fn split_by_rows(&self, max_rows_per_block: usize) -> (Vec<Self>, Option<Self>) {
-        let mut res = vec![];
+        let mut res = Vec::with_capacity(self.num_rows / max_rows_per_block);
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
         while remain_rows >= max_rows_per_block {
@@ -270,7 +297,24 @@ impl DataBlock {
         (res, remain)
     }
 
-    pub fn split_by_rows_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
+    pub fn split_by_rows_no_tail(&self, max_rows_per_block: usize) -> Vec<Self> {
+        let mut res =
+            Vec::with_capacity((self.num_rows + max_rows_per_block - 1) / max_rows_per_block);
+        let mut offset = 0;
+        let mut remain_rows = self.num_rows;
+        while remain_rows >= max_rows_per_block {
+            let cut = self.slice(offset..(offset + max_rows_per_block));
+            res.push(cut);
+            offset += max_rows_per_block;
+            remain_rows -= max_rows_per_block;
+        }
+        if remain_rows > 0 {
+            res.push(self.slice(offset..(offset + remain_rows)));
+        }
+        res
+    }
+
+    pub fn split_by_rows_if_needed_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
         let max_rows_per_block = min_rows_per_block * 2;
         let mut res = vec![];
         let mut offset = 0;
@@ -300,28 +344,15 @@ impl DataBlock {
 
     #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
-        #[cfg(debug_assertions)]
-        if let Value::Column(col) = &entry.value {
-            assert_eq!(self.num_rows, col.len());
-            assert_eq!(col.data_type(), entry.data_type);
-        }
         self.columns.push(entry);
+        #[cfg(debug_assertions)]
+        self.check_valid().unwrap();
     }
 
     #[inline]
-    pub fn pop_columns(self, num: usize) -> Result<Self> {
-        let mut columns = self.columns.clone();
-        let len = columns.len();
-
-        for _ in 0..num.min(len) {
-            columns.pop().unwrap();
-        }
-
-        Ok(Self {
-            columns,
-            num_rows: self.num_rows,
-            meta: self.meta,
-        })
+    pub fn pop_columns(&mut self, num: usize) {
+        debug_assert!(num <= self.columns.len());
+        self.columns.truncate(self.columns.len() - num);
     }
 
     /// Resort the columns according to the schema.
@@ -370,6 +401,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn replace_meta(&mut self, meta: BlockMetaInfoPtr) {
+        self.meta.replace(meta);
+    }
+
+    #[inline]
     pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
         self.meta.as_ref()
     }
@@ -390,25 +426,7 @@ impl DataBlock {
             .map(|(field, col)| {
                 Ok(BlockEntry::new(
                     field.data_type().clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
-                ))
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(DataBlock::new(cols, arrow_chunk.len()))
-    }
-
-    pub fn from_arrow_chunk_with_types<A: AsRef<dyn Array>>(
-        arrow_chunk: &ArrowChunk<A>,
-        data_types: &[DataType],
-    ) -> Result<Self> {
-        let cols = data_types
-            .iter()
-            .zip(arrow_chunk.arrays())
-            .map(|(data_type, col)| {
-                Ok(BlockEntry::new(
-                    data_type.clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), data_type)),
+                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())?),
                 ))
             })
             .collect::<Result<_>>()?;
@@ -444,7 +462,7 @@ impl DataBlock {
                     chunk_idx += 1;
                     BlockEntry::new(
                         data_type.clone(),
-                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)?),
                     )
                 }
             };
@@ -533,6 +551,13 @@ impl DataBlock {
             columns.push(column);
         }
         DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
+
+    #[inline]
+    pub fn get_last_column(&self) -> &Column {
+        debug_assert!(!self.columns.is_empty());
+        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
+        self.columns.last().unwrap().value.as_column().unwrap()
     }
 }
 

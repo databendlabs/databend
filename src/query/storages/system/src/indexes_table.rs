@@ -14,23 +14,22 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::FromOptData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_fuse::TableContext;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -63,6 +62,7 @@ impl AsyncSystemTable for IndexesTable {
 
         let mut names = Vec::with_capacity(indexes.len());
         let mut types = Vec::with_capacity(indexes.len());
+        let mut originals = Vec::with_capacity(indexes.len());
         let mut defs = Vec::with_capacity(indexes.len());
         let mut created_on = Vec::with_capacity(indexes.len());
         let mut updated_on = Vec::with_capacity(indexes.len());
@@ -70,6 +70,7 @@ impl AsyncSystemTable for IndexesTable {
         for (_, name, index) in indexes {
             names.push(name.as_bytes().to_vec());
             types.push(index.index_type.to_string().as_bytes().to_vec());
+            originals.push(index.original_query.as_bytes().to_vec());
             defs.push(index.query.as_bytes().to_vec());
             created_on.push(index.created_on.timestamp_micros());
             updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
@@ -78,6 +79,7 @@ impl AsyncSystemTable for IndexesTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(types),
+            StringType::from_data(originals),
             StringType::from_data(defs),
             TimestampType::from_data(created_on),
             TimestampType::from_opt_data(updated_on),
@@ -90,6 +92,7 @@ impl IndexesTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("type", TableDataType::String),
+            TableField::new("original", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new(

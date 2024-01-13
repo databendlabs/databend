@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_expression::ColumnId;
+use databend_common_expression::ColumnId;
 
 use super::statistics::*;
 

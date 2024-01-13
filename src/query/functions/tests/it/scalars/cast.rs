@@ -14,10 +14,11 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::Column;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
+use itertools::Itertools;
 use roaring::RoaringTreemap;
 
 use super::run_ast;
@@ -38,8 +39,9 @@ fn test_cast() {
         test_cast_between_number_and_boolean(file, is_try);
         test_cast_between_date_and_timestamp(file, is_try);
         test_cast_between_string_and_timestamp(file, is_try);
-        test_between_string_and_date(file, is_try);
+        test_cast_between_string_and_date(file, is_try);
         test_cast_to_nested_type(file, is_try);
+        test_cast_between_binary_and_string(file, is_try);
     }
 }
 
@@ -526,7 +528,7 @@ fn test_cast_between_string_and_timestamp(file: &mut impl Write, is_try: bool) {
     )]);
 }
 
-fn test_between_string_and_date(file: &mut impl Write, is_try: bool) {
+fn test_cast_between_string_and_date(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
     run_ast(file, format!("{prefix}TO_DATE('2022')"), &[]);
@@ -664,6 +666,90 @@ fn test_cast_between_string_and_decimal(file: &mut impl Write, is_try: bool) {
         format!("{prefix}CAST('-1.0e+10' AS DECIMAL(11, 0))"),
         &[],
     );
+    run_ast(
+        file,
+        format!("{prefix}CAST('-0.000000' AS DECIMAL(11, 0))"),
+        &[],
+    );
+}
+
+fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(file, format!("{prefix}CAST('Abc' AS BINARY)"), &[]);
+    run_ast(file, format!("{prefix}CAST('Dobrý den' AS BINARY)"), &[]);
+    run_ast(file, format!("{prefix}CAST('ß😀山' AS BINARY)"), &[]);
+    run_ast(file, format!("{prefix}CAST(NULL AS BINARY)"), &[]);
+    run_ast(file, format!("{prefix}CAST(NULL AS BINARY NULL)"), &[]);
+    run_ast(file, format!("{prefix}CAST(a AS BINARY)"), &[(
+        "a",
+        StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(a AS BINARY)"), &[(
+        "a",
+        StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
+            true, true, false,
+        ]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(a AS BINARY NULL)"), &[(
+        "a",
+        StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
+            true, true, false,
+        ]),
+    )]);
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST('Abc' AS BINARY) AS STRING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST('Dobrý den' AS BINARY) AS STRING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST('ß😀山' AS BINARY) AS STRING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(NULL AS BINARY) AS STRING)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(NULL AS BINARY NULL) AS STRING NULL)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STRING)"),
+        &[(
+            "a",
+            StringType::from_data(vec!["Abc", "Dobrý den", "ß😀山"]),
+        )],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(a AS BINARY) AS STRING)"),
+        &[(
+            "a",
+            StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
+                true, true, false,
+            ]),
+        )],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST({prefix}CAST(a AS BINARY NULL) AS STRING NULL)"),
+        &[(
+            "a",
+            StringType::from_data_with_validity(vec!["Abc", "Dobrý den", "ß😀山"], vec![
+                true, true, false,
+            ]),
+        )],
+    );
 }
 
 fn gen_bitmap_data() -> Column {
@@ -676,11 +762,13 @@ fn gen_bitmap_data() -> Column {
         rb
     });
 
-    let rbs = rbs_iter.map(|rb| {
-        let mut data = Vec::new();
-        rb.serialize_into(&mut data).unwrap();
-        data
-    });
+    let rbs = rbs_iter
+        .map(|rb| {
+            let mut data = Vec::new();
+            rb.serialize_into(&mut data).unwrap();
+            data
+        })
+        .collect_vec();
 
     BitmapType::from_data(rbs)
 }

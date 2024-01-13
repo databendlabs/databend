@@ -17,26 +17,27 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_ast::ast::format_statement;
-use common_ast::ast::ExplainKind;
-use common_ast::ast::Hint;
-use common_ast::ast::Identifier;
-use common_ast::ast::Statement;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageFileFormatType;
+use databend_common_ast::ast::format_statement;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
+use super::Finder;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -44,6 +45,8 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::DescConnectionPlan;
+use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -53,10 +56,12 @@ use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
+use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -75,6 +80,7 @@ use crate::Visibility;
 /// - Build `Metadata`
 pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
+    pub dialect: Dialect,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
@@ -97,8 +103,10 @@ impl<'a> Binder {
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
     ) -> Self {
+        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         Binder {
             ctx,
+            dialect,
             catalogs,
             name_resolution_ctx,
             metadata,
@@ -133,15 +141,14 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         hints: &Hint,
     ) -> Result<()> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             false,
-            false,
-        );
+        )?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
@@ -254,6 +261,7 @@ impl<'a> Binder {
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
+            Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
@@ -313,6 +321,7 @@ impl<'a> Binder {
             Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
             Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
+            Statement::ShowVirtualColumns(stmt) => self.bind_show_virtual_columns(bind_context, stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
@@ -341,7 +350,7 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
+            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
                     format!(", pattern => '{pattern}'")
@@ -424,7 +433,6 @@ impl<'a> Binder {
                     file_format_params: file_format_options.clone().try_into()?,
                 }))
             }
-
             Statement::DropFileFormat {
                 if_exists,
                 name,
@@ -433,6 +441,17 @@ impl<'a> Binder {
                 name: name.clone(),
             })),
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
+
+            // Connections
+            Statement::CreateConnection(stmt) => self.bind_create_connection(stmt).await?,
+            Statement::DropConnection(stmt) => Plan::DropConnection(Box::new(DropConnectionPlan {
+                if_exists: stmt.if_exists,
+                name: stmt.name.to_string(),
+            })),
+            Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
+                name: stmt.name.to_string(),
+            })),
+            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan{})),
 
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
@@ -467,6 +486,9 @@ impl<'a> Binder {
                 role_name,
             } => {
                 self.bind_set_role(bind_context, *is_default, role_name).await?
+            }
+            Statement::SetSecondaryRoles { option } => {
+                self.bind_set_secondary_roles(bind_context, option).await?
             }
 
             Statement::KillStmt { kill_target, object_id } => {
@@ -535,6 +557,19 @@ impl<'a> Binder {
             Statement::ShowNetworkPolicies => {
                 self.bind_show_network_policies().await?
             }
+            Statement::CreatePasswordPolicy(stmt) => {
+                self.bind_create_password_policy(stmt).await?
+            }
+            Statement::AlterPasswordPolicy(stmt) => {
+                self.bind_alter_password_policy(stmt).await?
+            }
+            Statement::DropPasswordPolicy(stmt) => {
+                self.bind_drop_password_policy(stmt).await?
+            }
+            Statement::DescPasswordPolicy(stmt) => {
+                self.bind_desc_password_policy(stmt).await?
+            }
+            Statement::ShowPasswordPolicies{ show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
             Statement::CreateTask(stmt) => {
                 self.bind_create_task(stmt).await?
             }
@@ -553,6 +588,25 @@ impl<'a> Binder {
             Statement::ShowTasks(stmt) => {
                 self.bind_show_tasks(stmt).await?
             }
+
+            // Streams
+            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
+            Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
+            Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+
+            Statement::CreatePipe(_) => {
+                todo!()
+            }
+            Statement::DescribePipe(_) => {
+                todo!()
+            }
+            Statement::AlterPipe(_) => {
+                todo!()
+            }
+            Statement::DropPipe(_) => {
+                todo!()
+            }
         };
         Ok(plan)
     }
@@ -565,7 +619,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
@@ -617,5 +671,142 @@ impl<'a> Binder {
         self.eq_scalars
             .iter()
             .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
+    }
+
+    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::SubqueryExpr(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
+    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
+        let mut finder = Finder::new(&f);
+        Self::check_sexpr(s_expr, &mut finder)
+    }
+
+    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
+    where F: Fn(&ScalarExpr) -> bool {
+        let result = match s_expr.plan.as_ref() {
+            RelOperator::Scan(scan) => {
+                f.reset_finder();
+                if let Some(agg_info) = &scan.agg_index {
+                    for predicate in &agg_info.predicates {
+                        f.visit(predicate)?;
+                    }
+                    for selection in &agg_info.selection {
+                        f.visit(&selection.scalar)?;
+                    }
+                }
+                if let Some(predicates) = &scan.push_down_predicates {
+                    for predicate in predicates {
+                        f.visit(predicate)?;
+                    }
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Join(join) => {
+                f.reset_finder();
+                for condition in &join.left_conditions {
+                    f.visit(condition)?;
+                }
+                for condition in &join.right_conditions {
+                    f.visit(condition)?;
+                }
+                for condition in &join.non_equi_conditions {
+                    f.visit(condition)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::EvalScalar(eval) => {
+                f.reset_finder();
+                for item in &eval.items {
+                    f.visit(&item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Filter(filter) => {
+                f.reset_finder();
+                for predicate in &filter.predicates {
+                    f.visit(predicate)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Aggregate(aggregate) => {
+                f.reset_finder();
+                for item in &aggregate.group_items {
+                    f.visit(&item.scalar)?;
+                }
+                for item in &aggregate.aggregate_functions {
+                    f.visit(&item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Exchange(exchange) => {
+                f.reset_finder();
+                if let crate::plans::Exchange::Hash(hash) = exchange {
+                    for scalar in hash {
+                        f.visit(scalar)?;
+                    }
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Window(window) => {
+                f.reset_finder();
+                for scalar_item in &window.arguments {
+                    f.visit(&scalar_item.scalar)?;
+                }
+                for scalar_item in &window.partition_by {
+                    f.visit(&scalar_item.scalar)?;
+                }
+                for info in &window.order_by {
+                    f.visit(&info.order_by_item.scalar)?;
+                }
+                f.scalars().is_empty()
+            }
+            RelOperator::Udf(_) => false,
+            _ => true,
+        };
+
+        match result {
+            true => {
+                for child in &s_expr.children {
+                    let mut finder = Finder::new(f.find_fn());
+                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
+                    if !flag {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            false => Ok(false),
+        }
+    }
+
+    pub(crate) fn check_allowed_scalar_expr_with_subquery(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::UDFServerCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
     }
 }

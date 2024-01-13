@@ -16,35 +16,34 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_index::BloomIndex;
 use opendal::Operator;
-use storages_common_index::BloomIndex;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
-use crate::metrics::metrics_inc_block_index_write_bytes;
-use crate::metrics::metrics_inc_block_index_write_milliseconds;
-use crate::metrics::metrics_inc_block_index_write_nums;
-use crate::metrics::metrics_inc_block_write_bytes;
-use crate::metrics::metrics_inc_block_write_milliseconds;
-use crate::metrics::metrics_inc_block_write_nums;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::Processor;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -78,8 +77,27 @@ impl TransformSerializeBlock {
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
+        kind: MutationKind,
     ) -> Result<Self> {
-        let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
+        // remove virtual computed fields.
+        let mut fields = table
+            .schema()
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !matches!(kind, MutationKind::Insert) {
+            // add stream fields.
+            for stream_column in table.stream_columns().iter() {
+                fields.push(stream_column.table_field());
+            }
+        }
+        let source_schema = Arc::new(TableSchema {
+            fields,
+            ..table.schema().as_ref().clone()
+        });
+
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
@@ -169,8 +187,8 @@ impl Processor for TransformSerializeBlock {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
-            let meta =
-                SerializeDataMeta::downcast_from(meta).ok_or(ErrorCode::Internal("It's a bug"))?;
+            let meta = SerializeDataMeta::downcast_from(meta)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             match meta {
                 SerializeDataMeta::DeletedSegment(deleted_segment) => {
                     // delete a whole segment, segment level
@@ -229,6 +247,9 @@ impl Processor for TransformSerializeBlock {
                 stats_type,
                 index,
             } => {
+                // Check if the datablock is valid, this is needed to ensure data is correct
+                block.check_valid()?;
+
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {

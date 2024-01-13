@@ -15,16 +15,16 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_sql::plans::CreateViewPlan;
-use common_sql::plans::Plan;
-use common_sql::Planner;
-use common_storages_view::view_table::QUERY;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_sql::plans::CreateViewPlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,15 +53,6 @@ impl Interpreter for CreateViewInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let table_function = catalog.list_table_functions();
-        if catalog
-            .exists_table(tenant.as_str(), &self.plan.database, &self.plan.view_name)
-            .await?
-        {
-            return Err(ErrorCode::ViewAlreadyExists(format!(
-                "{}.{} as view Already Exists",
-                self.plan.database, self.plan.view_name
-            )));
-        }
         let mut options = BTreeMap::new();
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
@@ -77,7 +68,7 @@ impl Interpreter for CreateViewInterpreter {
                         && !table_function.contains(&table_name.to_string())
                         && !table.table().is_stage_table()
                     {
-                        return Err(common_exception::ErrorCode::UnknownTable(format!(
+                        return Err(databend_common_exception::ErrorCode::UnknownTable(format!(
                             "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
                             database_name,
                             table_name,

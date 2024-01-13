@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use clap::Parser;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::Result;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -32,7 +32,7 @@ pub struct Config {
     pub share_endpoint_address: String,
     // Storage backend config.
     #[clap(flatten)]
-    pub storage: common_config::StorageConfig,
+    pub storage: databend_common_config::StorageConfig,
 }
 
 impl Default for Config {

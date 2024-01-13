@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::StringType;
-use common_expression::Column;
-use common_expression::FromData;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::StringType;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -38,7 +38,9 @@ fn test_create(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b'))", &[]);
     run_ast(file, "(s, s)", &[(
         "s",
-        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(vec!["a", "b", "c", "d"], vec![
+            true, true, false, true,
+        ]),
     )]);
 }
 
@@ -53,13 +55,15 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b')).3.1", &[]);
     run_ast(file, "(s, s).1", &[(
         "s",
-        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(vec!["a", "b", "c", "d"], vec![
+            true, true, false, true,
+        ]),
     )]);
     run_ast(file, "col.1", &[(
         "col",
         Column::Nullable(Box::new(NullableColumn {
             column: Column::Tuple(vec![StringType::from_data_with_validity(
-                &["a", "b", "c", "d"],
+                vec!["a", "b", "c", "d"],
                 vec![true, true, false, false],
             )]),
             validity: vec![true, false, true, false].into(),

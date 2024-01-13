@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_grpc::DNSResolver;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_grpc::DNSResolver;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resolver_github() -> Result<()> {

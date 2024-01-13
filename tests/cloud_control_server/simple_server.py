@@ -17,14 +17,14 @@ TASK_RUN_DB = {}
 
 def load_data_from_json():
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    directory_path = os.path.join(script_directory, "testdata", "tasks")
+    task_directory_path = os.path.join(script_directory, "testdata", "tasks")
 
-    for file_name in os.listdir(directory_path):
+    for file_name in os.listdir(task_directory_path):
         if file_name.endswith(".json"):
-            with open(os.path.join(directory_path, file_name), "r") as f:
-                task_data = json.load(f)
+            with open(os.path.join(task_directory_path, file_name), "r") as f:
+                task_run_data = json.load(f)
                 task = task_pb2.Task()
-                json_format.ParseDict(task_data["Task"], task)
+                json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
 
 
@@ -46,10 +46,53 @@ def create_task_request_to_task(id, create_task_request):
     task.suspend_task_after_num_failures = (
         create_task_request.suspend_task_after_num_failures
     )
+
+    task.when_condition = (
+        create_task_request.when_condition
+        if create_task_request.HasField("when_condition")
+        else ""
+    )
+    task.after.extend(create_task_request.after)
     task.created_at = datetime.now(timezone.utc).isoformat()
     task.updated_at = datetime.now(timezone.utc).isoformat()
 
     return task
+
+
+def get_root_task_id(task):
+    if len(task.after) == 0:
+        return str(task.task_id)
+    else:
+        root_ids = []
+        for prev_task in task.after:
+            root_ids.append(get_root_task_id(TASK_DB[prev_task]))
+
+        dedup = list(set(root_ids))
+        return ",".join(dedup)
+
+
+def create_task_run_from_task(task):
+    task_run = task_pb2.TaskRun()
+    task_run.task_id = task.task_id
+    task_run.task_name = task.task_name
+    task_run.owner = task.owner
+    task_run.query_text = task.query_text
+    task_run.schedule_options.CopyFrom(task.schedule_options)
+    task_run.warehouse_options.CopyFrom(task.warehouse_options)
+    task_run.condition_text = task.when_condition
+    task_run.root_task_id = str(get_root_task_id(task))
+
+    task_run.state = task_pb2.TaskRun.SUCCEEDED
+    task_run.attempt_number = 0
+    task_run.comment = task.comment
+    task_run.error_code = 0
+    task_run.error_message = ""
+    task_run.run_id = "1ftx"
+    task_run.query_id = "qwert"
+    task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
+    task_run.completed_time = datetime.now(timezone.utc).isoformat()
+
+    return task_run
 
 
 class TaskService(task_pb2_grpc.TaskServiceServicer):
@@ -112,6 +155,45 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                         code=7,
                     )
                 )
+        elif request.alter_task_type == task_pb2.AlterTaskRequest.ModifyWhen:
+            if request.HasField("when_condition"):
+                task.when_condition = request.when_condition
+            else:
+                return task_pb2.AlterTaskResponse(
+                    error=task_pb2.TaskError(
+                        kind="INVALID_ARGUMENT",
+                        message="when_condition not provided for MODIFY_WHEN",
+                        code=7,
+                    )
+                )
+        elif request.alter_task_type == task_pb2.AlterTaskRequest.AddAfter:
+            if len(request.add_after) > 0:
+                task.after.extend(request.add_after)
+            else:
+                return task_pb2.AlterTaskResponse(
+                    error=task_pb2.TaskError(
+                        kind="INVALID_ARGUMENT",
+                        message="add_after not provided for ADD_AFTER",
+                        code=7,
+                    )
+                )
+        elif request.alter_task_type == task_pb2.AlterTaskRequest.RemoveAfter:
+            after = task.after
+            print(request)
+            if len(request.remove_after) > 0:
+                filtered_array = [
+                    elem for elem in after if elem not in request.remove_after
+                ]
+                task.after[:] = []
+                task.after.extend(filtered_array)
+            else:
+                return task_pb2.AlterTaskResponse(
+                    error=task_pb2.TaskError(
+                        kind="INVALID_ARGUMENT",
+                        message="remove_after not provided for REMOVE_AFTER",
+                        code=7,
+                    )
+                )
         elif request.alter_task_type == task_pb2.AlterTaskRequest.Set:
             has_options = False
             if request.HasField("schedule_options"):
@@ -154,6 +236,8 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ExecuteTask(self, request, context):
         print("ExecuteTask", request)
+        for task_name, task in TASK_DB.items():
+            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
         return task_pb2.ExecuteTaskResponse(error=None)
 
     def ShowTasks(self, request, context):

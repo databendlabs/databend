@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
 
 use crate::api::rpc::exchange::exchange_transform_shuffle::ExchangeShuffleMeta;
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -43,7 +43,7 @@ impl ScatterTransform {
 impl Transform for ScatterTransform {
     const NAME: &'static str = "ScatterTransform";
 
-    fn transform(&mut self, data: DataBlock) -> common_exception::Result<DataBlock> {
+    fn transform(&mut self, data: DataBlock) -> databend_common_exception::Result<DataBlock> {
         let blocks = self.scatter.execute(data)?;
 
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(

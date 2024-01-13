@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::util::is_subset;
 use crate::IndexType;

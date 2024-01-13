@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
-use common_pipeline_transforms::processors::transforms::Transformer;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::EvalScalar;
+use databend_common_exception::Result;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::TransformProfileWrapper;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::EvalScalar;
 
 use crate::pipelines::PipelineBuilder;
 

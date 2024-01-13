@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(thread_local)]
-#![feature(io_error_other)]
 #![feature(int_roundings)]
+#![allow(clippy::diverging_sub_expression)]
+#![feature(assert_matches)]
 
 extern crate core;
 
@@ -25,6 +26,7 @@ mod catalogs;
 mod clusters;
 mod configs;
 mod databases;
+mod distributed;
 mod frame;
 mod interpreters;
 mod metrics;

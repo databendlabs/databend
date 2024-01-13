@@ -16,26 +16,29 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator::RightOuter;
-use common_ast::ast::MatchOperation;
-use common_ast::ast::MatchedClause;
-use common_ast::ast::MergeIntoStmt;
-use common_ast::ast::TableReference;
-use common_ast::ast::UnmatchedClause;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnType;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::FieldIndex;
-use common_expression::TableSchemaRef;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::JoinOperator::Inner;
+use databend_common_ast::ast::JoinOperator::RightAnti;
+use databend_common_ast::ast::JoinOperator::RightOuter;
+use databend_common_ast::ast::MatchOperation;
+use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::MergeIntoStmt;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UnmatchedClause;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
+use parking_lot::RwLock;
 
 use super::wrap_cast_scalar;
-use super::Finder;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -50,12 +53,28 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-// implementation of merge into for now:
-//      use an left outer join for target_source and source.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum MergeIntoType {
+    MatechedOnly,
+    FullOperation,
+    InsertOnly,
+}
+
+// Optimize Rule:
+// for now we think right source table is small table in default.
+// 1. insert only:
+//      right anti join
+// 2. (macthed and unmatched)
+//      right outer
+// 3. matched only:
+//      inner join
+// we will import optimizer for these join type in the future.
+
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]
@@ -73,7 +92,60 @@ impl Binder {
             return Err(ErrorCode::Unimplemented(
                 "merge into is experimental for now, you can use 'set enable_experimental_merge_into = 1' to set it up",
             ));
+        };
+
+        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
+        let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
+
+        let mut plan = self
+            .bind_merge_into_with_join_type(
+                bind_context,
+                stmt,
+                match merge_type {
+                    MergeIntoType::MatechedOnly => Inner,
+                    _ => RightOuter,
+                },
+                matched_clauses.clone(),
+                unmatched_clauses.clone(),
+                merge_type.clone(),
+            )
+            .await?;
+
+        // optimize insert-only
+        if let MergeIntoType::InsertOnly = merge_type {
+            let insert_only = insert_only(&plan);
+            if !insert_only {
+                return Err(ErrorCode::SemanticError(
+                    "for unmatched clause, then condition and exprs can only have source fields",
+                ));
+            }
+            // init bind_context and metadata
+            *bind_context = BindContext::new();
+            self.metadata = Arc::new(RwLock::new(Metadata::default()));
+            plan = self
+                .bind_merge_into_with_join_type(
+                    bind_context,
+                    stmt,
+                    RightAnti,
+                    matched_clauses,
+                    unmatched_clauses,
+                    MergeIntoType::InsertOnly,
+                )
+                .await?;
         }
+
+        Ok(Plan::MergeInto(Box::new(plan)))
+    }
+
+    async fn bind_merge_into_with_join_type(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &MergeIntoStmt,
+        join_type: JoinOperator,
+        matched_clauses: Vec<MatchedClause>,
+        unmatched_clauses: Vec<UnmatchedClause>,
+        merge_type: MergeIntoType,
+    ) -> Result<MergeInto> {
         let MergeIntoStmt {
             catalog,
             database,
@@ -91,7 +163,6 @@ impl Binder {
             ));
         }
 
-        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let mut unmatched_evaluators =
             Vec::<UnmatchedEvaluator>::with_capacity(unmatched_clauses.len());
         let mut matched_evaluators = Vec::<MatchedEvaluator>::with_capacity(matched_clauses.len());
@@ -128,9 +199,15 @@ impl Binder {
         let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
+        if !self.check_sexpr_top(&source_expr)? {
+            return Err(ErrorCode::SemanticError(
+                "replace source can't contain udf functions".to_string(),
+            ));
+        }
+
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = source_context.column_set();
+        let mut columns_set = HashSet::<IndexType>::new();
 
         let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
             // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
@@ -141,12 +218,12 @@ impl Binder {
                     .num_fields(),
             );
             let source_output_columns = &source_context.columns;
-            // we use Vec as the value, because if there could be duplicate names
+            // we use Vec as the value, because there could be duplicate names
             let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
             for column in source_output_columns {
                 name_map
                     .entry(column.column_name.clone())
-                    .or_insert_with(|| vec![])
+                    .or_default()
                     .push(column.clone());
             }
 
@@ -211,8 +288,11 @@ impl Binder {
             },
         };
 
-        let column_binding = target_context
-            .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
+        let column_binding = target_context.add_internal_column_binding(
+            &row_id_column_binding,
+            self.metadata.clone(),
+            true,
+        )?;
 
         target_expr =
             SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);
@@ -220,12 +300,15 @@ impl Binder {
         self.metadata
             .write()
             .set_table_row_id_index(table_index, column_binding.index);
-        // add row_id_idx
-        columns_set.insert(column_binding.index);
 
-        // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
+        // add row_id_idx
+        if merge_type != MergeIntoType::InsertOnly {
+            columns_set.insert(column_binding.index);
+        }
+
+        // add join, we use _row_id to check_duplicate join row.
         let join = Join {
-            op: RightOuter,
+            op: join_type,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
             left: Box::new(target_table),
             // use source as build table
@@ -242,6 +325,12 @@ impl Binder {
                 &join,
             )
             .await?;
+        {
+            // add join used column idx
+            let join_ctx = bind_ctx.clone();
+            let join_column_set = join_ctx.clone().column_set();
+            columns_set = columns_set.union(&join_column_set).cloned().collect();
+        }
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
@@ -253,11 +342,6 @@ impl Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        // add join condition used column idx
-        columns_set = columns_set
-            .union(&scalar_binder.bind(join_expr).await?.0.used_columns())
-            .cloned()
-            .collect();
 
         let column_entries = self.metadata.read().columns_by_table_index(table_index);
         let mut field_index_map = HashMap::<usize, String>::new();
@@ -265,7 +349,7 @@ impl Binder {
         let has_update = self.has_update(&matched_clauses);
         if has_update {
             for (idx, field) in table_schema.fields().iter().enumerate() {
-                let used_idx = self.find_column_index(&column_entries, &field.name())?;
+                let used_idx = self.find_column_index(&column_entries, field.name())?;
                 columns_set.insert(used_idx);
                 field_index_map.insert(idx, used_idx.to_string());
             }
@@ -308,7 +392,7 @@ impl Binder {
             );
         }
 
-        Ok(Plan::MergeInto(Box::new(MergeInto {
+        Ok(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
@@ -322,7 +406,10 @@ impl Binder {
             unmatched_evaluators,
             target_table_idx: table_index,
             field_index_map,
-        })))
+            merge_type,
+            distributed: false,
+            change_join_order: false,
+        })
     }
 
     async fn bind_matched_clause<'a>(
@@ -334,26 +421,15 @@ impl Binder {
         update_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
         target_name: &str,
     ) -> Result<MatchedEvaluator> {
-        // not supported for update clauses
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::SubqueryExpr(_)
-            )
-        };
-
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
-            let finder = Finder::new(&f);
-            let finder = scalar_expr.accept(finder)?;
-            if !finder.scalars().is_empty() {
+
+            if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "update clause's condition can't contain subquery|window|aggregate functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|udf functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -377,6 +453,13 @@ impl Binder {
                 let mut update_columns = HashMap::with_capacity(update_list.len());
                 for update_expr in update_list {
                     let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
+                    if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                        return Err(ErrorCode::SemanticError(
+                            "update clause's can't contain subquery|window|aggregate|udf functions"
+                                .to_string(),
+                        )
+                        .set_span(scalar_expr.span()));
+                    }
                     let col_name =
                         normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
                     if let Some(tbl_identify) = &update_expr.table {
@@ -407,15 +490,6 @@ impl Binder {
                         )));
                     }
 
-                    let finder = Finder::new(&f);
-                    let finder = scalar_expr.accept(finder)?;
-                    if !finder.scalars().is_empty() {
-                        return Err(ErrorCode::SemanticError(
-                            "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),
-                        )
-                        .set_span(scalar_expr.span()));
-                    }
-
                     update_columns.insert(index, scalar_expr.clone());
                 }
 
@@ -443,6 +517,14 @@ impl Binder {
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                return Err(ErrorCode::SemanticError(
+                    "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(scalar_expr.span()));
+            }
+
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
@@ -490,6 +572,13 @@ impl Binder {
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
                 let (mut scalar_expr, _) = scalar_binder.bind(expr).await?;
+                if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                    return Err(ErrorCode::SemanticError(
+                        "insert clause's can't contain subquery|window|aggregate|udf functions"
+                            .to_string(),
+                    )
+                    .set_span(scalar_expr.span()));
+                }
                 // type cast
                 scalar_expr = wrap_cast_scalar(
                     &scalar_expr,
@@ -564,4 +653,47 @@ impl Binder {
         }
         false
     }
+}
+
+fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
+    if matched_len == 0 && unmatched_len > 0 {
+        Ok(MergeIntoType::InsertOnly)
+    } else if unmatched_len == 0 && matched_len > 0 {
+        Ok(MergeIntoType::MatechedOnly)
+    } else if unmatched_len > 0 && matched_len > 0 {
+        Ok(MergeIntoType::FullOperation)
+    } else {
+        Err(ErrorCode::SemanticError(
+            "we must have macthed or unmatched clause at least one",
+        ))
+    }
+}
+
+fn insert_only(merge_plan: &MergeInto) -> bool {
+    let meta_data = merge_plan.meta_data.read();
+    let target_table_columns: HashSet<usize> = meta_data
+        .columns_by_table_index(merge_plan.target_table_idx)
+        .iter()
+        .map(|column| column.index())
+        .collect();
+
+    for evaluator in &merge_plan.unmatched_evaluators {
+        if evaluator.condition.is_some() {
+            let condition = evaluator.condition.as_ref().unwrap();
+            for column in condition.used_columns() {
+                if target_table_columns.contains(&column) {
+                    return false;
+                }
+            }
+        }
+
+        for value in &evaluator.values {
+            for column in value.used_columns() {
+                if target_table_columns.contains(&column) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }

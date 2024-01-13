@@ -14,15 +14,18 @@
 
 use std::any::Any;
 use std::cell::UnsafeCell;
+use std::ops::Deref;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use minitrace::prelude::*;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
+
+use crate::processors::profile::Profile;
 
 #[derive(Debug)]
 pub enum Event {
@@ -78,12 +81,39 @@ pub trait Processor: Send {
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::Unimplemented("Unimplemented async_process."))
     }
+
+    fn record_profile(&self, _profile: &Profile) {}
+
+    fn details_status(&self) -> Option<String> {
+        None
+    }
+}
+
+// To keep ProcessPtr::async_process taking &self, instead of self,
+// we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
+// so that later an Arc of it could be moved into the async closure,
+// which async_process returns.
+struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+unsafe impl Sync for UnsafeSyncCelledProcessor {}
+
+impl Deref for UnsafeSyncCelledProcessor {
+    type Target = UnsafeCell<Box<(dyn Processor)>>;
+
+    fn deref(&self) -> &Self::Target {
+        &(self.0)
+    }
 }
 
 #[derive(Clone)]
 pub struct ProcessorPtr {
     id: Arc<UnsafeCell<NodeIndex>>,
-    inner: Arc<UnsafeCell<Box<dyn Processor>>>,
+    inner: Arc<UnsafeSyncCelledProcessor>,
+}
+
+impl From<UnsafeCell<Box<(dyn Processor)>>> for UnsafeSyncCelledProcessor {
+    fn from(value: UnsafeCell<Box<(dyn Processor)>>) -> Self {
+        Self(value)
+    }
 }
 
 unsafe impl Send for ProcessorPtr {}
@@ -94,7 +124,7 @@ impl ProcessorPtr {
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {
             id: Arc::new(UnsafeCell::new(node_index(0))),
-            inner: Arc::new(UnsafeCell::new(inner)),
+            inner: Arc::new(UnsafeCell::new(inner).into()),
         }
     }
 
@@ -129,6 +159,11 @@ impl ProcessorPtr {
     }
 
     /// # Safety
+    pub unsafe fn record_profile(&self, profile: &Profile) {
+        (*self.inner.get()).record_profile(profile)
+    }
+
+    /// # Safety
     pub unsafe fn interrupt(&self) {
         (*self.inner.get()).interrupt()
     }
@@ -151,13 +186,30 @@ impl ProcessorPtr {
 
         let task = (*self.inner.get()).async_process();
 
+        // The `task` may have reference to the `Processor` that hold in `self.inner`,
+        // so we need to move a clone of `self.inner` into the following async closure to keep the
+        // `Processor` from being dropped before `task` is done.
+
+        // e.g.
+        // There may be scenarios where the 'ExecutingGraph' has already been dropped,
+        // but the async task returned by async_process is still running; in this case,
+        // there could be illegal memory access.
+
+        let inner = self.inner.clone();
         async move {
             let span = Span::enter_with_local_parent(name)
                 .with_property(|| ("graph-node-id", id.index().to_string()));
+            task.in_span(span).await?;
 
-            task.in_span(span).await
+            drop(inner);
+            Ok(())
         }
         .boxed()
+    }
+
+    /// # Safety
+    pub unsafe fn details_status(&self) -> Option<String> {
+        (*self.inner.get()).details_status()
     }
 }
 
@@ -189,5 +241,13 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     async fn async_process(&mut self) -> Result<()> {
         (**self).async_process().await
+    }
+
+    fn details_status(&self) -> Option<String> {
+        (**self).details_status()
+    }
+
+    fn record_profile(&self, profile: &Profile) {
+        (**self).record_profile(profile)
     }
 }

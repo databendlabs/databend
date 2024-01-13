@@ -107,6 +107,7 @@ message CsvFileFormatParams {
   // corresponding to `!error_on_column_count_mismatch`
   // for we can not set default value in proto3
   bool allow_column_count_mismatch = 9;
+  optional string empty_field_as = 10;
 }
 
 message TsvFileFormatParams {
@@ -133,11 +134,12 @@ message NdJsonFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   StageFileCompression compression = 1;
+  optional string missing_field_as = 2;
+  optional string null_field_as = 3;
 }
 
 message JsonFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   StageFileCompression compression = 1;
-
 }

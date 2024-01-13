@@ -15,15 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::TableSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
     // returns true, if target should NOT be pruned (false positive allowed)
@@ -32,6 +33,14 @@ pub trait RangePruner {
         input: &StatisticsOfColumns,
         metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool;
+
+    fn should_keep_with_partition_columns(
+        &self,
+        _stats: &StatisticsOfColumns,
+        _partition_columns: Option<&HashMap<String, Scalar>>,
+    ) -> bool {
+        true
+    }
 }
 
 struct KeepTrue;
@@ -76,6 +85,25 @@ impl RangePruner for RangeIndex {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
                 warn!("failed to range filter, returning true. {}", e);
                 true
+            }
+        }
+    }
+    fn should_keep_with_partition_columns(
+        &self,
+        stats: &StatisticsOfColumns,
+        partition_columns: Option<&HashMap<String, Scalar>>,
+    ) -> bool {
+        match partition_columns {
+            None => self.should_keep(stats, None),
+            Some(partition_columns) => {
+                match self.apply_with_partition_columns(stats, partition_columns) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        // swallow exceptions intentionally, corrupted index should not prevent execution
+                        warn!("failed to range filter, returning true. {}", e);
+                        true
+                    }
+                }
             }
         }
     }

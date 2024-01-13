@@ -1,0 +1,136 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_004
+
+statement ok
+CREATE DATABASE db_09_004
+
+statement ok
+USE db_09_004
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(a UInt8 not null, b UInt64 not null, c Int8 not null, d Int64 not null, e Date not null, f Date not null, g DateTime not null, h String not null) Engine = Fuse
+
+statement ok
+CREATE TABLE IF NOT EXISTS t3(a String not null, b String not null, c String not null, d String not null) Engine = Fuse
+
+statement error 1006
+INSERT INTO t1 (a,b,c,d,e) select * from t3
+
+statement error 1006
+INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3
+
+statement ok
+create table n1(a uint64)
+
+statement ok
+insert into n1 select number from numbers(10000)
+
+query I
+select sum(a) from n1
+----
+49995000
+
+statement ok
+CREATE TABLE n2(a UInt64 not null, b UInt64 not null)
+
+statement ok
+insert into n2 select number, number + 1 from numbers(10000)
+
+query I
+select count(a) from n2
+----
+10000
+
+query II
+select sum(a), sum(b) from n2
+----
+49995000 50005000
+
+statement ok
+insert into n2 select * from n2
+
+query I
+select count(a) from n2
+----
+20000
+
+query II
+select sum(a), sum(b) from n2
+----
+99990000 100010000
+
+statement ok
+create table n3(a uint64 not null, b uint64 not null)
+
+statement ok
+insert into n3 select sum(a), sum(b) from n2
+
+query II
+select * from n3
+----
+99990000 100010000
+
+statement ok
+create table s1(a String not null, b String not null)
+
+statement ok
+insert into s1 select number, number + 1 from numbers(10000)
+
+query II
+select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1
+----
+49995000 50005000
+
+statement ok
+create table d1(n String not null, a UInt8 not null, b Int16 not null default 4, c String not null default 'c')
+
+statement error 1006
+insert into d1(a) values (1)
+
+statement ok
+insert into d1(n,a) values ('',1)
+
+statement error 1006
+insert into d1(b) values (2)
+
+statement ok
+insert into d1(n,a,b) values ('',0,2)
+
+statement error 1006
+insert into d1(b) select b from d1
+
+statement ok
+insert into d1(n,a,b) select '',0,b from d1
+
+query TIIT
+select * from d1 order by a, b
+----
+(empty) 0 2 c
+(empty) 0 2 c
+(empty) 0 4 c
+(empty) 1 4 c
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP TABLE t3
+
+statement ok
+DROP TABLE n1
+
+statement ok
+DROP TABLE n2
+
+statement ok
+DROP TABLE n3
+
+statement ok
+DROP TABLE s1
+
+statement ok
+DROP TABLE d1
+
+statement ok
+DROP DATABASE db_09_004
+

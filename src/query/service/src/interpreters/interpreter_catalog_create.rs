@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::CatalogManager;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::CatalogId;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::CatalogMeta;
-use common_meta_app::schema::CatalogNameIdent;
-use common_meta_app::schema::CatalogOption;
-use common_sql::plans::CreateCatalogPlan;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CatalogId;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_sql::plans::CreateCatalogPlan;
+use databend_common_storages_fuse::TableContext;
 use log::debug;
 
 use super::Interpreter;

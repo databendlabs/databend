@@ -16,26 +16,26 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Notify;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_expression::ScalarRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::RangeJoin;
-use common_sql::executor::RangeJoinCondition;
-use common_sql::executor::RangeJoinType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ScalarRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::physical_plans::RangeJoin;
+use databend_common_sql::executor::physical_plans::RangeJoinCondition;
+use databend_common_sql::executor::physical_plans::RangeJoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
+use crate::pipelines::executor::WatchNotify;
+use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {
@@ -51,7 +51,7 @@ pub struct RangeJoinState {
     pub(crate) other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
     pub(crate) partition_finished: Mutex<bool>,
-    pub(crate) finished_notify: Arc<Notify>,
+    pub(crate) finished_notify: Arc<WatchNotify>,
     pub(crate) left_sinker_count: RwLock<usize>,
     pub(crate) right_sinker_count: RwLock<usize>,
     // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
@@ -81,7 +81,7 @@ impl RangeJoinState {
             // join_type: range_join.join_type.clone(),
             other_conditions: range_join.other_conditions.clone(),
             partition_finished: Mutex::new(false),
-            finished_notify: Arc::new(Notify::new()),
+            finished_notify: Arc::new(WatchNotify::new()),
             left_sinker_count: RwLock::new(0),
             right_sinker_count: RwLock::new(0),
             tasks: RwLock::new(vec![]),

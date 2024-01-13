@@ -38,10 +38,11 @@ mod string_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
-mod traits;
+pub mod traits;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;
+pub use traits::hash_join_fast_string_hash;
 pub use traits::EntryMutRefLike as HashtableEntryMutRefLike;
 pub use traits::EntryRefLike as HashtableEntryRefLike;
 pub use traits::FastHash;
@@ -110,5 +111,5 @@ pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
-pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub type BinaryHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
 pub use traits::HashJoinHashtableLike;

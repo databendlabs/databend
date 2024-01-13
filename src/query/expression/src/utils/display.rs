@@ -19,8 +19,8 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use common_io::display_decimal_128;
-use common_io::display_decimal_256;
+use databend_common_io::display_decimal_128;
+use databend_common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use roaring::RoaringTreemap;
@@ -34,6 +34,7 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::types::binary::BinaryColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
@@ -114,12 +115,17 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
+            ScalarRef::Binary(s) => {
+                for c in *s {
+                    write!(f, "{:02X}", c)?;
+                }
+                Ok(())
+            }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }
@@ -157,7 +163,13 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, ")")
             }
-            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
+            ScalarRef::Variant(s) => {
+                write!(f, "0x")?;
+                for c in *s {
+                    write!(f, "{c:02x}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -171,6 +183,7 @@ impl Debug for Column {
             Column::Number(col) => write!(f, "{col:?}"),
             Column::Decimal(col) => write!(f, "{col:?}"),
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
+            Column::Binary(col) => write!(f, "{col:?}"),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
@@ -193,12 +206,17 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
+            ScalarRef::Binary(s) => {
+                for c in *s {
+                    write!(f, "{c:02X}")?;
+                }
+                Ok(())
+            }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }
@@ -379,6 +397,18 @@ impl Debug for DecimalColumn {
     }
 }
 
+impl Debug for BinaryColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinaryColumn")
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
+            .finish()
+    }
+}
+
 impl Debug for StringColumn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StringColumn")
@@ -437,16 +467,22 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
                 }
                 write!(f, ")")
             }
-            RawExpr::UDFServerCall {
-                func_name, args, ..
+            RawExpr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
             } => {
-                write!(f, "{}(", func_name)?;
+                write!(f, "{name}")?;
+                write!(f, "(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{arg}")?;
                 }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
                 write!(f, ")")
             }
         }
@@ -457,6 +493,7 @@ impl Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
             DataType::Boolean => write!(f, "Boolean"),
+            DataType::Binary => write!(f, "Binary"),
             DataType::String => write!(f, "String"),
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
@@ -497,6 +534,7 @@ impl Display for TableDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
             TableDataType::Boolean => write!(f, "Boolean"),
+            TableDataType::Binary => write!(f, "Binary"),
             TableDataType::String => write!(f, "String"),
             TableDataType::Number(num) => write!(f, "{num}"),
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),
@@ -652,16 +690,22 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 }
                 write!(f, ")")
             }
-            Expr::UDFServerCall {
-                func_name, args, ..
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_display,
+                ..
             } => {
-                write!(f, "{}(", func_name)?;
+                write!(f, "{name}")?;
+                write!(f, "(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{arg}")?;
                 }
+                write!(f, ", ")?;
+                write!(f, "{lambda_display}")?;
                 write!(f, ")")
             }
         }
@@ -796,11 +840,14 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
-                Expr::UDFServerCall {
-                    func_name, args, ..
+                Expr::LambdaFunctionCall {
+                    name,
+                    args,
+                    lambda_display,
+                    ..
                 } => {
                     let mut s = String::new();
-                    s += func_name;
+                    s += &name;
                     s += "(";
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -808,6 +855,8 @@ impl<Index: ColumnIndex> Expr<Index> {
                         }
                         s += &arg.sql_display();
                     }
+                    s += ", ";
+                    s += &lambda_display;
                     s += ")";
                     s
                 }

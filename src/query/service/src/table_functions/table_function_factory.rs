@@ -15,12 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_types::MetaId;
-use common_storages_fuse::table_functions::FuseColumnTable;
-use common_storages_fuse::table_functions::FuseEncodingTable;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::table_functions::FuseColumnTable;
+use databend_common_storages_fuse::table_functions::FuseEncodingTable;
+use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -40,7 +41,6 @@ use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
-use crate::table_functions::srf::FlattenTable;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -138,6 +138,11 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "stream_status".to_string(),
+            (next_id(), Arc::new(StreamStatusTable::create)),
+        );
+
+        creators.insert(
             "sync_crash_me".to_string(),
             (next_id(), Arc::new(SyncCrashMeTable::create)),
         );
@@ -199,11 +204,6 @@ impl TableFunctionFactory {
         creators.insert(
             "fuse_encoding".to_string(),
             (next_id(), Arc::new(FuseEncodingTable::create)),
-        );
-
-        creators.insert(
-            "flatten".to_string(),
-            (next_id(), Arc::new(FlattenTable::create)),
         );
 
         TableFunctionFactory {

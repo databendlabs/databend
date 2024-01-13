@@ -14,23 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Expr;
-use common_expression::Scalar;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::parse_exprs;
-use common_storages_factory::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::parse_exprs;
+use databend_common_storages_factory::Table;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::pipelines::processors::InputPort;
+use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
 pub struct TransformResortAddOnWithoutSourceSchema {
@@ -49,18 +52,25 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
-                let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-                let mut expr = expr.remove(0);
-                if expr.data_type() != f.data_type() {
-                    expr = Expr::Cast {
-                        span: None,
-                        is_try: f.data_type().is_nullable(),
-                        expr: Box::new(expr),
-                        dest_type: f.data_type().clone(),
-                    };
-                }
-                expr
+                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+                check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
+                // #issue13932
+                // if there is a non-null constraint, we should return an error
+                // although we will give a valid default value. for example:
+                // 1. (a int not null), we give zero
+                // 2. (a int), we give null
+                // but for pg or snowflake, if a field is non-null, it will return
+                // a non-null error (it means they will give a null as the default value).
+                if !f.is_nullable() {
+                    // if we have a user-specified default expr, it must satisfy the non-null constraint
+                    // in table-create phase. So we just consider default_expr is none.
+                    return Err(ErrorCode::BadArguments(format!(
+                        "null value in column `{}` of table `{}` violates not-null constraint",
+                        f.name(),
+                        table.name()
+                    )));
+                }
                 let default_value = Scalar::default_value(f.data_type());
                 Expr::Constant {
                     span: None,

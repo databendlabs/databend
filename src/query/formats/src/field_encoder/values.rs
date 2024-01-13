@@ -13,24 +13,25 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::date::date_to_string;
-use common_expression::types::decimal::DecimalColumn;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumn;
-use common_expression::types::timestamp::timestamp_to_string;
-use common_expression::types::NumberColumn;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_io::constants::FALSE_BYTES_NUM;
-use common_io::constants::INF_BYTES_LONG;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_SNAKE;
-use common_io::constants::NULL_BYTES_UPPER;
-use common_io::constants::TRUE_BYTES_NUM;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::date::date_to_string;
+use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_io::constants::FALSE_BYTES_NUM;
+use databend_common_io::constants::INF_BYTES_LONG;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_SNAKE;
+use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_NUM;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -121,6 +122,7 @@ impl FieldEncoderValues {
 
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested),
 
+            Column::Binary(c) => self.write_binary(c, row_index, out_buf),
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
@@ -214,6 +216,11 @@ impl FieldEncoderValues {
         out_buf.extend_from_slice(data.as_bytes());
     }
 
+    fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+    }
+
     fn write_string(
         &self,
         column: &StringColumn,
@@ -254,7 +261,7 @@ impl FieldEncoderValues {
 
     fn write_bitmap(
         &self,
-        _column: &StringColumn,
+        _column: &BinaryColumn,
         _row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
@@ -265,7 +272,7 @@ impl FieldEncoderValues {
 
     fn write_variant(
         &self,
-        column: &StringColumn,
+        column: &BinaryColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,

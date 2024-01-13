@@ -16,30 +16,30 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use common_base::base::convert_byte_size;
-use common_base::base::convert_number_size;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
-use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
-use common_sql::IndexType;
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::HashtableLike;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_sql::IndexType;
 use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
-use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
@@ -68,7 +68,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let mut memory_ratio = settings.get_spilling_memory_ratio()? as f64 / 100_f64;
+        let mut memory_ratio = settings.get_aggregate_spilling_memory_ratio()? as f64 / 100_f64;
 
         if memory_ratio > 1_f64 {
             memory_ratio = 1_f64;
@@ -86,7 +86,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
             max_memory_usage,
             convert_threshold,
             spilling_bytes_threshold_per_proc: match settings
-                .get_spilling_bytes_threshold_per_proc()?
+                .get_aggregate_spilling_bytes_threshold_per_proc()?
             {
                 0 => max_memory_usage / max_threads,
                 spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,

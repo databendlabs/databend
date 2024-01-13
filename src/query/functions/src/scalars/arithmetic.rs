@@ -19,63 +19,58 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalColumn;
-use common_expression::types::decimal::DecimalDomain;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::Number;
-use common_expression::types::number::NumberType;
-use common_expression::types::number::F64;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
-use common_expression::types::ArgType;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberClass;
-use common_expression::types::NumberDataType;
-use common_expression::types::SimpleDomain;
-use common_expression::types::StringType;
-use common_expression::types::ALL_FLOAT_TYPES;
-use common_expression::types::ALL_INTEGER_TYPES;
-use common_expression::types::ALL_NUMBER_CLASSES;
-use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
-use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
-use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::values::Value;
-use common_expression::values::ValueRef;
-use common_expression::vectorize_1_arg;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::with_float_mapped_type;
-use common_expression::with_integer_mapped_type;
-use common_expression::with_number_mapped_type;
-use common_expression::with_number_mapped_type_without_64;
-use common_expression::with_unsigned_integer_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Domain;
-use common_expression::EvalContext;
-use common_expression::Function;
-use common_expression::FunctionDomain;
-use common_expression::FunctionEval;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_io::display_decimal_128;
-use common_io::display_decimal_256;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_expression::types::decimal::DecimalDomain;
+use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::number::NumberType;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberClass;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMBER_CLASSES;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
+use databend_common_expression::types::F32;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfBinary;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::values::Value;
+use databend_common_expression::values::ValueRef;
+use databend_common_expression::vectorize_1_arg;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_float_mapped_type;
+use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_number_mapped_type_without_64;
+use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
 use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
-use super::decimal::register_decimal_to_float32;
-use super::decimal::register_decimal_to_float64;
 use super::decimal::register_decimal_to_int;
 use crate::scalars::decimal::register_decimal_arithmetic;
+use crate::scalars::decimal::register_decimal_to_float;
+use crate::scalars::decimal::register_decimal_to_string;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
@@ -594,8 +589,20 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else if src_type.need_round_cast_to(*dest_type) {
                             registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
+                                |func_ctx, domain| {
+                                    let (domain, overflowing) = if func_ctx.rounding_mode {
+                                        // Perform round on domain to keep the result of domain
+                                        // matches the result of function
+                                        let min = AsPrimitive::<f64>::as_(domain.min);
+                                        let max = AsPrimitive::<f64>::as_(domain.max);
+                                        let round_domain = SimpleDomain::<F64>{
+                                            min: min.round().into(),
+                                            max: max.round().into(),
+                                        };
+                                        round_domain.overflow_cast()
+                                    } else {
+                                        domain.overflow_cast()
+                                    };
                                     if overflowing {
                                         FunctionDomain::MayThrow
                                     } else {
@@ -664,8 +671,20 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else if src_type.need_round_cast_to(*dest_type) {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
+                                |func_ctx, domain| {
+                                    let (domain, overflowing) = if func_ctx.rounding_mode {
+                                        // Perform round on domain to keep the result of domain
+                                        // matches the result of function
+                                        let min = AsPrimitive::<f64>::as_(domain.min);
+                                        let max = AsPrimitive::<f64>::as_(domain.max);
+                                        let round_domain = SimpleDomain::<F64>{
+                                            min: min.round().into(),
+                                            max: max.round().into(),
+                                        };
+                                        round_domain.overflow_cast()
+                                    } else {
+                                        domain.overflow_cast()
+                                    };
                                     FunctionDomain::Domain(NullableDomain {
                                         has_null: overflowing,
                                         value: Some(Box::new(
@@ -717,10 +736,10 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                 NumberClass::Decimal128 => {
                     // todo(youngsofun): add decimal try_cast and decimal to int and float
                     if matches!(dest_type, NumberDataType::Float32) {
-                        register_decimal_to_float32(registry);
+                        register_decimal_to_float::<F32>(registry);
                     }
                     if matches!(dest_type, NumberDataType::Float64) {
-                        register_decimal_to_float64(registry);
+                        register_decimal_to_float::<F64>(registry);
                     }
 
                     with_number_mapped_type!(|DEST_TYPE| match dest_type {
@@ -775,7 +794,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                     }
                     _ => unreachable!(),
                 }),
-                eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
+                eval: Box::new(move |args, ctx| unary_minus_decimal(args, arg_type.clone(), ctx)),
             },
         };
 
@@ -787,34 +806,20 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
     });
 }
 
-fn unary_minus_decimal(args: &[ValueRef<AnyType>], arg_type: DataType) -> Value<AnyType> {
+fn unary_minus_decimal(
+    args: &[ValueRef<AnyType>],
+    arg_type: DataType,
+    ctx: &mut EvalContext,
+) -> Value<AnyType> {
     let arg = &args[0];
-    let mut is_scalar = false;
-    let column = match arg {
-        ValueRef::Column(column) => column.clone(),
-        ValueRef::Scalar(s) => {
-            is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &arg_type);
-            builder.build()
+    let arg_type = arg_type.as_decimal().unwrap();
+    with_decimal_mapped_type!(|DECIMAL_TYPE| match arg_type {
+        DecimalDataType::DECIMAL_TYPE(size) => {
+            type Type = DecimalType<DECIMAL_TYPE>;
+            let arg = arg.try_downcast().unwrap();
+            vectorize_1_arg::<Type, Type>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
         }
-    };
-
-    let result = match column {
-        Column::Decimal(DecimalColumn::Decimal128(buf, size)) => {
-            DecimalColumn::Decimal128(buf.into_iter().map(|x| -x).collect(), size)
-        }
-        Column::Decimal(DecimalColumn::Decimal256(buf, size)) => {
-            DecimalColumn::Decimal256(buf.into_iter().map(|x| -x).collect(), size)
-        }
-        _ => unreachable!(),
-    };
-
-    if is_scalar {
-        let scalar = result.index(0).unwrap();
-        Value::Scalar(Scalar::Decimal(scalar))
-    } else {
-        Value::Column(Column::Decimal(result))
-    }
+    })
 }
 
 fn register_string_to_number(registry: &mut FunctionRegistry) {
@@ -951,78 +956,5 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                 // already registered in Decimal128 branch
             }
         });
-    }
-}
-
-fn register_decimal_to_string(registry: &mut FunctionRegistry) {
-    // decimal to string
-    registry.register_function_factory("to_string", |_params, args_type| {
-        if args_type.len() != 1 {
-            return None;
-        }
-
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_decimal() {
-            return None;
-        }
-
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "to_string".to_string(),
-                args_type: vec![arg_type.clone()],
-                return_type: StringType::data_type(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
-            },
-        }))
-    });
-}
-
-fn decimal_to_string(
-    args: &[ValueRef<AnyType>],
-    from_type: DataType,
-    _ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    let arg = &args[0];
-
-    let mut is_scalar = false;
-    let column = match arg {
-        ValueRef::Column(column) => column.clone(),
-        ValueRef::Scalar(s) => {
-            is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
-            builder.build()
-        }
-    };
-
-    let from_type = from_type.as_decimal().unwrap();
-
-    let column = match from_type {
-        DecimalDataType::Decimal128(_) => {
-            let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
-            let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
-            for x in buffer {
-                builder.put_str(&display_decimal_128(x, from_size.scale));
-                builder.commit_row();
-            }
-            builder
-        }
-        DecimalDataType::Decimal256(_) => {
-            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
-            let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
-            for x in buffer {
-                builder.put_str(&display_decimal_256(x, from_size.scale));
-                builder.commit_row();
-            }
-            builder
-        }
-    };
-
-    if is_scalar {
-        Value::Scalar(Scalar::String(column.build_scalar()))
-    } else {
-        Value::Column(Column::String(column.build()))
     }
 }

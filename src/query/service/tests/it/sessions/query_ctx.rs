@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestFixture;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::Mock;
@@ -33,8 +35,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         .mount(&mock_server)
         .await;
 
-    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
-
+    let mut conf = ConfigBuilder::create().config();
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
@@ -44,27 +45,23 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         disable_credential_loader: true,
         ..Default::default()
     });
+    let fixture = TestFixture::setup_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
 
-    let (_guard, qctx) =
-        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
-
-    let _ = qctx.get_data_operator()?;
+    let _ = ctx.get_data_operator()?;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_fs() -> Result<()> {
-    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
-
+    let mut conf = ConfigBuilder::create().config();
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: "/tmp".to_string(),
     });
-
-    let (_guard, qctx) =
-        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
-
-    let _ = qctx.get_data_operator()?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let _ = ctx.get_data_operator()?;
 
     Ok(())
 }

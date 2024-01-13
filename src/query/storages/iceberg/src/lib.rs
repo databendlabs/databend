@@ -89,6 +89,7 @@
 
 #![feature(lazy_cell)]
 #![feature(impl_trait_in_assoc_type)]
+#![allow(clippy::diverging_sub_expression)]
 
 mod catalog;
 mod database;
@@ -100,3 +101,4 @@ mod table_source;
 pub use catalog::IcebergCatalog;
 pub use catalog::IcebergCreator;
 pub use catalog::ICEBERG_CATALOG;
+pub use table::IcebergTable;

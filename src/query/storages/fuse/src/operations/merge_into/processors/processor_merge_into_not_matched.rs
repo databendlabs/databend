@@ -18,22 +18,22 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
-use common_sql::evaluator::BlockOperator;
-use common_storage::metrics::merge_into::merge_into_not_matched_operation_milliseconds;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
-use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_storage::MergeStatus;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
@@ -56,6 +56,7 @@ pub struct MergeIntoNotMatchedProcessor {
     func_ctx: FunctionContext,
     // data_schemas[i] means the i-th op's result block's schema.
     data_schemas: HashMap<usize, DataSchemaRef>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl MergeIntoNotMatchedProcessor {
@@ -63,6 +64,7 @@ impl MergeIntoNotMatchedProcessor {
         unmatched: UnMatchedExprs,
         input_schema: DataSchemaRef,
         func_ctx: FunctionContext,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         let mut data_schemas = HashMap::with_capacity(unmatched.len());
@@ -95,9 +97,11 @@ impl MergeIntoNotMatchedProcessor {
             output_data: Vec::new(),
             func_ctx,
             data_schemas,
+            ctx,
         })
     }
 
+    #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
         let output_port = self.output_port.clone();
@@ -165,6 +169,13 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     metrics_inc_merge_into_append_blocks_rows_counter(
                         satisfied_block.num_rows() as u32
                     );
+
+                    self.ctx.add_merge_status(MergeStatus {
+                        insert_rows: satisfied_block.num_rows(),
+                        update_rows: 0,
+                        deleted_rows: 0,
+                    });
+
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)
                 }

@@ -12,6 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::assert_matches::assert_matches;
+use std::io::Cursor;
+
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use serde::Deserialize;
+use serde::Serialize;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 struct BasicOld {
     a: u32,
@@ -88,15 +96,19 @@ enum NewEnumInsertFieldInTheMiddle {
 #[test]
 fn test_bincode_backward_compat_enum() {
     let old_format = OldEnum::B(100);
-    let bytes = bincode::serialize(&old_format).unwrap();
-    let _: OldEnum = bincode::deserialize(&bytes).unwrap();
+
+    let mut buffer = Cursor::new(Vec::new());
+    bincode_serialize_into_buf(&mut buffer, &old_format).unwrap();
+    let bytes = buffer.get_ref().as_slice();
+
+    let _: OldEnum = bincode_deserialize_from_slice(bytes).unwrap();
 
     // enum extended with new field is ok
-    let new: NewEnumAppendField = bincode::deserialize(&bytes).unwrap();
+    let new: NewEnumAppendField = bincode_deserialize_from_slice(bytes).unwrap();
     assert_eq!(new, NewEnumAppendField::B(100));
 
     // enum, insert with new field in the middle, is NOT ok
-    let new: Result<NewEnumInsertFieldInTheMiddle, _> = bincode::deserialize(&bytes);
+    let new: Result<NewEnumInsertFieldInTheMiddle, _> = bincode_deserialize_from_slice(bytes);
     assert!(new.is_err())
 }
 
@@ -144,4 +156,32 @@ fn test_msgpack_backward_compat_enum() {
     assert_eq!(new.enum_field, NewEnumInsertFieldInTheMiddle::B(100));
     assert_eq!(new.new_string, None);
     assert_eq!(new.new_int, default_new_int());
+}
+
+#[test]
+fn test_msg_pack_enum_reorder() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum ScalarOrigin {
+        Null,
+        Int(i8),
+        String(Vec<u8>),
+        Float(f32),
+        Binary(Vec<u8>),
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum ScalarReordered {
+        Null,
+        Int(i8),
+        Binary(Vec<u8>),
+        String(Vec<u8>),
+        Float(f32),
+    }
+
+    let value = vec![ScalarOrigin::Null, ScalarOrigin::String(vec![1, 2, 3])];
+    let bytes = rmp_serde::to_vec_named(&value).unwrap();
+    let deserialized: Vec<ScalarReordered> = rmp_serde::from_slice(&bytes).unwrap();
+
+    assert_matches!(deserialized[0], ScalarReordered::Null);
+    assert_matches!(&deserialized[1], ScalarReordered::String(x) if x == &vec![1, 2, 3]);
 }

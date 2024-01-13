@@ -1,0 +1,13 @@
+statement ok
+set enable_distributed_merge_into = 1;
+
+statement ok
+set enable_runtime_filter = 1;
+
+include ./09_0036_merge_into_without_distributed_enable.test
+
+statement ok
+set enable_distributed_merge_into = 0;
+
+statement ok
+set enable_runtime_filter = 0;

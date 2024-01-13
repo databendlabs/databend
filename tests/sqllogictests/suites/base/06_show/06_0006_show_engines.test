@@ -1,0 +1,24 @@
+query TT
+SHOW ENGINES
+----
+DELTA DELTA Storage Engine
+FUSE FUSE Storage Engine
+ICEBERG ICEBERG Storage Engine
+MEMORY MEMORY Storage Engine
+NULL NULL Storage Engine
+RANDOM RANDOM Storage Engine
+STREAM STREAM Storage Engine
+VIEW VIEW Storage (LOGICAL VIEW)
+
+query TT
+SHOW ENGINES LIKE 'FU%' LIMIT 1
+----
+FUSE FUSE Storage Engine
+
+query TT
+SHOW ENGINES WHERE engine='MEMORY' LIMIT 1
+----
+MEMORY MEMORY Storage Engine
+
+statement error
+SHOW ENGINES WHERE name_engine='MEMORY' LIMIT 1

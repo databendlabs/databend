@@ -14,27 +14,27 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
-use common_arrow::arrow::io::parquet::read::ArrayIter;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageReader;
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::plan::Projection;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::Schema;
+use databend_common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use databend_common_arrow::arrow::io::parquet::read::ArrayIter;
+use databend_common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use databend_common_arrow::parquet::metadata::ColumnChunkMetaData;
+use databend_common_arrow::parquet::metadata::FileMetaData;
+use databend_common_arrow::parquet::metadata::RowGroupMetaData;
+use databend_common_arrow::parquet::read::BasicDecompressor;
+use databend_common_arrow::parquet::read::PageReader;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::LoadParams;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
 
 use crate::hive_partition::HivePartInfo;
 use crate::HivePartitionFiller;
@@ -137,7 +137,7 @@ impl HiveBlockReader {
         };
 
         let projected_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         Ok(Arc::new(HiveBlockReader {
             operator,
             projection,
@@ -208,13 +208,14 @@ impl HiveBlockReader {
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
-        let handler =
-            common_base::base::tokio::spawn(async_backtrace::location!().frame(async move {
+        let handler = databend_common_base::base::tokio::spawn(async_backtrace::location!().frame(
+            async move {
                 let chunk = op.read_with(&path).range(offset..offset + length).await?;
 
                 let _semaphore_permit = semaphore.acquire().await.unwrap();
                 Ok(chunk)
-            }));
+            },
+        ));
 
         match handler.await {
             Ok(Ok(data)) => Ok(data),

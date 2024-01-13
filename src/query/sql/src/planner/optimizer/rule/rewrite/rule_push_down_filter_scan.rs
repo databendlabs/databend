@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
@@ -222,10 +222,9 @@ impl RulePushDownFilterScan {
                 Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                     span: lambda_func.span,
                     func_name: lambda_func.func_name.clone(),
-                    display_name: lambda_func.display_name.clone(),
                     args,
-                    params: lambda_func.params.clone(),
                     lambda_expr: lambda_func.lambda_expr.clone(),
+                    lambda_display: lambda_func.lambda_display.clone(),
                     return_type: lambda_func.return_type.clone(),
                 }))
             }
@@ -261,7 +260,9 @@ impl RulePushDownFilterScan {
 
                 Ok(ScalarExpr::UDFServerCall(UDFServerCall {
                     span: udf.span,
+                    name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
@@ -283,18 +284,13 @@ impl RulePushDownFilterScan {
             let used_columns = predicate.used_columns();
             let mut contain_derived_column = false;
             for column_entry in column_entries {
-                match column_entry {
-                    ColumnEntry::BaseTableColumn(_) => {}
-                    ColumnEntry::InternalColumn(_) => {}
-                    ColumnEntry::DerivedColumn(column) => {
-                        // Don't push down predicate that contains derived column
-                        // Because storage can't know such columns.
-                        if used_columns.contains(&column.column_index) {
-                            contain_derived_column = true;
-                            break;
-                        }
+                if let ColumnEntry::DerivedColumn(column) = column_entry {
+                    // Don't push down predicate that contains derived column
+                    // Because storage can't know such columns.
+                    if used_columns.contains(&column.column_index) {
+                        contain_derived_column = true;
+                        break;
                     }
-                    ColumnEntry::VirtualColumn(_) => {}
                 }
             }
             if !contain_derived_column {

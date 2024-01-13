@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use common_meta_raft_store::state_machine::testing::snapshot_logs;
-use common_meta_sled_store::openraft::async_trait::async_trait;
-use common_meta_sled_store::openraft::entry::RaftEntry;
-use common_meta_sled_store::openraft::storage::Adaptor;
-use common_meta_sled_store::openraft::storage::RaftLogReaderExt;
-use common_meta_sled_store::openraft::testing::log_id;
-use common_meta_sled_store::openraft::testing::StoreBuilder;
-use common_meta_sled_store::openraft::RaftSnapshotBuilder;
-use common_meta_sled_store::openraft::RaftStorage;
-use common_meta_types::new_log_id;
-use common_meta_types::Entry;
-use common_meta_types::Membership;
-use common_meta_types::StorageError;
-use common_meta_types::StoredMembership;
-use common_meta_types::TypeConfig;
-use common_meta_types::Vote;
+use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
+use databend_common_meta_sled_store::openraft::async_trait::async_trait;
+use databend_common_meta_sled_store::openraft::entry::RaftEntry;
+use databend_common_meta_sled_store::openraft::storage::Adaptor;
+use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
+use databend_common_meta_sled_store::openraft::testing::log_id;
+use databend_common_meta_sled_store::openraft::testing::StoreBuilder;
+use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_sled_store::openraft::RaftStorage;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::StorageError;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::TypeConfig;
+use databend_common_meta_types::Vote;
 use databend_meta::meta_service::meta_node::LogStore;
 use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
@@ -65,7 +65,7 @@ fn test_impl_raft_storage() -> anyhow::Result<()> {
     let root = Span::root(full_name!(), SpanContext::random());
     let _guard = root.set_local_parent();
 
-    common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
+    databend_common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
 
     Ok(())
 }

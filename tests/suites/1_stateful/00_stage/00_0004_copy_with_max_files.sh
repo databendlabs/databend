@@ -63,3 +63,22 @@ do
 		echo "drop table if exists test_max_files_force_${force}_purge_${purge}" | $BENDSQL_CLIENT_CONNECT
 	done
 done
+
+
+DIR=/tmp/00_0004_2
+TABLE=test_max_files_limit
+stmt "drop table if exists ${TABLE}"
+stmt "create table ${TABLE} (a int, b int)"
+
+rm -rf ${DIR}
+mkdir ${DIR}
+for i in {1..15001}
+do
+	echo "${i},1" > ${DIR}/f${i}.csv
+done
+
+stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV)"
+stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true"
+query "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true purge=true return_failed_only=true"
+query "drop table ${TABLE}"
+

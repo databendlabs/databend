@@ -1,0 +1,55 @@
+
+statement ok
+drop table if exists rand
+
+statement ok
+drop table if exists t1
+
+
+statement ok
+create table rand(name String not null, id int, flag bool) Engine = random
+
+statement ok
+create table t1 engine=fuse row_per_block = $RAND_30000_100000 as select * from rand limit $RAND_100000_300000
+
+query III
+select max(length(name)) = 5,  min(length(name)) = 5,  count(name) >= 100000 from t1
+----
+1 1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 0)
+----
+1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 1)
+----
+1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 2)
+----
+1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 3)
+----
+1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 4)
+----
+1 1
+
+query III
+select a is null or a = 5, b is null or b = 5 from  (select max(length(name))  as a,  min(length(name))  as b from t1 where id % 5 = 5)
+----
+1 1
+
+
+statement ok
+drop table if exists rand
+
+statement ok
+drop table if exists t1

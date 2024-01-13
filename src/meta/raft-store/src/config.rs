@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use std::net::Ipv4Addr;
+use std::sync::LazyLock;
 
-use common_exception::Result;
-use common_grpc::DNSResolver;
-use common_meta_types::Endpoint;
-use common_meta_types::MetaStartupError;
-use common_meta_types::NodeId;
-use once_cell::sync::Lazy;
+use databend_common_exception::Result;
+use databend_common_grpc::DNSResolver;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::NodeId;
 
-pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
+pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");
     let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
@@ -56,7 +56,7 @@ pub struct RaftConfig {
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
-    pub raft_api_port: u32,
+    pub raft_api_port: u16,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     pub raft_dir: String,
@@ -78,6 +78,9 @@ pub struct RaftConfig {
 
     /// The maximum number of applied logs to keep before purging
     pub max_applied_log_to_keep: u64,
+
+    /// The size of chunk for transmitting snapshot. The default is 64MB
+    pub snapshot_chunk_size: u64,
 
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
@@ -138,6 +141,7 @@ impl Default for RaftConfig {
             heartbeat_interval: 1000,
             install_snapshot_timeout: 4000,
             max_applied_log_to_keep: 1000,
+            snapshot_chunk_size: 4194304, // 4MB
             single: false,
             join: vec![],
             leave_via: vec![],
@@ -160,35 +164,23 @@ impl RaftConfig {
     }
 
     pub fn raft_api_listen_host_endpoint(&self) -> Endpoint {
-        Endpoint {
-            addr: self.raft_listen_host.clone(),
-            port: self.raft_api_port,
-        }
+        Endpoint::new(&self.raft_listen_host, self.raft_api_port)
     }
 
     pub fn raft_api_advertise_host_endpoint(&self) -> Endpoint {
-        Endpoint {
-            addr: self.raft_advertise_host.clone(),
-            port: self.raft_api_port,
-        }
+        Endpoint::new(&self.raft_advertise_host, self.raft_api_port)
     }
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<Endpoint> {
         let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
         match ipv4_addr {
-            Ok(addr) => Ok(Endpoint {
-                addr: addr.to_string(),
-                port: self.raft_api_port,
-            }),
+            Ok(addr) => Ok(Endpoint::new(addr, self.raft_api_port)),
             Err(_) => {
                 let _ip_addrs = DNSResolver::instance()?
                     .resolve(self.raft_advertise_host.clone())
                     .await?;
-                Ok(Endpoint {
-                    addr: _ip_addrs[0].to_string(),
-                    port: self.raft_api_port,
-                })
+                Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
             }
         }
     }

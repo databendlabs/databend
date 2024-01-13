@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::NavigationPoint;
 
 #[derive(Clone, Debug)]
 pub struct RevertTablePlan {

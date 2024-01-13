@@ -16,26 +16,21 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::block_debug::pretty_format_blocks;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
-use common_expression::SortColumnDescription;
-use common_sql::optimizer::SExpr;
-use common_sql::planner::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::Planner;
-use common_storages_fuse::TableContext;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::SortColumnDescription;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::planner::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::Planner;
+use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::TestFixture;
-use enterprise_query::test_kits::context::create_ee_query_context;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
-
-use crate::aggregating_index::CATALOG;
-use crate::aggregating_index::DATABASE;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan() -> Result<()> {
@@ -104,639 +99,481 @@ async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
 }
 
 async fn test_index_scan_impl(format: &str) -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
-    )
-    .await?;
-
-    // Insert data
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+        .execute_command(&format!(
+            "CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"
+        ))
+        .await?;
+
+    fixture
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Create index
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
     let index_name = "index1";
 
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
+    fixture.execute_command(
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
     // Refresh Index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("REFRESH AGGREGATING INDEX {index_name}"),
-    )
-    .await?;
+        .execute_command(&format!("REFRESH AGGREGATING INDEX {index_name}"))
+        .await?;
 
     // Query with index
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 1        |",
-            "| 2        | 3        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 1        |",
+        "| 2        | 3        |",
+        "+----------+----------+",
+    ])
     .await?;
 
-    let plan = plan_sql(fixture.ctx(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let plan = plan_sql(ctx.clone(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+",
-            "| Column 0 |",
-            "+----------+",
-            "| 1        |",
-            "| 2        |",
-            "+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 1        |",
+        "| 2        |",
+        "+----------+",
+    ])
     .await?;
 
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    let plan = plan_sql(fixture.ctx(), "SELECT SUM(a) from t WHERE c > 1 GROUP BY b").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let plan = plan_sql(ctx.clone(), "SELECT SUM(a) from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+",
-            "| Column 0 |",
-            "+----------+",
-            "| 1        |",
-            "| 3        |",
-            "+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 1        |",
+        "| 3        |",
+        "+----------+",
+    ])
     .await?;
 
     // Insert new data but not refresh index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Query with one fuse block and one index block
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 2        |",
-            "| 2        | 6        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 2        |",
+        "| 2        | 6        |",
+        "+----------+----------+",
+    ])
     .await?;
 
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    let plan = plan_sql(fixture.ctx(), "SELECT b + 1 from t WHERE c > 1 GROUP BY b").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let plan = plan_sql(ctx.clone(), "SELECT b + 1 from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+",
-            "| Column 0 |",
-            "+----------+",
-            "| 2        |",
-            "| 3        |",
-            "+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 2        |",
+        "| 3        |",
+        "+----------+",
+    ])
     .await?;
 
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT SUM(a) + 1 from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+",
-            "| Column 0 |",
-            "+----------+",
-            "| 3        |",
-            "| 7        |",
-            "+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx.clone(), &plan).await, vec![
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 3        |",
+        "| 7        |",
+        "+----------+",
+    ])
     .await?;
 
-    drop_index(fixture.ctx(), index_name).await?;
+    drop_index(ctx, index_name).await?;
 
     Ok(())
 }
 
 async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
-    )
-    .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"
+        ))
+        .await?;
 
     // Insert data
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Create index
     let index_name = "index1";
 
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+    fixture.execute_command(
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
     // Refresh Index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("REFRESH AGGREGATING INDEX {index_name}"),
-    )
-    .await?;
+        .execute_command(&format!("REFRESH AGGREGATING INDEX {index_name}"))
+        .await?;
 
     // Query with index
     // sum
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 1        |",
-            "| 2        | 3        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 1        |",
+        "| 2        | 3        |",
+        "+----------+----------+",
+    ])
     .await?;
 
     // sum and max
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+----------+",
-            "| Column 0 | Column 1 | Column 2 |",
-            "+----------+----------+----------+",
-            "| 1        | 1        | 1        |",
-            "| 2        | 3        | 2        |",
-            "+----------+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+----------+",
+        "| Column 0 | Column 1 | Column 2 |",
+        "+----------+----------+----------+",
+        "| 1        | 1        | 1        |",
+        "| 2        | 3        | 2        |",
+        "+----------+----------+----------+",
+    ])
     .await?;
 
     // Insert new data but not refresh index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Query with one fuse block and one index block
     // sum
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 2        |",
-            "| 2        | 6        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 2        |",
+        "| 2        | 6        |",
+        "+----------+----------+",
+    ])
     .await?;
 
     // sum and max
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+----------+",
-            "| Column 0 | Column 1 | Column 2 |",
-            "+----------+----------+----------+",
-            "| 1        | 2        | 1        |",
-            "| 2        | 6        | 2        |",
-            "+----------+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx.clone(), &plan).await, vec![
+        "+----------+----------+----------+",
+        "| Column 0 | Column 1 | Column 2 |",
+        "+----------+----------+----------+",
+        "| 1        | 2        | 1        |",
+        "| 2        | 6        | 2        |",
+        "+----------+----------+----------+",
+    ])
     .await?;
 
-    drop_index(fixture.ctx(), index_name).await?;
+    drop_index(ctx, index_name).await?;
 
     Ok(())
 }
 
 async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
-    )
-    .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"
+        ))
+        .await?;
 
     // Insert data
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+    fixture
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Create index
     let index_name = "index1";
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+    fixture.execute_command(
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
     // Refresh Index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("REFRESH AGGREGATING INDEX {index_name}"),
-    )
-    .await?;
+        .execute_command(&format!("REFRESH AGGREGATING INDEX {index_name}"))
+        .await?;
 
     // Query with index
     // sum
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    let plan = plan_sql(fixture.ctx(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let plan = plan_sql(ctx.clone(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+",
-            "| Column 0 |",
-            "+----------+",
-            "| 1        |",
-            "| 2        |",
-            "+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 1        |",
+        "| 2        |",
+        "+----------+",
+    ])
     .await?;
 
     // sum and max
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 1        |",
-            "| 2        | 3        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 1        |",
+        "| 2        | 3        |",
+        "+----------+----------+",
+    ])
     .await?;
 
     // Insert new data but not refresh index
-    execute_sql(
-        fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
-    )
-    .await?;
+    fixture
+        .execute_command("INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)")
+        .await?;
 
     // Query with one fuse block and one index block
     // sum
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 2        |",
-            "| 2        | 6        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 2        |",
+        "| 2        | 6        |",
+        "+----------+----------+",
+    ])
     .await?;
 
     // sum and max
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| 1        | 2        |",
-            "| 2        | 6        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx.clone(), &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 2        |",
+        "| 2        | 6        |",
+        "+----------+----------+",
+    ])
     .await?;
 
-    drop_index(fixture.ctx(), index_name).await?;
+    drop_index(ctx, index_name).await?;
 
     Ok(())
 }
 
 async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a string) storage_format = '{format}'"),
-    )
-    .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE t (a string) storage_format = '{format}'"
+        ))
+        .await?;
 
     // Insert data
-    execute_sql(fixture.ctx(), "INSERT INTO t VALUES ('1'), ('2')").await?;
+    fixture
+        .execute_command("INSERT INTO t VALUES ('1'), ('2')")
+        .await?;
 
     // Create index
     let index_name = "index1";
 
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"),
-    )
-    .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"
+        ))
+        .await?;
 
     // Refresh Index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("REFRESH AGGREGATING INDEX {index_name}"),
-    )
-    .await?;
+        .execute_command(&format!("REFRESH AGGREGATING INDEX {index_name}"))
+        .await?;
 
     // Query with index
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    let plan = plan_sql(fixture.ctx(), "SELECT a, COUNT(*) from t GROUP BY a").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let plan = plan_sql(ctx.clone(), "SELECT a, COUNT(*) from t GROUP BY a").await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+",
-            "| Column 0 | Column 1 |",
-            "+----------+----------+",
-            "| '1'      | 1        |",
-            "| '2'      | 1        |",
-            "+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| '1'      | 1        |",
+        "| '2'      | 1        |",
+        "+----------+----------+",
+    ])
     .await?;
 
-    drop_index(fixture.ctx(), index_name).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    drop_index(ctx, index_name).await?;
 
     Ok(())
 }
 
 async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()> {
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a string) storage_format = '{format}'"),
-    )
-    .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE t (a string) storage_format = '{format}'"
+        ))
+        .await?;
 
     // Insert data
-    execute_sql(fixture.ctx(), "INSERT INTO t VALUES ('1'), ('21'), ('231')").await?;
+    fixture
+        .execute_command("INSERT INTO t VALUES ('1'), ('21'), ('231')")
+        .await?;
 
     // Create index
     let index_name = "index1";
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
+    fixture.execute_command(
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
     )
         .await?;
 
     // Refresh Index
     fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("REFRESH AGGREGATING INDEX {index_name}"),
-    )
-    .await?;
+        .execute_command(&format!("REFRESH AGGREGATING INDEX {index_name}"))
+        .await?;
 
     // Query with index
-    fixture
-        .ctx()
-        .evict_table_from_cache(CATALOG, DATABASE, "t")?;
+    let ctx = fixture.new_query_ctx().await?;
     let plan = plan_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s",
     )
     .await?;
 
     assert!(is_index_scan_plan(&plan));
 
-    expects_ok(
-        "Index scan",
-        execute_plan(fixture.ctx(), &plan).await,
-        vec![
-            "+----------+----------+----------+",
-            "| Column 0 | Column 1 | Column 2 |",
-            "+----------+----------+----------+",
-            "| '1'      | 1        | '1'      |",
-            "| '2'      | 5        | '21'     |",
-            "+----------+----------+----------+",
-        ],
-    )
+    expects_ok("Index scan", execute_plan(ctx, &plan).await, vec![
+        "+----------+----------+----------+",
+        "| Column 0 | Column 1 | Column 2 |",
+        "+----------+----------+----------+",
+        "| '1'      | 1        | '1'      |",
+        "| '2'      | 5        | '21'     |",
+        "+----------+----------+----------+",
+    ])
     .await?;
 
-    drop_index(fixture.ctx(), index_name).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    drop_index(ctx, index_name).await?;
 
     Ok(())
 }
@@ -799,7 +636,7 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     // Create agg index
     execute_sql(
         ctx.clone(),
-        &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
+        &format!("CREATE ASYNC AGGREGATING INDEX index AS {index_sql}"),
     )
     .await?;
 
@@ -1048,12 +885,12 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",
@@ -1128,6 +965,101 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select sum(a), to_string(b) as bs from t group by bs",
             is_index_scan: true,
         },
+        // query: sort-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select to_string(c + 1) as s from t order by s",
+            index: "select c + 1 from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select b, c from t",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select avg(a + 1) from t group by b order by b",
+            index: "select a + 1, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 and b < 5 order by b",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a, b from t where b > 1",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t where c > 1 group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t where b > 0 group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs order by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 
@@ -1135,9 +1067,12 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
     let spill_settings = if spill {
         Some(HashMap::from([
-            ("spilling_memory_ratio".to_string(), "100".to_string()),
             (
-                "spilling_bytes_threshold_per_proc".to_string(),
+                "aggregate_spilling_memory_ratio".to_string(),
+                "100".to_string(),
+            ),
+            (
+                "aggregate_spilling_bytes_threshold_per_proc".to_string(),
                 "1".to_string(),
             ),
         ]))
@@ -1145,44 +1080,40 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
         None
     };
 
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     for num_blocks in [1, 10] {
         for num_rows_per_block in [1, 50] {
-            let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+            let session = fixture.default_session();
             if let Some(s) = spill_settings.as_ref() {
-                let settings = ctx.get_settings();
+                let settings = session.get_settings();
                 // Make sure the operator will spill the aggregation.
                 settings.set_batch_settings(s)?;
             }
 
-            let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
             // Prepare table and data
             // Create random engine table to generate random data.
-            execute_sql(
-                fixture.ctx(),
-                "CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM",
-            )
-            .await?;
-            execute_sql(
-                fixture.ctx(),
-                &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
-            )
-            .await?;
+            fixture
+                .execute_command("CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM")
+                .await?;
+            fixture
+                .execute_command(&format!(
+                    "CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"
+                ))
+                .await?;
             // Insert random data to table t.
             for _ in 0..num_blocks {
-                execute_sql(
-                    fixture.ctx(),
-                    &format!(
+                fixture
+                    .execute_command(&format!(
                         "INSERT INTO t SELECT * FROM rt LIMIT {}",
                         num_rows_per_block
-                    ),
-                )
-                .await?;
+                    ))
+                    .await?;
             }
 
             // Run fuzz tests with different index block ratios.
             for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
                 for suite in test_suites.iter() {
-                    fuzz(fixture.ctx(), FuzzParams {
+                    fuzz(fixture.new_query_ctx().await?, FuzzParams {
                         query_sql: suite.query.to_string(),
                         index_sql: suite.index.to_string(),
                         is_index_scan: suite.is_index_scan,
@@ -1195,9 +1126,10 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
             }
 
             // Clear data
-            execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-            execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+            fixture.execute_command("DROP TABLE rt ALL").await?;
+            fixture.execute_command("DROP TABLE t ALL").await?;
         }
     }
+
     Ok(())
 }

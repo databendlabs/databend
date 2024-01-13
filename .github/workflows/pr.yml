@@ -122,7 +122,7 @@ jobs:
               return;
             }
             const body = context.payload.pull_request.body;
-            const regex = /I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\//;
+            const regex = /I hereby agree to the terms of the CLA available at: https:\/\/docs.databend.com\/dev\/policies\/cla\//;
             if (!regex.test(body)) {
               core.error('CLA is not signed');
               core.setOutput('cla', 'not-signed');
@@ -143,10 +143,10 @@ jobs:
           token: ${{ github.token }}
           identifier: 'pr-assistant-cla'
           body: |
-            Pull request description must contain [CLA](https://databend.rs/doc/contributing/good-pr) like the following:
+            Pull request description must contain [CLA](https://docs.databend.com/dev/policies/cla/) like the following:
 
             ```
-            I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+            I hereby agree to the terms of the CLA available at: https://docs.databend.com/dev/policies/cla/
 
             ## Summary
 

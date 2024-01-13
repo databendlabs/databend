@@ -14,19 +14,18 @@
 
 use std::collections::HashSet;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
-use crate::binder::scalar_visitor::Recursion;
-use crate::binder::scalar_visitor::ScalarVisitor;
 use crate::optimizer::RelationalProperty;
+use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::WindowFuncType;
+use crate::plans::Visitor;
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -49,27 +48,35 @@ where F: Fn(&ScalarExpr) -> bool
     pub fn scalars(&self) -> &[ScalarExpr] {
         &self.scalars
     }
+
+    pub fn reset_finder(&mut self) {
+        self.scalars.clear()
+    }
+
+    pub fn find_fn(&self) -> &'a F {
+        self.find_fn
+    }
 }
 
-impl<'a, F> ScalarVisitor for Finder<'a, F>
+impl<'a, F> Visitor<'a> for Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    fn pre_visit(mut self, scalar: &ScalarExpr) -> Result<Recursion<Self>> {
-        if (self.find_fn)(scalar) {
-            if !(self.scalars.contains(scalar)) {
-                self.scalars.push((*scalar).clone())
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if (self.find_fn)(expr) {
+            if !(self.scalars.contains(expr)) {
+                self.scalars.push((*expr).clone())
             }
             // stop recursing down this expr once we find a match
-            return Ok(Recursion::Stop(self));
+        } else {
+            walk_expr(self, expr)?;
         }
-
-        Ok(Recursion::Continue(self))
+        Ok(())
     }
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => vec![
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
             split_conjunctions(&func.arguments[0]),
             split_conjunctions(&func.arguments[1]),
         ]
@@ -96,12 +103,14 @@ pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
 /// Helper to determine join condition type from a scalar expression.
 /// Given a query: `SELECT * FROM t(a), t1(b) WHERE a = 1 AND b = 1 AND a = b AND a+b = 1`,
 /// the predicate types are:
+/// - ALL: `true`, `false`: SELECT * FROM t(a), t1(b) ON a = b AND true
 /// - Left: `a = 1`
 /// - Right: `b = 1`
 /// - Both: `a = b`
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
 pub enum JoinPredicate<'a> {
+    ALL(&'a ScalarExpr),
     Left(&'a ScalarExpr),
     Right(&'a ScalarExpr),
     Both {
@@ -121,6 +130,11 @@ impl<'a> JoinPredicate<'a> {
         if contain_subquery(scalar) {
             return Self::Other(scalar);
         }
+
+        if scalar.used_columns().is_empty() {
+            return Self::ALL(scalar);
+        }
+
         if satisfied_by(scalar, left_prop) {
             return Self::Left(scalar);
         }
@@ -168,56 +182,44 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
 
 /// check if the scalar could be constructed by the columns
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
-    if columns.contains(scalar) {
-        return true;
+    struct PruneVisitor<'a> {
+        columns: &'a HashSet<ScalarExpr>,
+        can_prune: bool,
     }
 
-    match scalar {
-        ScalarExpr::BoundColumnRef(_) => false,
-        ScalarExpr::ConstantExpr(_) => true,
-        ScalarExpr::WindowFunction(scalar) => {
-            let flag = match &scalar.func {
-                WindowFuncType::Aggregate(agg) => {
-                    agg.args.iter().all(|arg| prune_by_children(arg, columns))
-                }
-                WindowFuncType::LagLead(f) => {
-                    if let Some(default) = &f.default {
-                        prune_by_children(&f.arg, columns) & prune_by_children(default, columns)
-                    } else {
-                        prune_by_children(&f.arg, columns)
-                    }
-                }
-                WindowFuncType::NthValue(f) => prune_by_children(&f.arg, columns),
-                _ => false,
-            };
-            flag || scalar
-                .partition_by
-                .iter()
-                .all(|arg| prune_by_children(arg, columns))
-                || scalar
-                    .order_by
-                    .iter()
-                    .all(|arg| prune_by_children(&arg.expr, columns))
+    impl<'a> PruneVisitor<'a> {
+        fn new(columns: &'a HashSet<ScalarExpr>) -> Self {
+            Self {
+                columns,
+                can_prune: true,
+            }
         }
-        ScalarExpr::AggregateFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::LambdaFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::FunctionCall(scalar) => scalar
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
-        ScalarExpr::SubqueryExpr(_) => false,
-        ScalarExpr::UDFServerCall(udf) => udf
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
     }
+
+    impl<'a> Visitor<'a> for PruneVisitor<'a> {
+        fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+            if self.columns.contains(expr) {
+                return Ok(());
+            }
+
+            walk_expr(self, expr)
+        }
+
+        fn visit_bound_column_ref(&mut self, _: &'a BoundColumnRef) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+
+        fn visit_subquery(&mut self, _: &'a crate::plans::SubqueryExpr) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+    }
+
+    let mut visitor = PruneVisitor::new(columns);
+    visitor.visit(scalar).unwrap();
+
+    visitor.can_prune
 }
 
 /// Wrap cast scalar to target type

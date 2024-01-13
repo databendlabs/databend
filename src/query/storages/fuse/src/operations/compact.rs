@@ -15,17 +15,20 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::runtime::Runtime;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_sql::executor::MutationKind;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::gen_mutation_stream_operator;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
@@ -33,7 +36,6 @@ use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -45,7 +47,7 @@ pub struct CompactOptions {
     // the snapshot that compactor working on, it never changed during phases compaction.
     pub base_snapshot: Arc<TableSnapshot>,
     pub block_per_seg: usize,
-    pub limit: Option<usize>,
+    pub num_segment_limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -53,6 +55,7 @@ impl FuseTable {
     pub(crate) async fn do_compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self.compact_options(limit).await? {
@@ -63,6 +66,7 @@ impl FuseTable {
 
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
+            lock,
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
@@ -160,7 +164,21 @@ impl FuseTable {
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(ctx.clone(), projection, false, false)?;
+        let block_reader = self.create_block_reader(
+            ctx.clone(),
+            projection,
+            false,
+            self.change_tracking_enabled(),
+            false,
+        )?;
+        let (stream_columns, stream_operators) = if self.change_tracking_enabled() {
+            gen_mutation_stream_operator(
+                self.schema_with_stream(),
+                self.get_table_info().ident.seq,
+            )?
+        } else {
+            (vec![], vec![])
+        };
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -168,6 +186,8 @@ impl FuseTable {
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
+                    stream_columns.clone(),
+                    stream_operators.clone(),
                     output,
                 )
             },
@@ -178,13 +198,14 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
         pipeline.add_transform(
-            |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
+            |input: Arc<databend_common_pipeline_core::processors::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
                     input,
                     output,
                     self,
                     cluster_stats_gen.clone(),
+                    MutationKind::Compact,
                 )?;
                 proc.into_processor()
             },
@@ -225,7 +246,7 @@ impl FuseTable {
         Ok(Some(CompactOptions {
             base_snapshot,
             block_per_seg,
-            limit,
+            num_segment_limit: limit,
         }))
     }
 }

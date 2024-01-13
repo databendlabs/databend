@@ -1,0 +1,5 @@
+{"id":"normal","a":1,"b":1.2}
+{"id":"null_a","a":null,"b":0.9}
+{"id":"null_b","a":1,"b":null}
+{"id":"missing_a", "b":1}
+{"id":"missing_b","a":1}

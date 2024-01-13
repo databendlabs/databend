@@ -1,5 +1,5 @@
 [package]
-name = "storages-common-blocks"
+name = "databend-storages-common-blocks"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,11 +12,11 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../../../common/arrow" }
-common-config = { path = "../../../config" }
-common-exception = { path = "../../../../common/exception" }
-common-expression = { path = "../../../expression" }
+databend-common-arrow = { path = "../../../../common/arrow" }
+databend-common-config = { path = "../../../config" }
+databend-common-exception = { path = "../../../../common/exception" }
+databend-common-expression = { path = "../../../expression" }
 
-storages-common-table-meta = { path = "../table_meta" }
+databend-storages-common-table-meta = { path = "../table_meta" }
 
 [build-dependencies]

@@ -1,0 +1,3 @@
+onlyif mysql
+statement ok
+show metrics

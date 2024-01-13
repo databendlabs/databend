@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use sharing_endpoint::accessor::truncate_root;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_sharing_endpoint::accessor::truncate_root;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_truncate_root() -> Result<()> {

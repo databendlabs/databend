@@ -1,0 +1,42 @@
+statement ok
+DROP STAGE IF EXISTS test_stage
+
+statement ok
+DROP STAGE IF EXISTS test_stage_internal
+
+statement ok
+CREATE STAGE test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement ok
+CREATE STAGE if not exists test_stage url='s3://load/files/' connection=(access_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement error 2502
+CREATE STAGE test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement ok
+CREATE STAGE test_stage_internal file_format=(type=csv compression=AUTO record_delimiter='\n' escape='\\') comments='test'
+
+statement ok
+LIST @test_stage_internal
+
+statement ok
+desc stage test_stage_internal
+
+statement ok
+SHOW STAGES
+
+statement ok
+DROP STAGE test_stage
+
+statement ok
+DROP STAGE test_stage_internal
+
+statement ok
+CREATE STAGE if not exists test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+DROP STAGE test_stage_huggingface
+
+statement ok
+SHOW STAGES
+

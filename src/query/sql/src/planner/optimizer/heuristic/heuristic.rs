@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::LazyLock;
 
-use common_exception::Result;
-use common_expression::FunctionContext;
-use once_cell::sync::Lazy;
+use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::rule::TransformResult;
@@ -25,7 +25,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::MetadataRef;
 
-pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
+pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
@@ -46,6 +46,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
+        RuleID::PushDownFilterWindow,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
         RuleID::SplitAggregate,
@@ -55,8 +56,8 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     ]
 });
 
-pub static RESIDUAL_RULES: Lazy<Vec<RuleID>> =
-    Lazy::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
+pub static RESIDUAL_RULES: LazyLock<Vec<RuleID>> =
+    LazyLock::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
 
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Cost;
 use super::CostModel;
@@ -53,7 +53,7 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         | RelOperator::Window(_)
         | RelOperator::Sort(_)
         | RelOperator::ProjectSet(_)
-        | RelOperator::Lambda(_)
+        | RelOperator::Udf(_)
         | RelOperator::Limit(_) => compute_cost_unary_common_operator(memo, m_expr),
 
         _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),

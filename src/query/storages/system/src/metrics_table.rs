@@ -15,23 +15,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_metrics::reset_global_prometheus_registry;
-use common_metrics::MetricSample;
-use common_metrics::MetricValue;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_metrics::reset_global_prometheus_registry;
+use databend_common_metrics::MetricSample;
+use databend_common_metrics::MetricValue;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -54,8 +54,8 @@ impl SyncSystemTable for MetricsTable {
         let local_id = ctx.get_cluster().local_id.clone();
 
         let mut samples = {
-            let registry = common_metrics::load_global_prometheus_registry();
-            common_metrics::dump_metric_samples(&registry)?
+            let registry = databend_common_metrics::load_global_prometheus_registry();
+            databend_common_metrics::dump_metric_samples(&registry)?
         };
         samples.extend(self.custom_metric_samples()?);
 

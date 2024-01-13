@@ -20,6 +20,9 @@ for bin in databend-query databend-meta; do
 	fi
 done
 
+# Wait for killed process to cleanup resources
+sleep 1
+
 echo 'Start databend-meta...'
 nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."

@@ -1,0 +1,9 @@
+statement ok
+set max_block_size = 1;
+
+# Left Outer join with non-foldable filter on RHS
+statement ok
+select * from numbers(1) tbl(i) left join numbers(2) tbl2(j) on (i=j) where j+rand()<0;
+
+statement ok
+set max_block_size = 65536;

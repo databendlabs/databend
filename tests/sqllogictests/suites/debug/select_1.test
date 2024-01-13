@@ -1,0 +1,81 @@
+# This file use for debug logictest itself.
+
+statement ok
+create database if not exists db1
+
+statement ok
+use db1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a)
+
+query TI
+select 'aa bb', 1
+----
+aa bb 1
+
+statement ok
+set max_threads = 100
+
+# query TTTRRTIIII
+# SELECT * FROM system.tables WHERE database='db1'
+# ----
+# db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
+
+statement ok
+drop database db1
+
+statement ok
+use default
+
+statement ok
+drop table if exists t4
+
+statement ok
+create table if not exists t4(a float, b float, c varchar, d bool)
+
+statement ok
+insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false )
+
+query FFTB
+select a,b,c,d from t4
+----
+1.0 10.224 xxdsfs 0
+
+# ----  http
+# 1.0 10.224 xxdsfs false
+
+statement ok
+drop table t4
+
+statement ok
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
+
+query III
+select number, number + 1, number + 999 from numbers(10)
+----
+ 0     1   999
+ 1     2  1000
+ 2     3  1001
+ 3     4  1002
+ 4     5  1003
+ 5     6  1004
+ 6     7  1005
+ 7     8  1006
+ 8     9  1007
+ 9    10  1008
+
+query I
+select 1
+----
+1
+
+
+query I
+select 1
+----
+1
+
+statement ok
+drop table if exists t1
+

@@ -17,16 +17,16 @@ use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_catalog::plan::StageTableInfo;
-use common_compress::CompressAlgorithm;
-use common_compress::CompressCodec;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::CompressCodec;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
 use crate::row_based_file::buffers::FileOutputBuffers;

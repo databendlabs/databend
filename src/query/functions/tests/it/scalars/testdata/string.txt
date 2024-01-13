@@ -234,110 +234,6 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : to_base64('Abc')
-raw expr       : to_base64('Abc')
-checked expr   : to_base64<String>("Abc")
-optimized expr : "QWJj"
-output type    : String
-output domain  : {"QWJj"..="QWJj"}
-output         : 'QWJj'
-
-
-ast            : to_base64('123')
-raw expr       : to_base64('123')
-checked expr   : to_base64<String>("123")
-optimized expr : "MTIz"
-output type    : String
-output domain  : {"MTIz"..="MTIz"}
-output         : 'MTIz'
-
-
-ast            : to_base64(Null)
-raw expr       : to_base64(NULL)
-checked expr   : to_base64<String NULL>(CAST(NULL AS String NULL))
-optimized expr : NULL
-output type    : String NULL
-output domain  : {NULL}
-output         : NULL
-
-
-ast            : to_base64(a)
-raw expr       : to_base64(a::String)
-checked expr   : to_base64<String>(a)
-evaluation:
-+--------+-----------------+--------+
-|        | a               | Output |
-+--------+-----------------+--------+
-| Type   | String          | String |
-| Domain | {"123"..="Abc"} | {""..} |
-| Row 0  | 'Abc'           | 'QWJj' |
-| Row 1  | '123'           | 'MTIz' |
-+--------+-----------------+--------+
-evaluation (internal):
-+--------+---------------------------------------------------------------+
-| Column | Data                                                          |
-+--------+---------------------------------------------------------------+
-| a      | StringColumn { data: 0x416263313233, offsets: [0, 3, 6] }     |
-| Output | StringColumn { data: 0x51574a6a4d54497a, offsets: [0, 4, 8] } |
-+--------+---------------------------------------------------------------+
-
-
-ast            : from_base64('QWJj')
-raw expr       : from_base64('QWJj')
-checked expr   : from_base64<String>("QWJj")
-optimized expr : "Abc"
-output type    : String
-output domain  : {"Abc"..="Abc"}
-output         : 'Abc'
-
-
-ast            : from_base64('MTIz')
-raw expr       : from_base64('MTIz')
-checked expr   : from_base64<String>("MTIz")
-optimized expr : "123"
-output type    : String
-output domain  : {"123"..="123"}
-output         : '123'
-
-
-ast            : from_base64(Null)
-raw expr       : from_base64(NULL)
-checked expr   : from_base64<String NULL>(CAST(NULL AS String NULL))
-optimized expr : NULL
-output type    : String NULL
-output domain  : {NULL}
-output         : NULL
-
-
-ast            : from_base64(a)
-raw expr       : from_base64(a::String)
-checked expr   : from_base64<String>(a)
-evaluation:
-+--------+-------------------+---------+
-|        | a                 | Output  |
-+--------+-------------------+---------+
-| Type   | String            | String  |
-| Domain | {"MTIz"..="QWJj"} | Unknown |
-| Row 0  | 'QWJj'            | 'Abc'   |
-| Row 1  | 'MTIz'            | '123'   |
-+--------+-------------------+---------+
-evaluation (internal):
-+--------+---------------------------------------------------------------+
-| Column | Data                                                          |
-+--------+---------------------------------------------------------------+
-| a      | StringColumn { data: 0x51574a6a4d54497a, offsets: [0, 4, 8] } |
-| Output | StringColumn { data: 0x416263313233, offsets: [0, 3, 6] }     |
-+--------+---------------------------------------------------------------+
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | from_base64('!@#')
-  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. while evaluating function `from_base64('!@#')`
-
-
-
 ast            : quote('a\0b')
 raw expr       : quote('a b')
 checked expr   : quote<String>("a\0b")
@@ -499,28 +395,28 @@ output         : ''
 ast            : reverse('你好')
 raw expr       : reverse('你好')
 checked expr   : reverse<String>("你好")
-optimized expr : 0xbda5e5a0bde4
+optimized expr : BDA5E5A0BDE4
 output type    : String
 output domain  : {"��堽�"..="��堽�"}
-output         : 0xbda5e5a0bde4
+output         : BDA5E5A0BDE4
 
 
 ast            : reverse('ß😀山')
 raw expr       : reverse('ß😀山')
 checked expr   : reverse<String>("ß😀山")
-optimized expr : 0xb1b1e580989ff09fc3
+optimized expr : B1B1E580989FF09FC3
 output type    : String
 output domain  : {"��倘���"..="��倘���"}
-output         : 0xb1b1e580989ff09fc3
+output         : B1B1E580989FF09FC3
 
 
 ast            : reverse('Dobrý den')
 raw expr       : reverse('Dobrý den')
 checked expr   : reverse<String>("Dobrý den")
-optimized expr : 0x6e656420bdc372626f44
+optimized expr : 6E656420BDC372626F44
 output type    : String
 output domain  : {"ned ��rboD"..="ned ��rboD"}
-output         : 0x6e656420bdc372626f44
+output         : 6E656420BDC372626F44
 
 
 ast            : reverse(Null)
@@ -2023,7 +1919,7 @@ error:
 
 ast            : hex(a)
 raw expr       : hex(a::Int8)
-checked expr   : hex<Int64>(to_int64<Int8>(a))
+checked expr   : to_hex<Int64>(to_int64<Int8>(a))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -2045,7 +1941,7 @@ evaluation (internal):
 
 ast            : hex(a2)
 raw expr       : hex(a2::UInt8 NULL)
-checked expr   : hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : to_hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2067,7 +1963,7 @@ evaluation (internal):
 
 ast            : hex(b)
 raw expr       : hex(b::Int16)
-checked expr   : hex<Int64>(to_int64<Int16>(b))
+checked expr   : to_hex<Int64>(to_int64<Int16>(b))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2089,7 +1985,7 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(c::UInt32)
-checked expr   : hex<Int64>(to_int64<UInt32>(c))
+checked expr   : to_hex<Int64>(to_int64<UInt32>(c))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2113,19 +2009,21 @@ error:
   --> SQL:1:1
   |
 1 | hex(d)
-  | ^^^^^^ no overload satisfies `hex(Float64)`
+  | ^^^^^^ no overload satisfies `to_hex(Float64)`
 
 has tried possible overloads:
-  hex(String) :: String            : unable to unify `Float64` with `String`
-  hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
-  hex(Int64) :: String             : unable to unify `Float64` with `Int64`
-  hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
+  to_hex(String) :: String            : unable to unify `Float64` with `String`
+  to_hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
+  to_hex(Int64) :: String             : unable to unify `Float64` with `Int64`
+  to_hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
+  to_hex(Binary) :: String            : unable to unify `Float64` with `Binary`
+  to_hex(Binary NULL) :: String NULL  : unable to unify `Float64` with `Binary`
 
 
 
 ast            : hex(e)
 raw expr       : hex(e::String)
-checked expr   : hex<String>(e)
+checked expr   : to_hex<String>(e)
 evaluation:
 +--------+-----------------+--------------------+
 |        | e               | Output             |
@@ -2142,59 +2040,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------+
 | e      | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
 | Output | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
-+--------+------------------------------------------------------------------------------------------------------------+
-
-
-ast            : unhex('6461746162656e64')
-raw expr       : unhex('6461746162656e64')
-checked expr   : unhex<String>("6461746162656e64")
-optimized expr : "databend"
-output type    : String
-output domain  : {"databend"..="databend"}
-output         : 'databend'
-
-
-ast            : unhex(hex(s))
-raw expr       : unhex(hex(s::String))
-checked expr   : unhex<String>(hex<String>(s))
-evaluation:
-+--------+-----------------+------------+
-|        | s               | Output     |
-+--------+-----------------+------------+
-| Type   | String          | String     |
-| Domain | {"abc"..="def"} | Unknown    |
-| Row 0  | 'abc'           | 'abc'      |
-| Row 1  | 'def'           | 'def'      |
-| Row 2  | 'databend'      | 'databend' |
-+--------+-----------------+------------+
-evaluation (internal):
-+--------+-------------------------------------------------------------------------------+
-| Column | Data                                                                          |
-+--------+-------------------------------------------------------------------------------+
-| s      | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] } |
-| Output | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] } |
-+--------+-------------------------------------------------------------------------------+
-
-
-ast            : unhex(s)
-raw expr       : unhex(s::String)
-checked expr   : unhex<String>(s)
-evaluation:
-+--------+-----------------------+------------+
-|        | s                     | Output     |
-+--------+-----------------------+------------+
-| Type   | String                | String     |
-| Domain | {"616263"..="646566"} | Unknown    |
-| Row 0  | '616263'              | 'abc'      |
-| Row 1  | '646566'              | 'def'      |
-| Row 2  | '6461746162656e64'    | 'databend' |
-+--------+-----------------------+------------+
-evaluation (internal):
-+--------+------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                       |
-+--------+------------------------------------------------------------------------------------------------------------+
-| s      | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
-| Output | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
 +--------+------------------------------------------------------------------------------------------------------------+
 
 
@@ -2485,6 +2330,68 @@ evaluation (internal):
 | c      | StringColumn { data: 0x3f78626271, offsets: [0, 1, 2, 4, 5] }         |
 | Output | StringColumn { data: 0x683f787374626271, offsets: [0, 2, 5, 7, 8] }   |
 +--------+-----------------------------------------------------------------------+
+
+
+ast            : translate('abcdefabcdef', 'dc', 'zy')
+raw expr       : translate('abcdefabcdef', 'dc', 'zy')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "zy")
+optimized expr : "abyzefabyzef"
+output type    : String
+output domain  : {"abyzefabyzef"..="abyzefabyzef"}
+output         : 'abyzefabyzef'
+
+
+ast            : translate('abcdefabcdef', '', 'zy')
+raw expr       : translate('abcdefabcdef', '', 'zy')
+checked expr   : translate<String, String, String>("abcdefabcdef", "", "zy")
+optimized expr : "abcdefabcdef"
+output type    : String
+output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output         : 'abcdefabcdef'
+
+
+ast            : translate('abcdefabcdef', 'dc', '')
+raw expr       : translate('abcdefabcdef', 'dc', '')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "")
+optimized expr : "abefabef"
+output type    : String
+output domain  : {"abefabef"..="abefabef"}
+output         : 'abefabef'
+
+
+ast            : translate('abcdefabcdef', 'dc', 'dc')
+raw expr       : translate('abcdefabcdef', 'dc', 'dc')
+checked expr   : translate<String, String, String>("abcdefabcdef", "dc", "dc")
+optimized expr : "abcdefabcdef"
+output type    : String
+output domain  : {"abcdefabcdef"..="abcdefabcdef"}
+output         : 'abcdefabcdef'
+
+
+ast            : translate(a, b, c)
+raw expr       : translate(a::String, b::String, c::String)
+checked expr   : translate<String, String, String>(a, b, c)
+optimized expr : translate<String, String, String>("abcdef", b, c)
+evaluation:
++--------+-----------------------+-------------+-------------+----------+
+|        | a                     | b           | c           | Output   |
++--------+-----------------------+-------------+-------------+----------+
+| Type   | String                | String      | String      | String   |
+| Domain | {"abcdef"..="abcdef"} | {""..="dc"} | {""..="zy"} | {""..}   |
+| Row 0  | 'abcdef'              | 'dc'        | 'zy'        | 'abyzef' |
+| Row 1  | 'abcdef'              | ''          | 'zy'        | 'abcdef' |
+| Row 2  | 'abcdef'              | 'dc'        | ''          | 'abef'   |
+| Row 3  | 'abcdef'              | 'dc'        | 'dc'        | 'abcdef' |
++--------+-----------------------+-------------+-------------+----------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616263646566616263646566616263646566616263646566, offsets: [0, 6, 12, 18, 24] } |
+| b      | StringColumn { data: 0x646364636463, offsets: [0, 2, 2, 4, 6] }                                        |
+| c      | StringColumn { data: 0x7a797a796463, offsets: [0, 2, 4, 4, 6] }                                        |
+| Output | StringColumn { data: 0x6162797a656661626364656661626566616263646566, offsets: [0, 6, 12, 16, 22] }     |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : strcmp('text', 'text2')

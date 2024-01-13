@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -74,10 +74,14 @@ impl Operator for UnionAll {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = vec![];
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
@@ -88,7 +92,7 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
@@ -120,16 +124,55 @@ impl Operator for UnionAll {
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
+        let required = required.clone();
+        let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+        if left_physical_prop.distribution == Distribution::Serial
+            || right_physical_prop.distribution == Distribution::Serial
+            || required.distribution == Distribution::Serial
+        {
+            Ok(RequiredProperty {
+                distribution: Distribution::Serial,
+            })
+        } else {
+            Ok(RequiredProperty {
+                distribution: Distribution::Random,
+            })
+        }
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut children_required = vec![];
+
         let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
         if left_physical_prop.distribution == Distribution::Serial
             || right_physical_prop.distribution == Distribution::Serial
         {
-            required.distribution = Distribution::Serial;
-        } else if left_physical_prop.distribution == right_physical_prop.distribution {
-            required.distribution = left_physical_prop.distribution;
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+            ]);
+        } else {
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Any,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Any,
+                },
+            ]);
         }
-        Ok(required)
+
+        Ok(children_required)
     }
 }

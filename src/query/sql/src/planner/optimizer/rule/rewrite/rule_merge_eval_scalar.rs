@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -93,7 +93,7 @@ impl Rule for RuleMergeEvalScalar {
             let items = up_eval_scalar
                 .items
                 .into_iter()
-                .chain(down_eval_scalar.items.into_iter())
+                .chain(down_eval_scalar.items)
                 .collect();
             let merged = EvalScalar { items };
 

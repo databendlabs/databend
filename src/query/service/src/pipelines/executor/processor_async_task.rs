@@ -15,32 +15,35 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio::time::sleep;
-use common_base::runtime::catch_unwind;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
+use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_condvar::WorkersCondvar;
-use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    inner: BoxFuture<'static, Result<()>>,
+    inner: BoxFuture<'static, (Duration, Result<()>)>,
 }
 
 impl ProcessorAsyncTask {
@@ -50,6 +53,7 @@ impl ProcessorAsyncTask {
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
+        weak_executor: Weak<PipelineExecutor>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -71,24 +75,43 @@ impl ProcessorAsyncTask {
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
+            let mut log_graph = false;
 
             loop {
                 let interval = Box::pin(sleep(Duration::from_secs(5)));
                 match futures::future::select(interval, inner).await {
                     Either::Left((_, right)) => {
                         inner = right;
+                        let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
-                        warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
-                            query_id,
-                            processor_id,
-                            processor_name,
-                            start.elapsed(),
-                            active_workers,
-                        );
+                        match elapsed >= Duration::from_secs(200)
+                            && active_workers == 0
+                            && !log_graph
+                        {
+                            false => {
+                                warn!(
+                                    "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
+                                    query_id, processor_id, processor_name, elapsed, active_workers
+                                );
+                            }
+                            true => {
+                                log_graph = true;
+                                if let Some(executor) = weak_executor.upgrade() {
+                                    error!(
+                                        "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
+                                        query_id,
+                                        processor_id,
+                                        processor_name,
+                                        elapsed,
+                                        active_workers,
+                                        executor.graph.format_graph_nodes()
+                                    );
+                                }
+                            }
+                        };
                     }
                     Either::Right((res, _)) => {
-                        return res;
+                        return (start.elapsed(), res);
                     }
                 }
             }
@@ -116,17 +139,22 @@ impl Future for ProcessorAsyncTask {
 
         match catch_unwind(move || inner.poll(cx)) {
             Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(res)) => {
+            Ok(Poll::Ready((elapsed, res))) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        Some(elapsed),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), None),
                 );
 
                 Poll::Ready(())

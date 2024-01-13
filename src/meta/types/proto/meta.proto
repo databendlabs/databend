@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -176,6 +176,23 @@ message StreamItem {
   optional SeqV value = 2;
 }
 
+message SnapshotChunkRequest {
+  uint64 ver = 100;
+
+  // json serialized meta data, including vote and snapshot_meta.
+  // ```text
+  // { vote: Vote, meta: SnapshotMeta }
+  // ```
+  string rpc_meta = 10;
+
+  SnapshotChunkV1 chunk = 20;
+}
+
+message SnapshotChunkV1 {
+  uint64 offset = 10;
+  bool done = 11;
+  bytes data = 12;
+}
 
 service RaftService {
 
@@ -190,6 +207,7 @@ service RaftService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
+  rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
   rpc Vote(RaftRequest) returns (RaftReply);
 }
 
@@ -200,7 +218,7 @@ service MetaService {
   // General KV API for get, mget, list, and upsert;
   // It is introduced to replace `WriteMsg` and `ReadMsg`.
   //
-  // Since: 0.8.35; 2022-09-14
+  // 2022-09-14: since: 0.8.35
   rpc KvApi(RaftRequest) returns (RaftReply);
 
   // Handle application read request.
@@ -210,6 +228,8 @@ service MetaService {
   // It returns a stream of `StreamItem`.
   // - For single-reply request, the stream contains only one item, e.g. `Get`.
   // - For multi-reply request, the stream contains multiple items, e.g. `MGet` and `List`.
+  //
+  // 2023-10-17: since 1.2.163
   rpc KvReadV1(RaftRequest) returns (stream StreamItem);
 
   // Export all meta data.

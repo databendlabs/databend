@@ -14,9 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_profile::SharedProcessorProfiles;
+use databend_common_exception::Result;
+use databend_common_profile::SharedProcessorProfiles;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -61,12 +60,7 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan, enable_profiling).await
     } else {
-        if enable_profiling {
-            return Err(ErrorCode::Unimplemented(
-                "Query profiling is not supported in distributed mode",
-            ));
-        }
-        build_distributed_pipeline(ctx, plan, enable_profiling).await
+        build_distributed_pipeline(ctx, plan, false).await
     }?;
     Ok(build_res)
 }
@@ -84,6 +78,7 @@ pub async fn build_local_pipeline(
         ctx.clone(),
         enable_profiling,
         SharedProcessorProfiles::default(),
+        vec![],
     );
     let mut build_res = pipeline.finalize(plan)?;
 

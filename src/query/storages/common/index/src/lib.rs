@@ -26,4 +26,5 @@ pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
 pub use index::Index;
 pub use page_index::PageIndex;
+pub use range_index::statistics_to_domain;
 pub use range_index::RangeIndex;

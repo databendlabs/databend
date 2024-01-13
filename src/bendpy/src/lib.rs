@@ -23,13 +23,13 @@ mod utils;
 use std::env;
 use std::path::Path;
 
-use common_config::Config;
-use common_config::InnerConfig;
-use common_license::license_manager::LicenseManager;
-use common_license::license_manager::OssLicenseManager;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_embedded::MetaEmbedded;
+use databend_common_config::Config;
+use databend_common_config::InnerConfig;
+use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_embedded::MetaEmbedded;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
@@ -54,7 +54,7 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
         MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
             .await
             .unwrap();
-        GlobalServices::init(conf.clone()).await.unwrap();
+        GlobalServices::init(&conf).await.unwrap();
 
         // init oss license manager
         OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();

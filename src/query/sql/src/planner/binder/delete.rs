@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::DeleteStmt;
-use common_ast::ast::Expr;
-use common_ast::ast::TableReference;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ROW_ID_COL_NAME;
+use databend_common_ast::ast::DeleteStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::TableReference;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
@@ -35,6 +35,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ScalarExpr;
 
@@ -98,6 +99,16 @@ impl<'a> Binder {
             .process_selection(selection, table_expr, &mut scalar_binder)
             .await?;
 
+        if let Some(selection) = &selection {
+            if !self.check_allowed_scalar_expr_with_subquery(selection)? {
+                return Err(ErrorCode::SemanticError(
+                    "selection in delete statement can't contain window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(selection.span()));
+            }
+        }
+
         let plan = DeletePlan {
             catalog_name,
             database_name,
@@ -114,7 +125,6 @@ impl Binder {
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        scalar: &ScalarExpr,
         subquery_expr: &SubqueryExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
@@ -130,7 +140,7 @@ impl Binder {
         outer_columns.extend(subquery_expr.outer_columns.iter());
 
         let filter = Filter {
-            predicates: vec![scalar.clone()],
+            predicates: vec![subquery_expr.clone().into()],
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {
@@ -184,35 +194,25 @@ impl Binder {
         table_expr: SExpr,
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
-        match scalar {
-            ScalarExpr::FunctionCall(scalar) => {
-                for arg in scalar.arguments.iter() {
-                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
-                        .await?;
-                }
-            }
-            ScalarExpr::CastExpr(scalar) => {
-                self.subquery_desc(scalar.argument.as_ref(), table_expr, subquery_desc)
-                    .await?;
-            }
-            ScalarExpr::SubqueryExpr(subquery) => {
-                let desc = self
-                    .process_subquery(scalar, subquery, table_expr.clone())
-                    .await?;
-                subquery_desc.push(desc);
-            }
-            ScalarExpr::UDFServerCall(scalar) => {
-                for arg in scalar.arguments.iter() {
-                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
-                        .await?;
-                }
-            }
-            ScalarExpr::BoundColumnRef(_)
-            | ScalarExpr::ConstantExpr(_)
-            | ScalarExpr::WindowFunction(_)
-            | ScalarExpr::AggregateFunction(_)
-            | ScalarExpr::LambdaFunction(_) => {}
+        struct FindSubqueryVisitor<'a> {
+            subqueries: Vec<&'a SubqueryExpr>,
         }
+
+        impl<'a> Visitor<'a> for FindSubqueryVisitor<'a> {
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                self.subqueries.push(subquery);
+                Ok(())
+            }
+        }
+
+        let mut find_subquery = FindSubqueryVisitor { subqueries: vec![] };
+        find_subquery.visit(scalar)?;
+
+        for subquery in find_subquery.subqueries {
+            let desc = self.process_subquery(subquery, table_expr.clone()).await?;
+            subquery_desc.push(desc);
+        }
+
         Ok(())
     }
 }

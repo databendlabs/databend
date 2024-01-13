@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::block_debug::assert_blocks_eq;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::assert_blocks_eq;
 use databend_query::servers::MySQLFederated;
 
 #[test]

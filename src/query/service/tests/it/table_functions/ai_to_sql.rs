@@ -12,9 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_catalog::table_args::TableArgs;
-use common_exception::Result;
-use common_expression::Scalar;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_query::table_functions::GPT2SQLTable;
 
 #[test]

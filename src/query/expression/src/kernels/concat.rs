@@ -15,16 +15,18 @@
 use std::iter::TrustedLen;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -33,6 +35,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::MapType;
@@ -94,23 +97,27 @@ impl DataBlock {
 
 impl Column {
     pub fn concat_columns<I: Iterator<Item = Column> + TrustedLen + Clone>(
-        mut columns: I,
+        columns: I,
     ) -> Result<Column> {
         let (_, size) = columns.size_hint();
         match size {
-            None => Err(ErrorCode::EmptyData("Can't concat empty columns")),
-            Some(1) => Ok(columns.next().unwrap()),
-            _ => Ok(Self::concat_none_empty(columns)),
+            Some(0) => Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            _ => Self::concat_columns_impl(columns),
         }
     }
 
-    pub fn concat_none_empty<I: Iterator<Item = Column> + TrustedLen + Clone>(
+    pub fn concat_columns_impl<I: Iterator<Item = Column> + TrustedLen + Clone>(
         columns: I,
-    ) -> Column {
+    ) -> Result<Column> {
         let mut columns_iter_clone = columns.clone();
-        let first_column = columns_iter_clone.next().unwrap();
+        let first_column = match columns_iter_clone.next() {
+            // Even if `columns.size_hint()`'s upper bound is `Some(a)` (a != 0),
+            // it's possible that `columns`'s len is 0.
+            None => return Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            Some(col) => col,
+        };
         let capacity = columns_iter_clone.fold(first_column.len(), |acc, x| acc + x.len());
-        match first_column {
+        let column = match first_column {
             Column::Null { .. } => Column::Null { len: capacity },
             Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
             Column::EmptyMap { .. } => Column::EmptyMap { len: capacity },
@@ -236,6 +243,10 @@ impl Column {
                 columns.map(|col| col.into_boolean().unwrap()),
                 capacity,
             )),
+            Column::Binary(_) => BinaryType::upcast_column(Self::concat_binary_types(
+                columns.map(|col| col.into_binary().unwrap()),
+                capacity,
+            )),
             Column::String(_) => StringType::upcast_column(Self::concat_string_types(
                 columns.map(|col| col.into_string().unwrap()),
                 capacity,
@@ -294,7 +305,7 @@ impl Column {
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
-            Column::Bitmap(_) => BitmapType::upcast_column(Self::concat_string_types(
+            Column::Bitmap(_) => BitmapType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_bitmap().unwrap()),
                 capacity,
             )),
@@ -303,7 +314,7 @@ impl Column {
                     .clone()
                     .map(|col| col.into_nullable().unwrap().column)
                     .collect();
-                let column = Self::concat_none_empty(column.into_iter());
+                let column = Self::concat_columns_impl(column.into_iter())?;
                 let validity = Column::Boolean(Self::concat_boolean_types(
                     columns.map(|col| col.into_nullable().unwrap().validity),
                     capacity,
@@ -318,16 +329,17 @@ impl Column {
                             .clone()
                             .map(|col| col.into_tuple().unwrap()[idx].clone())
                             .collect();
-                        Self::concat_none_empty(column.into_iter())
+                        Self::concat_columns_impl(column.into_iter())
                     })
-                    .collect();
+                    .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
-            Column::Variant(_) => VariantType::upcast_column(Self::concat_string_types(
+            Column::Variant(_) => VariantType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_variant().unwrap()),
                 capacity,
             )),
-        }
+        };
+        Ok(column)
     }
 
     pub fn concat_primitive_types<T>(
@@ -344,12 +356,12 @@ impl Column {
         builder
     }
 
-    pub fn concat_string_types(
-        cols: impl Iterator<Item = StringColumn> + Clone,
+    pub fn concat_binary_types(
+        cols: impl Iterator<Item = BinaryColumn> + Clone,
         num_rows: usize,
-    ) -> StringColumn {
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+    ) -> BinaryColumn {
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut offsets_len = 0;
         let mut data_size = 0;
@@ -359,7 +371,7 @@ impl Column {
             *offsets.get_unchecked_mut(offsets_len) = 0;
             offsets_len += 1;
             for col in cols.clone() {
-                let mut start = 0;
+                let mut start = col.offsets()[0];
                 for end in col.offsets()[1..].iter() {
                     data_size += end - start;
                     start = *end;
@@ -376,44 +388,78 @@ impl Column {
 
         unsafe {
             for col in cols {
-                let col_data = col.data().as_slice();
+                let offsets = col.offsets();
+                let col_data = &(col.data().as_slice())
+                    [offsets[0] as usize..offsets[offsets.len() - 1] as usize];
                 copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
     }
 
-    pub fn concat_boolean_types(cols: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
+    pub fn concat_string_types(
+        cols: impl Iterator<Item = StringColumn> + Clone,
+        num_rows: usize,
+    ) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::concat_binary_types(
+                cols.map(Into::into),
+                num_rows,
+            ))
+        }
+    }
+
+    pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_len = 0;
+        let mut builder_ptr = builder.as_mut_ptr();
+        let mut builder_idx = 0;
         let mut unset_bits = 0;
-        let mut value = 0;
-        let mut i = 0;
+        let mut buf = 0;
 
         unsafe {
-            for col in cols {
-                for item in col.iter() {
-                    if item {
-                        value |= BIT_MASK[i % 8];
-                    } else {
-                        unset_bits += 1;
-                    }
-                    i += 1;
-                    if i % 8 == 0 {
-                        *builder.get_unchecked_mut(builder_len) = value;
-                        builder_len += 1;
-                        value = 0;
+            for bitmap in bitmaps {
+                let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
+                let mut idx = 0;
+                let len = bitmap.len();
+                if builder_idx % 8 != 0 {
+                    while idx < len {
+                        if bitmap.get_bit_unchecked(idx) {
+                            buf |= BIT_MASK[builder_idx % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        builder_idx += 1;
+                        idx += 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
+                            buf = 0;
+                            break;
+                        }
                     }
                 }
+                let remaining = len - idx;
+                if remaining > 0 {
+                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                        &mut builder_ptr,
+                        bitmap_slice,
+                        builder_idx,
+                        idx + bitmap_offset,
+                        remaining,
+                    );
+                    builder_idx += remaining;
+                    unset_bits += cur_unset_bits;
+                    buf = cur_buf;
+                }
             }
-            if i % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = value;
-                builder_len += 1;
+
+            if builder_idx % 8 != 0 {
+                store_advance_aligned(buf, &mut builder_ptr);
             }
-            builder.set_len(builder_len);
+
+            set_vec_len_by_ptr(&mut builder, builder_ptr);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()

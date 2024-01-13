@@ -1,5 +1,5 @@
 # IntelliJ project files
-.idea/*
+**/.idea/*
 
 # visual studio code files
 .vscode
@@ -75,3 +75,6 @@ benchmark/clickbench/results
 
 # z3
 **/.z3-trace
+
+# lychee
+.lycheecache

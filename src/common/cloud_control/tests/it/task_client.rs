@@ -12,27 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_cloud_control::pb::task::Status::Suspended;
-use common_cloud_control::pb::task_service_client::TaskServiceClient;
-use common_cloud_control::pb::task_service_server::TaskService;
-use common_cloud_control::pb::task_service_server::TaskServiceServer;
-use common_cloud_control::pb::AlterTaskRequest;
-use common_cloud_control::pb::AlterTaskResponse;
-use common_cloud_control::pb::CreateTaskRequest;
-use common_cloud_control::pb::CreateTaskResponse;
-use common_cloud_control::pb::DescribeTaskRequest;
-use common_cloud_control::pb::DescribeTaskResponse;
-use common_cloud_control::pb::DropTaskRequest;
-use common_cloud_control::pb::DropTaskResponse;
-use common_cloud_control::pb::ExecuteTaskRequest;
-use common_cloud_control::pb::ExecuteTaskResponse;
-use common_cloud_control::pb::ShowTaskRunsRequest;
-use common_cloud_control::pb::ShowTaskRunsResponse;
-use common_cloud_control::pb::ShowTasksRequest;
-use common_cloud_control::pb::ShowTasksResponse;
-use common_cloud_control::pb::Task;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_cloud_control::pb::task::Status::Suspended;
+use databend_common_cloud_control::pb::task_service_client::TaskServiceClient;
+use databend_common_cloud_control::pb::task_service_server::TaskService;
+use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
+use databend_common_cloud_control::pb::AlterTaskRequest;
+use databend_common_cloud_control::pb::AlterTaskResponse;
+use databend_common_cloud_control::pb::CreateTaskRequest;
+use databend_common_cloud_control::pb::CreateTaskResponse;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
+use databend_common_cloud_control::pb::DescribeTaskResponse;
+use databend_common_cloud_control::pb::DropTaskRequest;
+use databend_common_cloud_control::pb::DropTaskResponse;
+use databend_common_cloud_control::pb::ExecuteTaskRequest;
+use databend_common_cloud_control::pb::ExecuteTaskResponse;
+use databend_common_cloud_control::pb::ShowTaskRunsRequest;
+use databend_common_cloud_control::pb::ShowTaskRunsResponse;
+use databend_common_cloud_control::pb::ShowTasksRequest;
+use databend_common_cloud_control::pb::ShowTasksResponse;
+use databend_common_cloud_control::pb::Task;
+use databend_common_exception::Result;
 use tonic::codegen::tokio_stream;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
@@ -76,6 +76,8 @@ impl TaskService for MockTaskService {
                 created_at: Default::default(),
                 updated_at: Default::default(),
                 last_suspended_at: None,
+                after: vec![],
+                when_condition: None,
             }),
             error: None,
         }))
@@ -171,6 +173,8 @@ async fn test_task_client_success_cases() -> Result<()> {
         warehouse_options: None,
         suspend_task_after_num_failures: None,
         if_not_exist: false,
+        after: vec![],
+        when_condition: None,
     });
 
     let response = client.create_task(request).await?;

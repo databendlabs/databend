@@ -14,6 +14,7 @@
 
 pub mod any;
 pub mod array;
+pub mod binary;
 pub mod bitmap;
 pub mod boolean;
 pub mod date;
@@ -30,16 +31,18 @@ pub mod string;
 pub mod timestamp;
 pub mod variant;
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
+pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
@@ -61,6 +64,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -70,6 +74,7 @@ pub enum DataType {
     EmptyArray,
     EmptyMap,
     Boolean,
+    Binary,
     String,
     Number(NumberDataType),
     Decimal(DecimalDataType),
@@ -284,11 +289,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar;
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
+    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
@@ -309,26 +314,25 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///     builder.push(...);
     /// }
     /// ```
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder>;
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize;
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>>;
+    fn column_len(col: &Self::Column) -> usize;
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
 
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a>;
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
@@ -338,12 +342,67 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 
-    fn scalar_memory_size<'a>(_: &Self::ScalarRef<'a>) -> usize {
+    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
         std::mem::size_of::<Self::Scalar>()
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
+    }
+
+    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
+    #[inline(always)]
+    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
+        None
+    }
+
+    /// Return the comparison function for the given select operation, some data types not support comparison.
+    #[inline(always)]
+    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
+        match op {
+            SelectOp::Equal => Self::equal,
+            SelectOp::NotEqual => Self::not_equal,
+            SelectOp::Gt => Self::greater_than,
+            SelectOp::Gte => Self::greater_than_equal,
+            SelectOp::Lt => Self::less_than,
+            SelectOp::Lte => Self::less_than_equal,
+        }
+    }
+
+    /// Equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Equal))
+    }
+
+    /// Not equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Equal))
+    }
+
+    /// Greater than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Greater))
+    }
+
+    /// Less than comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        matches!(Self::compare(left, right), Some(Ordering::Less))
+    }
+
+    /// Greater than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Less))
+    }
+
+    /// Less than or equal comparison between two scalars, some data types not support comparison.
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !matches!(Self::compare(left, right), Some(Ordering::Greater))
     }
 }
 

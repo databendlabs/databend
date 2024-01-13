@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_meta_types::Endpoint;
-use common_meta_types::KVMeta;
-use common_meta_types::Membership;
-use common_meta_types::Node;
-use common_meta_types::StoredMembership;
-use common_meta_types::UpsertKV;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use maplit::btreemap;
 use openraft::testing::log_id;
@@ -51,7 +51,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let d = top_level.newest().unwrap().as_ref();
 
-    assert_eq!(top_level.iter_levels().count(), 1);
+    assert_eq!(top_level.iter_arc_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -62,12 +62,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = d
-        .str_map()
-        .range::<str, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (s("a"), Marked::new_with_meta(1, b("a0"), None)),
@@ -98,37 +93,20 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = compacted.newest().unwrap().as_ref();
 
-    let got = d
-        .str_map()
-        .range::<String, _>(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = d.str_map().range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (
             s("a"),
-            Marked::new_with_meta(
-                4,
-                b("a1"),
-                Some(KVMeta {
-                    expire_at: Some(15)
-                })
-            )
+            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expire(15)))
         ),
         (
             s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expire(5)))
         ),
         (
             s("c"),
-            Marked::new_with_meta(
-                3,
-                b("c0"),
-                Some(KVMeta {
-                    expire_at: Some(20)
-                })
-            )
+            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expire(20)))
         ),
     ]);
 
@@ -302,7 +280,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 ///
 ///    | kv             | expire
 ///    | ---            | ---
-/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
+/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
 async fn build_sm_with_expire() -> anyhow::Result<SMV002> {

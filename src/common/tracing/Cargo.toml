@@ -1,5 +1,5 @@
 [package]
-name = "common-tracing"
+name = "databend-common-tracing"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -15,7 +15,7 @@ console = ["console-subscriber", "tracing", "tracing-subscriber"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
+databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
 console-subscriber = { version = "0.2.0", optional = true }
@@ -25,11 +25,12 @@ humantime = "2.1.0"
 log = { workspace = true }
 minitrace = { workspace = true }
 minitrace-opentelemetry = "0.6"
-opentelemetry = { version = "0.20", features = ["trace"] }
-opentelemetry-otlp = { version = "0.13", features = ["trace"] }
+opentelemetry = { version = "0.20", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.13", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry_sdk = { version = "0.20", features = ["trace", "logs", "rt-tokio"] }
 serde = { workspace = true }
-serde_json = "1"
+serde_json = { workspace = true }
 tonic = { workspace = true }
 tracing = { version = "0.1.37", optional = true }
-tracing-appender = "0.2.2"
+tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"], optional = true }

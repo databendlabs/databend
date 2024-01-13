@@ -18,29 +18,29 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Barrier;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::arrow::and_validities;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::with_join_hash_method;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashJoinHashtableLike;
-use common_sql::ColumnSet;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::and_validities;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::with_join_hash_method;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodKind;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_sql::ColumnSet;
+use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -71,6 +71,7 @@ pub struct HashJoinProbeState {
     pub(crate) probe_workers: AtomicUsize,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
+    pub(crate) barrier_count: AtomicUsize,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -108,15 +109,20 @@ impl HashJoinProbeState {
         barrier: Barrier,
         restore_barrier: Barrier,
     ) -> Result<Self> {
-        if matches!(join_type, &JoinType::Right | &JoinType::RightSingle) {
-            probe_schema = probe_schema_wrap_nullable(&probe_schema);
-        }
-        if join_type == &JoinType::Full {
+        if matches!(
+            join_type,
+            &JoinType::Right | &JoinType::RightSingle | &JoinType::Full
+        ) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
         let hash_key_types = probe_keys
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
+            .map(|expr| {
+                expr.as_expr(&BUILTIN_FUNCTIONS)
+                    .data_type()
+                    .remove_nullable()
+                    .clone()
+            })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(HashJoinProbeState {
@@ -135,6 +141,7 @@ impl HashJoinProbeState {
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
+            barrier_count: AtomicUsize::new(0),
         })
     }
 
@@ -162,6 +169,7 @@ impl HashJoinProbeState {
         input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
+        let input_num_rows = input.num_rows();
         let mut _nullable_data_block = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
@@ -170,9 +178,15 @@ impl HashJoinProbeState {
             let nullable_columns = input
                 .columns()
                 .iter()
-                .map(|c| wrap_true_validity(c, input.num_rows(), &probe_state.true_validity))
+                .map(|c| {
+                    wrap_true_validity(
+                        c,
+                        input_num_rows,
+                        &probe_state.generation_state.true_validity,
+                    )
+                })
                 .collect::<Vec<_>>();
-            _nullable_data_block = Some(DataBlock::new(nullable_columns, input.num_rows()));
+            _nullable_data_block = Some(DataBlock::new(nullable_columns, input_num_rows));
             Evaluator::new(
                 _nullable_data_block.as_ref().unwrap(),
                 &probe_state.func_ctx,
@@ -181,7 +195,7 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let probe_keys = self
+        let mut probe_keys = self
             .hash_join_state
             .hash_join_desc
             .probe_keys
@@ -191,49 +205,52 @@ impl HashJoinProbeState {
                 Ok((
                     evaluator
                         .run(expr)?
-                        .convert_to_full_column(return_type, input.num_rows()),
+                        .convert_to_full_column(return_type, input_num_rows),
                     return_type.clone(),
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark {
-            if input.num_rows() > probe_state.markers.as_ref().unwrap().len() {
-                probe_state.markers = Some(vec![MARKER_KIND_FALSE; input.num_rows()]);
-            }
-            if self
+        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
+            && self
                 .hash_join_state
                 .hash_join_desc
                 .other_predicate
                 .is_none()
-            {
-                self.hash_join_state.init_markers(
-                    &probe_keys,
-                    input.num_rows(),
-                    probe_state.markers.as_mut().unwrap(),
-                );
-            }
+        {
+            self.hash_join_state.init_markers(
+                &probe_keys,
+                input_num_rows,
+                probe_state.markers.as_mut().unwrap(),
+            );
         }
 
-        if probe_keys
+        let mut valids = None;
+        if !Self::check_for_eliminate_valids(
+            self.hash_join_state.hash_join_desc.from_correlated_subquery,
+            &self.hash_join_state.hash_join_desc.join_type,
+        ) && probe_keys
             .iter()
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
-            let mut valids = None;
             for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, input.num_rows()));
+                    valids = Some(Bitmap::new_constant(false, input_num_rows));
                     break;
                 } else {
                     valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
-            probe_state.valids = valids;
+        }
+
+        for (col, ty) in probe_keys.iter_mut() {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
         }
 
         let input = input.project(&self.probe_projections);
-        let is_probe_projected = input.num_columns() > 0;
+        probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
         if self.hash_join_state.fast_return.load(Ordering::Relaxed)
             && matches!(
@@ -241,27 +258,76 @@ impl HashJoinProbeState {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, is_probe_projected, &probe_state.true_validity);
+            return self.left_fast_return(
+                input,
+                probe_state.generation_state.is_probe_projected,
+                &probe_state.generation_state.true_validity,
+            );
         }
 
+        // Adaptive early filtering.
+        // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
+        // when all keys have matches. This allows us to achieve the same performance as before.
+        probe_state.num_keys += if let Some(valids) = &valids {
+            (valids.len() - valids.unset_bits()) as u64
+        } else {
+            input_num_rows as u64
+        };
+        let prefer_early_filtering =
+            (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
+
+        // Probe:
+        // (1) INNER / RIGHT / RIGHT SINGLE / RIGHT SEMI / RIGHT ANTI / RIGHT MARK / LEFT SEMI / LEFT MARK
+        //        prefer_early_filtering is true  => early_filtering_probe_with_selection
+        //        prefer_early_filtering is false => probe
+        // (2) LEFT / LEFT SINGLE / LEFT ANTI / FULL
+        //        prefer_early_filtering is true  => early_filtering_probe
+        //        prefer_early_filtering is false => probe
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
+                // Build `keys` and get the hashes of `keys`.
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let (keys_iter, mut hashes) =
-                    table.hash_method.build_keys_iter_and_hashes(&keys_state)?;
-                // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-                table.hash_table.probe(&mut hashes);
-                self.result_blocks(
-                    &table.hash_table,
-                    probe_state,
-                    keys_iter,
-                    &hashes,
-                    &input,
-                    is_probe_projected,
-                )
+                    .build_keys_state(&probe_keys, input_num_rows)?;
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
+
+                // Perform a round of hash table probe.
+                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
+                    probe_state.selection_count = if prefer_early_filtering {
+                        // Early filtering, use selection to get better performance.
+                        probe_state.probe_with_selection = true;
+
+                        table.hash_table.early_filtering_probe_with_selection(
+                            &mut probe_state.hashes,
+                            valids,
+                            &mut probe_state.selection,
+                        )
+                    } else {
+                        // If don't do early filtering, don't use selection.
+                        probe_state.probe_with_selection = false;
+
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    };
+                    probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
+                } else {
+                    // For left join, left single join, full join and left anti join, don't use selection.
+                    probe_state.probe_with_selection = false;
+
+                    let count = if prefer_early_filtering {
+                        table
+                            .hash_table
+                            .early_filtering_probe(&mut probe_state.hashes, valids)
+                    } else {
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    };
+                    probe_state.num_keys_hash_matched += count as u64;
+                }
+
+                // Continue to probe hash table and process data blocks.
+                self.result_blocks(&input, keys, &table.hash_table, probe_state)
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -269,12 +335,48 @@ impl HashJoinProbeState {
         })
     }
 
+    /// Checks if a join type can eliminate valids.
+    pub fn check_for_eliminate_valids(
+        from_correlated_subquery: bool,
+        join_type: &JoinType,
+    ) -> bool {
+        if !from_correlated_subquery {
+            return false;
+        }
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Full
+                | JoinType::Left
+                | JoinType::LeftSingle
+                | JoinType::LeftAnti
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+                | JoinType::RightMark
+        )
+    }
+
+    /// Checks if a join type can use selection.
+    pub fn check_for_selection(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::RightMark
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+        )
+    }
+
     pub fn probe_attach(&self) -> Result<usize> {
         let mut worker_id = 0;
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
-        if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+        if self.hash_join_state.enable_spill {
             worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
             self.spill_workers.fetch_add(1, Ordering::Relaxed);
         }
@@ -348,14 +450,15 @@ impl HashJoinProbeState {
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
-        let task_num = unsafe { &*self.hash_join_state.chunks.get() }.len();
+        let task_num = unsafe { &*self.hash_join_state.build_state.get() }
+            .generation_state
+            .chunks
+            .len();
         if task_num == 0 {
             return Ok(());
         }
-        let mut final_scan_tasks = self.final_scan_tasks.write();
-        for idx in 0..task_num {
-            final_scan_tasks.push_back(idx);
-        }
+        let tasks = (0..task_num).collect_vec();
+        *self.final_scan_tasks.write() = tasks.into();
         Ok(())
     }
 
@@ -379,24 +482,18 @@ impl HashJoinProbeState {
     pub fn right_and_full_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let true_validity = &state.true_validity;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
 
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
-
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
         let mut projected_probe_fields = vec![];
         for (i, field) in self.probe_schema.fields().iter().enumerate() {
             if self.probe_projections.contains(&i) {
@@ -404,22 +501,31 @@ impl HashJoinProbeState {
             }
         }
 
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
         let chunk_index = task;
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_occupied = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
             while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if !outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+                unsafe {
+                    if !outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_occupied)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_occupied)
+                            .row_index = row_index as u32;
+                        build_indexes_occupied += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -444,13 +550,13 @@ impl HashJoinProbeState {
             } else {
                 None
             };
-            let build_block = if is_build_projected {
+            let build_block = if build_state.generation_state.is_build_projected {
                 let mut unmatched_build_block = self.hash_join_state.row_space.gather(
                     &build_indexes[0..build_indexes_occupied],
-                    build_columns,
-                    build_columns_data_type,
-                    &build_num_rows,
-                    string_items_buf,
+                    &generation_state.build_columns,
+                    &generation_state.build_columns_data_type,
+                    &generation_state.build_num_rows,
+                    &mut probe_state.generation_state.string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -458,7 +564,13 @@ impl HashJoinProbeState {
                     let nullable_unmatched_build_columns = unmatched_build_block
                         .columns()
                         .iter()
-                        .map(|c| wrap_true_validity(c, num_rows, true_validity))
+                        .map(|c| {
+                            wrap_true_validity(
+                                c,
+                                num_rows,
+                                &probe_state.generation_state.true_validity,
+                            )
+                        })
                         .collect::<Vec<_>>();
                     unmatched_build_block =
                         DataBlock::new(nullable_unmatched_build_columns, num_rows);
@@ -481,35 +593,43 @@ impl HashJoinProbeState {
     pub fn right_semi_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let chunk_index = task;
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
+        let chunk_index = task;
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+            while row_index < outer_map_len && build_indexes_idx < max_block_size {
+                unsafe {
+                    if *outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_idx)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes.get_unchecked_mut(build_indexes_idx).row_index =
+                            row_index as u32;
+                        build_indexes_idx += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -521,13 +641,13 @@ impl HashJoinProbeState {
             }
 
             result_blocks.push(self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?);
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }
@@ -535,35 +655,43 @@ impl HashJoinProbeState {
     pub fn right_anti_outer_scan(
         &self,
         task: usize,
-        state: &mut ProbeState,
+        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let chunk_index = task;
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let outer_scan_map = &build_state.outer_scan_map;
+        let chunk_index = task;
         let outer_map = &outer_scan_map[chunk_index];
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
-                if !outer_map[row_index] {
-                    build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                    build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                    build_indexes_occupied += 1;
+            while row_index < outer_map_len && build_indexes_idx < max_block_size {
+                unsafe {
+                    if !outer_map.get_unchecked(row_index) {
+                        build_indexes
+                            .get_unchecked_mut(build_indexes_idx)
+                            .chunk_index = chunk_index as u32;
+                        build_indexes.get_unchecked_mut(build_indexes_idx).row_index =
+                            row_index as u32;
+                        build_indexes_idx += 1;
+                    }
                 }
                 row_index += 1;
             }
@@ -575,36 +703,38 @@ impl HashJoinProbeState {
             }
 
             result_blocks.push(self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?);
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }
 
-    pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let max_block_size = state.max_block_size;
-        let build_indexes = &mut state.build_indexes;
-        let string_items_buf = &mut state.string_items_buf;
-        let mut build_indexes_occupied = 0;
-        let mut result_blocks = vec![];
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
-
-        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
-        let chunk_index = task;
+    pub fn left_mark_scan(
+        &self,
+        task: usize,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let generation_state = &build_state.generation_state;
+        let mark_scan_map = &build_state.mark_scan_map;
+        let chunk_index = task;
         let markers = &mark_scan_map[chunk_index];
         let has_null = *self
             .hash_join_state
@@ -612,18 +742,24 @@ impl HashJoinProbeState {
             .marker_join_desc
             .has_null
             .read();
-
         let markers_len = markers.len();
         let mut row_index = 0;
+
+        // Results.
+        let mut build_indexes_idx = 0;
+        let mut result_blocks = vec![];
+
         while row_index < markers_len {
             let block_size = std::cmp::min(markers_len - row_index, max_block_size);
             let mut validity = MutableBitmap::with_capacity(block_size);
             let mut boolean_bit_map = MutableBitmap::with_capacity(block_size);
-            while build_indexes_occupied < block_size {
-                let marker = if markers[row_index] == MARKER_KIND_FALSE && has_null {
+            while build_indexes_idx < block_size {
+                let marker = if unsafe { *markers.get_unchecked(row_index) } == MARKER_KIND_FALSE
+                    && has_null
+                {
                     MARKER_KIND_NULL
                 } else {
-                    markers[row_index]
+                    unsafe { *markers.get_unchecked(row_index) }
                 };
                 if marker == MARKER_KIND_NULL {
                     validity.push(false);
@@ -635,9 +771,13 @@ impl HashJoinProbeState {
                 } else {
                     boolean_bit_map.push(false);
                 }
-                build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
-                build_indexes[build_indexes_occupied].row_index = row_index as u32;
-                build_indexes_occupied += 1;
+                unsafe {
+                    build_indexes
+                        .get_unchecked_mut(build_indexes_idx)
+                        .chunk_index = chunk_index as u32;
+                    build_indexes.get_unchecked_mut(build_indexes_idx).row_index = row_index as u32;
+                }
+                build_indexes_idx += 1;
                 row_index += 1;
             }
 
@@ -654,19 +794,19 @@ impl HashJoinProbeState {
             }));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.row_space.gather(
-                &build_indexes[0..build_indexes_occupied],
-                build_columns,
-                build_columns_data_type,
-                &build_num_rows,
-                string_items_buf,
+                &build_indexes[0..build_indexes_idx],
+                &generation_state.build_columns,
+                &generation_state.build_columns_data_type,
+                &generation_state.build_num_rows,
+                &mut probe_state.generation_state.string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),
                 Some(marker_block),
-                build_indexes_occupied,
+                build_indexes_idx,
             ));
 
-            build_indexes_occupied = 0;
+            build_indexes_idx = 0;
         }
         Ok(result_blocks)
     }

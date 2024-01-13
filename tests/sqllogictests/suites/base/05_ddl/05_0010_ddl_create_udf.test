@@ -1,0 +1,59 @@
+statement ok
+DROP FUNCTION IF EXISTS isnotempty
+
+statement ok
+CREATE FUNCTION isnotempty AS(p) -> not(is_null(p))
+
+statement ok
+CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p))
+
+statement error 2603
+CREATE FUNCTION isnotempty AS(p) -> not(is_null(p))
+
+statement ok
+DROP FUNCTION IF EXISTS isnotempty_with_desc
+
+statement ok
+CREATE FUNCTION isnotempty_with_desc AS(p) -> not(is_null(p)) DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION IF NOT EXISTS isnotempty_with_desc AS(p) -> not(is_null(p)) DESC = 'This is a description'
+
+statement error 2603
+CREATE FUNCTION isnotempty_with_desc AS(p) -> not(is_null(p)) DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION with_lambda AS(list) -> array_filter(list, x -> x > 2)
+
+statement ok
+CREATE FUNCTION IF NOT EXISTS with_lambda AS(list) -> array_filter(list, x -> x > 2)
+
+statement error 2603
+CREATE FUNCTION with_lambda AS(list) -> array_filter(list, x -> x > 2)
+
+statement ok
+DROP TABLE IF EXISTS array_int64_table
+
+statement ok
+CREATE TABLE IF NOT EXISTS array_int64_table(arr ARRAY(INT64))
+
+statement ok
+INSERT INTO array_int64_table VALUES ([1, 2, 3, 4]), ([5, 6, 7, 8])
+
+query T
+SELECT with_lambda(arr) from array_int64_table
+----
+[3,4]
+[5,6,7,8]
+
+statement error 1005
+CREATE FUNCTION with_lambda as (list) -> array_filter(list, x -> y > 2);
+
+statement ok
+DROP FUNCTION IF EXISTS with_lambda
+
+statement ok
+DROP FUNCTION isnotempty
+
+statement ok
+DROP FUNCTION isnotempty_with_desc

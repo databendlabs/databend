@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use common_base::base::tokio;
-use common_base::base::Stoppable;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::SeqV;
+use databend_common_base::base::tokio;
+use databend_common_base::base::Stoppable;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::SeqV;
 use log::debug;
 use log::info;
 use pretty_assertions::assert_eq;

@@ -30,7 +30,7 @@ runs:
 
     - name: Check typos
       shell: bash
-      run: typos --exclude docs --exclude website
+      run: typos
 
     - name: Check unused deps
       shell: bash

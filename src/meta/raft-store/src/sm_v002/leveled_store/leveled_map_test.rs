@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures_util::TryStreamExt;
 
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
@@ -28,7 +28,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     // Insert an entry at level 0
     let (prev, result) = l.str_map_mut().set(s("a1"), Some((b("b0"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(0));
+    assert_eq!(prev, Marked::new_tombstone(0));
     assert_eq!(result, Marked::new_with_meta(1, b("b0"), None));
 
     // Insert the same entry at level 1
@@ -73,7 +73,7 @@ async fn test_single_level() -> anyhow::Result<()> {
 
     // Write a1
     let (prev, result) = l.str_map_mut().set(s("a1"), Some((b("b1"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(0));
+    assert_eq!(prev, Marked::new_tombstone(0));
     assert_eq!(result, Marked::new_with_meta(1, b("b1"), None));
 
     // Write more
@@ -99,7 +99,7 @@ async fn test_single_level() -> anyhow::Result<()> {
     assert_eq!(prev, Marked::new_with_meta(3, b("b3"), None));
     assert_eq!(
         result,
-        Marked::new_tomb_stone(6),
+        Marked::new_tombstone(6),
         "NOTE: single level data also creates a tombstone"
     );
 
@@ -110,7 +110,7 @@ async fn test_single_level() -> anyhow::Result<()> {
         //
         (s("a1"), Marked::new_with_meta(6, b("b1"), None)),
         (s("a2"), Marked::new_with_meta(2, b("b2"), None)),
-        (s("a3"), Marked::new_tomb_stone(6)),
+        (s("a3"), Marked::new_tombstone(6)),
         (s("x1"), Marked::new_with_meta(4, b("y1"), None)),
         (s("x2"), Marked::new_with_meta(5, b("y2"), None)),
     ]);
@@ -120,7 +120,7 @@ async fn test_single_level() -> anyhow::Result<()> {
     assert_eq!(got, Marked::new_with_meta(2, b("b2"), None));
 
     let got = l.str_map().get("a3").await?;
-    assert_eq!(got, Marked::new_tomb_stone(6));
+    assert_eq!(got, Marked::new_tombstone(6));
     Ok(())
 }
 
@@ -162,11 +162,11 @@ async fn test_two_levels() -> anyhow::Result<()> {
     // Delete by adding a tombstone
     let (prev, result) = l.str_map_mut().set(s("a1"), None).await?;
     assert_eq!(prev, Marked::new_with_meta(1, b("b1"), None));
-    assert_eq!(result, Marked::new_tomb_stone(6));
+    assert_eq!(result, Marked::new_tombstone(6));
 
     // Override tombstone
     let (prev, result) = l.str_map_mut().set(s("a1"), Some((b("b5"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(6));
+    assert_eq!(prev, Marked::new_tombstone(6));
     assert_eq!(result, Marked::new_with_meta(7, b("b5"), None));
 
     // Range
@@ -189,7 +189,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     assert_eq!(got, Marked::new_with_meta(6, b("b4"), None));
 
     let got = l.str_map().get("w1").await?;
-    assert_eq!(got, Marked::new_tomb_stone(0));
+    assert_eq!(got, Marked::new_tombstone(0));
 
     // Check base level
 
@@ -245,10 +245,10 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
     assert_eq!(got, Marked::new_with_meta(1, b("a0"), None));
 
     let got = l.str_map().get("b").await?;
-    assert_eq!(got, Marked::new_tomb_stone(4));
+    assert_eq!(got, Marked::new_tombstone(4));
 
     let got = l.str_map().get("c").await?;
-    assert_eq!(got, Marked::new_tomb_stone(6));
+    assert_eq!(got, Marked::new_tombstone(6));
 
     let got = l.str_map().get("d").await?;
     assert_eq!(got, Marked::new_with_meta(7, b("d2"), None));
@@ -257,7 +257,7 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
     assert_eq!(got, Marked::new_with_meta(6, b("e1"), None));
 
     let got = l.str_map().get("f").await?;
-    assert_eq!(got, Marked::new_tomb_stone(0));
+    assert_eq!(got, Marked::new_tombstone(0));
 
     let got = l
         .str_map()
@@ -268,8 +268,8 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (s("a"), Marked::new_with_meta(1, b("a0"), None)),
-        (s("b"), Marked::new_tomb_stone(4)),
-        (s("c"), Marked::new_tomb_stone(6)),
+        (s("b"), Marked::new_tombstone(4)),
+        (s("c"), Marked::new_tombstone(6)),
         (s("d"), Marked::new_with_meta(7, b("d2"), None)),
         (s("e"), Marked::new_with_meta(6, b("e1"), None)),
     ]);
@@ -286,11 +286,11 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
     assert_eq!(result, Marked::new_with_meta(8, b("x"), None));
 
     let (prev, result) = l.str_map_mut().set(s("b"), Some((b("y"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(4));
+    assert_eq!(prev, Marked::new_tombstone(4));
     assert_eq!(result, Marked::new_with_meta(9, b("y"), None));
 
     let (prev, result) = l.str_map_mut().set(s("c"), Some((b("z"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(6));
+    assert_eq!(prev, Marked::new_tombstone(6));
     assert_eq!(result, Marked::new_with_meta(10, b("z"), None));
 
     let (prev, result) = l.str_map_mut().set(s("d"), Some((b("u"), None))).await?;
@@ -302,7 +302,7 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
     assert_eq!(result, Marked::new_with_meta(12, b("v"), None));
 
     let (prev, result) = l.str_map_mut().set(s("f"), Some((b("w"), None))).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(0));
+    assert_eq!(prev, Marked::new_tombstone(0));
     assert_eq!(result, Marked::new_with_meta(13, b("w"), None));
 
     let got = l
@@ -330,27 +330,27 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
 
     let (prev, result) = l.str_map_mut().set(s("a"), None).await?;
     assert_eq!(prev, Marked::new_with_meta(1, b("a0"), None));
-    assert_eq!(result, Marked::new_tomb_stone(7));
+    assert_eq!(result, Marked::new_tombstone(7));
 
     let (prev, result) = l.str_map_mut().set(s("b"), None).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(4));
-    assert_eq!(result, Marked::new_tomb_stone(7));
+    assert_eq!(prev, Marked::new_tombstone(4));
+    assert_eq!(result, Marked::new_tombstone(7));
 
     let (prev, result) = l.str_map_mut().set(s("c"), None).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(6));
-    assert_eq!(result, Marked::new_tomb_stone(7));
+    assert_eq!(prev, Marked::new_tombstone(6));
+    assert_eq!(result, Marked::new_tombstone(7));
 
     let (prev, result) = l.str_map_mut().set(s("d"), None).await?;
     assert_eq!(prev, Marked::new_with_meta(7, b("d2"), None));
-    assert_eq!(result, Marked::new_tomb_stone(7));
+    assert_eq!(result, Marked::new_tombstone(7));
 
     let (prev, result) = l.str_map_mut().set(s("e"), None).await?;
     assert_eq!(prev, Marked::new_with_meta(6, b("e1"), None));
-    assert_eq!(result, Marked::new_tomb_stone(7));
+    assert_eq!(result, Marked::new_tombstone(7));
 
     let (prev, result) = l.str_map_mut().set(s("f"), None).await?;
-    assert_eq!(prev, Marked::new_tomb_stone(0));
-    assert_eq!(result, Marked::new_tomb_stone(0));
+    assert_eq!(prev, Marked::new_tombstone(0));
+    assert_eq!(result, Marked::new_tombstone(0));
 
     let got = l
         .str_map()
@@ -360,11 +360,11 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
-        (s("a"), Marked::new_tomb_stone(7)),
-        (s("b"), Marked::new_tomb_stone(7)),
-        (s("c"), Marked::new_tomb_stone(7)),
-        (s("d"), Marked::new_tomb_stone(7)),
-        (s("e"), Marked::new_tomb_stone(7)),
+        (s("a"), Marked::new_tombstone(7)),
+        (s("b"), Marked::new_tombstone(7)),
+        (s("c"), Marked::new_tombstone(7)),
+        (s("d"), Marked::new_tombstone(7)),
+        (s("e"), Marked::new_tombstone(7)),
     ]);
 
     Ok(())
@@ -379,26 +379,18 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
 
     // internal_seq: 0
     l.str_map_mut()
-        .set(s("a"), Some((b("a0"), Some(KVMeta { expire_at: Some(1) }))))
+        .set(s("a"), Some((b("a0"), Some(KVMeta::new_expire(1)))))
         .await?;
     l.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
     l.str_map_mut()
-        .set(s("c"), Some((b("c0"), Some(KVMeta { expire_at: Some(2) }))))
+        .set(s("c"), Some((b("c0"), Some(KVMeta::new_expire(2)))))
         .await?;
 
     l.freeze_writable();
 
     // internal_seq: 3
     l.str_map_mut()
-        .set(
-            s("b"),
-            Some((
-                b("b1"),
-                Some(KVMeta {
-                    expire_at: Some(10),
-                }),
-            )),
-        )
+        .set(s("b"), Some((b("b1"), Some(KVMeta::new_expire(10)))))
         .await?;
     l.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
 
@@ -414,17 +406,17 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::upsert_value(&mut l, s("a"), b("a1")).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(1, b("a0"), Some(KVMeta::new_expire(1)))
         );
         assert_eq!(
             result,
-            Marked::new_with_meta(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
         );
 
         let got = l.str_map().get("a").await?;
         assert_eq!(
             got,
-            Marked::new_with_meta(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
         );
     }
 
@@ -435,23 +427,17 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::upsert_value(&mut l, s("b"), b("x1")).await?;
         assert_eq!(
             prev,
-            Marked::new_normal(4, b("b1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(4, b("b1")).with_meta(Some(KVMeta::new_expire(10)))
         );
         assert_eq!(
             result,
-            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
         );
 
         let got = l.str_map().get("b").await?;
         assert_eq!(
             got,
-            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
         );
     }
 
@@ -460,7 +446,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) = MapApiExt::upsert_value(&mut l, s("d"), b("d1")).await?;
-        assert_eq!(prev, Marked::new_tomb_stone(0));
+        assert_eq!(prev, Marked::new_tombstone(0));
         assert_eq!(result, Marked::new_with_meta(6, b("d1"), None));
 
         let got = l.str_map().get("d").await?;
@@ -477,20 +463,20 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, s("a"), Some(KVMeta { expire_at: Some(2) })).await?;
+            MapApiExt::update_meta(&mut l, s("a"), Some(KVMeta::new_expire(2))).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(1, b("a0"), Some(KVMeta::new_expire(1)))
         );
         assert_eq!(
             result,
-            Marked::new_with_meta(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
+            Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
         );
 
         let got = l.str_map().get("a").await?;
         assert_eq!(
             got,
-            Marked::new_with_meta(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
+            Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
         );
     }
 
@@ -501,13 +487,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::update_meta(&mut l, s("b"), None).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(
-                4,
-                b("b1"),
-                Some(KVMeta {
-                    expire_at: Some(10)
-                })
-            )
+            Marked::new_with_meta(4, b("b1"), Some(KVMeta::new_expire(10)))
         );
         assert_eq!(result, Marked::new_with_meta(6, b("b1"), None));
 
@@ -519,28 +499,18 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) = MapApiExt::update_meta(
-            &mut l,
-            s("c"),
-            Some(KVMeta {
-                expire_at: Some(20),
-            }),
-        )
-        .await?;
+        let (prev, result) =
+            MapApiExt::update_meta(&mut l, s("c"), Some(KVMeta::new_expire(20))).await?;
         assert_eq!(prev, Marked::new_with_meta(5, b("c1"), None));
         assert_eq!(
             result,
-            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta {
-                expire_at: Some(20)
-            }))
+            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
         );
 
         let got = l.str_map().get("c").await?;
         assert_eq!(
             got,
-            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta {
-                expire_at: Some(20)
-            }))
+            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
         );
     }
 
@@ -549,12 +519,12 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, s("d"), Some(KVMeta { expire_at: Some(2) })).await?;
-        assert_eq!(prev, Marked::new_tomb_stone(0));
-        assert_eq!(result, Marked::new_tomb_stone(0));
+            MapApiExt::update_meta(&mut l, s("d"), Some(KVMeta::new_expire(2))).await?;
+        assert_eq!(prev, Marked::new_tombstone(0));
+        assert_eq!(result, Marked::new_tombstone(0));
 
         let got = l.str_map().get("d").await?;
-        assert_eq!(got, Marked::new_tomb_stone(0));
+        assert_eq!(got, Marked::new_tombstone(0));
     }
 
     Ok(())

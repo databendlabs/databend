@@ -19,46 +19,48 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use chrono::Datelike;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_expression::types::date::string_to_date;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::*;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::timestamp::string_to_timestamp;
-use common_expression::types::variant::cast_scalar_to_variant;
-use common_expression::types::variant::cast_scalars_to_variants;
-use common_expression::types::AnyType;
-use common_expression::types::ArrayType;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::GenericType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::VariantType;
-use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::vectorize_1_arg;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::with_number_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::EvalContext;
-use common_expression::Function;
-use common_expression::FunctionDomain;
-use common_expression::FunctionEval;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::string_to_date;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::string_to_timestamp;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::variant::cast_scalars_to_variants;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::GenericType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::vectorize_1_arg;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use jsonb::array_length;
 use jsonb::as_bool;
 use jsonb::as_f64;
@@ -66,6 +68,8 @@ use jsonb::as_i64;
 use jsonb::as_str;
 use jsonb::build_array;
 use jsonb::build_object;
+use jsonb::concat;
+use jsonb::contains;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
 use jsonb::get_by_index;
@@ -77,10 +81,12 @@ use jsonb::get_by_path_first;
 use jsonb::is_array;
 use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
+use jsonb::jsonpath::JsonPath;
 use jsonb::keypath::parse_key_paths;
 use jsonb::object_keys;
 use jsonb::parse_value;
 use jsonb::path_exists;
+use jsonb::path_match;
 use jsonb::strip_nulls;
 use jsonb::to_bool;
 use jsonb::to_f64;
@@ -512,33 +518,53 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
-        "json_path_exists",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
-            |val, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                match parse_json_path(path) {
-                    Ok(json_path) => {
-                        let res = path_exists(val, json_path);
-                        output.push(res);
-                    }
-                    Err(_) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
-                        );
-                        output.push(false);
-                    }
-                }
+    registry.register_function_factory("json_path_match", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_path_match".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::Boolean)),
             },
-        ),
-    );
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, path_match)),
+            },
+        }))
+    });
+
+    registry.register_function_factory("json_path_exists", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_path_exists".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::Boolean)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(|args, ctx| {
+                    path_predicate_fn(args, ctx, |json, path| Ok(path_exists(json, path)))
+                }),
+            },
+        }))
+    });
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get_path",
@@ -1082,6 +1108,25 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_2_arg(
+        "concat",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                if let Err(err) = concat(left, right, &mut output.data) {
+                    ctx.set_error(output.len(), err.to_string());
+                };
+                output.commit_row();
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_1_arg(
         "json_typeof",
         |_, _| FunctionDomain::MayThrow,
@@ -1175,6 +1220,40 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 
     registry.register_passthrough_nullable_2_arg(
+        "json_contains_in_left",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = contains(left, right);
+                output.push(result);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "json_contains_in_right",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let result = contains(right, left);
+                output.push(result);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
         "json_exists_any_keys",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
@@ -1229,7 +1308,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
+    let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
     let mut items = Vec::with_capacity(columns.len());
 
     for idx in 0..cap {
@@ -1266,7 +1345,7 @@ fn json_object_impl_fn(
 ) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
+    let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
         for i in 0..cap {
             ctx.set_error(i, "The number of keys and values must be equal");
@@ -1360,7 +1439,12 @@ fn get_by_keypath_fn(
     });
     let len = len_opt.unwrap_or(1);
 
-    let mut builder = StringColumnBuilder::with_capacity(len, len * 50);
+    let mut builder = if string_res {
+        ColumnBuilder::String(StringColumnBuilder::with_capacity(len, len * 50))
+    } else {
+        ColumnBuilder::Variant(BinaryColumnBuilder::with_capacity(len, len * 50))
+    };
+
     let mut validity = MutableBitmap::with_capacity(len);
 
     for idx in 0..len {
@@ -1386,10 +1470,14 @@ fn get_by_keypath_fn(
                     match json_row {
                         ScalarRef::Variant(json) => match get_by_keypath(json, path.paths.iter()) {
                             Some(res) => {
-                                if string_res {
-                                    builder.put_slice(to_string(&res).as_bytes());
-                                } else {
-                                    builder.put_slice(&res);
+                                match &mut builder {
+                                    ColumnBuilder::String(builder) => {
+                                        builder.put_str(&to_string(&res));
+                                    }
+                                    ColumnBuilder::Variant(builder) => {
+                                        builder.put_slice(&res);
+                                    }
+                                    _ => unreachable!(),
                                 }
                                 validity.push(true);
                             }
@@ -1406,31 +1494,114 @@ fn get_by_keypath_fn(
             None => validity.push(false),
         }
 
-        builder.commit_row();
+        match &mut builder {
+            ColumnBuilder::String(builder) => {
+                builder.commit_row();
+            }
+            ColumnBuilder::Variant(builder) => {
+                builder.commit_row();
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let builder = ColumnBuilder::Nullable(Box::new(NullableColumnBuilder { builder, validity }));
+
+    match len_opt {
+        Some(_) => Value::Column(builder.build()),
+        None => Value::Scalar(builder.build_scalar()),
+    }
+}
+
+fn path_predicate_fn<'a, P>(
+    args: &'a [ValueRef<AnyType>],
+    ctx: &'a mut EvalContext,
+    predicate: P,
+) -> Value<AnyType>
+where
+    P: Fn(&'a [u8], JsonPath<'a>) -> Result<bool, jsonb::Error>,
+{
+    let scalar_jsonpath = match &args[1] {
+        ValueRef::Scalar(ScalarRef::String(v)) => {
+            let res = parse_json_path(v)
+                .map_err(|_| format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(v)));
+            Some(res)
+        }
+        _ => None,
+    };
+
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+
+    let mut output = MutableBitmap::with_capacity(len);
+    let mut validity = MutableBitmap::with_capacity(len);
+
+    for idx in 0..len {
+        let jsonpath = match &args[1] {
+            ValueRef::Scalar(_) => scalar_jsonpath.clone(),
+            ValueRef::Column(col) => {
+                let scalar = unsafe { col.index_unchecked(idx) };
+                match scalar {
+                    ScalarRef::String(buf) => {
+                        let res = parse_json_path(buf).map_err(|_| {
+                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(buf))
+                        });
+                        Some(res)
+                    }
+                    _ => None,
+                }
+            }
+        };
+        match jsonpath {
+            Some(result) => match result {
+                Ok(path) => {
+                    let json_row = match &args[0] {
+                        ValueRef::Scalar(scalar) => scalar.clone(),
+                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                    };
+                    match json_row {
+                        ScalarRef::Variant(json) => match predicate(json, path) {
+                            Ok(r) => {
+                                output.push(r);
+                                validity.push(true);
+                            }
+                            Err(err) => {
+                                ctx.set_error(output.len(), err.to_string());
+                                output.push(false);
+                                validity.push(false);
+                            }
+                        },
+                        _ => {
+                            output.push(false);
+                            validity.push(false);
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err);
+                    output.push(false);
+                    validity.push(false);
+                }
+            },
+            None => {
+                output.push(false);
+                validity.push(false);
+            }
+        }
     }
 
     let validity: Bitmap = validity.into();
 
     match len_opt {
-        Some(_) => {
-            let column = builder.build();
-            let val = if string_res {
-                Value::Column(Column::String(column))
-            } else {
-                Value::Column(Column::Variant(column))
-            };
-            val.wrap_nullable(Some(validity))
-        }
+        Some(_) => Value::Column(Column::Boolean(output.into())).wrap_nullable(Some(validity)),
         None => {
             if !validity.get_bit(0) {
                 Value::Scalar(Scalar::Null)
             } else {
-                let row = builder.build_scalar();
-                if string_res {
-                    Value::Scalar(Scalar::String(row))
-                } else {
-                    Value::Scalar(Scalar::Variant(row))
-                }
+                Value::Scalar(Scalar::Boolean(output.get(0)))
             }
         }
     }

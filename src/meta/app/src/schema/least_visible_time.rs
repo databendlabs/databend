@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Utc;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct LeastVisibleTime {
-    pub time: u64,
+    pub time: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SetLVTReq {
     pub table_id: u64,
-    pub time: u64,
+    pub time: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SetLVTReply {
-    pub time: u64,
+    pub time: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -37,7 +40,7 @@ pub struct GetLVTReq {
 pub struct GetLVTReply {
     // return the current LeastVisibleTime
     // None if unset before
-    pub time: Option<u64>,
+    pub time: Option<DateTime<Utc>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

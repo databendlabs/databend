@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::agg_index;
 use crate::optimizer::rule::Rule;
@@ -34,18 +34,24 @@ pub struct RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    pub fn new(metadata: MetadataRef) -> Self {
-        Self {
-            id: RuleID::TryApplyAggIndex,
-            metadata,
-            patterns: vec![
-                // Expression
-                //     |
-                //    Scan
-                SExpr::create_unary(
+    fn sorted_patterns() -> Vec<SExpr> {
+        vec![
+            // Expression
+            //     |
+            //    Sort
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_unary(
                     Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Sort,
                         }
                         .into(),
                     ),
@@ -55,16 +61,26 @@ impl RuleTryApplyAggIndex {
                         }
                         .into(),
                     ))),
+                )),
+            ),
+            // Expression
+            //     |
+            //    Sort
+            //     |
+            //   Filter
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
                 ),
-                // Expression
-                //     |
-                //   Filter
-                //     |
-                //    Scan
-                SExpr::create_unary(
+                Arc::new(SExpr::create_unary(
                     Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Sort,
                         }
                         .into(),
                     ),
@@ -82,18 +98,28 @@ impl RuleTryApplyAggIndex {
                             .into(),
                         ))),
                     )),
+                )),
+            ),
+            // Expression
+            //     |
+            //    Sort
+            //     |
+            // Aggregation
+            //     |
+            // Expression
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
                 ),
-                // Expression
-                //     |
-                // Aggregation
-                //     |
-                // Expression
-                //     |
-                //    Scan
-                SExpr::create_unary(
+                Arc::new(SExpr::create_unary(
                     Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Sort,
                         }
                         .into(),
                     ),
@@ -127,20 +153,30 @@ impl RuleTryApplyAggIndex {
                             )),
                         )),
                     )),
+                )),
+            ),
+            // Expression
+            //     |
+            //    Sort
+            //     |
+            // Aggregation
+            //     |
+            // Expression
+            //     |
+            //   Filter
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
                 ),
-                // Expression
-                //     |
-                // Aggregation
-                //     |
-                // Expression
-                //     |
-                //   Filter
-                //     |
-                //    Scan
-                SExpr::create_unary(
+                Arc::new(SExpr::create_unary(
                     Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Sort,
                         }
                         .into(),
                     ),
@@ -182,8 +218,170 @@ impl RuleTryApplyAggIndex {
                             )),
                         )),
                     )),
+                )),
+            ),
+        ]
+    }
+
+    fn normal_patterns() -> Vec<SExpr> {
+        vec![
+            // Expression
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
                 ),
-            ],
+                Arc::new(SExpr::create_leaf(Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Scan,
+                    }
+                    .into(),
+                ))),
+            ),
+            // Expression
+            //     |
+            //   Filter
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Filter,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Scan,
+                        }
+                        .into(),
+                    ))),
+                )),
+            ),
+            // Expression
+            //     |
+            // Aggregation
+            //     |
+            // Expression
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Aggregate,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(
+                                PatternPlan {
+                                    plan_type: RelOp::EvalScalar,
+                                }
+                                .into(),
+                            ),
+                            Arc::new(SExpr::create_leaf(Arc::new(
+                                PatternPlan {
+                                    plan_type: RelOp::Scan,
+                                }
+                                .into(),
+                            ))),
+                        )),
+                    )),
+                )),
+            ),
+            // Expression
+            //     |
+            // Aggregation
+            //     |
+            // Expression
+            //     |
+            //   Filter
+            //     |
+            //    Scan
+            SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Aggregate,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(
+                                PatternPlan {
+                                    plan_type: RelOp::EvalScalar,
+                                }
+                                .into(),
+                            ),
+                            Arc::new(SExpr::create_unary(
+                                Arc::new(
+                                    PatternPlan {
+                                        plan_type: RelOp::Filter,
+                                    }
+                                    .into(),
+                                ),
+                                Arc::new(SExpr::create_leaf(Arc::new(
+                                    PatternPlan {
+                                        plan_type: RelOp::Scan,
+                                    }
+                                    .into(),
+                                ))),
+                            )),
+                        )),
+                    )),
+                )),
+            ),
+        ]
+    }
+
+    fn patterns() -> Vec<SExpr> {
+        let mut patterns = Self::normal_patterns();
+        patterns.extend(Self::sorted_patterns());
+        patterns
+    }
+    pub fn new(metadata: MetadataRef) -> Self {
+        Self {
+            id: RuleID::TryApplyAggIndex,
+            metadata,
+            patterns: Self::patterns(),
         }
     }
 }

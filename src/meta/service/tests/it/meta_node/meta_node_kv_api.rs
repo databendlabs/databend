@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 use test_harness::test;

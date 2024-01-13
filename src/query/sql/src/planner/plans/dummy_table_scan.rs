@@ -14,8 +14,9 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -48,6 +49,7 @@ impl Operator for DummyTableScan {
             output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
+            orderings: vec![],
         }))
     }
 
@@ -57,7 +59,7 @@ impl Operator for DummyTableScan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: 1.0,
             statistics: Statistics {
@@ -72,8 +74,21 @@ impl Operator for DummyTableScan {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Ok(required.clone())
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for DummyTableScan".to_string(),
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for DummyTableScan".to_string(),
+        ))
     }
 }

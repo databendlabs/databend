@@ -8,6 +8,9 @@ USE_PARQUET2=0
 --- file_format
 1	2	3
 4	5	6
+--- variant named internal stage
+1	[1,2,3]
+2	{"k":"v"}
 USE_PARQUET2=1
 --- named internal stage
 1	2	3
@@ -18,3 +21,6 @@ USE_PARQUET2=1
 --- file_format
 1	2	3
 4	5	6
+--- variant named internal stage
+1	[1,2,3]
+2	{"k":"v"}

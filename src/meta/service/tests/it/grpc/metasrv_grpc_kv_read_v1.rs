@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,17 @@
 
 use std::sync::Arc;
 
-use common_meta_client::ClientHandle;
-use common_meta_client::Streamed;
-use common_meta_kvapi::kvapi::GetKVReq;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::ListKVReq;
-use common_meta_kvapi::kvapi::MGetKVReq;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf as pb;
-use common_meta_types::protobuf::KvMeta;
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::With;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::Streamed;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::KvMeta;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::With;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use log::info;
@@ -35,6 +34,7 @@ use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
+use crate::tests::service::make_grpc_client;
 
 #[test(harness = meta_service_test_harness)]
 #[minitrace::trace]
@@ -46,7 +46,6 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     let client = tc.grpc_client().await?;
 
     initialize_kvs(&client, now_sec).await?;
-    test_streamed_get(&client, now_sec).await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
 
@@ -65,9 +64,59 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
     initialize_kvs(&client, now_sec).await?;
 
     let client = tcs[1].grpc_client().await?;
-    test_streamed_get(&client, now_sec).await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
+
+    Ok(())
+}
+
+/// When invoke kv_read_v1() on a follower, the leader endpoint is responded in the response header.
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
+async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<()> {
+    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+
+    let addresses = tcs
+        .iter()
+        .map(|tc| tc.config.grpc_api_address.clone())
+        .collect::<Vec<_>>();
+
+    let a0 = || addresses[0].clone();
+    let a1 = || addresses[1].clone();
+    let a2 = || addresses[2].clone();
+
+    let client = make_grpc_client(vec![a1(), a2(), a0()])?;
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(a0(), eclient.target_endpoint(),);
+
+        // Start using a1(), a follower, for next RPC
+        eclient.endpoints().lock().choose_next();
+    }
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(a1(), eclient.target_endpoint(), "using a1()");
+    }
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(
+            a1(),
+            eclient.target_endpoint(),
+            "make client again, still using a1()"
+        );
+    }
+
+    let _strm = client
+        .request(Streamed(MGetKVReq {
+            keys: vec![s("a"), s("b")],
+        }))
+        .await?;
+
+    // Current leader endpoint updated, will connect to a0.
+    {
+        let eclient = client.make_established_client().await?;
+        assert_eq!(a0(), eclient.target_endpoint(),);
+    }
 
     Ok(())
 }
@@ -80,7 +129,7 @@ async fn initialize_kvs(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Res
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
-        UpsertKVReq::insert("a", &b("a")).with(KVMeta::new_expire(now_sec + 10)),
+        UpsertKVReq::insert("a", &b("a")).with(MetaSpec::new_expire(now_sec + 10)),
         UpsertKVReq::insert("c", &b("c")),
         UpsertKVReq::insert("c1", &b("c1")),
         UpsertKVReq::insert("c2", &b("c2")),
@@ -90,27 +139,6 @@ async fn initialize_kvs(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Res
         client.upsert_kv(update).await?;
     }
 
-    Ok(())
-}
-
-/// Test streamed mget on a grpc meta-service client
-async fn test_streamed_get(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Result<()> {
-    info!("--- test streamed get");
-
-    let strm = client.request(Streamed(GetKVReq { key: s("a") })).await?;
-
-    let got = strm.map_err(|e| e.to_string()).collect::<Vec<_>>().await;
-    assert_eq!(
-        vec![Ok(pb::StreamItem::new(
-            s("a"),
-            Some(pb::SeqV::with_meta(
-                1,
-                Some(KvMeta::new_expire(now_sec + 10)),
-                b("a")
-            ))
-        )),],
-        got
-    );
     Ok(())
 }
 

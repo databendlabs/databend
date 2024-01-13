@@ -5,7 +5,7 @@ This is Databend's [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/
 Before running the following commands, you should generate **databend-sqllogictests** binary file.
 
 ---
-Run all tests under the three handlers(mysql, http, clickhouse) in turn.
+Run all tests under the three handlers(mysql, http) in turn.
 ```shell
 databend-sqllogictests
 ```
@@ -70,3 +70,7 @@ query <type_string> <sort_mode> <label>
 The SQL for the query is found on second an subsequent lines of the record up to first line of the form "----" or until the end of the record. Lines following the "----" are expected results of the query, one value per line. If the "----" and/or the results are omitted, then the query is expected to return an empty set.
 
 For more information about arguments, such as <type_string>, <sort_mode>, <label> please refer to [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki).
+
+### Aditional features
+
+- sql with regexp pattern `\$RAND_(\d+)_(\d+)` will be replaced by a random number from the range.

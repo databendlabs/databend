@@ -1,0 +1,530 @@
+
+query II
+SELECT 1+1 AS two, 2+2 AS four
+----
+2 4
+
+statement ok
+drop table if exists abc
+
+statement ok
+CREATE TABLE abc (a INT NULL, b INT NULL, c INT NULL)
+
+# TODO get ok here
+# statement error 1010
+# SELECT * FROM abc WHERE 'hello'
+
+statement ok
+INSERT INTO abc VALUES (1, 2, 3)
+
+query III
+SELECT * FROM abc
+----
+1 2 3
+
+query TIII
+SELECT NULL AS z, * FROM abc
+----
+NULL 1 2 3
+
+statement ok
+SELECT * FROM abc WHERE NULL
+
+statement ok
+SELECT * FROM abc WHERE a = NULL
+
+query IIIIII
+SELECT *,* FROM abc
+----
+1 2 3 1 2 3
+
+query IIII
+SELECT a,a,a,a FROM abc
+----
+1 1 1 1
+
+query II
+SELECT a,c FROM abc
+----
+1 3
+
+query I
+SELECT a+b+c AS foo FROM abc
+----
+6
+
+statement ok
+SELECT * FROM abc WHERE a > 5 AND a < 5
+
+statement ok
+SELECT * FROM abc WHERE a > 5 AND a < 5 AND b>=100
+
+statement ok
+INSERT INTO abc VALUES (0, 1, 2)
+
+query II
+SELECT a,b FROM abc WHERE CASE WHEN a != 0 THEN b/a > 1.5 ELSE false END
+----
+1 2
+
+statement ok
+drop table if exists kv
+
+statement ok
+CREATE TABLE kv (k CHAR NULL, v CHAR NULL)
+
+statement ok
+INSERT INTO kv (k) VALUES ('a')
+
+query TT
+SELECT * FROM kv
+----
+a NULL
+
+query TT
+SELECT k,v FROM kv
+----
+a NULL
+
+query T
+SELECT v||'foo' FROM kv
+----
+NULL
+
+query T
+SELECT lower(v) FROM kv
+----
+NULL
+
+query T
+SELECT k FROM kv
+----
+a
+
+query TT
+SELECT kv.K,KV.v FROM kv
+----
+a NULL
+
+query TT
+SELECT kv.* FROM kv
+----
+a NULL
+
+query T
+SELECT FOO.k FROM kv AS foo WHERE foo.k = 'a'
+----
+a
+
+query T
+SELECT foo.v FROM kv AS foo WHERE foo.k = 'a'
+----
+NULL
+
+onlyif mysql
+statement ok
+drop table if exists kw
+
+onlyif mysql
+statement ok
+CREATE TABLE kw ("from" INT)
+
+onlyif mysql
+statement ok
+INSERT INTO kw VALUES (1)
+
+onlyif mysql
+query III
+SELECT *, "from", kw."from" FROM kw
+----
+1 1 1
+
+statement ok
+drop table if exists xyzw
+
+statement ok
+CREATE TABLE xyzw (  x INT,  y INT,  z INT,  w INT)
+
+statement ok
+INSERT INTO xyzw VALUES (4, 5, 6, 7), (1, 2, 3, 4)
+
+statement error 1065
+SELECT * FROM xyzw LIMIT x
+
+statement error 1065
+SELECT * FROM xyzw OFFSET 1 + y
+
+statement error 1065
+SELECT * FROM xyzw LIMIT 3.3
+
+statement error 1065
+SELECT * FROM xyzw ORDER BY 1 LIMIT '1'
+
+statement error 1065
+SELECT * FROM xyzw OFFSET 1.5
+
+statement error 1065
+SELECT * FROM xyzw LIMIT -100
+
+statement error 1065
+SELECT * FROM xyzw OFFSET -100
+
+query IIII
+SELECT * FROM xyzw LIMIT 9223372036854775808
+----
+4 5 6 7
+1 2 3 4
+
+statement ok
+SELECT * FROM xyzw OFFSET 9223372036854775808
+
+statement error 1065
+SELECT * FROM xyzw ORDER BY x OFFSET 1 + 0.0
+
+query T
+SELECT (x,y) FROM xyzw
+----
+(4,5)
+(1,2)
+
+statement ok
+SELECT * FROM xyzw LIMIT 0
+
+query IIII
+SELECT * FROM xyzw ORDER BY x LIMIT 1
+----
+1 2 3 4
+
+query IIII
+SELECT * FROM xyzw ORDER BY x LIMIT 1 OFFSET 1
+----
+4 5 6 7
+
+query IIII
+SELECT * FROM xyzw ORDER BY y OFFSET 1
+----
+4 5 6 7
+
+# SELECT * FROM xyzw ORDER BY y OFFSET 1 LIMIT 1
+# SELECT * FROM xyzw LIMIT (random() * 0.0)::int OFFSET (random() * 0.0)::int
+# ((SELECT a FROM t LIMIT 1)) LIMIT 1
+
+statement ok
+SELECT * FROM (SELECT * FROM xyzw LIMIT 5) OFFSET 5
+
+query II
+SELECT z, y FROM xyzw@foo
+----
+6 5
+3 2
+
+statement ok
+drop table if exists boolean_table
+
+statement ok
+CREATE TABLE boolean_table (  id INTEGER NOT NULL,  value BOOLEAN NULL)
+
+statement ok
+INSERT INTO boolean_table (id, value) VALUES (1, NULL)
+
+query T
+SELECT value FROM boolean_table
+----
+NULL
+
+query I
+SELECT CASE WHEN NULL THEN 1 ELSE 2 END
+----
+2
+
+statement ok
+INSERT INTO abc VALUES (42, NULL, NULL)
+
+statement ok
+SELECT 0 * b, b % 1, 0 % b from abc
+
+statement ok
+drop table if exists maxinttest
+
+statement ok
+CREATE TABLE MaxIntTest (a BIGINT)
+
+statement ok
+INSERT INTO MaxIntTest VALUES (9223372036854775807)
+
+query I
+SELECT a FROM MaxIntTest WHERE a = 9223372036854775807
+----
+9223372036854775807
+
+query I
+SELECT 1 IN (1, 2)
+----
+1
+
+query T
+SELECT NULL IN (1, 2)
+----
+NULL
+
+query I
+SELECT 1 IN (1, NULL)
+----
+1
+
+query I
+SELECT 1 IN (NULL, 2)
+----
+NULL
+
+# statement error 1105
+# SELECT NULL IN ((1, 1))
+
+# statement error 1105
+# SELECT (1, NULL) IN ((1, 1))
+
+# statement error 1105
+# SELECT (2, NULL) IN ((1, 1))
+
+# statement error 1105
+# SELECT () IN (1,2)
+
+# statement error 1105
+# SELECT () IN ((1,2))
+
+# statement error 1105
+# SELECT () IN (())
+
+# statement error 1105
+# SELECT ('string', NULL) IN ((1, 1))
+
+# statement error 1105
+# SELECT (2, 'string', NULL) IN ((1, 1))
+
+# statement error 1105
+# SELECT (1, 1) IN ((1, NULL))
+
+# statement error 1105
+# SELECT (1, 1) IN ((2, NULL))
+
+# statement error 1105
+# SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a))
+
+# statement error 1105
+# SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT NULL IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT () IN (SELECT * FROM (VALUES (1)) AS t(a))
+
+# statement error 1105
+# SELECT () IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT ('string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (2, 'string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (2, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, 2) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
+
+# statement error 1105
+# SELECT NULL NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT () NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
+
+# statement error 1105
+# SELECT () NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT ('string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (2, 'string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (2, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, 2) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+
+# statement error 1105
+# SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
+
+# statement error 1105
+# SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+# statement error 1105
+# SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+# statement error 1105
+# SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+# statement error 1105
+# SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
+
+# statement error 1105
+# SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+# statement error 1105
+# SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+# statement error 1105
+# SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+
+statement ok
+drop table if exists a
+
+statement ok
+CREATE TABLE a (x INT, y INT)
+
+statement ok
+INSERT INTO a VALUES (1, 10), (2, 20), (3, 30)
+
+query II
+SELECT * FROM a WHERE x > 1
+----
+2 20
+3 30
+
+query II
+SELECT * FROM a WHERE y > 1
+----
+1 10
+2 20
+3 30
+
+query II
+SELECT * FROM a WHERE x > 1 AND x < 3
+----
+2 20
+
+query II
+SELECT * FROM a WHERE x > 1 AND y < 30
+----
+2 20
+
+query I
+SELECT x + 1 FROM a
+----
+2
+3
+4
+
+query IIIII
+SELECT x, x + 1, y, y + 1, x + y FROM a
+----
+1 2 10 11 11
+2 3 20 21 22
+3 4 30 31 33
+
+query I
+SELECT u + v FROM (SELECT x + 3, y + 10 FROM a) AS foo(u, v)
+----
+24
+35
+46
+
+query IIII
+SELECT x, x, y, x FROM a
+----
+1 1 10 1
+2 2 20 2
+3 3 30 3
+
+query II
+SELECT x + 1, x + y FROM a WHERE x + y > 20
+----
+3 22
+4 33
+
+statement ok
+drop table if exists b
+
+statement ok
+CREATE TABLE b (x INT, y INT)
+
+statement ok
+INSERT INTO b VALUES (1, 10), (2, 20), (3, 30)
+
+query II
+SELECT * FROM b
+----
+1  10
+2  20
+3  30
+
+# query I
+# SELECT x FROM b WHERE rowid > 0
+
+# ----
+# 1
+# 2
+# 3
+
+# query I
+# SELECT x FROM b WHERE b.rowid > 0
+
+# ----
+# 1
+# 2
+# 3
+
+statement ok
+drop table if exists c
+
+statement ok
+CREATE TABLE c (n INT, str STRING)
+
+statement ok
+INSERT INTO c values (1, 'one'),(2, 'two'),(3, 'three'),(4, 'four'),(5, 'five'),(6, 'six'),(7, 'seven'),(8, 'eight'),(9, 'nine'),(10, 'ten')
+
+query IT
+SELECT * FROM c WHERE str >= 'moo'
+----
+1 one
+2 two
+3 three
+6 six
+7 seven
+9 nine
+10 ten
+
+statement ok
+drop table if exists wide
+
+statement ok
+CREATE TABLE wide (id INT8 NOT NULL, a INT8 NOT NULL, b TEXT NOT NULL, c INT8 NOT NULL, d TEXT NOT NULL, e TEXT NOT NULL, f INT8 NOT NULL, g TEXT NOT NULL, h TEXT NOT NULL, i TEXT NOT NULL, j TEXT NOT NULL, k INT8 NOT NULL, l FLOAT NOT NULL, m FLOAT NOT NULL, n INT8 NOT NULL)
+
+statement error 1006
+INSERT INTO wide(id, n) VALUES(0, 10)
+
+query T
+SELECT count(*) FROM wide
+----
+0

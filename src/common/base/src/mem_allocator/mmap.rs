@@ -374,7 +374,7 @@ mod test {
         {
             length += 1;
         }
-        let slice = unsafe { &*(&uname_release[..length] as *const _ as *const [u8]) };
+        let slice = unsafe { &*(&uname_release[..length] as *const _) };
         let ver = std::str::from_utf8(slice).unwrap();
         let version = semver::Version::parse(ver);
         assert!(version.is_ok());

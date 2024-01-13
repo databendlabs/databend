@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 
 use std::time::Duration;
 
-use common_base::base::Stoppable;
-use common_meta_client::ClientHandle;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_base::base::Stoppable;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use log::info;
 use test_harness::test;
 
@@ -162,7 +162,6 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
         None,
     )?;
 

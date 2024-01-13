@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-fuse"
+name = "databend-common-storages-fuse"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,62 +11,58 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
-
 [dependencies]
-common-arrow = { path = "../../../common/arrow" }
-common-base = { path = "../../../common/base" }
-common-cache = { path = "../../../common/cache" }
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
-common-io = { path = "../../../common/io" }
-common-meta-app = { path = "../../../meta/app" }
-common-meta-types = { path = "../../../meta/types" }
-common-metrics = { path = "../../../common/metrics" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sinks = { path = "../../pipeline/sinks" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-sharing = { path = "../../sharing" }
-common-sql = { path = "../../sql" }
-common-storage = { path = "../../../common/storage" }
+databend-common-arrow = { path = "../../../common/arrow" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-cache = { path = "../../../common/cache" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-functions = { path = "../../functions" }
+databend-common-hashtable = { path = "../../../common/hashtable" }
+databend-common-io = { path = "../../../common/io" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-meta-types = { path = "../../../meta/types" }
+databend-common-metrics = { path = "../../../common/metrics" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sinks = { path = "../../pipeline/sinks" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
+databend-common-sharing = { path = "../../sharing" }
+databend-common-sql = { path = "../../sql" }
+databend-common-storage = { path = "../../../common/storage" }
 jsonb = { workspace = true }
 
-storages-common-blocks = { path = "../common/blocks" }
-storages-common-cache = { path = "../common/cache" }
-storages-common-cache-manager = { path = "../common/cache_manager" }
-storages-common-index = { path = "../common/index" }
-storages-common-locks = { path = "../common/locks" }
-storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table_meta" }
+databend-storages-common-blocks = { path = "../common/blocks" }
+databend-storages-common-cache = { path = "../common/cache" }
+databend-storages-common-cache-manager = { path = "../common/cache_manager" }
+databend-storages-common-index = { path = "../common/index" }
+databend-storages-common-pruner = { path = "../common/pruner" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }
 chrono = { workspace = true }
 enum-as-inner = "0.5"
-futures = "0.3.24"
+futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = "2.0.0"
-itertools = "0.10.5"
-lazy_static = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
-rand = "0.8.5"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
 sys-info = "0.9"
-
-typetag = "0.2.3"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+typetag = { workspace = true }
+uuid = { workspace = true }
+xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }

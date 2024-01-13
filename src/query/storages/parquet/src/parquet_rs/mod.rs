@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod copy_into_table;
 mod parquet_reader;
 mod parquet_table;
 mod partition;
@@ -19,6 +20,14 @@ mod pruning;
 mod source;
 mod statistics;
 
+mod meta;
+mod schema;
+
+pub use copy_into_table::ParquetTableForCopy;
+pub use meta::read_metas_in_parallel;
+pub use meta::read_metas_in_parallel_for_copy;
+pub use meta::read_parquet_metas_batch;
+pub use parquet_reader::InMemoryRowGroup;
 pub use parquet_reader::ParquetRSFullReader;
 pub use parquet_reader::ParquetRSReaderBuilder;
 pub use parquet_reader::ParquetRSRowGroupReader;

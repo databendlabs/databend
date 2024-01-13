@@ -18,53 +18,56 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
+use std::sync::LazyLock;
 
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::serialize::read_decimal_with_size;
-use common_expression::serialize::uniform_date;
-use common_expression::types::array::ArrayColumnBuilder;
-use common_expression::types::date::check_date;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalColumnBuilder;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::number::Number;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::timestamp::check_timestamp;
-use common_expression::types::AnyType;
-use common_expression::types::NumberColumnBuilder;
-use common_expression::with_decimal_type;
-use common_expression::with_number_mapped_type;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_UPPER;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::BufferReadStringExt;
-use common_io::cursor_ext::DateTimeResType;
-use common_io::cursor_ext::ReadBytesExt;
-use common_io::cursor_ext::ReadCheckPointExt;
-use common_io::cursor_ext::ReadNumberExt;
-use common_io::parse_bitmap;
-use common_io::prelude::FormatSettings;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::serialize::uniform_date;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalColumnBuilder;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::cursor_ext::BufferReadDateTimeExt;
+use databend_common_io::cursor_ext::BufferReadStringExt;
+use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::cursor_ext::ReadBytesExt;
+use databend_common_io::cursor_ext::ReadCheckPointExt;
+use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::parse_bitmap;
+use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
-use once_cell::sync::Lazy;
+use num_traits::NumCast;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
 
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
-    pub common_settings: InputCommonSettings,
+    common_settings: InputCommonSettings,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -74,7 +77,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings) -> Self {
+    pub fn create_for_insert(format: FormatSettings, rounding_mode: bool) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -88,6 +91,7 @@ impl FastFieldDecoderValues {
                 timezone: format.timezone,
                 disable_variant_check: false,
             },
+            rounding_mode,
         }
     }
 
@@ -140,6 +144,7 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -194,9 +199,26 @@ impl FastFieldDecoderValues {
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
-        let v: T::Native = reader.read_int_text()?;
+        let val: Result<T::Native> = reader.read_int_text();
+        let v = match val {
+            Ok(v) => v,
+            Err(_) => {
+                // cast float value to integer value
+                let val: f64 = reader.read_float_text()?;
+                let new_val: Option<T::Native> = if self.rounding_mode {
+                    num_traits::cast::cast(val.round())
+                } else {
+                    num_traits::cast::cast(val)
+                };
+                if let Some(v) = new_val {
+                    v
+                } else {
+                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                }
+            }
+        };
         column.push(v.into());
         Ok(())
     }
@@ -416,7 +438,7 @@ impl FastFieldDecoderValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -430,7 +452,7 @@ impl FastFieldDecoderValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -472,7 +494,8 @@ pub trait FastValuesDecodeFallback {
 // Pre-generate the positions of `(`, `'` and `\`
 static PATTERNS: &[&str] = &["(", "'", "\\"];
 
-static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
+static INSERT_TOKEN_FINDER: LazyLock<AhoCorasick> =
+    LazyLock::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 impl<'a> FastValuesDecoder<'a> {
     pub fn new(data: &'a str, field_decoder: &'a FastFieldDecoderValues) -> Self {

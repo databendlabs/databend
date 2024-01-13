@@ -18,25 +18,27 @@ use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::native::read::reader::NativeReader;
-use common_arrow::native::read::NativeReadBuf;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::Value;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::native::read::reader::infer_schema;
+use databend_common_arrow::native::read::reader::NativeReader;
+use databend_common_arrow::native::read::NativeReadBuf;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
+use databend_common_metrics::storage::*;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
-use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::metrics::metrics_inc_remote_io_read_parts;
 
 // Native storage format
 
@@ -196,36 +198,40 @@ impl BlockReader {
         Ok(native_readers)
     }
 
+    #[inline(always)]
     pub fn fill_missing_native_column_values(
         &self,
         data_block: DataBlock,
         data_block_column_ids: &HashSet<ColumnId>,
     ) -> Result<DataBlock> {
-        let default_vals = self.default_vals.clone();
-
         DataBlock::create_with_default_value_and_block(
             &self.projected_schema,
             &data_block,
             data_block_column_ids,
-            &default_vals,
+            &self.default_vals,
         )
     }
 
     pub fn build_block(
         &self,
-        chunks: Vec<(usize, Box<dyn Array>)>,
+        chunks: &[(usize, Box<dyn Array>)],
         default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
-        let mut nums_rows = 0;
+        let mut nums_rows: Option<usize> = None;
         let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
                 let data_type: DataType = self.projected_schema.field(index).data_type().into();
                 entries.push(BlockEntry::new(
                     data_type.clone(),
-                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                 ));
-                nums_rows = array.len();
+                match nums_rows {
+                    Some(rows) => {
+                        debug_assert_eq!(rows, array.len(), "Column array lengths are not equal")
+                    }
+                    None => nums_rows = Some(array.len()),
+                }
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
                     let data_type: DataType = self.projected_schema.field(index).data_type().into();
@@ -237,6 +243,12 @@ impl BlockReader {
                 }
             }
         }
-        Ok(DataBlock::new(entries, nums_rows))
+        Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
+    }
+
+    pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let schema = infer_schema(&mut reader).ok()?;
+        Some(schema)
     }
 }

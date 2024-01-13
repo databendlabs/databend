@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::types::DataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
 use itertools::Itertools;
 use log::info;
 
@@ -38,7 +38,9 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
+use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -66,7 +68,18 @@ pub fn try_rewrite(
         .collect::<HashMap<_, _>>();
 
     let query_predicates = query_info.predicates.map(distinguish_predicates);
+    let query_sort_items = query_info.formatted_sort_items();
     let query_group_items = query_info.formatted_group_items();
+
+    if query_info.aggregation.is_some() {
+        // if have agg funcs, check sort items are subset of group items.
+        if !query_sort_items
+            .iter()
+            .all(|item| query_group_items.contains(item))
+        {
+            return Ok(None);
+        }
+    }
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, sql, plan) in index_plans.iter() {
@@ -77,6 +90,7 @@ pub fn try_rewrite(
 
         // 1. Check query output and try to rewrite it.
         let index_selection = index_info.formatted_selection()?;
+
         // group items should be in selection.
         if !query_group_items
             .iter()
@@ -123,7 +137,7 @@ pub fn try_rewrite(
                             &index_selection,
                             &query_info.format_scalar(&agg.scalar),
                         ) {
-                            rewritten.column.data_type = Box::new(DataType::String);
+                            rewritten.column.data_type = Box::new(DataType::Binary);
                             new_selection.push(ScalarItem {
                                 index: agg.index,
                                 scalar: rewritten.into(),
@@ -200,10 +214,15 @@ pub fn try_rewrite(
             }
             (Some((qe, qr, qo)), None) => {
                 if !qe.is_empty() {
-                    continue;
+                    let preds = qe
+                        .iter()
+                        .flat_map(|(left, right)| [(*left).clone(), (*right).clone()])
+                        .collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if !qo.is_empty() {
-                    continue;
+                    let preds = qo.iter().map(|p| (*p).clone()).collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if let Some(preds) = check_predicates_range(
                     qr,
@@ -243,8 +262,8 @@ pub fn try_rewrite(
                         // If the item is an aggregation function,
                         // the actual data in the index is the temp state of the function.
                         // (E.g. `sum` function will store serialized `sum_state` in index data.)
-                        // So the data type will be `String`.
-                        return Ok(TableField::new(&idx.to_string(), TableDataType::String));
+                        // So the data type will be `Binary`.
+                        return Ok(TableField::new(&idx.to_string(), TableDataType::Binary));
                     }
                 }
 
@@ -341,33 +360,26 @@ fn rewrite_scalar_index(
     columns: &HashMap<String, IndexType>,
     scalar: &mut ScalarExpr,
 ) {
-    match scalar {
-        ScalarExpr::BoundColumnRef(col) => {
-            if let Some(index) = columns.get(&col.column.column_name) {
-                col.column.table_index = Some(table_index);
+    struct RewriteVisitor<'a> {
+        table_index: IndexType,
+        columns: &'a HashMap<String, IndexType>,
+    }
+
+    impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
+        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) -> Result<()> {
+            if let Some(index) = self.columns.get(&col.column.column_name) {
+                col.column.table_index = Some(self.table_index);
                 col.column.index = *index;
             }
+            Ok(())
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            agg.args
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::FunctionCall(func) => {
-            func.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        ScalarExpr::CastExpr(cast) => {
-            rewrite_scalar_index(table_index, columns, &mut cast.argument);
-        }
-        ScalarExpr::UDFServerCall(udf) => {
-            udf.arguments
-                .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
-        }
-        _ => { /*  do nothing */ }
     }
+
+    let mut visitor = RewriteVisitor {
+        table_index,
+        columns,
+    };
+    visitor.visit(scalar).unwrap();
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.
@@ -607,6 +619,7 @@ pub struct RewriteInfomartion<'a> {
     table_index: IndexType,
     pub selection: &'a EvalScalar,
     pub predicates: Option<&'a [ScalarExpr]>,
+    pub sort_items: Option<&'a [SortItem]>,
     pub aggregation: Option<AggregationInfo<'a>>,
 }
 
@@ -638,6 +651,18 @@ impl RewriteInfomartion<'_> {
             let mut cols = Vec::with_capacity(agg.group_items.len());
             for item in agg.group_items.iter() {
                 cols.push(self.format_scalar(&item.scalar));
+            }
+            cols.sort();
+            return cols;
+        }
+        vec![]
+    }
+
+    fn formatted_sort_items(&self) -> Vec<String> {
+        if let Some(sorts) = self.sort_items {
+            let mut cols = Vec::with_capacity(sorts.len());
+            for item in sorts {
+                cols.push(format_col_name(item.index));
             }
             cols.sort();
             return cols;
@@ -734,6 +759,7 @@ fn collect_information(s_expr: &SExpr) -> Result<RewriteInfomartion<'_>> {
             table_index: 0,
             selection: eval,
             predicates: None,
+            sort_items: None,
             aggregation: None,
         };
         collect_information_impl(s_expr.child(0)?, &mut info)?;
@@ -762,6 +788,10 @@ fn collect_information_impl<'a>(
             } else {
                 collect_information_impl(child, info)
             }
+        }
+        RelOperator::Sort(sort) => {
+            info.sort_items.replace(&sort.items);
+            collect_information_impl(s_expr.child(0)?, info)
         }
         RelOperator::Filter(filter) => {
             info.predicates.replace(&filter.predicates);
@@ -1018,7 +1048,9 @@ fn rewrite_query_item(
             Some(
                 UDFServerCall {
                     span: udf.span,
+                    name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
+                    display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),

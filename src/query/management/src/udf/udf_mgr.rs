@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_base::base::escape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_functions::is_builtin_function;
-use common_meta_app::principal::UserDefinedFunction;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_base::base::escape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_functions::is_builtin_function;
+use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -72,11 +72,11 @@ impl UdfApi for UdfMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.added_or_else(|v| {
-            ErrorCode::UdfAlreadyExists(format!("UDF already exists, seq [{}]", v.seq))
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
+            ErrorCode::UdfAlreadyExists(format!("UDF '{}' already exists.", info.name))
         })?;
 
-        Ok(res.seq)
+        Ok(res_seq)
     }
 
     #[async_backtrace::framed]
@@ -84,8 +84,8 @@ impl UdfApi for UdfMgr {
     async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
-                "Builtin function can not be updated: {}",
-                info.name.as_str()
+                "Cannot add UDF '{}': name conflicts with a built-in function.",
+                info.name
             )));
         }
 
@@ -102,7 +102,7 @@ impl UdfApi for UdfMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUDF(format!(
-                "Unknown Function, or seq not match {}",
+                "UDF '{}' does not exist.",
                 info.name.clone()
             ))),
         }
@@ -115,8 +115,8 @@ impl UdfApi for UdfMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUDF(format!("Unknown Function {}", udf_name)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::with_meta(
@@ -125,7 +125,7 @@ impl UdfApi for UdfMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUDFFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownUDF(format!(
-                "Unknown Function {}",
+                "UDF '{}' does not exist.",
                 udf_name
             ))),
         }
@@ -139,7 +139,10 @@ impl UdfApi for UdfMgr {
         let mut udfs = Vec::with_capacity(values.len());
         for (name, value) in values {
             let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
-                format!("udf {name} is corrupt")
+                format!(
+                    "Failed to deserialize UDF '{}': data format is corrupt or invalid.",
+                    name
+                )
             })?;
             udfs.push(udf);
         }
@@ -161,7 +164,7 @@ impl UdfApi for UdfMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownUDF(format!(
-                "Unknown Function {}",
+                "UDF '{}' does not exist.",
                 udf_name
             )))
         }

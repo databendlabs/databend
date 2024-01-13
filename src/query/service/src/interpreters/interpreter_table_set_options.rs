@@ -15,19 +15,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_types::MatchSeq;
-use common_sql::plans::SetOptionsPlan;
-use common_storages_fuse::TableContext;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::SetOptionsPlan;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use log::error;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;
+use super::interpreter_table_create::is_valid_change_tracking;
 use super::interpreter_table_create::is_valid_create_opt;
 use super::interpreter_table_create::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
@@ -59,6 +60,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_change_tracking(&self.plan.set_options)?;
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
         if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
@@ -87,24 +89,13 @@ impl Interpreter for SetOptionsInterpreter {
         }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
-        let table = self.plan.table.as_str();
-        let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), database, table)
-            .await
-            .ok();
+        let table_name = self.plan.table.as_str();
+        let table = catalog
+            .get_table(self.ctx.get_tenant().as_str(), database, table_name)
+            .await?;
 
-        let table = if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
-            table
-        } else {
-            return Err(ErrorCode::UnknownTable(format!(
-                "Unknown table `{}`.`{}` in catalog '{}'",
-                database,
-                self.plan.table.as_str(),
-                &catalog.name()
-            )));
-        };
+        // check mutability
+        table.check_mutable()?;
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;

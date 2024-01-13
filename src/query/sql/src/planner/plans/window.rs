@@ -16,13 +16,13 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -90,6 +90,17 @@ impl Window {
 
         Ok(used_columns)
     }
+
+    // `Window.partition_by_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
+    // like `Aggregate.group_columns` only consider `group_items` field.
+    pub fn partition_by_columns(&self) -> Result<ColumnSet> {
+        let mut col_set = ColumnSet::new();
+        for part in self.partition_by.iter() {
+            col_set.insert(part.index);
+            col_set.extend(part.scalar.used_columns())
+        }
+        Ok(col_set)
+    }
 }
 
 impl Operator for Window {
@@ -117,7 +128,8 @@ impl Operator for Window {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let output_columns = ColumnSet::from([self.index]);
+        let mut output_columns = input_prop.output_columns.clone();
+        output_columns.insert(self.index);
 
         // Derive outer columns
         let outer_columns = input_prop
@@ -130,14 +142,18 @@ impl Operator for Window {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = input_prop.orderings.clone();
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let input_stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = if self.partition_by.is_empty() {
             // Scalar aggregation
@@ -176,6 +192,17 @@ impl Operator for Window {
                 column_stats: input_stat_info.statistics.column_stats.clone(),
             },
         }))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+        Ok(vec![vec![required]])
     }
 }
 

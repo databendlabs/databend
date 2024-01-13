@@ -1,26 +1,79 @@
 [package]
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
 edition = "2021"
 license = "Apache-2.0"
-name = "common-arrow"
+name = "databend-common-arrow"
 publish = false
 version = "0.1.0"
+description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."
 
 [lib]
 doctest = false
 test = false
 
 [features]
-arrow-default = [
-    "arrow/compute",
-    "arrow/regex",
-    "arrow/io_csv",
-    "arrow/io_parquet",
-    "arrow/io_json",
-    "arrow/io_flight",
-    "arrow/compute_filter",
-]
 default = ["arrow-default", "parquet-default"]
+
+arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
+io_ipc = []
+io_ipc_compression = []
+io_flight = ["io_ipc", "arrow-format/flight-data"]
+
+# base64 + io_ipc because arrow schemas are stored as base64-encoded ipc format.
+io_parquet = ["io_ipc", "base64", "streaming-iterator", "fallible-streaming-iterator"]
+io_parquet_async = ["futures", "io_parquet", "parquet2/async"]
+
+io_parquet_compression = [
+    "io_parquet_zstd",
+    "io_parquet_gzip",
+    "io_parquet_snappy",
+    "io_parquet_lz4",
+    "io_parquet_brotli",
+]
+
+# sample testing of generated arrow data
+io_parquet_sample_test = ["io_parquet_async"]
+
+# compression backends
+io_parquet_zstd = ["parquet2/zstd"]
+io_parquet_gzip = ["parquet2/gzip"]
+io_parquet_snappy = ["parquet2/snappy"]
+io_parquet_lz4 = ["parquet2/lz4"]
+io_parquet_brotli = ["parquet2/brotli"]
+
+# parquet bloom filter functions
+io_parquet_bloom_filter = ["parquet2/bloom_filter"]
+
+compute_aggregate = []
+compute_cast = ["lexical-core", "compute_take"]
+compute_concatenate = []
+compute_merge_sort = ["itertools", "compute_sort"]
+compute_sort = ["compute_take"]
+compute_take = []
+compute = [
+    "compute_aggregate",
+    "compute_cast",
+    "compute_concatenate",
+    "compute_merge_sort",
+    "compute_sort",
+    "compute_take",
+]
+
+serde_types = ["serde", "serde_derive"]
+simd = []
+
+arrow-default = [
+    "arrow",
+    "io_ipc",
+    "io_ipc_compression",
+    "io_flight",
+    "io_parquet_async",
+    "io_parquet_compression",
+    "io_parquet",
+    "compute",
+    "serde_types",
+    "simd",
+]
+
 parquet-default = [
     "parquet2/lz4",
     "parquet2/zstd",
@@ -29,22 +82,81 @@ parquet-default = [
     # "parquet2/gzip_zlib_ng",
     "parquet2/brotli",
 ]
-simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
 
-# Crates.io dependencies
-arrow = { git = "https://github.com/jorgecarleitao/arrow2", rev = "b073454", package = "arrow2", default-features = false, features = [
-    "arrow",
-    "io_parquet",
-    "io_parquet_compression",
-    "serde_types",
-] }
-
 arrow-format = { workspace = true }
-futures = "0.3.24"
-native = { package = "strawboat", git = "https://github.com/sundy-li/strawboat", rev = "f3114b" }
-parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types"] }
+bitpacking = "0.8.0"
+byteorder = { workspace = true }
+bytes = "^1"
+log = { workspace = true }
+num = { version = "0.4", default-features = false, features = ["std"] }
+ordered-float = "3.7.0"
+ringbuffer = "0.14.2"
+roaring = "0.10.1"
+seq-macro = { version = "0.3", default-features = false }
+
+bytemuck = { version = "1", features = ["derive"] }
+chrono = { workspace = true }
+dyn-clone = "1"
+either = "1.9"
+foreign_vec = "0.1.0"
+num-traits = "0.2"
+parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
+
+# for decimal i256
+ethnum = { workspace = true }
+
+# For SIMD utf8 validation
+simdutf8 = "0.1.4"
+
+# A Rust port of SwissTable
+hashbrown = { version = "0.14", default-features = false, features = ["ahash"] }
+
+# for timezone support
+chrono-tz = { workspace = true, optional = true }
+# To efficiently cast numbers to strings
+lexical-core = { version = "0.8", optional = true }
+
+fallible-streaming-iterator = { version = "0.1", optional = true }
+streaming-iterator = { version = "0.1", optional = true }
+
+# for IPC compression
+lz4 = { version = "1.24" }
+snap = { version = "1.1.0" }
+zstd = { version = "0.12" }
+
+base64 = { version = "0.21.0", optional = true }
+itertools = { workspace = true, optional = true }
+rand = { workspace = true }
+
+# to write to parquet as a stream
+futures = { version = "0.3", optional = true }
+
+# to read IPC as a stream
+async-stream = { version = "0.3.2", optional = true }
+
+# Faster hashing
+ahash = "0.8"
+
+# Arrow integration tests support
+serde = { version = "^1.0", features = ["rc"], optional = true }
+serde_derive = { version = "^1.0", optional = true }
+
+# Support conversion to/from arrow-rs
+arrow-array = { workspace = true, optional = true }
+arrow-buffer = { workspace = true, optional = true }
+arrow-data = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
 
 [dev-dependencies]
+# used to test async readers
+tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+# used to run formal property testing
+async-std = "1.12"
+env_logger = "0.10"
+flate2 = "1"
+proptest = { version = "1", default_features = false, features = ["std"] }
+quanta = "0.11.1"

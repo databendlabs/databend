@@ -38,3 +38,4 @@ echo "SET GLOBAL input_read_buffer_size = 1048576;" | $BENDSQL_CLIENT_CONNECT
 
 # check
 echo "select count(*) from test_tsv" |  $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists test_tsv" | $BENDSQL_CLIENT_CONNECT

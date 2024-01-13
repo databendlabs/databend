@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
-use common_catalog::plan::Partitions;
-use common_expression::ColumnId;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
+use databend_common_catalog::plan::Partitions;
+use databend_common_expression::ColumnId;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CompactSource {

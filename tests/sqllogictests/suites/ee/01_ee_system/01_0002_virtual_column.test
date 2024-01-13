@@ -1,0 +1,234 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_virtual_column
+
+statement ok
+CREATE DATABASE test_virtual_column
+
+statement ok
+USE test_virtual_column
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1(id int, val json) storage_format = 'native'
+
+statement ok
+insert into t1 values(1, '{"a":11,"b":1}'), (2, '{"a":22}'), (3, '3')
+
+statement ok
+create virtual column (val['a'], val['b']) for t1
+
+statement ok
+refresh virtual column for t1
+
+query TTT
+show virtual columns from t1
+----
+test_virtual_column t1 val['a'], val['b']
+
+statement ok
+insert into t1 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
+
+query ITT
+select id, val['a'], val['b'] from t1 order by id
+----
+1 11 1
+2 22 NULL
+3 NULL NULL
+4 44 4
+5 55 NULL
+6 NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t1 order by id
+----
+1 11 1 {"a":11,"b":1}
+2 22 NULL {"a":22}
+3 NULL NULL 3
+4 44 4 {"a":44,"b":4}
+5 55 NULL {"a":55}
+6 NULL NULL 6
+
+query ITTT
+select id, val['a'], val['b'], val['c'] from t1 order by id
+----
+1 11 1 NULL
+2 22 NULL NULL
+3 NULL NULL NULL
+4 44 4 NULL
+5 55 NULL NULL
+6 NULL NULL NULL
+
+query ITT
+select id, val['a'], val['b'] from t1 where val=3 or val=6 order by id
+----
+3 NULL NULL
+6 NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t1 where val=3 or val=6 order by id
+----
+3 NULL NULL 3
+6 NULL NULL 6
+
+query ITT
+select id, val['a'], val['b'] from t1 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1
+4 44 4
+
+query ITTT
+select id, val['a'], val['b'], val from t1 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 {"a":11,"b":1}
+4 44 4 {"a":44,"b":4}
+
+query IT
+select max(id), val:a from t1 group by val:a order by val:a
+----
+1 11
+2 22
+4 44
+5 55
+6 NULL
+
+query ITIT
+select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t1)t11 join (select id, val:a as a from t1)t12 on t11.a = t12.a order by t11.a
+----
+1 11 1 11
+2 22 2 22
+4 44 4 44
+5 55 5 55
+
+query ITT
+SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t1 AS r) AS r order by id
+----
+1 11 11
+2 22 22
+3 NULL NULL
+4 44 44
+5 55 55
+6 NULL NULL
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t2(id int, val json) storage_format = 'parquet'
+
+statement ok
+insert into t2 values(1, '{"a":11,"b":1}'), (2, '{"a":22}'), (3, '3')
+
+statement ok
+create virtual column (val['a'], val['b']) for t2
+
+statement ok
+refresh virtual column for t2
+
+query TTT
+show virtual columns from t2
+----
+test_virtual_column t2 val['a'], val['b']
+
+statement ok
+insert into t2 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
+
+query ITT
+select id, val['a'], val['b'] from t2 order by id
+----
+1 11 1
+2 22 NULL
+3 NULL NULL
+4 44 4
+5 55 NULL
+6 NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t2 order by id
+----
+1 11 1 {"a":11,"b":1}
+2 22 NULL {"a":22}
+3 NULL NULL 3
+4 44 4 {"a":44,"b":4}
+5 55 NULL {"a":55}
+6 NULL NULL 6
+
+query ITTT
+select id, val['a'], val['b'], val['c'] from t2 order by id
+----
+1 11 1 NULL
+2 22 NULL NULL
+3 NULL NULL NULL
+4 44 4 NULL
+5 55 NULL NULL
+6 NULL NULL NULL
+
+query ITT
+select id, val['a'], val['b'] from t2 where val=3 or val=6 order by id
+----
+3 NULL NULL
+6 NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t2 where val=3 or val=6 order by id
+----
+3 NULL NULL 3
+6 NULL NULL 6
+
+query ITT
+select id, val['a'], val['b'] from t2 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1
+4 44 4
+
+query ITTT
+select id, val['a'], val['b'], val from t2 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 {"a":11,"b":1}
+4 44 4 {"a":44,"b":4}
+
+query IT
+select max(id), val:a from t2 group by val:a order by val:a
+----
+1 11
+2 22
+4 44
+5 55
+6 NULL
+
+query ITIT
+select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t2)t11 join (select id, val:a as a from t2)t12 on t11.a = t12.a order by t11.a
+----
+1 11 1 11
+2 22 2 22
+4 44 4 44
+5 55 5 55
+
+query ITT
+SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t2 AS r) AS r order by id
+----
+1 11 11
+2 22 22
+3 NULL NULL
+4 44 44
+5 55 55
+6 NULL NULL
+
+statement ok
+DROP DATABASE test_virtual_column
+

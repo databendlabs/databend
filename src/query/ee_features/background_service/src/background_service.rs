@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use common_base::base::GlobalInstance;
-use common_exception::Result;
-use common_meta_app::principal::UserIdentity;
+use databend_common_base::base::GlobalInstance;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserIdentity;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {

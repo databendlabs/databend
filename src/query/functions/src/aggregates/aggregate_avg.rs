@@ -12,186 +12,229 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
-use std::fmt;
+use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::decimal::*;
-use common_expression::types::*;
-use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::with_number_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use ethnum::i256;
-use serde::Deserialize;
-use serde::Serialize;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Scalar;
+use num_traits::AsPrimitive;
 
 use super::aggregate_sum::DecimalSumState;
-use super::aggregate_sum::NumberSumState;
-use super::aggregate_sum::SumState;
-use super::deserialize_state;
-use super::serialize_state;
-use super::StateAddr;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
+use super::AggregateUnaryFunction;
+use super::FunctionData;
+use super::UnaryState;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
-#[derive(Serialize, Deserialize)]
-struct AvgState<T> {
-    pub value: T,
-    pub count: u64,
-}
-
-#[derive(Clone)]
-pub struct AggregateAvgFunction<T> {
-    display_name: String,
-    _arguments: Vec<DataType>,
-    t: PhantomData<T>,
-    return_type: DataType,
-
-    // only for decimals
-    // AVG：AVG(DECIMAL(a, b)) -> DECIMAL(38 or 76, max(b, 4))。
-    scale_add: u8,
-}
-
-impl<T> AggregateFunction for AggregateAvgFunction<T>
-where T: SumState
+#[derive(BorshSerialize, BorshDeserialize)]
+struct NumberAvgState<T, TSum>
+where TSum: ValueType
 {
-    fn name(&self) -> &str {
-        "AggregateAvgFunction"
-    }
+    pub value: TSum::Scalar,
+    pub count: u64,
+    #[borsh(skip)]
+    _t: PhantomData<T>,
+}
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(self.return_type.clone())
-    }
-
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| AvgState::<T> {
-            value: T::default(),
+impl<T, TSum> Default for NumberAvgState<T, TSum>
+where
+    T: ValueType + Sync + Send,
+    TSum: ValueType,
+    T::Scalar: Number + AsPrimitive<TSum::Scalar>,
+    TSum::Scalar:
+        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+{
+    fn default() -> Self {
+        Self {
+            value: TSum::Scalar::default(),
             count: 0,
-        });
-    }
-
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AvgState<T>>()
-    }
-
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[Column],
-        validity: Option<&Bitmap>,
-        input_rows: usize,
-    ) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        state.count += validity.map_or(input_rows as u64, |v| (v.len() - v.unset_bits()) as u64);
-        state.value.accumulate(&columns[0], validity)
-    }
-
-    fn accumulate_keys(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        columns: &[Column],
-        _input_rows: usize,
-    ) -> Result<()> {
-        for place in places {
-            let state = place.next(offset).get::<AvgState<T>>();
-            state.count += 1;
+            _t: PhantomData,
         }
-        T::accumulate_keys(places, offset, &columns[0])
     }
+}
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        state.value.accumulate_row(&columns[0], row)?;
-        state.count += 1;
+impl<T, TSum> UnaryState<T, Float64Type> for NumberAvgState<T, TSum>
+where
+    T: ValueType + Sync + Send,
+    TSum: ValueType,
+    T::Scalar: Number + AsPrimitive<TSum::Scalar>,
+    TSum::Scalar:
+        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.count += 1;
+        let other = T::to_owned_scalar(other).as_();
+        self.value += other;
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-
-        serialize_state(writer, state)
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.count += rhs.count;
+        self.value += rhs.value;
+        Ok(())
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        let rhs: AvgState<T> = deserialize_state(reader)?;
-
-        state.count += rhs.count;
-        state.value.merge(&rhs.value)
+    fn merge_result(
+        &mut self,
+        builder: &mut Vec<F64>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let value = self.value.as_() / (self.count as f64);
+        builder.push(F64::from(value));
+        Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        let rhs = rhs.get::<AvgState<T>>();
-        state.count += rhs.count;
-        state.value.merge(&rhs.value)
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        borsh_serialize_state(writer, self)
     }
 
-    #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        state
-            .value
-            .merge_avg_result(builder, state.count, self.scale_add, &None)
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>
+    where Self: Sized {
+        borsh_deserialize_state(reader)
     }
 }
 
-impl<T> fmt::Display for AggregateAvgFunction<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
+struct DecimalAvgData {
+    // only for decimals
+    // AVG：AVG(DECIMAL(a, b)) -> DECIMAL(38 or 76, max(b, 4))。
+    pub scale_add: u8,
+}
+
+impl FunctionData for DecimalAvgData {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
-impl<T> AggregateAvgFunction<T>
-where T: SumState
+#[derive(BorshSerialize, BorshDeserialize)]
+struct DecimalAvgState<const OVERFLOW: bool, T>
+where
+    T: ValueType,
+    T::Scalar: Decimal,
 {
-    pub fn try_create(
-        display_name: &str,
-        arguments: Vec<DataType>,
-        return_type: DataType,
-        scale_add: u8,
-    ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(Self {
-            display_name: display_name.to_string(),
-            _arguments: arguments,
-            t: PhantomData,
-            return_type,
-            scale_add,
-        }))
+    pub value: T::Scalar,
+    pub count: u64,
+}
+
+impl<const OVERFLOW: bool, T> Default for DecimalAvgState<OVERFLOW, T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+{
+    fn default() -> Self {
+        Self {
+            value: T::Scalar::default(),
+            count: 0,
+        }
+    }
+}
+
+impl<const OVERFLOW: bool, T> DecimalAvgState<OVERFLOW, T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign,
+{
+    fn add_internal(&mut self, count: u64, value: T::ScalarRef<'_>) -> Result<()> {
+        self.count += count;
+        self.value += T::to_owned_scalar(value);
+        if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {:?} not in [{}, {}]",
+                self.value,
+                T::Scalar::MIN,
+                T::Scalar::MAX,
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.add_internal(1, other)
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.add_internal(rhs.count, T::to_scalar_ref(&rhs.value))
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut T::ColumnBuilder,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        // # Safety
+        // `downcast_ref_unchecked` will check type in debug mode using dynamic dispatch,
+        let decimal_avg_data = unsafe {
+            function_data
+                .unwrap()
+                .as_any()
+                .downcast_ref_unchecked::<DecimalAvgData>()
+        };
+        match self
+            .value
+            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add as u32))
+            .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
+        {
+            Some(value) => {
+                T::push_item(builder, T::to_scalar_ref(&value));
+                Ok(())
+            }
+            None => Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {} mul {}",
+                self.value,
+                T::Scalar::e(decimal_avg_data.scale_add as u32)
+            ))),
+        }
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        borsh_serialize_state(writer, self)
+    }
+
+    fn deserialize(reader: &mut &[u8]) -> Result<Self>
+    where Self: Sized {
+        borsh_deserialize_state(reader)
     }
 }
 
 pub fn try_create_aggregate_avg_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
-) -> Result<Arc<dyn AggregateFunction>> {
+) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
 
-    // null use dummy func, it's already covered in `AggregateNullResultFunction`
     let data_type = if arguments[0].is_null() {
         Int8Type::data_type()
     } else {
         arguments[0].clone()
     };
-    with_number_mapped_type!(|NUM_TYPE| match &data_type {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            type TSum = <NUM_TYPE as ResultTypeOfUnary>::Sum;
-            AggregateAvgFunction::<NumberSumState<NUM_TYPE, TSum>>::try_create(
-                display_name,
-                arguments,
-                Float64Type::data_type(),
-                0,
-            )
+
+    with_number_mapped_type!(|NUM| match &data_type {
+        DataType::Number(NumberDataType::NUM) => {
+            type TSum = <NUM as ResultTypeOfUnary>::Sum;
+            let return_type = Float64Type::data_type();
+            AggregateUnaryFunction::<
+                NumberAvgState<NumberType<NUM>, NumberType<TSum>>,
+                NumberType<NUM>,
+                Float64Type,
+            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
             let p = MAX_DECIMAL128_PRECISION;
@@ -200,53 +243,69 @@ pub fn try_create_aggregate_avg_function(
                 scale: s.scale.max(4),
             };
 
+            // DecimalWidth<int64_t> = 18
             let overflow = s.precision > 18;
+            let scale_add = decimal_size.scale - s.scale;
+            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {
-                AggregateAvgFunction::<DecimalSumState<true, i128>>::try_create(
-                    display_name,
-                    arguments,
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                    decimal_size.scale - s.scale,
+                let func = AggregateUnaryFunction::<
+                    DecimalAvgState<true, Decimal128Type>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create(
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             } else {
-                AggregateAvgFunction::<DecimalSumState<false, i128>>::try_create(
-                    display_name,
-                    arguments,
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                    decimal_size.scale - s.scale,
+                let func = AggregateUnaryFunction::<
+                    DecimalAvgState<false, Decimal128Type>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create(
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
             let p = MAX_DECIMAL256_PRECISION;
-
             let decimal_size = DecimalSize {
                 precision: p,
                 scale: s.scale.max(4),
             };
 
             let overflow = s.precision > 18;
+            let scale_add = decimal_size.scale - s.scale;
+            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {
-                AggregateAvgFunction::<DecimalSumState<true, i256>>::try_create(
-                    display_name,
-                    arguments,
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                    decimal_size.scale - s.scale,
+                let func = AggregateUnaryFunction::<
+                    DecimalAvgState<true, Decimal256Type>,
+                    Decimal256Type,
+                    Decimal256Type,
+                >::try_create(
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             } else {
-                AggregateAvgFunction::<DecimalSumState<false, i256>>::try_create(
-                    display_name,
-                    arguments,
-                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                    decimal_size.scale - s.scale,
+                let func = AggregateUnaryFunction::<
+                    DecimalSumState<false, Decimal256Type>,
+                    Decimal256Type,
+                    Decimal256Type,
+                >::try_create(
+                    display_name, return_type, params, arguments[0].clone()
                 )
+                .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                Ok(Arc::new(func))
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "AggregateAvgFunction does not support type '{:?}'",
-            arguments[0]
+            "{} does not support type '{:?}'",
+            display_name, arguments[0]
         ))),
     })
 }

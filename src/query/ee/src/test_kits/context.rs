@@ -12,30 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_exception::Result;
-use common_license::license::LicenseInfo;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::PasswordHashMethod;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use databend_query::sessions::QueryContext;
-use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
-use databend_query::sessions::TableContext;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGuard;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license::LicenseInfo;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_query::test_kits::*;
 use jwt_simple::algorithms::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::ES256KeyPair;
 use tempfile::TempDir;
 
-use crate::test_kits::sessions::TestGlobalServices;
+use crate::test_kits::setup::TestFixture;
 
 fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
     LicenseInfo {
@@ -46,58 +35,45 @@ fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
     }
 }
 
-pub async fn create_ee_query_context(
-    mut current_user: Option<UserInfo>,
-) -> Result<(TestGuard, Arc<QueryContext>, String)> {
-    let key_pair = ES256KeyPair::generate();
-    let claims = Claims::with_custom_claims(
-        build_custom_claims("trial".to_string(), "databend".to_string()),
-        Duration::from_hours(2),
-    );
-    let token = key_pair.sign(claims)?;
-    let public_key = key_pair.public_key().to_pem().unwrap();
+pub struct EESetup {
+    config: InnerConfig,
+    pk: String,
+}
 
-    let tmp_dir = TempDir::new().unwrap();
-    let mut conf = ConfigBuilder::create().config();
-    conf.query.databend_enterprise_license = Some(token);
-    // make sure we are using `fs` storage
-    let root = tmp_dir.path().to_str().unwrap().to_string();
-    conf.storage.allow_insecure = true;
-    conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        // use `TempDir` as root path (auto clean)
-        root: root.clone(),
-    });
-
-    let guard = TestGlobalServices::setup(conf, public_key).await?;
-
-    let dummy_session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
-
-    if current_user.is_none() {
-        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
-            hash_method: PasswordHashMethod::Sha256,
-            hash_value: Vec::from("pass"),
-        });
-
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_global(),
+impl EESetup {
+    pub fn new() -> Self {
+        let key_pair = ES256KeyPair::generate();
+        let claims = Claims::with_custom_claims(
+            build_custom_claims("trial".to_string(), "databend".to_string()),
+            Duration::from_hours(2),
         );
+        let token = key_pair.sign(claims).unwrap();
+        let public_key = key_pair.public_key().to_pem().unwrap();
 
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
-        );
+        let mut conf = ConfigBuilder::create().config();
+        conf.query.databend_enterprise_license = Some(token);
+        conf.storage.allow_insecure = true;
 
-        current_user = Some(user_info);
+        let tmp_dir = TempDir::new().expect("create tmp dir failed");
+        let root = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        Self {
+            config: conf,
+            pk: public_key,
+        }
     }
+}
 
-    dummy_session
-        .set_authed_user(current_user.unwrap(), None)
-        .await?;
-    let dummy_query_context = dummy_session.create_query_context().await?;
+impl Default for EESetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok((guard, dummy_query_context, root))
+#[async_trait::async_trait]
+impl Setup for EESetup {
+    async fn setup(&self) -> Result<InnerConfig> {
+        TestFixture::setup(&self.config, self.pk.clone()).await?;
+        Ok(self.config.clone())
+    }
 }

@@ -15,8 +15,10 @@
 use core::fmt;
 use std::convert::TryFrom;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 use serde::Deserialize;
@@ -41,6 +43,24 @@ pub struct UserInfo {
     pub quota: UserQuota,
 
     pub option: UserOption,
+
+    // Recently changed history passwords,
+    // used to detect whether the newly changed password
+    // is repeated with the history passwords.
+    pub history_auth_infos: Vec<AuthInfo>,
+
+    // The time of the most recent failed login with wrong passwords,
+    // used to detect whether the number of failed logins exceeds the limit,
+    // if so, the login will be locked for a while.
+    pub password_fails: Vec<DateTime<Utc>>,
+
+    // The time of the last password change,
+    // used to check if the minimum allowed time has been exceeded when changing the password,
+    // and to check if the maximum time that must be changed has been exceeded when login.
+    pub password_update_on: Option<DateTime<Utc>>,
+
+    // Login lockout time, records the end time of login lockout due to multiple password fails.
+    pub lockout_time: Option<DateTime<Utc>>,
 }
 
 impl UserInfo {
@@ -57,6 +77,10 @@ impl UserInfo {
             grants,
             quota,
             option,
+            history_auth_infos: Vec::new(),
+            password_fails: Vec::new(),
+            password_update_on: None,
+            lockout_time: None,
         }
     }
 
@@ -83,6 +107,37 @@ impl UserInfo {
             self.option = user_option;
         };
     }
+
+    pub fn update_auth_history(&mut self, auth: Option<AuthInfo>) {
+        if let Some(auth_info) = auth {
+            if matches!(auth_info, AuthInfo::Password { .. }) {
+                // Update password change history
+                self.history_auth_infos.push(auth_info);
+                // Maximum 24 password records
+                if self.history_auth_infos.len() > 24 {
+                    self.history_auth_infos.remove(0);
+                }
+                self.password_update_on = Some(Utc::now());
+            }
+        }
+    }
+
+    pub fn update_login_fail_history(&mut self) {
+        self.password_fails.push(Utc::now());
+        // Maximum 10 failed login password records
+        if self.password_fails.len() > 10 {
+            self.password_fails.remove(0);
+        }
+    }
+
+    pub fn clear_login_fail_history(&mut self) {
+        self.password_fails = Vec::new();
+        self.lockout_time = None;
+    }
+
+    pub fn update_lockout_time(&mut self, lockout_time: DateTime<Utc>) {
+        self.lockout_time = Some(lockout_time);
+    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
@@ -107,6 +162,8 @@ pub struct UserOption {
     default_role: Option<String>,
 
     network_policy: Option<String>,
+
+    password_policy: Option<String>,
 }
 
 impl UserOption {
@@ -115,6 +172,7 @@ impl UserOption {
             flags,
             default_role: None,
             network_policy: None,
+            password_policy: None,
         }
     }
 
@@ -137,6 +195,11 @@ impl UserOption {
         self
     }
 
+    pub fn with_password_policy(mut self, password_policy: Option<String>) -> Self {
+        self.password_policy = password_policy;
+        self
+    }
+
     pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
         self.flags.insert(flag);
         self
@@ -154,12 +217,20 @@ impl UserOption {
         self.network_policy.as_ref()
     }
 
+    pub fn password_policy(&self) -> Option<&String> {
+        self.password_policy.as_ref()
+    }
+
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
     }
 
     pub fn set_network_policy(&mut self, network_policy: Option<String>) {
         self.network_policy = network_policy;
+    }
+
+    pub fn set_password_policy(&mut self, password_policy: Option<String>) {
+        self.password_policy = password_policy;
     }
 
     pub fn set_all_flag(&mut self) {

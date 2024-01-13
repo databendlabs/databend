@@ -15,29 +15,29 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_ast::parser::parse_expr;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_base::base::ProgressValues;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Filters;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_license::license::Feature::DataMask;
-use common_license::license_manager::get_license_manager;
-use common_settings::Settings;
-use common_users::UserApiProvider;
-use data_mask_feature::get_datamask_handler;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StreamTablePart;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_license::license::Feature::DataMask;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_settings::Settings;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
 use log::info;
 use parking_lot::RwLock;
 
@@ -90,7 +90,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let start = std::time::Instant::now();
 
-        let (statistics, parts) = if let Some(PushDownInfo {
+        let (statistics, mut parts) = if let Some(PushDownInfo {
             filters:
                 Some(Filters {
                     filter:
@@ -110,6 +110,15 @@ impl ToReadDataSourcePlan for dyn Table {
                 .await
         }?;
 
+        let mut base_block_ids = None;
+        if parts.partitions.len() == 1 {
+            let part = parts.partitions[0].clone();
+            if let Some(part) = StreamTablePart::from_part(&part) {
+                parts = part.inner();
+                base_block_ids = Some(part.base_block_ids());
+            }
+        }
+
         ctx.set_status_info(&format!(
             "build physical plan - got data source partitions, time used {:?}",
             start.elapsed()
@@ -127,23 +136,24 @@ impl ToReadDataSourcePlan for dyn Table {
         }
 
         let source_info = self.get_data_source_info();
-
-        let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
         let mut output_schema = match (self.support_column_projection(), &push_downs) {
-            (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
-                _ => {
-                    if let Some(output_columns) = &push_downs.output_columns {
-                        Arc::new(output_columns.project_schema(schema))
-                    } else if let Some(projection) = &push_downs.projection {
-                        Arc::new(projection.project_schema(schema))
-                    } else {
-                        schema.clone()
+            (true, Some(push_downs)) => {
+                let schema = &self.schema_with_stream();
+                match &push_downs.prewhere {
+                    Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
+                    _ => {
+                        if let Some(output_columns) = &push_downs.output_columns {
+                            Arc::new(output_columns.project_schema(schema))
+                        } else if let Some(projection) = &push_downs.projection {
+                            Arc::new(projection.project_schema(schema))
+                        } else {
+                            schema.clone()
+                        }
                     }
                 }
-            },
-            _ => schema.clone(),
+            }
+            _ => self.schema(),
         };
 
         if let Some(ref push_downs) = push_downs {
@@ -225,21 +235,21 @@ impl ToReadDataSourcePlan for dyn Table {
 
                                 let body = &policy.body;
                                 let tokens = tokenize_sql(body)?;
-                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                                let ast_expr =
+                                    parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
                                 let settings = Settings::create("".to_string());
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                                let mut type_checker = TypeChecker::new(
+                                let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,
                                     ctx.clone(),
                                     &name_resolution_ctx,
                                     metadata,
                                     &aliases,
                                     false,
-                                    false,
-                                );
+                                )?;
 
                                 ctx.set_status_info(
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
@@ -278,7 +288,11 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            base_block_ids,
+            update_stream_columns: false,
             data_mask_policy,
+            // Set a dummy id, will be set real id later
+            table_index: usize::MAX,
         })
     }
 }

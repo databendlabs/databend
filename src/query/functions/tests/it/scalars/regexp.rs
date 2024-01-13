@@ -14,9 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::number::Int64Type;
-use common_expression::types::StringType;
-use common_expression::FromData;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -123,7 +123,7 @@ fn test_regexp_instr(file: &mut impl Write) {
         (
             "source",
             StringType::from_data_with_validity(
-                &[
+                vec![
                     "dog cat dog",
                     "aa aaa aaaa aa aaa aaaa",
                     "",
@@ -134,7 +134,7 @@ fn test_regexp_instr(file: &mut impl Write) {
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
+            StringType::from_data_with_validity(vec!["dog", "", "", "A{4}"], vec![
                 true, false, false, true,
             ]),
         ),
@@ -152,7 +152,7 @@ fn test_regexp_instr(file: &mut impl Write) {
         (
             "source",
             StringType::from_data_with_validity(
-                &[
+                vec![
                     "dog cat dog",
                     "aa aaa aaaa aa aaa aaaa",
                     "",
@@ -163,7 +163,7 @@ fn test_regexp_instr(file: &mut impl Write) {
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
+            StringType::from_data_with_validity(vec!["dog", "", "", "A{4}"], vec![
                 true, false, false, true,
             ]),
         ),
@@ -296,19 +296,21 @@ fn test_regexp_like(file: &mut impl Write) {
     let nullable_three_columns = &[
         (
             "source",
-            StringType::from_data_with_validity(&["abc", "abc", "", "abc"], vec![
+            StringType::from_data_with_validity(vec!["abc", "abc", "", "abc"], vec![
                 true, true, false, true,
             ]),
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["abc", "", "", "abc"], vec![
+            StringType::from_data_with_validity(vec!["abc", "", "", "abc"], vec![
                 true, false, false, true,
             ]),
         ),
         (
             "mt",
-            StringType::from_data_with_validity(&["", "i", "i", ""], vec![true, true, true, false]),
+            StringType::from_data_with_validity(vec!["", "i", "i", ""], vec![
+                true, true, true, false,
+            ]),
         ),
     ];
     run_ast(file, "regexp_like(source, pat, mt)", nullable_three_columns);
@@ -452,13 +454,13 @@ fn test_regexp_replace(file: &mut impl Write) {
         (
             "source",
             StringType::from_data_with_validity(
-                &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
+                vec!["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(vec!["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),
@@ -476,13 +478,13 @@ fn test_regexp_replace(file: &mut impl Write) {
         (
             "source",
             StringType::from_data_with_validity(
-                &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
+                vec!["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(vec!["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),
@@ -628,13 +630,13 @@ fn test_regexp_substr(file: &mut impl Write) {
         (
             "source",
             StringType::from_data_with_validity(
-                &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
+                vec!["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(vec!["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),

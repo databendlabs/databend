@@ -14,23 +14,25 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::ComputedExpr;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_sql::plans::ShowCreateTablePlan;
-use common_storages_view::view_table::QUERY;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_sql::plans::ShowCreateTablePlan;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use log::debug;
-use storages_common_table_meta::table::is_internal_opt_key;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -63,14 +65,13 @@ impl Interpreter for ShowCreateTableInterpreter {
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
-        let engine = table.engine();
-        if engine == VIEW_ENGINE {
-            self.show_create_view(table.as_ref())
-        } else {
-            match table.options().get(OPT_KEY_STORAGE_PREFIX) {
+        match table.engine() {
+            STREAM_ENGINE => self.show_create_stream(table.as_ref()),
+            VIEW_ENGINE => self.show_create_view(table.as_ref()),
+            _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => self.show_attach_table(table.as_ref()),
                 None => self.show_create_table(table.as_ref()),
-            }
+            },
         }
     }
 }
@@ -157,7 +158,7 @@ impl ShowCreateTableInterpreter {
             .get_hide_options_in_show_create_table()
             .unwrap_or(false);
 
-        if !hide_options_in_show_create_table {
+        if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
             table_create_sql.push_str({
                 let mut opts = table_info.options().iter().collect::<Vec<_>>();
                 opts.sort_by_key(|(k, _)| *k);
@@ -216,6 +217,35 @@ impl ShowCreateTableInterpreter {
                 "Logical error, View Table must have a SelectQuery inside.",
             ))
         }
+    }
+
+    fn show_create_stream(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+        let stream_table = StreamTable::try_from_table(table)?;
+        let mut create_sql = format!(
+            "CREATE STREAM `{}` ON TABLE `{}`.`{}`",
+            stream_table.name(),
+            stream_table.source_table_database(),
+            stream_table.source_table_name()
+        );
+
+        let comment = stream_table.get_table_info().meta.comment.clone();
+        if !comment.is_empty() {
+            create_sql.push_str(format!(" COMMENT = '{}'", comment).as_str());
+        }
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(stream_table.name().as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(create_sql.into_bytes())),
+                ),
+            ],
+            1,
+        );
+        PipelineBuildResult::from_blocks(vec![block])
     }
 
     fn show_attach_table(&self, table: &dyn Table) -> Result<PipelineBuildResult> {

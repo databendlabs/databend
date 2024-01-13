@@ -1,0 +1,26 @@
+statement ok
+drop database if exists db1;
+
+statement ok
+create database db1;
+
+statement ok
+drop table if exists db1.t;
+
+statement ok
+create table db1.t(id int);
+
+statement ok
+drop table db1.t;
+
+statement ok
+show drop tables from db1;
+
+statement ok
+show drop tables from db1 where name='t';
+
+statement ok
+show drop tables from db1 like '%t';
+
+statement ok
+drop database db1;

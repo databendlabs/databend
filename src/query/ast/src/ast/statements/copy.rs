@@ -19,7 +19,13 @@ use std::fmt::Formatter;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::str::FromStr;
 
+use databend_common_base::base::mask_string;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::CopyOptions;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use itertools::Itertools;
 use url::Url;
 
@@ -116,6 +122,36 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
     }
+
+    pub fn apply_to_copy_option(
+        &self,
+        copy_options: &mut CopyOptions,
+    ) -> databend_common_exception::Result<()> {
+        copy_options.on_error =
+            OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
+
+        if self.size_limit != 0 {
+            copy_options.size_limit = self.size_limit;
+        }
+
+        copy_options.split_size = self.split_size;
+        copy_options.purge = self.purge;
+        copy_options.disable_variant_check = self.disable_variant_check;
+        copy_options.return_failed_only = self.return_failed_only;
+
+        if self.max_files != 0 {
+            copy_options.max_files = self.max_files;
+        }
+
+        if !(copy_options.purge && self.force) && copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
+                copy_options.max_files
+            )));
+        }
+        Ok(())
+    }
 }
 
 impl Display for CopyIntoTableStmt {
@@ -165,7 +201,7 @@ impl Display for CopyIntoTableStmt {
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
-        write!(f, " ON_ERROR = '{}'", self.on_error)?;
+        write!(f, " ON_ERROR = {}", self.on_error)?;
 
         Ok(())
     }
@@ -255,7 +291,7 @@ impl Display for CopyIntoLocationSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
     visited_keys: HashSet<String>,
-    conns: BTreeMap<String, String>,
+    pub conns: BTreeMap<String, String>,
 }
 
 impl Connection {
@@ -268,8 +304,8 @@ impl Connection {
 
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
-        for k in self.conns.keys() {
-            conns.insert(k.to_string(), "********".to_string());
+        for (k, v) in &self.conns {
+            conns.insert(k.to_string(), mask_string(v, 3));
         }
         Self {
             visited_keys: self.visited_keys.clone(),
@@ -351,7 +387,7 @@ impl UriLocation {
         uri: String,
         part_prefix: String,
         conns: BTreeMap<String, String>,
-    ) -> common_exception::Result<Self> {
+    ) -> databend_common_exception::Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             return Ok(UriLocation::new(
@@ -363,8 +399,9 @@ impl UriLocation {
             ));
         }
 
-        let parsed = Url::parse(&uri)
-            .map_err(|e| common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e)))?;
+        let parsed = Url::parse(&uri).map_err(|e| {
+            databend_common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e))
+        })?;
 
         let protocol = parsed.scheme().to_string();
 
@@ -377,7 +414,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or(common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| databend_common_exception::ErrorCode::BadArguments("invalid uri"))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()

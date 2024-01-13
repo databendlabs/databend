@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Query;
-use common_ast::ast::SetExpr;
 use databend_client::error::Error as ClientError;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SetExpr;
 use databend_driver::Connection;
 use databend_driver::Error;
 

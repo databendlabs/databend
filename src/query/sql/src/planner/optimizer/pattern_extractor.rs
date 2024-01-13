@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::optimizer::group::Group;
 use crate::optimizer::m_expr::MExpr;
@@ -144,7 +144,7 @@ impl PatternExtractor {
             let child_group = memo.group(*child)?;
             let child_m_expr = child_group
                 .m_exprs
-                .get(0)
+                .first()
                 .ok_or_else(|| ErrorCode::Internal(format!("No MExpr in group {child}")))?;
             children.push(Arc::new(Self::expand_pattern(memo, child_m_expr)?));
         }

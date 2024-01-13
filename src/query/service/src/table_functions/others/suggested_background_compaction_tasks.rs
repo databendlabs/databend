@@ -19,9 +19,9 @@ use arrow_array::BooleanArray;
 use arrow_array::LargeBinaryArray;
 use arrow_array::PrimitiveArray;
 use arrow_array::RecordBatch;
-use background_service::Suggestion;
-use common_exception::Result;
-use common_meta_app::schema::TableStatistics;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_enterprise_background_service::Suggestion;
 use log::as_debug;
 use log::info;
 

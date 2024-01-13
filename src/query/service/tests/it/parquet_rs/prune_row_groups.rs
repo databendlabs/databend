@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::plan::ParquetReadOptions;
-use common_expression::FunctionContext;
-use common_expression::TableSchema;
-use common_storages_parquet::ParquetRSPruner;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_storages_parquet::ParquetRSPruner;
 
 use super::data::make_test_file_rg;
 use super::data::Scenario;
 use super::utils::get_data_source_plan;
-use crate::parquet_rs::utils::create_test_fixture;
+use crate::parquet_rs::utils::create_parquet2_test_fixture;
 
 /// Enable row groups pruning and test.
 async fn test(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>) {
@@ -40,8 +40,10 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     let file_path = file.path().to_string_lossy();
     let sql = format!("select * from 'fs://{file_path}' where {predicate}");
 
-    let fixture = create_test_fixture().await;
-    let plan = get_data_source_plan(fixture.ctx(), &sql).await.unwrap();
+    let fixture = create_parquet2_test_fixture().await;
+    let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
+        .await
+        .unwrap();
     let parquet_meta = parquet::file::footer::parse_metadata(file.as_file()).unwrap();
     let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
     let leaf_fields = Arc::new(schema.leaf_fields());
@@ -54,10 +56,11 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         ParquetReadOptions::default()
             .with_prune_row_groups(prune)
             .with_prune_pages(false),
+        vec![],
     )
     .unwrap();
 
-    let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None).unwrap();
+    let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None, None).unwrap();
 
     assert_eq!(
         expected_rgs, rgs,

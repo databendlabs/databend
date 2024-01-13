@@ -16,12 +16,12 @@ use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_cache::CountableMeter;
-use common_exception::Result;
+use databend_common_cache::CountableMeter;
+use databend_common_exception::Result;
+use databend_common_metrics::cache::*;
 use parking_lot::RwLock;
 
 use super::loader::LoadParams;
-use crate::metrics::metrics_inc_cache_miss_load_millisecond;
 use crate::providers::InMemoryCache;
 use crate::CacheAccessor;
 use crate::Loader;

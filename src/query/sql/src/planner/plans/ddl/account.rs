@@ -12,24 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserPrivilegeSet;
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_ast::ast::AlterPasswordAction;
+use databend_common_ast::ast::PasswordSetOptions;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
+    pub if_not_exists: bool,
     pub user: UserIdentity,
     pub auth_info: AuthInfo,
     pub user_option: UserOption,
-    pub if_not_exists: bool,
+    pub password_update_on: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,6 +90,12 @@ pub struct RevokeRolePlan {
 pub struct SetRolePlan {
     pub is_default: bool,
     pub role_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetSecondaryRolesPlan {
+    All,
+    None,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -186,6 +197,63 @@ impl ShowNetworkPoliciesPlan {
             DataField::new("Allowed Ip List", DataType::String),
             DataField::new("Blocked Ip List", DataType::String),
             DataField::new("Comment", DataType::String),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreatePasswordPolicyPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub set_options: PasswordSetOptions,
+}
+
+impl CreatePasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlterPasswordPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub action: AlterPasswordAction,
+}
+
+impl AlterPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropPasswordPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+}
+
+impl DropPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DescPasswordPolicyPlan {
+    pub name: String,
+}
+
+impl DescPasswordPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("Property", DataType::String),
+            DataField::new("Value", DataType::String),
+            DataField::new("Default", DataType::Nullable(Box::new(DataType::String))),
+            DataField::new("Description", DataType::String),
         ])
     }
 }

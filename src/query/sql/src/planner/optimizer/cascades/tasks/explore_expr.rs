@@ -15,8 +15,8 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use super::apply_rule::ApplyRuleTask;
@@ -56,6 +56,8 @@ pub struct ExploreExprTask {
 
     pub ref_count: Rc<SharedCounter>,
     pub parent: Option<Rc<SharedCounter>>,
+
+    should_terminate: bool,
 }
 
 impl ExploreExprTask {
@@ -71,28 +73,31 @@ impl ExploreExprTask {
             m_expr_index,
             ref_count: Rc::new(SharedCounter::new()),
             parent: None,
+            should_terminate: false,
         }
     }
 
-    pub fn with_parent(
-        ctx: Arc<dyn TableContext>,
-        group_index: IndexType,
-        m_expr_index: IndexType,
-        parent: &Rc<SharedCounter>,
-    ) -> Self {
-        let mut task = Self::new(ctx, group_index, m_expr_index);
+    pub fn with_parent(mut self, parent: &Rc<SharedCounter>) -> Self {
         parent.inc();
-        task.parent = Some(parent.clone());
-        task
+        self.parent = Some(parent.clone());
+        self
+    }
+
+    pub fn with_termination(mut self) -> Self {
+        self.should_terminate = true;
+        self
     }
 
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut Scheduler<'_>,
     ) -> Result<()> {
         if matches!(self.state, ExploreExprState::ExploredSelf) {
             return Ok(());
+        }
+        if self.should_terminate {
+            return self.terminate();
         }
         self.transition(optimizer, scheduler)?;
         scheduler.add_task(Task::ExploreExpr(self));
@@ -102,7 +107,7 @@ impl ExploreExprTask {
     fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut Scheduler<'_>,
     ) -> Result<()> {
         let event = match self.state {
             ExploreExprState::Init => self.explore_children(optimizer, scheduler)?,
@@ -129,7 +134,7 @@ impl ExploreExprTask {
     fn explore_children(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut Scheduler<'_>,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo
@@ -142,7 +147,7 @@ impl ExploreExprTask {
                 // If the child group isn't explored, then schedule a `ExploreGroupTask` for it.
                 all_children_explored = false;
                 let explore_group_task =
-                    ExploreGroupTask::with_parent(self.ctx.clone(), *child, &self.ref_count);
+                    ExploreGroupTask::new(self.ctx.clone(), *child).with_parent(&self.ref_count);
                 scheduler.add_task(Task::ExploreGroup(explore_group_task));
             }
         }
@@ -157,7 +162,7 @@ impl ExploreExprTask {
     fn explore_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut Scheduler<'_>,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo
@@ -180,5 +185,15 @@ impl ExploreExprTask {
             parent.dec();
         }
         Ok(ExploreExprEvent::ExploredSelf)
+    }
+
+    fn terminate(&mut self) -> Result<()> {
+        if let Some(parent) = &self.parent {
+            parent.dec();
+        }
+
+        self.state = ExploreExprState::ExploredSelf;
+
+        Ok(())
     }
 }

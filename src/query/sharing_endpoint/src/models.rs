@@ -18,10 +18,10 @@ use std::collections::HashSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use enumflags2::BitFlags;
 use poem::async_trait;
 use poem::error::Result as PoemResult;
@@ -160,7 +160,7 @@ impl TableMetaLambdaInput {
             authorization,
             share_name,
             tenant_id,
-            request_tables: HashSet::from_iter(request_tables.into_iter()),
+            request_tables: HashSet::from_iter(request_tables),
             request_id,
         }
     }

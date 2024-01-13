@@ -15,15 +15,15 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
@@ -97,6 +97,10 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.inner.generate()? {
             None => self.is_finish = true,
             Some(data_block) => {
+                if data_block.is_full_empty() {
+                    // A part was pruned by runtime filter
+                    return Ok(());
+                }
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),
                     bytes: data_block.memory_size(),

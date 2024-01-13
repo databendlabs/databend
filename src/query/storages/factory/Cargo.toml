@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-factory"
+name = "databend-common-storages-factory"
 version = "0.1.0"
 edition = "2021"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -12,16 +12,21 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
-common-config = { path = "../../config" }
-common-exception = { path = "../../../common/exception" }
-common-meta-app = { path = "../../../meta/app" }
-common-storages-fuse = { path = "../fuse" }
-common-storages-memory = { path = "../memory" }
-common-storages-null = { path = "../null" }
-common-storages-random = { path = "../random" }
-common-storages-view = { path = "../view" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-config = { path = "../../config" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-storages-delta = { path = "../delta" }
+databend-common-storages-fuse = { path = "../fuse" }
+databend-common-storages-iceberg = { path = "../iceberg" }
+databend-common-storages-memory = { path = "../memory" }
+databend-common-storages-null = { path = "../null" }
+databend-common-storages-random = { path = "../random" }
+databend-common-storages-stream = { path = "../stream" }
+databend-common-storages-view = { path = "../view" }
 
-storages-common-index = { path = "../common/index" }
+databend-storages-common-index = { path = "../common/index" }
 
-dashmap = "5.4"
+async-trait = { workspace = true }
+dashmap = { workspace = true }
+tokio = { workspace = true }

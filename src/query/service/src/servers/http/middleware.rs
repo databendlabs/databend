@@ -17,8 +17,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::http::metrics_incr_http_request_count;
+use databend_common_metrics::http::metrics_incr_http_response_panics_count;
+use databend_common_metrics::http::metrics_incr_http_slow_request_count;
+use databend_common_metrics::http::metrics_observe_http_response_duration;
+use databend_common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -42,9 +47,6 @@ use uuid::Uuid;
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
-use crate::servers::http::metrics::metrics_incr_http_request_count;
-use crate::servers::http::metrics::metrics_incr_http_response_panics_count;
-use crate::servers::http::metrics::metrics_incr_http_slow_request_count;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -180,6 +182,7 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             session.set_current_tenant(tenant_id);
         }
+        let node_id = ctx.get_cluster().local_id.clone();
 
         self.auth_manager
             .auth(ctx.get_current_session(), &credential)
@@ -204,8 +207,11 @@ impl<E> HTTPSessionEndpoint<E> {
         Ok(HttpQueryContext::new(
             session,
             query_id,
+            node_id,
             deduplicate_label,
             user_agent,
+            req.method().to_string(),
+            req.uri().to_string(),
         ))
     }
 }
@@ -267,7 +273,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
         .map(|(k, v)| {
@@ -317,8 +323,10 @@ impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
         let output = self.ep.call(req).await?;
         let resp = output.into_response();
         let status_code = resp.status().to_string();
+        let duration = start_time.elapsed();
         metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
-        if start_time.elapsed().as_secs() > 20 {
+        metrics_observe_http_response_duration(method.clone(), self.api.clone(), duration);
+        if duration.as_secs_f64() > 60.0 {
             // TODO: replace this into histogram
             metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
         }

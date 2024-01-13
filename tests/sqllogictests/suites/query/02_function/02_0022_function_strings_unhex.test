@@ -1,0 +1,17 @@
+query T
+select unhex('616263')::STRING
+----
+abc
+
+statement error 1006
+select unhex('hello')
+
+query T
+select unhex(hex('hello'))::STRING
+----
+hello
+
+query T
+select unhex(null)
+----
+NULL

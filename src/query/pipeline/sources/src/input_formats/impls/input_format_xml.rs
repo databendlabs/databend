@@ -16,17 +16,17 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnBuilder;
-use common_expression::TableSchemaRef;
-use common_formats::FieldDecoder;
-use common_formats::FileFormatOptionsExt;
-use common_formats::SeparatedTextDecoder;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::XmlFileFormatParams;
-use common_storage::FileParseError;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableSchemaRef;
+use databend_common_formats::FieldDecoder;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_formats::SeparatedTextDecoder;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::XmlFileFormatParams;
+use databend_common_storage::FileParseError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
@@ -138,10 +138,12 @@ impl InputFormatTextBase for InputFormatXML {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
         Arc::new(SeparatedTextDecoder::create_xml(
             XmlFileFormatParams::downcast_unchecked(params),
             options,
+            rounding_mode,
         ))
     }
 
@@ -226,7 +228,7 @@ impl InputFormatTextBase for InputFormatXML {
                                             num_rows,
                                         ));
                                     }
-                                    let attr = attributes.get(0).unwrap();
+                                    let attr = attributes.first().unwrap();
                                     key = Some(attr.value.clone());
                                 }
                             }

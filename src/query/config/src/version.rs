@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use semver::Version;
 
-pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
+pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let git_tag = option_env!("DATABEND_GIT_SEMVER");
     let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
@@ -32,7 +33,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     }
 });
 
-pub static QUERY_SEMVER: Lazy<Version> = Lazy::new(|| {
+pub static QUERY_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     //
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");

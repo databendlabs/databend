@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::arc_with_non_send_sync)]
+
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::DictionaryStringHashMap;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableEntryMutRefLike;
-use common_hashtable::HashtableLike;
-use common_hashtable::ShortStringHashMap;
-use common_hashtable::StackHashMap;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::DictionaryStringHashMap;
+use databend_common_hashtable::HashMap;
+use databend_common_hashtable::HashtableEntryMutRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_hashtable::ShortStringHashMap;
+use databend_common_hashtable::StackHashMap;
 use rand::Rng;
 
 macro_rules! simple_test {

@@ -15,16 +15,16 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::{self as pread};
-use common_arrow::parquet::read::read_metadata;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::TableSchema;
-use common_meta_store::MetaStore;
-use common_storage::DataOperator;
+use databend_common_arrow::arrow::io::parquet::read::infer_schema;
+use databend_common_arrow::arrow::io::parquet::read::{self as pread};
+use databend_common_arrow::parquet::read::read_metadata;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
+use databend_common_meta_store::MetaStore;
+use databend_common_storage::DataOperator;
 use opendal::Operator;
 
 use crate::common::gen_result_cache_meta_key;
@@ -112,7 +112,7 @@ impl ResultCacheReader {
         let mut reader = Cursor::new(data);
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
-        let schema = DataSchema::from(&TableSchema::from(&arrow_schema));
+        let schema = DataSchema::try_from(&arrow_schema).unwrap();
 
         // Read the parquet file into one block.
         let chunks_iter =
@@ -136,7 +136,7 @@ impl ResultCacheReader {
         let mut reader = Cursor::new(data.clone());
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
-        let table_schema = TableSchema::from(&arrow_schema);
+        let table_schema = TableSchema::try_from(&arrow_schema).unwrap();
 
         Ok((table_schema, data))
     }

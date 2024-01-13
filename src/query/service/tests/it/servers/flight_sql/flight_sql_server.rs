@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
 use std::net::TcpListener;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::servers::FlightSQLServer;
 use databend_query::test_kits::ConfigBuilder;
 

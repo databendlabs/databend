@@ -1,0 +1,49 @@
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+query I
+SELECT sum(to_int32(to_float32(value) > 5)) > 1 FROM system.metrics where metric = 'query_success_total'
+----
+1
+
+onlyif mysql
+statement ok
+truncate table system.metrics

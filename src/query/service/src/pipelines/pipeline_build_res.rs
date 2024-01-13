@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::OneBlockSource;
-use common_profile::SharedProcessorProfiles;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_profile::SharedProcessorProfiles;
 
-use super::processors::transforms::hash_join::HashJoinBuildState;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::pipelines::processors::transforms::HashJoinBuildState;
 
 #[derive(Clone)]
 pub struct PipelineBuilderData {

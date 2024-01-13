@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::KVMeta;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 
 use crate::sm_v002::marked::InternalSeq;
 use crate::sm_v002::marked::Marked;
@@ -22,12 +22,9 @@ use crate::state_machine::ExpireValue;
 
 #[test]
 fn test_from_tuple() -> anyhow::Result<()> {
-    let m = Marked::from((1, 2u64, Some(KVMeta { expire_at: Some(3) })));
+    let m = Marked::from((1, 2u64, Some(KVMeta::new_expire(3))));
 
-    assert_eq!(
-        m,
-        Marked::new_with_meta(1, 2, Some(KVMeta { expire_at: Some(3) }))
-    );
+    assert_eq!(m, Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3))));
 
     Ok(())
 }
@@ -39,12 +36,12 @@ fn test_impl_trait_seq_value() -> anyhow::Result<()> {
     assert_eq!(m.value(), Some(&2));
     assert_eq!(m.meta(), None);
 
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta { expire_at: Some(3) }));
+    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
     assert_eq!(m.seq(), 1);
     assert_eq!(m.value(), Some(&2));
-    assert_eq!(m.meta(), Some(&KVMeta { expire_at: Some(3) }));
+    assert_eq!(m.meta(), Some(&KVMeta::new_expire(3)));
 
-    let m: Marked<u64> = Marked::new_tomb_stone(1);
+    let m: Marked<u64> = Marked::new_tombstone(1);
     assert_eq!(m.seq(), 0, "internal_seq is not returned to application");
     assert_eq!(m.value(), None);
     assert_eq!(m.meta(), None);
@@ -67,7 +64,7 @@ fn test_internal_seq() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, 2, None);
     assert_eq!(m.internal_seq(), InternalSeq::normal(1));
 
-    let m: Marked<u64> = Marked::new_tomb_stone(1);
+    let m: Marked<u64> = Marked::new_tombstone(1);
     assert_eq!(m.internal_seq(), InternalSeq::tombstone(1));
 
     Ok(())
@@ -79,13 +76,10 @@ fn test_unpack() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, 2, None);
     assert_eq!(m.unpack_ref(), Some((&2, None)));
 
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta { expire_at: Some(3) }));
-    assert_eq!(
-        m.unpack_ref(),
-        Some((&2, Some(&KVMeta { expire_at: Some(3) })))
-    );
+    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
+    assert_eq!(m.unpack_ref(), Some((&2, Some(&KVMeta::new_expire(3)))));
 
-    let m: Marked<u64> = Marked::new_tomb_stone(1);
+    let m: Marked<u64> = Marked::new_tombstone(1);
     assert_eq!(m.unpack_ref(), None);
 
     Ok(())
@@ -96,7 +90,7 @@ fn test_unpack() -> anyhow::Result<()> {
 fn test_max() -> anyhow::Result<()> {
     let m1 = Marked::new_with_meta(1, 2, None);
     let m2 = Marked::new_with_meta(3, 2, None);
-    let m3: Marked<u64> = Marked::new_tomb_stone(2);
+    let m3: Marked<u64> = Marked::new_tombstone(2);
 
     assert_eq!(Marked::max_ref(&m1, &m2), &m2);
     assert_eq!(Marked::max_ref(&m1, &m3), &m3);
@@ -116,11 +110,11 @@ fn test_from_marked_for_option_seqv() -> anyhow::Result<()> {
     let s: Option<SeqV<u64>> = Some(SeqV::new(1, 2));
     assert_eq!(s, m.into());
 
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta { expire_at: Some(3) }));
-    let s: Option<SeqV<u64>> = Some(SeqV::with_meta(1, Some(KVMeta { expire_at: Some(3) }), 2));
+    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
+    let s: Option<SeqV<u64>> = Some(SeqV::with_meta(1, Some(KVMeta::new_expire(3)), 2));
     assert_eq!(s, m.into());
 
-    let m: Marked<u64> = Marked::new_tomb_stone(1);
+    let m: Marked<u64> = Marked::new_tombstone(1);
     let s: Option<SeqV<u64>> = None;
     assert_eq!(s, m.into());
 
@@ -144,7 +138,7 @@ fn test_from_marked_for_option_expire_value() -> anyhow::Result<()> {
     let s: Option<ExpireValue> = Some(ExpireValue::new("2".to_string(), 1));
     assert_eq!(s, m.into());
 
-    let m = Marked::new_tomb_stone(1);
+    let m = Marked::new_tombstone(1);
     let s: Option<ExpireValue> = None;
     assert_eq!(s, m.into());
 

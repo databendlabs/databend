@@ -5,12 +5,11 @@
 set -e
 
 export STORAGE_ALLOW_INSECURE=true
-export QUERY_CLOUD_CONTROL_GRPC_SERVER_ADDRESS="http://0.0.0.0:50051"
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone.sh
 
-TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
+TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""

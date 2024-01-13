@@ -14,10 +14,10 @@
 
 use std::ops::Range;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryIterator;
 use crate::property::Domain;
-use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
-use crate::types::string::StringIterator;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -33,21 +33,21 @@ pub struct BitmapType;
 impl ValueType for BitmapType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
-    type Column = StringColumn;
+    type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
+    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
         long
     }
 
-    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_vec()
     }
 
-    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
         scalar
     }
 
@@ -55,17 +55,26 @@ impl ValueType for BitmapType {
         scalar.as_bitmap().cloned()
     }
 
-    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         col.as_bitmap().cloned()
     }
 
-    fn try_downcast_builder<'a>(
-        builder: &'a mut ColumnBuilder,
-    ) -> Option<&'a mut Self::ColumnBuilder> {
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Bitmap(builder) => Some(builder),
+            ColumnBuilder::Bitmap(builder) => Some(builder),
             _ => None,
         }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Bitmap(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Bitmap(builder))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -88,31 +97,29 @@ impl ValueType for BitmapType {
         Domain::Undefined
     }
 
-    fn column_len<'a>(col: &'a Self::Column) -> usize {
+    fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
 
-    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
         col.index(index)
     }
 
-    unsafe fn index_column_unchecked<'a>(
-        col: &'a Self::Column,
-        index: usize,
-    ) -> Self::ScalarRef<'a> {
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
         col.index_unchecked(index)
     }
 
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
 
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
+        BinaryColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -140,7 +147,7 @@ impl ValueType for BitmapType {
         builder.build_scalar()
     }
 
-    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
         scalar.len()
     }
 
@@ -157,6 +164,6 @@ impl ArgType for BitmapType {
     fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
+        BinaryColumnBuilder::with_capacity(capacity, 0)
     }
 }

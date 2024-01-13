@@ -16,11 +16,11 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
 
 use super::StateAddr;
-use crate::types::string::StringColumnBuilder;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -74,7 +74,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         offset: usize,
-        builder: &mut StringColumnBuilder,
+        builder: &mut BinaryColumnBuilder,
     ) -> Result<()> {
         for place in places {
             self.serialize(place.next(offset), &mut builder.data)?;
@@ -93,7 +93,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     /// Batch merge and deserialize the state from binary array
     fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
-        let c = column.as_string().unwrap();
+        let c = column.as_binary().unwrap();
         for (place, mut data) in places.iter().zip(c.iter()) {
             self.merge(place.next(offset), &mut data)?;
         }
@@ -102,7 +102,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
-        let c = column.as_string().unwrap();
+        let c = column.as_binary().unwrap();
 
         for mut data in c.iter() {
             self.merge(place, &mut data)?;

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterTask {

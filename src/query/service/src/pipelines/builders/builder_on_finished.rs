@@ -15,16 +15,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_pipeline_core::Pipeline;
-use common_storage::metrics::copy::metrics_inc_copy_purge_files_cost_milliseconds;
-use common_storage::metrics::copy::metrics_inc_copy_purge_files_counter;
-use common_storage::StageFileInfo;
-use common_storages_fuse::io::Files;
-use common_storages_stage::StageTable;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::io::Files;
+use databend_common_storages_stage::StageTable;
 use log::error;
 
 use crate::pipelines::PipelineBuilder;
@@ -41,7 +40,7 @@ impl PipelineBuilder {
         // set on_finished callback.
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
-                None => {
+                Ok(_) => {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.
                         // todo(ariesdevil): persist errors with query_id
@@ -74,7 +73,7 @@ impl PipelineBuilder {
                         Ok(())
                     })?;
                 }
-                Some(error) => {
+                Err(error) => {
                     error!("copy failed, reason: {}", error);
                 }
             }

@@ -16,24 +16,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::ast::split_conjunctions_expr;
-use common_ast::ast::split_equivalent_predicate_expr;
-use common_ast::ast::Expr;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_ast::ast::split_conjunctions_expr;
+use databend_common_ast::ast::split_equivalent_predicate_expr;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use indexmap::IndexMap;
 
+use super::Finder;
 use crate::binder::CteInfo;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::FlattenInfo;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::optimizer::SubqueryRewriter;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
@@ -42,6 +45,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -63,7 +67,7 @@ impl Binder {
         right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
-        join: &common_ast::ast::Join,
+        join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
         check_duplicate_join_tables(&left_context, &right_context)?;
 
@@ -176,13 +180,13 @@ impl Binder {
 
     pub fn bind_join_with_type(
         &mut self,
-        join_type: JoinType,
+        mut join_type: JoinType,
         join_conditions: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
     ) -> Result<SExpr> {
-        let left_conditions = join_conditions.left_conditions;
-        let right_conditions = join_conditions.right_conditions;
+        let mut left_conditions = join_conditions.left_conditions;
+        let mut right_conditions = join_conditions.right_conditions;
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
         let other_conditions = join_conditions.other_conditions;
         if join_type == JoinType::Cross
@@ -193,6 +197,7 @@ impl Binder {
             ));
         }
         self.push_down_other_conditions(
+            &join_type,
             &mut left_child,
             &mut right_child,
             other_conditions,
@@ -203,6 +208,29 @@ impl Binder {
             self.eq_scalars.push((left.clone(), right.clone()));
         }
 
+        let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
+        if !right_prop.outer_columns.is_empty() {
+            // If there are outer columns in right child, then the join is a correlated lateral join
+            let mut decorrelator = SubqueryRewriter::new(self.metadata.clone());
+            right_child = decorrelator.flatten_plan(
+                &right_child,
+                &right_prop.outer_columns,
+                &mut FlattenInfo {
+                    from_count_func: false,
+                },
+                false,
+            )?;
+            decorrelator.add_equi_conditions(
+                None,
+                &right_prop.outer_columns,
+                &mut right_conditions,
+                &mut left_conditions,
+            )?;
+            if join_type == JoinType::Cross {
+                join_type = JoinType::Inner;
+            }
+        }
+
         let logical_join = Join {
             left_conditions,
             right_conditions,
@@ -210,8 +238,8 @@ impl Binder {
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
-            contain_runtime_filter: false,
             need_hold_hash_table: false,
+            broadcast: false,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
@@ -222,6 +250,7 @@ impl Binder {
 
     fn push_down_other_conditions(
         &self,
+        join_type: &JoinType,
         left_child: &mut SExpr,
         right_child: &mut SExpr,
         other_conditions: Vec<ScalarExpr>,
@@ -240,6 +269,27 @@ impl Binder {
         for predicate in other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
+                JoinPredicate::ALL(_) => match join_type {
+                    JoinType::Cross
+                    | JoinType::Inner
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
+                        need_push_down = true;
+                        right_push_down.push(predicate.clone());
+                    }
+                    JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone());
+                    }
+                    JoinType::Full => non_equi_conditions.push(predicate.clone()),
+                },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;
                     left_push_down.push(predicate.clone());
@@ -471,6 +521,36 @@ impl<'a> JoinConditionResolver<'a> {
                     self.right_context,
                     self.join_context,
                 );
+            }
+        }
+
+        self.check_join_allowed_scalar_expr(left_join_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(right_join_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(non_equi_conditions)
+            .await?;
+        self.check_join_allowed_scalar_expr(other_join_conditions)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn check_join_allowed_scalar_expr(&mut self, scalars: &Vec<ScalarExpr>) -> Result<()> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            )
+        };
+        for scalar in scalars {
+            let mut finder = Finder::new(&f);
+            finder.visit(scalar)?;
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Join condition can't contain aggregate or window functions".to_string(),
+                )
+                .set_span(scalar.span()));
             }
         }
         Ok(())

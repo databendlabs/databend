@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseInfo;
 
 pub const HIVE_DATABASE_ENGINE: &str = "hive";
-use common_catalog::database::Database;
+use databend_common_catalog::database::Database;
 
 #[derive(Clone)]
 pub struct HiveDatabase {

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
 
 use std::collections::HashSet;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::ArrayRef;
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::*;
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_arrow::ArrayRef;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::*;
 use goldenfile::Mint;
 
 use crate::common::*;

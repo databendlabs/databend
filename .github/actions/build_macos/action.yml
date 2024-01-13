@@ -21,6 +21,7 @@ runs:
     - name: Rust setup
       shell: bash
       run: |
+        brew unlink python || true
         bash ./scripts/setup/dev_setup.sh -yb
         rustup target add ${{ inputs.target }}
 

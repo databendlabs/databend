@@ -1,0 +1,32 @@
+statement ok
+DROP FILE FORMAT IF EXISTS test_format
+
+statement error 2507
+DROP FILE FORMAT test_format
+
+statement ok
+CREATE FILE FORMAT test_format TYPE=CSV  FIELD_DELIMITER='\t' ESCAPE='\\'
+
+statement ok
+CREATE FILE FORMAT if not exists test_format TYPE=CSV
+
+statement error 2509
+CREATE FILE FORMAT test_format TYPE=CSV
+
+
+query TT
+show FILE FORMATS;
+----
+test_format TYPE = CSV COMPRESSION = None HEADERS= 0 FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' NAN_DISPLAY = 'NaN' ESCAPE = '\\' QUOTE = '\"'
+
+statement ok
+DROP FILE FORMAT test_format
+
+statement error 2507
+DROP FILE FORMAT test_format
+
+statement ok
+show FILE FORMATS
+
+statement error 1005
+CREATE FILE FORMAT csv TYPE=CSV

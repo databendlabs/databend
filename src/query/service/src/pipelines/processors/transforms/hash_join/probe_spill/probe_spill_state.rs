@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::query_spill_prefix;
-use common_storage::DataOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;

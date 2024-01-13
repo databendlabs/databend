@@ -14,45 +14,45 @@
 
 use std::sync::Arc;
 
-use aggregating_index::get_agg_index_handler;
-use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Partitions;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::UpdateIndexReq;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::executor::PhysicalPlanReplacer;
-use common_sql::plans::Plan;
-use common_sql::plans::RefreshIndexPlan;
-use common_sql::plans::RelOperator;
-use common_storages_fuse::operations::AggIndexSink;
-use common_storages_fuse::pruning::create_segment_location_vector;
-use common_storages_fuse::FuseLazyPartInfo;
-use common_storages_fuse::FusePartInfo;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::SegmentLocation;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::executor::PhysicalPlanReplacer;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RefreshIndexPlan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_storages_fuse::operations::AggIndexSink;
+use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::FuseLazyPartInfo;
+use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::SegmentLocation;
+use databend_enterprise_aggregating_index::get_agg_index_handler;
+use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
-use storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
-use crate::schedulers::ReplaceReadSource;
 use crate::sessions::QueryContext;
 
 pub struct RefreshIndexInterpreter {
@@ -86,12 +86,12 @@ impl RefreshIndexInterpreter {
         }
 
         if !lazy_init_segments.is_empty() {
-            let table_info = self.plan.table_info.clone();
+            let table_schema = self.plan.table_info.schema();
             let push_downs = plan.push_downs.clone();
             let ctx = self.ctx.clone();
 
             let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, dal, push_downs, table_info, lazy_init_segments, 0)
+                .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, lazy_init_segments, 0)
                 .await?;
 
             return Ok(Some(partitions));
@@ -108,12 +108,12 @@ impl RefreshIndexInterpreter {
         dal: Operator,
         segments: Vec<SegmentLocation>,
     ) -> Result<Option<Partitions>> {
-        let table_info = self.plan.table_info.clone();
+        let table_schema = self.plan.table_info.schema();
         let push_downs = plan.push_downs.clone();
         let ctx = self.ctx.clone();
 
         let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, dal, push_downs, table_info, segments, 0)
+            .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, segments, 0)
             .await?;
 
         Ok(Some(partitions))
@@ -285,7 +285,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let new_index_meta = self.update_index_meta(&new_read_source)?;
 
-        let mut replace_read_source = ReplaceReadSource {
+        let mut replace_read_source = ReadSourceReplacer {
             source: new_read_source,
         };
         query_plan = replace_read_source.replace(&query_plan)?;
@@ -373,9 +373,9 @@ impl Interpreter for RefreshIndexInterpreter {
         build_res
             .main_pipeline
             .set_on_finished(move |may_error| match may_error {
-                None => GlobalIORuntime::instance()
+                Ok(_) => GlobalIORuntime::instance()
                     .block_on(async move { modify_last_update(ctx, req).await }),
-                Some(error_code) => Err(error_code.clone()),
+                Err(error_code) => Err(error_code.clone()),
             });
 
         return Ok(build_res);
@@ -387,4 +387,16 @@ async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Resu
     let handler = get_agg_index_handler();
     let _ = handler.do_update_index(catalog, req).await?;
     Ok(())
+}
+
+struct ReadSourceReplacer {
+    source: DataSourcePlan,
+}
+
+impl PhysicalPlanReplacer for ReadSourceReplacer {
+    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
+        let mut plan = plan.clone();
+        plan.source = Box::new(self.source.clone());
+        Ok(PhysicalPlan::TableScan(plan))
+    }
 }

@@ -22,6 +22,13 @@ mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;
 mod parquet_rows_fetcher;
+mod runtime_filter_prunner;
+
+mod data_source_with_meta;
 
 pub use fuse_rows_fetcher::build_row_fetcher_pipeline;
 pub use fuse_source::build_fuse_parquet_source_pipeline;
+pub use native_data_source_deserializer::NativeDeserializeDataTransform;
+pub use native_data_source_reader::ReadNativeDataSource;
+pub use parquet_data_source_deserializer::DeserializeDataTransform;
+pub use parquet_data_source_reader::ReadParquetDataSource;

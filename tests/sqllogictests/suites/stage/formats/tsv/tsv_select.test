@@ -1,0 +1,31 @@
+statement ok
+drop table if exists it
+
+statement ok
+create table it (a int null, b string null)
+
+query 
+select $2 from @data/csv/select.tsv (file_format => 'tsv') order by $1
+----
+
+query 
+select a.$1 from @data/csv/select.tsv (file_format => 'tsv') a order by $1
+----
+
+query error 1065.*Query from TSV file lacks column positions\. Specify as \$1, \$2, etc\.
+select * from @data/tsv/select.tsv (file_format => 'tsv') a order by $1
+
+query error 1065.*select \* from file only support Parquet format
+select *, $1 from @data/tsv/select.tsv (file_format => 'tsv')
+
+query 
+copy into it from (select $1, $2 from @data/tsv t2) files=('select.tsv') file_format = (type = TSV)
+----
+tsv/select.tsv 3 0 NULL NULL
+
+query IT
+select * from it order by a
+----
+1 NULL
+2 b
+3 c

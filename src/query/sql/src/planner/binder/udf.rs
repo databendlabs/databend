@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::AlterUDFStmt;
-use common_ast::ast::CreateUDFStmt;
-use common_ast::ast::Identifier;
-use common_ast::ast::UDFDefinition;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::udf_client::UDFFlightClient;
-use common_meta_app::principal::LambdaUDF;
-use common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
-use common_meta_app::principal::UDFServer;
-use common_meta_app::principal::UserDefinedFunction;
+use databend_common_ast::ast::AlterUDFStmt;
+use databend_common_ast::ast::CreateUDFStmt;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::UDFDefinition;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
@@ -89,7 +89,16 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                let mut client = UDFFlightClient::connect(address).await?;
+                let mut client = UDFFlightClient::connect(
+                    address,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_connect_timeout_secs()?,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_request_timeout_secs()?,
+                )
+                .await?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;

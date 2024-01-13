@@ -1,0 +1,37 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+drop table if exists integers
+
+statement ok
+drop table if exists integers2
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM numbers(75000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM numbers(100000) tbl(i) WHERE i%2 != 0;
+
+query I
+SELECT COUNT(*) FROM integers JOIN integers2 ON integers.i=integers2.i
+----
+37500
+
+query I
+SELECT COUNT(*) FROM integers LEFT OUTER JOIN integers2 ON integers.i=integers2.i
+----
+75000
+
+query I
+SELECT COUNT(*) FROM integers RIGHT OUTER JOIN integers2 ON integers.i=integers2.i
+----
+50000
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.i
+----
+87500
+
+statement ok
+set max_block_size = 65536;

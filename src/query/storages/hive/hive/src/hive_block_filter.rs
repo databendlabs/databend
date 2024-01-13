@@ -15,25 +15,25 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::statistics::BinaryStatistics;
-use common_arrow::parquet::statistics::BooleanStatistics;
-use common_arrow::parquet::statistics::PrimitiveStatistics;
-use common_arrow::parquet::statistics::Statistics;
-use common_expression::types::number::F32;
-use common_expression::types::number::F64;
-use common_expression::types::BooleanType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_common_arrow::parquet::metadata::RowGroupMetaData;
+use databend_common_arrow::parquet::statistics::BinaryStatistics;
+use databend_common_arrow::parquet::statistics::BooleanStatistics;
+use databend_common_arrow::parquet::statistics::PrimitiveStatistics;
+use databend_common_arrow::parquet::statistics::Statistics;
+use databend_common_expression::types::number::F32;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::hive_parquet_block_reader::HiveBlockReader;
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
@@ -87,8 +87,9 @@ impl HiveBlockFilter {
                                 in_memory_size as u64,
                                 None,
                             );
-                            if let Ok(idx) = self.data_schema.index_of(col.name()) {
-                                statistics.insert(idx as u32, col_stats);
+                            if let Some((index, _)) = self.data_schema.column_with_name(col.name())
+                            {
+                                statistics.insert(index as u32, col_stats);
                             }
                         }
                     }
@@ -96,7 +97,7 @@ impl HiveBlockFilter {
             }
 
             for (p_key, p_value) in part_columns {
-                if let Ok(idx) = self.data_schema.index_of(&p_key) {
+                if let Some((idx, _)) = self.data_schema.column_with_name(&p_key) {
                     let mut null_count = 0;
                     let v = if p_value == HIVE_DEFAULT_PARTITION {
                         null_count = row_group.num_rows();

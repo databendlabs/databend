@@ -21,7 +21,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -431,14 +431,7 @@ impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRefInner<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRefInner<'a, K, V> {
     fn clone(&self) -> Self {
-        use ShortStringHashtableEntryRefInner::*;
-        match self {
-            Table0(a, b) => Table0(a, *b),
-            Table1(a) => Table1(a),
-            Table2(a) => Table2(a),
-            Table3(a) => Table3(a),
-            Table4(a) => Table4(a),
-        }
+        *self
     }
 }
 
@@ -518,7 +511,7 @@ impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRef<'a, K, V> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 
@@ -927,7 +920,7 @@ where A: Allocator + Clone + Default
 
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         self.entry_mut(key)
-            .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
+            .map(|e| unsafe { &mut *(e.get_mut_ptr()) })
     }
 
     unsafe fn insert(

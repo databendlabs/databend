@@ -16,37 +16,39 @@ use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_meta_types::protobuf as pb;
-use common_meta_types::txn_condition;
-use common_meta_types::txn_op;
-use common_meta_types::txn_op_response;
-use common_meta_types::AppliedState;
-use common_meta_types::Change;
-use common_meta_types::Cmd;
-use common_meta_types::ConditionResult;
-use common_meta_types::Entry;
-use common_meta_types::EntryPayload;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::Node;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
-use common_meta_types::StoredMembership;
-use common_meta_types::TxnCondition;
-use common_meta_types::TxnDeleteByPrefixRequest;
-use common_meta_types::TxnDeleteByPrefixResponse;
-use common_meta_types::TxnDeleteRequest;
-use common_meta_types::TxnDeleteResponse;
-use common_meta_types::TxnGetRequest;
-use common_meta_types::TxnGetResponse;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnOpResponse;
-use common_meta_types::TxnPutRequest;
-use common_meta_types::TxnPutResponse;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKV;
-use common_meta_types::With;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op_response;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::Change;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::CmdContext;
+use databend_common_meta_types::ConditionResult;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EntryPayload;
+use databend_common_meta_types::Interval;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnDeleteByPrefixRequest;
+use databend_common_meta_types::TxnDeleteByPrefixResponse;
+use databend_common_meta_types::TxnDeleteRequest;
+use databend_common_meta_types::TxnDeleteResponse;
+use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnGetResponse;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnOpResponse;
+use databend_common_meta_types::TxnPutRequest;
+use databend_common_meta_types::TxnPutResponse;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 use log::as_debug;
 use log::as_display;
@@ -61,6 +63,9 @@ use crate::sm_v002::SMV002;
 pub struct Applier<'a> {
     sm: &'a mut SMV002,
 
+    /// The context of the current applying log.
+    cmd_ctx: CmdContext,
+
     /// The changes has been made by the applying one log entry
     changes: Vec<Change<Vec<u8>, String>>,
 }
@@ -69,6 +74,7 @@ impl<'a> Applier<'a> {
     pub fn new(sm: &'a mut SMV002) -> Self {
         Self {
             sm,
+            cmd_ctx: CmdContext::from_millis(0),
             changes: Vec::new(),
         }
     }
@@ -82,6 +88,8 @@ impl<'a> Applier<'a> {
 
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
+
+        self.cmd_ctx = CmdContext::from_millis(log_time_ms);
 
         self.clean_expired_kvs(log_time_ms).await?;
 
@@ -198,7 +206,6 @@ impl<'a> Applier<'a> {
         Ok(st)
     }
 
-    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
     /// Update or insert a kv entry.
     ///
     /// If the input entry has expired, it performs a delete operation.
@@ -209,7 +216,10 @@ impl<'a> Applier<'a> {
     ) -> Result<(Option<SeqV>, Option<SeqV>), io::Error> {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv_primary_index(upsert_kv).await?;
+        let (prev, result) = self
+            .sm
+            .upsert_kv_primary_index(upsert_kv, &self.cmd_ctx)
+            .await?;
 
         self.sm
             .update_expire_index(&upsert_kv.key, &prev, &result)
@@ -382,9 +392,10 @@ impl<'a> Applier<'a> {
         put: &TxnPutRequest,
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
-        let upsert = UpsertKV::update(&put.key, &put.value).with(KVMeta {
-            expire_at: put.expire_at,
-        });
+        let upsert = UpsertKV::update(&put.key, &put.value).with(MetaSpec::new(
+            put.expire_at,
+            put.ttl_ms.map(Interval::from_millis),
+        ));
 
         let (prev, _result) = self.upsert_kv(&upsert).await?;
 

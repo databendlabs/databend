@@ -1,0 +1,143 @@
+statement ok
+drop table if exists t
+
+statement ok
+create table t(id string, a int default 2, b int not null default 2)
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON) on_error = continue
+----
+ndjson/null.ndjson 3 2 Missing value for column 1 (a Int32 NULL) 4
+
+query 
+select * from t order by id;
+----
+normal 1 1
+null_a 2 1
+null_b 1 2
+
+statement ok
+truncate table t
+
+query error 2004.*NULL_FIELD_AS cannot be `error`
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = 'ERROR') on_error = continue
+
+query 
+select * from t order by id;
+----
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = 'NULL', missing_field_as = 'FIELD_DEFAULT') on_error = continue
+----
+ndjson/null.ndjson 4 1 Invalid value 'null' for column 2 (b Int32): null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL 3
+
+query 
+select * from t order by id;
+----
+missing_a 2 1
+missing_b 1 2
+normal 1 1
+null_a NULL 1
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = 'FIELD_DEFAULT', missing_field_as = 'FIELD_DEFAULT') on_error = continue force=true
+----
+ndjson/null.ndjson 5 0 NULL NULL
+
+query 
+select * from t order by id;
+----
+missing_a 2 1
+missing_b 1 2
+normal 1 1
+null_a 2 1
+null_b 1 2
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = 'TYPE_DEFAULT', missing_field_as = 'FIELD_DEFAULT') on_error = continue force=true
+----
+ndjson/null.ndjson 5 0 NULL NULL
+
+
+query 
+select * from t order by id;
+----
+missing_a 2 1
+missing_b 1 2
+normal 1 1
+null_a NULL 1
+null_b 1 0
+
+statement ok
+truncate table t
+
+query
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, missing_field_as = 'ERROR') on_error = continue force=true
+----
+ndjson/null.ndjson 3 2 Missing value for column 1 (a Int32 NULL) 4
+
+query 
+select * from t order by id;
+----
+normal 1 1
+null_a 2 1
+null_b 1 2
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, missing_field_as = 'NULL') on_error = continue force=true
+----
+ndjson/null.ndjson 4 1 Missing value for column 2 (b Int32) 5
+
+query 
+select * from t order by id;
+----
+missing_a NULL 1
+normal 1 1
+null_a 2 1
+null_b 1 2
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, missing_field_as = 'FIELD_DEFAULT') on_error = continue force=true
+----
+ndjson/null.ndjson 5 0 NULL NULL
+
+query 
+select * from t order by id;
+----
+missing_a 2 1
+missing_b 1 2
+normal 1 1
+null_a 2 1
+null_b 1 2
+
+statement ok
+truncate table t
+
+query
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, missing_field_as = 'TYPE_DEFAULT') on_error = continue force=true
+----
+ndjson/null.ndjson 5 0 NULL NULL
+
+query 
+select * from t order by id;
+----
+missing_a NULL 1
+missing_b 1 0
+normal 1 1
+null_a 2 1
+null_b 1 2

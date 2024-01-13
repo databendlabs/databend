@@ -17,24 +17,24 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
-use common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
-use common_arrow::arrow::io::parquet::read::ArrayIter;
-use common_arrow::arrow::io::parquet::read::InitNested;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::page::CompressedPage;
-use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageMetaData;
-use common_arrow::parquet::read::PageReader;
-use common_base::runtime::GLOBAL_MEM_STAT;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_storage::ColumnNode;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use databend_common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
+use databend_common_arrow::arrow::io::parquet::read::ArrayIter;
+use databend_common_arrow::arrow::io::parquet::read::InitNested;
+use databend_common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use databend_common_arrow::parquet::metadata::ColumnDescriptor;
+use databend_common_arrow::parquet::page::CompressedPage;
+use databend_common_arrow::parquet::read::BasicDecompressor;
+use databend_common_arrow::parquet::read::PageMetaData;
+use databend_common_arrow::parquet::read::PageReader;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_storage::ColumnNode;
 use log::debug;
 
 use super::filter::FilterState;
@@ -53,7 +53,7 @@ impl Parquet2Reader {
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let pages = PageReader::new_with_page_meta(
                     std::io::Cursor::new(chunk),
@@ -93,7 +93,7 @@ impl Parquet2Reader {
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let filter_state = Arc::new(Mutex::new(FilterState::new(filter.clone())));
                 let iter_filter_state = filter_state.clone();

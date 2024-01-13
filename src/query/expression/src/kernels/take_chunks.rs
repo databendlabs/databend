@@ -14,16 +14,17 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::compute::merge_sort::MergeSlice;
-use common_hashtable::RowPtr;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
+use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
@@ -35,6 +36,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
@@ -122,7 +124,7 @@ impl DataBlock {
         build_columns_data_type: &[DataType],
         indices: &[RowPtr],
         result_size: usize,
-        string_items_buf: &mut Option<Vec<(u64, usize)>>,
+        binary_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Self {
         let num_columns = build_columns.len();
         let result_columns = (0..num_columns)
@@ -133,7 +135,7 @@ impl DataBlock {
                     data_type.clone(),
                     indices,
                     result_size,
-                    string_items_buf,
+                    binary_items_buf,
                 );
                 BlockEntry::new(data_type.clone(), Value::Column(column))
             })
@@ -264,6 +266,10 @@ impl Column {
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<BooleanType>(columns, builder, indices)
+            }
+            Column::Binary(_) => {
+                let builder = BinaryType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<BinaryType>(columns, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
@@ -469,6 +475,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Boolean(columns)
             }
+            Column::Binary(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| BinaryType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Binary(columns)
+            }
             Column::String(_) => {
                 let columns = columns
                     .iter()
@@ -579,7 +592,7 @@ impl Column {
         data_type: DataType,
         indices: &[RowPtr],
         result_size: usize,
-        string_items_buf: &mut Option<Vec<(u64, usize)>>,
+        binary_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Column {
         match &columns {
             ColumnVec::Null { .. } => Column::Null { len: result_size },
@@ -603,8 +616,11 @@ impl Column {
             ColumnVec::Boolean(columns) => {
                 Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
+            ColumnVec::Binary(columns) => BinaryType::upcast_column(
+                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
+            ),
             ColumnVec::String(columns) => StringType::upcast_column(
-                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+                Self::take_block_vec_string_types(columns, indices, binary_items_buf.as_mut()),
             ),
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
@@ -659,7 +675,7 @@ impl Column {
                 )
             }
             ColumnVec::Bitmap(columns) => BitmapType::upcast_column(
-                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
@@ -668,7 +684,7 @@ impl Column {
                     *inner_data_type.clone(),
                     indices,
                     result_size,
-                    string_items_buf,
+                    binary_items_buf,
                 );
 
                 let inner_bitmap = Self::take_column_vec_indices(
@@ -676,7 +692,7 @@ impl Column {
                     DataType::Boolean,
                     indices,
                     result_size,
-                    string_items_buf,
+                    binary_items_buf,
                 );
 
                 Column::Nullable(Box::new(NullableColumn {
@@ -695,7 +711,7 @@ impl Column {
                             ty.clone(),
                             indices,
                             result_size,
-                            string_items_buf,
+                            binary_items_buf,
                         )
                     })
                     .collect();
@@ -703,7 +719,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             ColumnVec::Variant(columns) => VariantType::upcast_column(
-                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
         }
     }
@@ -718,26 +734,26 @@ impl Column {
         builder
     }
 
-    pub fn take_block_vec_string_types<'a>(
-        col: &'a [StringColumn],
+    pub fn take_block_vec_binary_types(
+        col: &[BinaryColumn],
         indices: &[RowPtr],
-        string_items_buf: Option<&mut Vec<(u64, usize)>>,
-    ) -> StringColumn {
+        binary_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> BinaryColumn {
         let num_rows = indices.len();
 
-        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
+        // Each element of `items` is (string pointer(u64), string length), if `binary_items_buf`
         // can be reused, we will not re-allocate memory.
-        let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
-            Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
+        let mut items: Option<Vec<(u64, usize)>> = match &binary_items_buf {
+            Some(binary_items_buf) if binary_items_buf.capacity() >= num_rows => None,
             _ => Some(Vec::with_capacity(num_rows)),
         };
         let items = match items.is_some() {
             true => items.as_mut().unwrap(),
-            false => string_items_buf.unwrap(),
+            false => binary_items_buf.unwrap(),
         };
 
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut data_size = 0;
 
@@ -766,7 +782,25 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn take_block_vec_string_types(
+        cols: &[StringColumn],
+        indices: &[RowPtr],
+        binary_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> StringColumn {
+        let binary_cols = cols
+            .iter()
+            .map(|col| col.clone().into())
+            .collect::<Vec<BinaryColumn>>();
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::take_block_vec_binary_types(
+                &binary_cols,
+                indices,
+                binary_items_buf,
+            ))
+        }
     }
 
     pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {

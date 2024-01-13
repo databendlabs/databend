@@ -18,46 +18,46 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
-use common_base::base::tokio::io::AsyncBufReadExt;
-use common_base::base::tokio::io::BufReader;
-use common_base::base::tokio::sync::RwLock;
-use common_base::base::tokio::sync::RwLockWriteGuard;
-use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::key_spaces::RaftStateKV;
-use common_meta_raft_store::key_spaces::RaftStoreEntry;
-use common_meta_raft_store::log::RaftLog;
-use common_meta_raft_store::ondisk::DATA_VERSION;
-use common_meta_raft_store::ondisk::TREE_HEADER;
-use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use common_meta_raft_store::sm_v002::SnapshotStoreError;
-use common_meta_raft_store::sm_v002::SnapshotStoreV002;
-use common_meta_raft_store::sm_v002::SnapshotViewV002;
-use common_meta_raft_store::sm_v002::SMV002;
-use common_meta_raft_store::state::RaftState;
-use common_meta_raft_store::state::RaftStateKey;
-use common_meta_raft_store::state::RaftStateValue;
-use common_meta_raft_store::state_machine::MetaSnapshotId;
-use common_meta_raft_store::state_machine::StoredSnapshot;
-use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::openraft::ErrorSubject;
-use common_meta_sled_store::openraft::ErrorVerb;
-use common_meta_sled_store::SledTree;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::Endpoint;
-use common_meta_types::LogId;
-use common_meta_types::Membership;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaStartupError;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
-use common_meta_types::Snapshot;
-use common_meta_types::SnapshotData;
-use common_meta_types::SnapshotMeta;
-use common_meta_types::StorageError;
-use common_meta_types::StorageIOError;
-use common_meta_types::Vote;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::io::AsyncBufReadExt;
+use databend_common_base::base::tokio::io::BufReader;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::tokio::sync::RwLockWriteGuard;
+use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::key_spaces::RaftStateKV;
+use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_raft_store::log::RaftLog;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_raft_store::ondisk::TREE_HEADER;
+use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use databend_common_meta_raft_store::sm_v002::SnapshotStoreError;
+use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use databend_common_meta_raft_store::sm_v002::SnapshotViewV002;
+use databend_common_meta_raft_store::sm_v002::SMV002;
+use databend_common_meta_raft_store::state::RaftState;
+use databend_common_meta_raft_store::state::RaftStateKey;
+use databend_common_meta_raft_store::state::RaftStateValue;
+use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_raft_store::state_machine::StoredSnapshot;
+use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::openraft::ErrorSubject;
+use databend_common_meta_sled_store::openraft::ErrorVerb;
+use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::LogId;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::Snapshot;
+use databend_common_meta_types::SnapshotData;
+use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::StorageError;
+use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::Vote;
 use futures::Stream;
 use log::as_display;
 use log::debug;
@@ -541,7 +541,7 @@ impl StoreInner {
         ns
     }
 
-    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
+    pub async fn get_node_raft_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
         let endpoint = self
             .get_node(node_id)
             .await

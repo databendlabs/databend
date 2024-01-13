@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::FALSE_BYTES_NUM;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_ESCAPE;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_io::constants::TRUE_BYTES_NUM;
-use common_meta_app::principal::CsvFileFormatParams;
-use common_meta_app::principal::TsvFileFormatParams;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::FALSE_BYTES_NUM;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_ESCAPE;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::TsvFileFormatParams;
 
 use crate::field_encoder::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderValues;
@@ -117,6 +117,11 @@ impl FieldEncoderCSV {
     pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
         match &column {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+
+            Column::Binary(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                self.string_formatter.write_string(buf, out_buf);
+            }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf, out_buf);
@@ -133,8 +138,13 @@ impl FieldEncoderCSV {
                 self.nested.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);
             }
-            // null, bool, number
-            _ => self.simple.write_field(column, row_index, out_buf, false),
+
+            Column::Null { .. }
+            | Column::EmptyArray { .. }
+            | Column::EmptyMap { .. }
+            | Column::Number(_)
+            | Column::Decimal(_)
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
     }
 

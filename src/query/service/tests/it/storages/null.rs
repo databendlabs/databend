@@ -12,23 +12,25 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::plans::TableOptions;
-use common_storages_null::NullTable;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_sql::plans::TableOptions;
+use databend_common_storages_null::NullTable;
 use databend_query::stream::ReadDataBlockStream;
+use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
 
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'a'".into(),

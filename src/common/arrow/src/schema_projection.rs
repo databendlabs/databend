@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 
-use arrow::datatypes::DataType;
-use arrow::datatypes::Field;
-use arrow::datatypes::Schema;
+use crate::arrow::datatypes::DataType;
+use crate::arrow::datatypes::Field;
+use crate::arrow::datatypes::Schema;
 
 /// Project a [`Schema`] by picking the fields at the given indices.
 pub fn project(schema: &Schema, indices: &[usize]) -> Schema {

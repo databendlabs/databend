@@ -16,13 +16,10 @@ use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_cache::Count;
-use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
-
-use crate::metrics_inc_cache_access_count;
-use crate::metrics_inc_cache_hit_count;
-use crate::metrics_inc_cache_miss_count;
+use databend_common_cache::Count;
+use databend_common_cache::CountableMeter;
+use databend_common_cache::DefaultHashBuilder;
+use databend_common_metrics::cache::*;
 
 // The cache accessor, crate users usually working on this interface while manipulating caches
 pub trait CacheAccessor<K, V, S = DefaultHashBuilder, M = Count>

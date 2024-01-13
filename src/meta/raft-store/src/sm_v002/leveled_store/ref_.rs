@@ -16,6 +16,7 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
+use std::sync::Arc;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
@@ -48,6 +49,12 @@ impl<'d> Ref<'d> {
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d Level> + 'd {
         self.writable.into_iter().chain(self.frozen.iter_levels())
     }
+
+    pub(in crate::sm_v002) fn iter_shared_levels(
+        &self,
+    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
+        (self.writable, self.frozen.iter_arc_levels())
+    }
 }
 
 #[async_trait::async_trait]
@@ -55,6 +62,7 @@ impl<'d, K> MapApiRO<K> for Ref<'d>
 where
     K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
+    Arc<Level>: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -65,13 +73,9 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-        Q: Ord + Send + Sync + ?Sized,
-    {
-        let levels = self.iter_levels();
-        compacted_range(range, levels).await
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
+        let (top, levels) = self.iter_shared_levels();
+        compacted_range(range, top, levels).await
     }
 }

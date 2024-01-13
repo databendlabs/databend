@@ -26,12 +26,13 @@
 
 use std::time::Instant;
 
-use common_metrics::count;
+use databend_common_metrics::count;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
-    use common_meta_types::NodeId;
-    use lazy_static::lazy_static;
+    use std::sync::LazyLock;
+
+    use databend_common_meta_types::NodeId;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
 
@@ -135,9 +136,7 @@ pub mod server_metrics {
         }
     }
 
-    lazy_static! {
-        static ref SERVER_METRICS: ServerMetrics = ServerMetrics::init();
-    }
+    static SERVER_METRICS: LazyLock<ServerMetrics> = LazyLock::new(ServerMetrics::init);
 
     pub fn set_current_leader(current_leader: NodeId) {
         SERVER_METRICS.current_leader_id.set(current_leader as i64);
@@ -186,6 +185,15 @@ pub mod server_metrics {
         SERVER_METRICS.proposals_failed.inc();
     }
 
+    /// Accumulate the number of succeeded and failed read requests.
+    pub fn incr_read_result<T, E>(r: &Result<T, E>) {
+        if r.is_ok() {
+            // TODO: success is not collected.
+        } else {
+            incr_read_failed();
+        }
+    }
+
     pub fn incr_read_failed() {
         SERVER_METRICS.read_failed.inc();
     }
@@ -197,8 +205,9 @@ pub mod server_metrics {
 
 pub mod raft_metrics {
     pub mod network {
-        use common_meta_types::NodeId;
-        use lazy_static::lazy_static;
+        use std::sync::LazyLock;
+
+        use databend_common_meta_types::NodeId;
         use prometheus_client;
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
@@ -235,6 +244,7 @@ pub mod raft_metrics {
             sent_bytes: Family<ToLabels, Counter>,
             recv_bytes: Family<FromLabels, Counter>,
             sent_failures: Family<ToLabels, Counter>,
+            append_sent_seconds: Family<ToLabels, Histogram>,
             snapshot_send_success: Family<ToLabels, Counter>,
             snapshot_send_failure: Family<ToLabels, Counter>,
             snapshot_send_inflights: Family<ToLabels, Gauge>,
@@ -253,6 +263,9 @@ pub mod raft_metrics {
                     sent_bytes: Family::default(),
                     recv_bytes: Family::default(),
                     sent_failures: Family::default(),
+                    append_sent_seconds: Family::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets(0.001f64, 2f64, 20))
+                    }), // 0.001s ~ 1024s
                     snapshot_send_success: Family::default(),
                     snapshot_send_failure: Family::default(),
                     snapshot_send_inflights: Family::default(),
@@ -284,6 +297,11 @@ pub mod raft_metrics {
                     key!("sent_failures"),
                     "sent failures",
                     metrics.sent_failures.clone(),
+                );
+                registry.register(
+                    key!("append_sent_seconds"),
+                    "append entries sent seconds",
+                    metrics.append_sent_seconds.clone(),
                 );
                 registry.register(
                     key!("snapshot_send_success"),
@@ -329,9 +347,7 @@ pub mod raft_metrics {
             }
         }
 
-        lazy_static! {
-            static ref RAFT_METRICS: RaftMetrics = RaftMetrics::init();
-        }
+        static RAFT_METRICS: LazyLock<RaftMetrics> = LazyLock::new(RaftMetrics::init);
 
         pub fn incr_active_peers(id: &NodeId, addr: &str, cnt: i64) {
             let id = id.to_string();
@@ -344,7 +360,7 @@ pub mod raft_metrics {
                 .inc_by(cnt);
         }
 
-        pub fn incr_fail_connections_to_peer(id: &NodeId, addr: &str) {
+        pub fn incr_connect_failure(id: &NodeId, addr: &str) {
             let id = id.to_string();
             RAFT_METRICS
                 .fail_connect_to_peer
@@ -355,7 +371,7 @@ pub mod raft_metrics {
                 .inc();
         }
 
-        pub fn incr_sent_bytes_to_peer(id: &NodeId, bytes: u64) {
+        pub fn incr_sendto_bytes(id: &NodeId, bytes: u64) {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_bytes
@@ -363,14 +379,22 @@ pub mod raft_metrics {
                 .inc_by(bytes);
         }
 
-        pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
+        pub fn incr_recvfrom_bytes(addr: String, bytes: u64) {
             RAFT_METRICS
                 .recv_bytes
                 .get_or_create(&FromLabels { from: addr })
                 .inc_by(bytes);
         }
 
-        pub fn incr_sent_failure_to_peer(id: &NodeId) {
+        pub fn incr_sendto_result(id: &NodeId, success: bool) {
+            if success {
+                // success is not collected.
+            } else {
+                incr_sendto_failure(id);
+            }
+        }
+
+        pub fn incr_sendto_failure(id: &NodeId) {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_failures
@@ -378,23 +402,26 @@ pub mod raft_metrics {
                 .inc();
         }
 
-        pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
+        pub fn observe_append_sendto_spent(id: &NodeId, v: f64) {
             let to = id.to_string();
             RAFT_METRICS
-                .snapshot_send_success
+                .append_sent_seconds
                 .get_or_create(&ToLabels { to })
-                .inc();
+                .observe(v);
         }
 
-        pub fn incr_snapshot_send_failures_to_peer(id: &NodeId) {
+        pub fn incr_snapshot_sendto_result(id: &NodeId, success: bool) {
             let to = id.to_string();
-            RAFT_METRICS
-                .snapshot_send_failure
-                .get_or_create(&ToLabels { to })
-                .inc();
+            if success {
+                &RAFT_METRICS.snapshot_send_success
+            } else {
+                &RAFT_METRICS.snapshot_send_failure
+            }
+            .get_or_create(&ToLabels { to })
+            .inc();
         }
 
-        pub fn incr_snapshot_send_inflights_to_peer(id: &NodeId, cnt: i64) {
+        pub fn incr_snapshot_sendto_inflight(id: &NodeId, cnt: i64) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_inflights
@@ -402,14 +429,14 @@ pub mod raft_metrics {
                 .inc_by(cnt);
         }
 
-        pub fn incr_snapshot_recv_inflights_from_peer(addr: String, cnt: i64) {
+        pub fn incr_snapshot_recvfrom_inflight(addr: String, cnt: i64) {
             RAFT_METRICS
                 .snapshot_recv_inflights
                 .get_or_create(&FromLabels { from: addr })
                 .inc_by(cnt);
         }
 
-        pub fn sample_snapshot_sent(id: &NodeId, v: f64) {
+        pub fn observe_snapshot_sendto_spent(id: &NodeId, v: f64) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_sent_seconds
@@ -417,38 +444,27 @@ pub mod raft_metrics {
                 .observe(v);
         }
 
-        pub fn sample_snapshot_recv(addr: String, v: f64) {
+        pub fn observe_snapshot_recvfrom_spent(addr: String, v: f64) {
             RAFT_METRICS
                 .snapshot_recv_seconds
                 .get_or_create(&FromLabels { from: addr })
                 .observe(v);
         }
 
-        pub fn incr_snapshot_recv_status_from_peer(addr: String, success: bool) {
+        pub fn incr_snapshot_recvfrom_result(addr: String, success: bool) {
             if success {
-                incr_snapshot_recv_failure_from_peer(addr);
+                &RAFT_METRICS.snapshot_recv_success
             } else {
-                incr_snapshot_recv_success_from_peer(addr);
+                &RAFT_METRICS.snapshot_recv_failures
             }
-        }
-
-        pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
-            RAFT_METRICS
-                .snapshot_recv_failures
-                .get_or_create(&FromLabels { from: addr })
-                .inc();
-        }
-
-        pub fn incr_snapshot_recv_success_from_peer(addr: String) {
-            RAFT_METRICS
-                .snapshot_recv_success
-                .get_or_create(&FromLabels { from: addr })
-                .inc();
+            .get_or_create(&FromLabels { from: addr })
+            .inc();
         }
     }
 
     pub mod storage {
-        use lazy_static::lazy_static;
+        use std::sync::LazyLock;
+
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
@@ -493,9 +509,7 @@ pub mod raft_metrics {
             }
         }
 
-        lazy_static! {
-            static ref STORAGE_METRICS: StorageMetrics = StorageMetrics::init();
-        }
+        static STORAGE_METRICS: LazyLock<StorageMetrics> = LazyLock::new(StorageMetrics::init);
 
         pub fn incr_raft_storage_fail(func: &str, write: bool) {
             let labels = FuncLabels {
@@ -517,9 +531,9 @@ pub mod raft_metrics {
 }
 
 pub mod network_metrics {
+    use std::sync::LazyLock;
     use std::time::Duration;
 
-    use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
@@ -582,9 +596,7 @@ pub mod network_metrics {
         }
     }
 
-    lazy_static! {
-        static ref NETWORK_METRICS: NetworkMetrics = NetworkMetrics::init();
-    }
+    static NETWORK_METRICS: LazyLock<NetworkMetrics> = LazyLock::new(NetworkMetrics::init);
 
     pub fn sample_rpc_delay_seconds(d: Duration) {
         NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());

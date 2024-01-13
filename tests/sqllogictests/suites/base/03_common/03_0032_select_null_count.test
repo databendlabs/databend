@@ -1,0 +1,49 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(c0 tuple(int, int) not null, c1 string null)
+
+statement error 1006
+insert into t(c1) values(null), (null), (null)
+
+statement ok
+insert into t(c0,c1) values((0,0),null), ((0,0),null), ((0,0),null)
+
+query I
+select count(c1) from t
+----
+0
+
+query I
+select count(c0) from t
+----
+3
+
+## test #issue13932
+statement ok
+create table t3(a int not null,b text);
+
+statement error 1006
+insert into t3(b) values('a');
+
+statement error 1006
+insert into t3(a) values(null);
+
+statement ok
+insert into t3(a) values(1);
+
+statement ok
+insert into t3(a,b) values(1,'a');
+
+statement ok
+drop table if exists t

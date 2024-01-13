@@ -14,15 +14,15 @@
 
 use std::io::Write;
 
-use common_arrow::arrow::compute::merge_sort::MergeSlice;
-use common_expression::BlockEntry;
-use common_expression::BlockRowIndex;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Value;
+use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockRowIndex;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
 
 pub fn new_block(columns: &[Column]) -> DataBlock {
-    let len = columns.get(0).map_or(1, |c| c.len());
+    let len = columns.first().map_or(1, |c| c.len());
     let columns = columns
         .iter()
         .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))

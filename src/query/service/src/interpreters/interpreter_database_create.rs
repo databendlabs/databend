@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_management::RoleApi;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::Ownership;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
-use common_meta_types::MatchSeq;
-use common_sharing::ShareEndpointManager;
-use common_sql::plans::CreateDatabasePlan;
-use common_users::UserApiProvider;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::Ownership;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sharing::ShareEndpointManager;
+use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -56,7 +56,7 @@ impl CreateDatabaseInterpreter {
                 Some(share_name.clone()),
             )
             .await?;
-        match share_specs.get(0) {
+        match share_specs.first() {
             Some((_, share_spec)) => {
                 if !share_spec.tenants.contains(tenant) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
@@ -132,7 +132,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
-                    &GrantObjectByID::Database {
+                    &OwnershipObject::Database {
                         catalog_name: self.plan.catalog.clone(),
                         db_id: reply.db_id,
                     },

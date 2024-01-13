@@ -258,6 +258,36 @@ Literal {
 
 
 ---------- Input ----------
+100_100_000
+---------- Output ---------
+100100000
+---------- AST ------------
+Literal {
+    span: Some(
+        0..11,
+    ),
+    lit: UInt64(
+        100100000,
+    ),
+}
+
+
+---------- Input ----------
+1_12200_00
+---------- Output ---------
+11220000
+---------- AST ------------
+Literal {
+    span: Some(
+        0..10,
+    ),
+    lit: UInt64(
+        11220000,
+    ),
+}
+
+
+---------- Input ----------
 .1
 ---------- Output ---------
 0.1
@@ -987,7 +1017,7 @@ BinaryOp {
         },
         right: ColumnRef {
             span: Some(
-                8..11,
+                8..9,
             ),
             database: None,
             table: Some(
@@ -1053,7 +1083,7 @@ BinaryOp {
 ---------- Input ----------
 "t":k1.k2
 ---------- Output ---------
-"t":k1.k2
+"t":k1:k2
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1091,7 +1121,7 @@ MapAccess {
             },
         },
     },
-    accessor: Dot {
+    accessor: Colon {
         key: Identifier {
             name: "k2",
             quote: None,
@@ -1106,7 +1136,7 @@ MapAccess {
 ---------- Input ----------
 "t":k1.k2.0
 ---------- Output ---------
-"t":k1.k2.0
+"t":k1:k2.0
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1148,7 +1178,7 @@ MapAccess {
                 },
             },
         },
-        accessor: Dot {
+        accessor: Colon {
             key: Identifier {
                 name: "k2",
                 quote: None,
@@ -1796,7 +1826,7 @@ Cast {
 ---------- Input ----------
 (arr[0]:a).b
 ---------- Output ---------
-arr[0]:a.b
+arr[0]:a:b
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1847,7 +1877,7 @@ MapAccess {
             },
         },
     },
-    accessor: Dot {
+    accessor: Colon {
         key: Identifier {
             name: "b",
             quote: None,
@@ -1975,7 +2005,7 @@ BinaryOp {
         ),
         expr: ColumnRef {
             span: Some(
-                0..5,
+                0..1,
             ),
             database: Some(
                 Identifier {
@@ -2154,7 +2184,7 @@ BinaryOp {
                         op: Eq,
                         left: ColumnRef {
                             span: Some(
-                                14..23,
+                                14..16,
                             ),
                             database: None,
                             table: Some(
@@ -4006,6 +4036,182 @@ FunctionCall {
                     ),
                     lit: UInt64(
                         0,
+                    ),
+                },
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+(current_timestamp, current_timestamp(), now())
+---------- Output ---------
+(current_timestamp(), current_timestamp(), now())
+---------- AST ------------
+Tuple {
+    span: Some(
+        0..47,
+    ),
+    exprs: [
+        FunctionCall {
+            span: Some(
+                1..18,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: None,
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                20..39,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "current_timestamp",
+                quote: None,
+                span: Some(
+                    20..37,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+        FunctionCall {
+            span: Some(
+                41..46,
+            ),
+            distinct: false,
+            name: Identifier {
+                name: "now",
+                quote: None,
+                span: Some(
+                    41..44,
+                ),
+            },
+            args: [],
+            params: [],
+            window: None,
+            lambda: None,
+        },
+    ],
+}
+
+
+---------- Input ----------
+ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
+---------- Output ---------
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..41,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ARRAY_REDUCE",
+        quote: None,
+        span: Some(
+            0..12,
+        ),
+    },
+    args: [
+        Array {
+            span: Some(
+                13..20,
+            ),
+            exprs: [
+                Literal {
+                    span: Some(
+                        14..15,
+                    ),
+                    lit: UInt64(
+                        1,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        16..17,
+                    ),
+                    lit: UInt64(
+                        2,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        18..19,
+                    ),
+                    lit: UInt64(
+                        3,
+                    ),
+                },
+            ],
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: Some(
+        Lambda {
+            params: [
+                Identifier {
+                    name: "acc",
+                    quote: None,
+                    span: Some(
+                        23..26,
+                    ),
+                },
+                Identifier {
+                    name: "t",
+                    quote: None,
+                    span: Some(
+                        27..28,
+                    ),
+                },
+            ],
+            expr: BinaryOp {
+                span: Some(
+                    37..38,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        33..36,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "acc",
+                            quote: None,
+                            span: Some(
+                                33..36,
+                            ),
+                        },
+                    ),
+                },
+                right: ColumnRef {
+                    span: Some(
+                        39..40,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
                     ),
                 },
             },

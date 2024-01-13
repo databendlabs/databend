@@ -1,0 +1,50 @@
+statement ok
+drop table if exists integers
+
+statement ok
+drop table if exists integers2
+
+statement ok
+CREATE TABLE integers AS SELECT a i, 1 j FROM generate_series(0, 1999, 1) t1(a);
+
+statement ok
+CREATE TABLE integers2 AS SELECT a k, 2 l FROM generate_series(2000, 3999, 1) t1(a);
+
+# equality join
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+----
+4000
+
+query IIII
+SELECT count(i), count(j), count(k), count(l) FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k ORDER BY 1, 2, 3, 4
+----
+2000 2000 2000 2000
+
+# range join
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.j>integers2.l
+----
+4000
+
+query IIII
+SELECT count(i), count(j), count(k), count(l) FROM integers FULL OUTER JOIN integers2 ON integers.j>integers2.l ORDER BY 1, 2, 3, 4
+----
+2000 2000 2000 2000
+
+# inequality join
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.j+1<>integers2.l;
+----
+4000
+
+query IIII
+SELECT count(i), count(j), count(k), count(l) FROM integers FULL OUTER JOIN integers2 ON integers.j+1<>integers2.l ORDER BY 1, 2, 3, 4
+----
+2000 2000 2000 2000
+
+# complex join condition
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.j+integers2.l<>3;
+----
+4000

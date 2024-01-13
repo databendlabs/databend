@@ -14,27 +14,26 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Identifier;
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_ast::ast::OrderByExpr;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::TableReference;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::TableReference;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;
-use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::optimizer::s_expr::SExpr;
 use crate::plans::Limit;
@@ -96,6 +95,7 @@ impl Dataframe {
                 None,
                 false,
                 false,
+                false,
             );
 
             binder
@@ -143,9 +143,11 @@ impl Dataframe {
             .normalize_select_list(bind_context, select_list)
             .await?;
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &bind_context.aggregate_info,
+            &bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -191,9 +193,11 @@ impl Dataframe {
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self
             .binder
@@ -255,19 +259,21 @@ impl Dataframe {
         }
 
         if let Some(having) = &having {
-            let (having, _) = self
+            let having = self
                 .binder
                 .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
                 .await?;
             self.s_expr = self
                 .binder
-                .bind_having(&mut self.bind_context, having, None, self.s_expr)
+                .bind_having(&mut self.bind_context, having, self.s_expr)
                 .await?;
         }
 
-        let (scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -304,9 +310,11 @@ impl Dataframe {
             .await?;
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
-        let (mut scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
         self.s_expr = self.binder.bind_distinct(
             None,
             &self.bind_context,
@@ -386,9 +394,11 @@ impl Dataframe {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
-        let (mut scalar_items, projections) = self
-            .binder
-            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.binder.analyze_projection(
+            &self.bind_context.aggregate_info,
+            &self.bind_context.windows,
+            &select_list,
+        )?;
         let order_items = self
             .binder
             .analyze_order_items(
@@ -542,10 +552,9 @@ impl Dataframe {
             ignore_result: false,
             formatted_ast: None,
         };
-        let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-            enable_distributed_optimization,
-        }));
-        optimize(self.query_ctx, opt_ctx, plan)
+        let opt_ctx = OptimizerContext::new(self.query_ctx.clone(), self.binder.metadata.clone())
+            .with_enable_distributed_optimization(enable_distributed_optimization);
+        optimize(opt_ctx, plan)
     }
 }
 

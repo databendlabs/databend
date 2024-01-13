@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
 
 use std::collections::BTreeMap;
 
-use common_exception::Result;
-use common_expression::types::number::Int32Type;
-use common_expression::types::NumberDataType;
-use common_expression::FromOptData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_formats::FileFormatOptionsExt;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::FileFormatParams;
-use common_settings::Settings;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_settings::Settings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;

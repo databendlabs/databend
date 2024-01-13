@@ -16,7 +16,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = ".." }
+databend-common-ast = { path = ".." }
 
 afl = "0.12"
 

@@ -1,0 +1,55 @@
+statement ok
+DROP DATABASE IF EXISTS ss
+
+statement ok
+DROP DATABASE IF EXISTS ss1
+
+statement ok
+DROP DATABASE IF EXISTS ss2
+
+statement ok
+CREATE DATABASE ss
+
+statement ok
+CREATE DATABASE ss1
+
+statement ok
+CREATE DATABASE ss2
+
+query T
+SHOW DATABASES like 'ss%'
+----
+ss
+ss1
+ss2
+
+query TT
+SHOW FULL DATABASES like 'ss%';
+----
+default account_admin ss
+default account_admin ss1
+default account_admin ss2
+
+query TT
+SHOW FULL DATABASES FROM default like 'ss%';
+----
+default account_admin ss
+default account_admin ss1
+default account_admin ss2
+
+query T
+SHOW SCHEMAS like 'ss%'
+----
+ss
+ss1
+ss2
+
+statement ok
+DROP DATABASE IF EXISTS ss
+
+statement ok
+DROP DATABASE IF EXISTS ss1
+
+statement ok
+DROP DATABASE IF EXISTS ss2
+

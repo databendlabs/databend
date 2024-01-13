@@ -14,28 +14,27 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_cloud_control::client_config::build_client_config;
-use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::ShowTasksRequest;
-use common_cloud_control::pb::Task;
-use common_cloud_control::task_client::make_request;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::UInt64Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::FromOptData;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_sql::plans::task_schema;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::ShowTasksRequest;
+use databend_common_cloud_control::pb::Task;
+use databend_common_cloud_control::task_client::make_request;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::plans::task_schema;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -48,15 +47,17 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut state: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut status: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut after: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
 
     for task in tasks {
-        let tsk: common_cloud_control::task_utils::Task = task.try_into()?;
+        let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
         created_on.push(tsk.created_at.timestamp_micros());
         name.push(tsk.task_name.into_bytes());
         id.push(tsk.task_id);
@@ -67,13 +68,23 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
                 .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
         );
         schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
-        state.push(tsk.status.to_string().into_bytes());
+        status.push(tsk.status.to_string().into_bytes());
         definition.push(tsk.query_text.into_bytes());
+        condition_text.push(tsk.condition_text.into_bytes());
+        // join by comma
+        after.push(
+            tsk.after
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(",")
+                .into_bytes(),
+        );
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
     }
+
     Ok(DataBlock::new_from_columns(vec![
         TimestampType::from_data(created_on),
         StringType::from_data(name),
@@ -82,8 +93,10 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         StringType::from_opt_data(comment),
         StringType::from_opt_data(warehouse),
         StringType::from_opt_data(schedule),
-        StringType::from_data(state),
+        StringType::from_data(status),
         StringType::from_data(definition),
+        StringType::from_data(condition_text),
+        StringType::from_data(after),
         UInt64Type::from_opt_data(suspend_after_num_failures),
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),

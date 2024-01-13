@@ -15,7 +15,6 @@
 #![feature(write_all_vectored)]
 
 mod cache;
-mod metrics;
 mod providers;
 mod read;
 
@@ -41,5 +40,3 @@ pub use read::InMemoryCacheReader;
 pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;
 pub use read::Loader;
-
-pub use self::metrics::*;

@@ -17,32 +17,33 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::ColumnPosition;
-use common_ast::ast::Expr;
-use common_ast::ast::Expr::Array;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Identifier;
-use common_ast::ast::Join;
-use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator;
-use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
-use common_ast::ast::Query;
-use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::SetExpr;
-use common_ast::ast::SetOperator;
-use common_ast::ast::TableReference;
-use common_ast::Visitor;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Expr::Array;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Join;
+use databend_common_ast::ast::JoinCondition;
+use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SetOperator;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::Visitor;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -67,9 +68,12 @@ use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
+use crate::plans::Visitor as _;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::UdfRewriter;
+use crate::VirtualColumnRewriter;
 use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
@@ -94,11 +98,6 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
-        if !order_by.is_empty() {
-            // Currently, we disable aggregating index scan if the query is a single-table query with order by.
-            self.ctx.set_can_scan_from_agg_index(false);
-        }
-
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                 warn!(
@@ -167,9 +166,6 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
-        // analyze lambda
-        self.analyze_lambda(&mut from_context, &mut select_list)?;
-
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -201,12 +197,24 @@ impl Binder {
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let (mut scalar_items, projections) =
-            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+        let (mut scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
                 self.analyze_aggregate_having(&mut from_context, &aliases, having)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        let qualify = if let Some(qualify) = &stmt.qualify {
+            Some(
+                self.analyze_window_qualify(&mut from_context, &aliases, qualify)
                     .await?,
             )
         } else {
@@ -238,26 +246,26 @@ impl Binder {
             )?;
         }
 
-        if !from_context.lambda_info.lambda_functions.is_empty() {
-            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
-        }
-
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }
 
-        if let Some((having, span)) = having {
-            s_expr = self
-                .bind_having(&mut from_context, having, span, s_expr)
-                .await?;
+        if let Some(having) = having {
+            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
         }
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
         for window_info in &from_context.windows.window_functions {
             s_expr = self.bind_window_function(window_info, s_expr).await?;
+        }
+
+        if let Some(qualify) = qualify {
+            s_expr = self
+                .bind_qualify(&mut from_context, qualify, s_expr)
+                .await?;
         }
 
         if stmt.distinct {
@@ -283,6 +291,15 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite variant inner fields as virtual columns
+        let mut virtual_column_rewriter =
+            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
+        s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
@@ -420,7 +437,6 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
 
         let f = |scalar: &ScalarExpr| {
@@ -430,8 +446,8 @@ impl Binder {
             )
         };
 
-        let finder = Finder::new(&f);
-        let finder = scalar.accept(finder)?;
+        let mut finder = Finder::new(&f);
+        finder.visit(&scalar)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Where clause can't contain aggregate or window functions".to_string(),
@@ -799,6 +815,7 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.windows.window_functions.is_empty()
         {
             return Ok(());
         }
@@ -821,7 +838,11 @@ impl Binder {
             return Ok(());
         }
 
-        if !metadata.table(0).table().support_row_id_column() {
+        if !metadata
+            .table(0)
+            .table()
+            .supported_internal_column(ROW_ID_COLUMN_ID)
+        {
             return Ok(());
         }
 
@@ -1052,8 +1073,11 @@ impl<'a> SelectRewriter<'a> {
 
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            let mut exclude_columns = aggregate_columns;
-            exclude_columns.push(ColumnID::Name(pivot.value_column.clone()));
+            let mut exclude_columns: Vec<_> = aggregate_columns
+                .iter()
+                .map(|c| Identifier::from_name(c.name()))
+                .collect();
+            exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
         };
         let new_aggregate_name = Identifier {
@@ -1095,13 +1119,7 @@ impl<'a> SelectRewriter<'a> {
         let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(
-                unpivot
-                    .names
-                    .iter()
-                    .map(|ident| ColumnID::Name(ident.clone()))
-                    .collect(),
-            );
+            star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),

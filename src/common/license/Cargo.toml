@@ -1,5 +1,5 @@
 [package]
-name = "common-license"
+name = "databend-common-license"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,7 +12,7 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
+databend-common-base = { path = "../base" }
+databend-common-exception = { path = "../exception" }
 jwt-simple = "0.11.0"
 serde = { workspace = true }

@@ -1,5 +1,5 @@
 [package]
-name = "common-openai"
+name = "databend-common-openai"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,15 +14,13 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../exception" }
-common-metrics = { path = "../metrics" }
+databend-common-exception = { path = "../exception" }
+databend-common-metrics = { path = "../metrics" }
 
 # GitHub dependencies
 
 # Crates.io dependencies
-lazy_static = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 
 [dev-dependencies]

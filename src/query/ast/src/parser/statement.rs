@@ -15,15 +15,15 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use common_meta_app::principal::AuthType;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserPrivilegeType;
-use common_meta_app::schema::CatalogType;
-use common_meta_app::share::ShareGrantObjectName;
-use common_meta_app::share::ShareGrantObjectPrivilege;
-use common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_app::share::ShareGrantObjectName;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareNameIdent;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -33,12 +33,14 @@ use nom::Slice;
 use crate::ast::*;
 use crate::input::Input;
 use crate::parser::copy::copy_into;
+use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
+use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -57,22 +59,26 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementMsg> {
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | MEMO )? ~ #statement
+            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
         |(_, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::AST) => {
-                        let formatted_stmt = format_statement(statement.stmt.clone())
-                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        let formatted_stmt =
+                            format_statement(statement.stmt.clone()).map_err(|_| {
+                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
+                            })?;
                         ExplainKind::Ast(formatted_stmt)
                     }
                     Some(TokenKind::SYNTAX) => {
-                        let pretty_stmt = pretty_statement(statement.stmt.clone(), 10)
-                            .map_err(|_| ErrorKind::Other("invalid statement"))?;
+                        let pretty_stmt =
+                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
+                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
+                            })?;
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
@@ -80,6 +86,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
+                    Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
@@ -101,7 +108,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #task_warehouse_option
-            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
+            ~ (AFTER ~ #comma_separated_list0(literal_string))?
+            ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ AS ~ #statement
@@ -112,24 +121,28 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             opt_if_not_exists,
             task,
             warehouse_opts,
-            _,
-            _,
             schedule_opts,
+            after_tasks,
+            when_conditions,
             suspend_opt,
             comment_opt,
             _,
             sql,
         )| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .unwrap();
+            let sql = format!("{}", sql.stmt);
+
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
                 warehouse_opts,
-                schedule_opts,
+                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                after: match after_tasks {
+                    Some((_, tasks)) => tasks,
+                    None => Vec::new(),
+                },
+                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
             })
         },
@@ -349,6 +362,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(_, _, show_options)| Statement::ShowIndexes { show_options },
     );
+    let show_locks = map(
+        rule! {
+            SHOW ~ LOCKS ~ ( IN ~ ^ACCOUNT )? ~ #limit_where?
+        },
+        |(_, _, opt_in_account, limit)| {
+            Statement::ShowLocks(ShowLocksStmt {
+                in_account: opt_in_account.is_some(),
+                limit,
+            })
+        },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -390,6 +414,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
             role_name,
+        },
+    );
+
+    let set_secondary_roles = map(
+        rule! {
+            SET ~ SECONDARY ~ ROLES ~ (ALL | NONE)
+        },
+        |(_, _, _, token)| {
+            let option = match token.kind {
+                TokenKind::ALL => SecondaryRolesOption::All,
+                TokenKind::NONE => SecondaryRolesOption::None,
+                _ => unreachable!(),
+            };
+            Statement::SetSecondaryRoles { option }
         },
     );
 
@@ -624,11 +662,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_drop_tables_status = map(
         rule! {
-            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )?
+            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, _, opt_database)| {
+        |(_, _, _, opt_database, limit)| {
             Statement::ShowDropTables(ShowDropTablesStmt {
                 database: opt_database.map(|(_, database)| database),
+                limit,
             })
         },
     );
@@ -790,7 +829,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
         },
         |(_, _, _, database_option, option)| {
             let (catalog, database) = database_option.map_or_else(
@@ -828,6 +867,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -883,17 +923,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_index = map(
         rule! {
-            CREATE ~ SYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
-                sync_creation: opt_sync.is_some(),
+                sync_creation: opt_async.is_none(),
             })
         },
     );
@@ -924,10 +964,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_not_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -938,10 +979,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
+                if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -952,10 +994,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, _, (catalog, database, table))| {
+        |(_, _, _, opt_if_exists, _, (catalog, database, table))| {
             Statement::DropVirtualColumn(DropVirtualColumnStmt {
+                if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
@@ -972,6 +1015,26 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 table,
+            })
+        },
+    );
+
+    let show_virtual_columns = map(
+        rule! {
+            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+        },
+        |(_, _, _, opt_table, opt_db, limit)| {
+            let table = opt_table.map(|(_, table)| table);
+            let (catalog, database) = match opt_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowVirtualColumns(ShowVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                limit,
             })
         },
     );
@@ -1053,6 +1116,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Statement::Grant(GrantStmt {
                 source,
                 principal: grant_option,
+            })
+        },
+    );
+    let grant_ownership = map(
+        rule! {
+            GRANT ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ TO ~ ROLE ~ #role_name
+        },
+        |(_, _, _, level, _, _, role_name)| {
+            Statement::Grant(GrantStmt {
+                source: AccountMgrSource::Privs {
+                    privileges: vec![UserPrivilegeType::Ownership],
+                    level,
+                },
+                principal: PrincipalIdentity::Role(role_name),
             })
         },
     );
@@ -1199,6 +1276,51 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _, stage_name)| Statement::DescribeStage {
             stage_name: stage_name.to_string(),
         },
+    );
+
+    // connections
+    let connection_opt = connection_opt("=");
+    let create_connection = map_res(
+        rule! {
+            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
+        },
+        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+            let options =
+                BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
+            Ok(Statement::CreateConnection(CreateConnectionStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: connection_name,
+                storage_type,
+                storage_params: options,
+            }))
+        },
+    );
+
+    let drop_connection = map(
+        rule! {
+            DROP ~ CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, connection_name)| {
+            Statement::DropConnection(DropConnectionStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: connection_name,
+            })
+        },
+    );
+
+    let desc_connection = map(
+        rule! {
+            (DESC | DESCRIBE) ~ CONNECTION ~ #ident
+        },
+        |(_, _, name)| Statement::DescribeConnection(DescribeConnectionStmt { name }),
+    );
+
+    let show_connections = map(
+        rule! {
+            SHOW ~ CONNECTIONS
+        },
+        |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
     );
 
     let call = map(
@@ -1419,10 +1541,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_network_policy = map(
         rule! {
-            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
-             ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+             ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1456,10 +1578,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let alter_network_policy = map(
         rule! {
-            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
-             ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
-             ~ ( COMMENT ~ Eq ~ #literal_string)?
+            ALTER ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident ~ SET
+             ~ ( ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
+             ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
@@ -1493,7 +1615,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_network_policy = map(
         rule! {
-            DROP ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ NETWORK ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropNetworkPolicyStmt {
@@ -1505,7 +1627,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let describe_network_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
+            ( DESC | DESCRIBE ) ~ NETWORK ~ ^POLICY ~ ^#ident
         },
         |(_, _, _, name)| {
             Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
@@ -1515,7 +1637,127 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_network_policies = value(
         Statement::ShowNetworkPolicies,
-        rule! { SHOW ~ NETWORK ~ POLICIES },
+        rule! { SHOW ~ NETWORK ~ ^POLICIES },
+    );
+
+    let create_password_policy = map(
+        rule! {
+            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+             ~ #password_set_options
+        },
+        |(_, _, _, opt_if_not_exists, name, set_options)| {
+            let stmt = CreatePasswordPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                set_options,
+            };
+            Statement::CreatePasswordPolicy(stmt)
+        },
+    );
+    let alter_password_policy = map(
+        rule! {
+            ALTER ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
+             ~ #alter_password_action
+        },
+        |(_, _, _, opt_if_exists, name, action)| {
+            let stmt = AlterPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                action,
+            };
+            Statement::AlterPasswordPolicy(stmt)
+        },
+    );
+    let drop_password_policy = map(
+        rule! {
+            DROP ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^EXISTS )? ~ ^#ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropPasswordPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropPasswordPolicy(stmt)
+        },
+    );
+    let describe_password_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PASSWORD ~ ^POLICY ~ ^#ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescPasswordPolicy(DescPasswordPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+    let show_password_policies = map(
+        rule! {
+            SHOW ~ PASSWORD ~ ^POLICIES ~ ^#show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowPasswordPolicies { show_options },
+    );
+
+    let create_pipe = map(
+        rule! {
+            CREATE ~ PIPE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ( AUTO_INGEST ~ "=" ~ #literal_bool )?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ AS ~ #copy_into_table
+        },
+        |(_, _, opt_if_not_exists, pipe, ingest, comment_opt, _, copy_stmt)| {
+            let copy_stmt = match copy_stmt {
+                Statement::CopyIntoTable(stmt) => stmt,
+                _ => {
+                    unreachable!()
+                }
+            };
+            Statement::CreatePipe(CreatePipeStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: pipe.to_string(),
+                auto_ingest: ingest.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                copy_stmt,
+            })
+        },
+    );
+
+    let alter_pipe = map(
+        rule! {
+            ALTER ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident ~ #alter_pipe_option
+        },
+        |(_, _, opt_if_exists, task, options)| {
+            Statement::AlterPipe(AlterPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+                options,
+            })
+        },
+    );
+
+    let drop_pipe = map(
+        rule! {
+            DROP ~ PIPE ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, opt_if_exists, task)| {
+            Statement::DropPipe(DropPipeStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+            })
+        },
+    );
+
+    let desc_pipe = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PIPE ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::DescribePipe(DescribePipeStmt {
+                name: task.to_string(),
+            })
+        },
     );
 
     let statement_body = alt((
@@ -1532,8 +1774,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #show_indexes : "`SHOW INDEXES`"
+            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
@@ -1542,13 +1784,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
         ),
-        // network policy
+        // network policy / password policy
         rule!(
             #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
             | #describe_network_policy: "`DESC NETWORK POLICY name`"
             | #show_network_policies: "`SHOW NETWORK POLICIES`"
+            | #create_password_policy: "`CREATE PASSWORD POLICY [IF NOT EXISTS] name [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #drop_password_policy: "`DROP PASSWORD POLICY [IF EXISTS] name`"
+            | #describe_password_policy: "`DESC PASSWORD POLICY name`"
+            | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
@@ -1585,6 +1832,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            | #stream_table
         ),
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
@@ -1596,6 +1844,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1608,6 +1857,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
@@ -1632,6 +1883,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
@@ -1666,15 +1918,34 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> }
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ AFTER <string>, <string>...]
+  [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
          | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
+        ),
+        rule!(
+            #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
+  [ AUTO_INGEST = [ TRUE | FALSE ] ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <copy_sql>`"
+            | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
+            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
+            | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
+
+        ),
+        rule!(
+            #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+        | #show_connections: "`SHOW CONNECTIONS`"
         ),
     ));
 
@@ -1682,7 +1953,7 @@ AS
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
         },
-        |(stmt, opt_format, _, _)| StatementMsg {
+        |(stmt, opt_format, _, _)| StatementWithFormat {
             stmt,
             format: opt_format.map(|(_, format)| format.name),
         },
@@ -1751,9 +2022,20 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         }
     });
 
+    let source_table = map(
+        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
+        |((catalog, database, table), alias)| MergeSource::Table {
+            catalog,
+            database,
+            table,
+            alias,
+        },
+    );
+
     rule!(
           #streaming_v2
         | #query
+        | #source_table
     )(i)
 }
 
@@ -1948,26 +2230,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
-    // TODO(TCeason): next pr, add a priv to control query UDF query
-    // let udf_privs = map(
-    // rule! {
-    // USAGEUDF ~ ON ~ UDF ~ #ident
-    // },
-    // |(_, _, _, udf)| AccountMgrSource::Privs {
-    // privileges: vec![UserPrivilegeType::UsageUDF],
-    // level: AccountMgrLevel::UDF(udf.to_string()),
-    // },
-    // );
-    //
-    // let udf_all_privs = map(
-    // rule! {
-    // ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
-    // },
-    // |(_, _, _, _, udf)| AccountMgrSource::Privs {
-    // privileges: vec![UserPrivilegeType::UsageUDF],
-    // level: AccountMgrLevel::UDF(udf.to_string()),
-    // },
-    // );
+    let udf_privs = map(
+        rule! {
+            USAGE ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
+
+    let udf_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
 
     let stage_privs = map(
         rule! {
@@ -1981,8 +2262,10 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #udf_privs: "USAGE ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
+        | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -2005,7 +2288,6 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
-        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -2114,6 +2396,52 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+    )(i)
+}
+
+pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    #[derive(Clone)]
+    enum Object {
+        Stage,
+        Udf,
+    }
+    let object = alt((
+        value(Object::Udf, rule! { UDF }),
+        value(Object::Stage, rule! { STAGE }),
+    ));
+
+    // Object object_name
+    let object = map(
+        rule! { #object ~ #ident},
+        |(object, object_name)| match object {
+            Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
+            Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+        },
+    );
+
+    rule!(
+        #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #object : "STAGE | UDF <object_name>"
     )(i)
 }
 
@@ -2422,7 +2750,7 @@ pub fn match_clause(i: Input) -> IResult<MergeOption> {
 
 fn match_operation(i: Input) -> IResult<MatchOperation> {
     alt((
-        value(MatchOperation::Delete, rule! {DELETE}),
+        value(MatchOperation::Delete, rule! { DELETE }),
         map(
             rule! {
                 UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
@@ -2524,6 +2852,29 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     ))(i)
 }
 
+pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
+    alt((map(
+        rule! {
+            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+        },
+        |(retain_hours_opt, dry_run_opt, opt_limit)| {
+            let retain_hours = match retain_hours_opt {
+                Some(retain_hours) => Some(retain_hours.1),
+                None => None,
+            };
+            let dry_run = match dry_run_opt {
+                Some(_) => Some(()),
+                None => None,
+            };
+            VacuumDropTableOption {
+                retain_hours,
+                dry_run,
+                limit: opt_limit.map(|(_, limit)| limit as usize),
+            }
+        },
+    ),))(i)
+}
+
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
@@ -2570,6 +2921,28 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
             AlterTaskOptions::ModifyAs(sql)
         },
     );
+    let modify_when = map(
+        rule! {
+             MODIFY ~ WHEN ~ #expr
+        },
+        |(_, _, expr)| {
+            let when = expr.to_string();
+            AlterTaskOptions::ModifyWhen(when)
+        },
+    );
+    let add_after = map(
+        rule! {
+             ADD ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::AddAfter(after),
+    );
+    let remove_after = map(
+        rule! {
+             REMOVE ~ AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, _, after)| AlterTaskOptions::RemoveAfter(after),
+    );
+
     let set = map(
         rule! {
              SET
@@ -2597,6 +2970,38 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_as
         | #set
         | #unset
+        | #modify_when
+        | #add_after
+        | #remove_after
+    )(i)
+}
+
+pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
+    let set = map(
+        rule! {
+             SET
+             ~ ( PIPE_EXECUTION_PAUSED ~ "=" ~ #literal_bool )?
+             ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(_, execution_parsed, comment)| AlterPipeOptions::Set {
+            execution_paused: execution_parsed.map(|(_, _, paused)| paused),
+            comments: comment.map(|(_, _, comment)| comment),
+        },
+    );
+    let refresh = map(
+        rule! {
+             REFRESH
+             ~ ( PREFIX ~ "=" ~ #literal_string )?
+             ~ ( MODIFIED_AFTER ~ "=" ~ #literal_string )?
+        },
+        |(_, prefix, modified_after)| AlterPipeOptions::Refresh {
+            prefix: prefix.map(|(_, _, prefix)| prefix),
+            modified_after: modified_after.map(|(_, _, modified_after)| modified_after),
+        },
+    );
+    rule!(
+        #set
+        | #refresh
     )(i)
 }
 
@@ -2620,7 +3025,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
     );
     let cron_expr = map(
         rule! {
@@ -2628,10 +3033,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         },
         |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
     );
-
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+    );
     rule!(
         #interval
         | #cron_expr
+        | #interval_sec
     )(i)
 }
 
@@ -2642,22 +3053,27 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
-pub fn show_limit(i: Input) -> IResult<ShowLimit> {
-    let limit_like = map(
-        rule! {
-            LIKE ~ #literal_string
-        },
-        |(_, pattern)| ShowLimit::Like { pattern },
-    );
-    let limit_where = map(
+pub fn limit_where(i: Input) -> IResult<ShowLimit> {
+    map(
         rule! {
             WHERE ~ #expr
         },
         |(_, selection)| ShowLimit::Where {
             selection: Box::new(selection),
         },
-    );
+    )(i)
+}
 
+pub fn limit_like(i: Input) -> IResult<ShowLimit> {
+    map(
+        rule! {
+            LIKE ~ #literal_string
+        },
+        |(_, pattern)| ShowLimit::Like { pattern },
+    )(i)
+}
+
+pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     rule!(
         #limit_like
         | #limit_where
@@ -2667,7 +3083,7 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
 pub fn show_options(i: Input) -> IResult<ShowOptions> {
     map(
         rule! {
-            #show_limit? ~ ( LIMIT ~ #literal_u64 )?
+            #show_limit? ~ ( LIMIT ~ ^#literal_u64 )?
         },
         |(show_limit, opt_limit)| ShowOptions {
             show_limit,
@@ -2679,7 +3095,7 @@ pub fn show_options(i: Input) -> IResult<ShowOptions> {
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string )*
         },
         |opts| {
             BTreeMap::from_iter(
@@ -2693,7 +3109,7 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
         },
         |(key, _, value, opts)| {
             let mut options = BTreeMap::from_iter(
@@ -2706,6 +3122,15 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     )(i)
 }
 
+fn option_to_string(i: Input) -> IResult<String> {
+    let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+
+    rule! (
+        #bool_to_string
+        | #parameter_to_string
+    )(i)
+}
+
 pub fn engine(i: Input) -> IResult<Engine> {
     let engine = alt((
         value(Engine::Null, rule! { NULL }),
@@ -2713,6 +3138,8 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Fuse, rule! { FUSE }),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
+        value(Engine::Iceberg, rule! { ICEBERG }),
+        value(Engine::Delta, rule! { DELTA }),
     ));
 
     map(
@@ -2724,89 +3151,95 @@ pub fn engine(i: Input) -> IResult<Engine> {
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    let engine = alt((value(DatabaseEngine::Default, rule! {DEFAULT}),));
-
-    map(
-        rule! {
-            ^#engine
-        },
-        |engine| engine,
-    )(i)
+    value(DatabaseEngine::Default, rule! { DEFAULT })(i)
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let create_db_engine = alt((map(
+    let create_db_engine = map(
         rule! {
-            ^#database_engine
+            ENGINE ~  ^"=" ~ ^#database_engine
         },
-        CreateDatabaseOption::DatabaseEngine,
-    ),));
+        |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
+    );
 
-    let share_from = alt((map(
+    let share_from = map(
         rule! {
-            #ident ~ "." ~ #ident
+            FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(tenant, _, share_name)| {
+        |(_, _, tenant, _, share_name)| {
             CreateDatabaseOption::FromShare(ShareNameIdent {
                 tenant: tenant.to_string(),
                 share_name: share_name.to_string(),
             })
         },
-    ),));
+    );
 
-    map(
-        rule! {
-            ENGINE ~  ^"=" ~ ^#create_db_engine
-            | FROM ~ SHARE ~ ^#share_from
-        },
-        |(_, _, option)| option,
+    rule!(
+        #create_db_engine
+        | #share_from
     )(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
-    let catalog_type = alt((
-        value(CatalogType::Default, rule! {DEFAULT}),
-        value(CatalogType::Hive, rule! {HIVE}),
-        value(CatalogType::Iceberg, rule! {ICEBERG}),
-    ));
-    map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
+    alt((
+        value(CatalogType::Default, rule! { DEFAULT }),
+        value(CatalogType::Hive, rule! { HIVE }),
+        value(CatalogType::Iceberg, rule! { ICEBERG }),
+    ))(i)
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
+    let tenant_setting = value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING });
+    let no_tenant_setting = value(
+        UserOptionItem::TenantSetting(false),
+        rule! { NOTENANTSETTING },
+    );
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ "=" ~ #role_name
+            "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
     let set_network_policy = map(
         rule! {
-            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
+            SET ~ NETWORK ~ ^POLICY ~ ^"=" ~ ^#literal_string
         },
         |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ NETWORK ~ POLICY
+            UNSET ~ NETWORK ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
-    alt((
-        value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
-        value(
-            UserOptionItem::TenantSetting(false),
-            rule! { NOTENANTSETTING },
-        ),
-        default_role_option,
-        set_network_policy,
-        unset_network_policy,
-    ))(i)
+    let set_password_policy = map(
+        rule! {
+            SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, policy)| UserOptionItem::SetPasswordPolicy(policy),
+    );
+    let unset_password_policy = map(
+        rule! {
+            UNSET ~ PASSWORD ~ ^POLICY
+        },
+        |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
+    );
+
+    rule!(
+        #tenant_setting
+        | #no_tenant_setting
+        | #default_role_option
+        | #set_network_policy
+        | #unset_network_policy
+        | #set_password_policy
+        | #unset_password_policy
+    )(i)
 }
 
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~  "'%'" )?
+            #parameter_to_string ~ ( "@" ~ "'%'" )?
         },
         |(username, _)| {
             let hostname = "%".to_string();
@@ -2842,11 +3275,11 @@ pub fn presign_location(i: Input) -> IResult<PresignLocation> {
 
 pub fn presign_option(i: Input) -> IResult<PresignOption> {
     alt((
-        map(rule! { EXPIRE ~ "=" ~ #literal_u64 }, |(_, _, v)| {
+        map(rule! { EXPIRE ~ ^"=" ~ ^#literal_u64 }, |(_, _, v)| {
             PresignOption::Expire(v)
         }),
         map(
-            rule! { CONTENT_TYPE ~ "=" ~ #literal_string },
+            rule! { CONTENT_TYPE ~ ^"=" ~ ^#literal_string },
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))(i)
@@ -2952,7 +3385,123 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
         |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+    )(i)
+}
+
+pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
+    map(
+        rule! {
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ~ ( COMMENT ~ Eq ~ ^#literal_string)?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordSetOptions {
+                min_length: opt_min_length.map(|opt| opt.2),
+                max_length: opt_max_length.map(|opt| opt.2),
+                min_upper_case_chars: opt_min_upper_case_chars.map(|opt| opt.2),
+                min_lower_case_chars: opt_min_lower_case_chars.map(|opt| opt.2),
+                min_numeric_chars: opt_min_numeric_chars.map(|opt| opt.2),
+                min_special_chars: opt_min_special_chars.map(|opt| opt.2),
+                min_age_days: opt_min_age_days.map(|opt| opt.2),
+                max_age_days: opt_max_age_days.map(|opt| opt.2),
+                max_retries: opt_max_retries.map(|opt| opt.2),
+                lockout_time_mins: opt_lockout_time_mins.map(|opt| opt.2),
+                history: opt_history.map(|opt| opt.2),
+                comment: opt_comment.map(|opt| opt.2),
+            }
+        },
+    )(i)
+}
+
+pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
+    map(
+        rule! {
+             PASSWORD_MIN_LENGTH ?
+             ~ PASSWORD_MAX_LENGTH ?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
+             ~ PASSWORD_MIN_NUMERIC_CHARS ?
+             ~ PASSWORD_MIN_SPECIAL_CHARS ?
+             ~ PASSWORD_MIN_AGE_DAYS ?
+             ~ PASSWORD_MAX_AGE_DAYS ?
+             ~ PASSWORD_MAX_RETRIES ?
+             ~ PASSWORD_LOCKOUT_TIME_MINS ?
+             ~ PASSWORD_HISTORY ?
+             ~ COMMENT ?
+        },
+        |(
+            opt_min_length,
+            opt_max_length,
+            opt_min_upper_case_chars,
+            opt_min_lower_case_chars,
+            opt_min_numeric_chars,
+            opt_min_special_chars,
+            opt_min_age_days,
+            opt_max_age_days,
+            opt_max_retries,
+            opt_lockout_time_mins,
+            opt_history,
+            opt_comment,
+        )| {
+            PasswordUnSetOptions {
+                min_length: opt_min_length.is_some(),
+                max_length: opt_max_length.is_some(),
+                min_upper_case_chars: opt_min_upper_case_chars.is_some(),
+                min_lower_case_chars: opt_min_lower_case_chars.is_some(),
+                min_numeric_chars: opt_min_numeric_chars.is_some(),
+                min_special_chars: opt_min_special_chars.is_some(),
+                min_age_days: opt_min_age_days.is_some(),
+                max_age_days: opt_max_age_days.is_some(),
+                max_retries: opt_max_retries.is_some(),
+                lockout_time_mins: opt_lockout_time_mins.is_some(),
+                history: opt_history.is_some(),
+                comment: opt_comment.is_some(),
+            }
+        },
+    )(i)
+}
+
+pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
+    let set_options = map(
+        rule! {
+           SET ~ #password_set_options
+        },
+        |(_, set_options)| AlterPasswordAction::SetOptions(set_options),
+    );
+    let unset_options = map(
+        rule! {
+           UNSET ~ #password_unset_options
+        },
+        |(_, unset_options)| AlterPasswordAction::UnSetOptions(unset_options),
+    );
+
+    rule!(
+        #set_options
+        | #unset_options
     )(i)
 }

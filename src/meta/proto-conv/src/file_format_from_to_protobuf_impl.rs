@@ -15,8 +15,12 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_meta_app as mt;
-use common_protos::pb;
+use std::str::FromStr;
+
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::EmptyFieldAs;
+use databend_common_meta_app::principal::NullAs;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
@@ -294,7 +298,9 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::principal::ParquetFileFormatParams {})
+        Ok(mt::principal::ParquetFileFormatParams {
+            missing_field_as: NullAs::Error,
+        })
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
@@ -319,7 +325,15 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
         )?;
-        Ok(mt::principal::NdJsonFileFormatParams { compression })
+
+        mt::principal::NdJsonFileFormatParams::try_create(
+            compression,
+            p.missing_field_as.as_deref(),
+            p.null_field_as.as_deref(),
+        )
+        .map_err(|e| Incompatible {
+            reason: format!("{e}"),
+        })
     }
 
     fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
@@ -328,6 +342,8 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+            null_field_as: Some(self.null_field_as.to_string()),
         })
     }
 }
@@ -409,6 +425,16 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
         } else {
             p.null_display
         };
+
+        let empty_field_as = p
+            .empty_field_as
+            .map(|s| {
+                EmptyFieldAs::from_str(&s).map_err(|e| Incompatible {
+                    reason: format!("{:?}", e),
+                })
+            })
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             compression,
             headers: p.headers,
@@ -419,6 +445,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             nan_display: p.nan_display,
             null_display,
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
+            empty_field_as,
         })
     }
 
@@ -436,6 +463,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             nan_display: self.nan_display.clone(),
             null_display: self.null_display.clone(),
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
+            empty_field_as: Some(self.empty_field_as.to_string()),
         })
     }
 }
