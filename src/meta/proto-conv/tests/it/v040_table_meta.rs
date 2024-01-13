@@ -149,7 +149,6 @@ fn test_decode_v40_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
-        owner: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;
