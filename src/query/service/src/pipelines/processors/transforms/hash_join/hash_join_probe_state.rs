@@ -491,10 +491,15 @@ impl HashJoinProbeState {
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
         // generate chunks
         let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
+        info!("partial unmodified blocks num: {}", tasks.len());
         for prefix in all_matched_blocks {
             // deleted block
             tasks.push((Vec::new(), prefix));
         }
+        info!(
+            "partial unmodified blocks and matched whole blocks num: {}",
+            tasks.len()
+        );
         *self.final_merge_into_partial_unmodified_scan_tasks.write() = tasks.into();
         Ok(())
     }

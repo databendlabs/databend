@@ -268,7 +268,7 @@ impl MatchedAggregator {
                 let segment_info = segment_infos.get(&item.0).unwrap();
                 let block_idx = segment_info.blocks.len() - block_idx - 1;
                 info!(
-                    "merge into apply: segment_idx:{},blk_idx:{}",
+                    "target_build_optimization, merge into apply: segment_idx:{},blk_idx:{}",
                     segment_idx, block_idx
                 );
                 mutation_logs.push(MutationLogEntry::DeletedBlock {
