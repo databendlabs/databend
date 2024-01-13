@@ -491,16 +491,7 @@ impl HashJoinProbeState {
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
         // generate chunks
         info!("chunk len: {}", chunks_offsets.len());
-        for chunk_offset in chunks_offsets {
-            info!("chunk offset: {}", chunk_offset);
-        }
-        let intervals = block_info_index.print_intervals();
-        for interval in intervals {
-            info!("interval :({},{}) ", interval.0, interval.1);
-        }
-        for (row_idx, hit) in matched.iter().enumerate() {
-            info!("row_idx :{}, hit: {} ", row_idx, hit);
-        }
+        info!("intervals len: {} ", block_info_index.intervals.len());
         let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
         info!("partial unmodified blocks num: {}", tasks.len());
         for prefix in all_matched_blocks {

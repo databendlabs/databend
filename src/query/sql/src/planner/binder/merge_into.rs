@@ -402,6 +402,7 @@ impl Binder {
             }
         }
         assert!(split_idx != DUMMY_COLUMN_INDEX);
+
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),

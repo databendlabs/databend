@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::u64::MAX;
 
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -51,6 +52,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::DUMMY_COLUMN_INDEX;
+use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -140,8 +142,18 @@ impl MergeIntoInterpreter {
             distributed,
             change_join_order,
             split_idx,
+            row_id_index,
             ..
         } = &self.plan;
+        let mut columns_set = columns_set.clone();
+        let table = self.ctx.get_table(catalog, database, table_name).await?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support MERGE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
 
         // attentation!! for now we have some strategies:
         // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
@@ -163,13 +175,27 @@ impl MergeIntoInterpreter {
         // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
         // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
         // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
-        let target_build_optimization =
+        let mut target_build_optimization =
             matches!(self.plan.merge_type, MergeIntoType::FullOperation)
                 && !self.plan.columns_set.contains(&self.plan.row_id_index);
-
         if target_build_optimization {
             assert!(*change_join_order && !*distributed);
+            // so if `target_build_optimization` is true, it means the optimizer enable this rule.
+            // but we need to check if it's parquet format or native format. for now,we just support
+            // parquet. (we will support native in the next pr).
+            if fuse_table.is_native() {
+                target_build_optimization = false;
+                // and we need to add row_id back and forbidden target_build_optimization
+                columns_set.insert(*row_id_index);
+                let merge_into_join = self.ctx.get_merge_into_join();
+                self.ctx.set_merge_into_join(MergeIntoJoin {
+                    target_tbl_idx: DUMMY_TABLE_INDEX,
+                    is_distributed: merge_into_join.is_distributed,
+                    merge_into_join_type: merge_into_join.merge_into_join_type,
+                });
+            }
         }
+
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
@@ -256,15 +282,6 @@ impl MergeIntoInterpreter {
                 "can't get internal row_number_idx when running merge into",
             ));
         }
-
-        let table = self.ctx.get_table(catalog, database, &table_name).await?;
-        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support MERGE INTO",
-                table.name(),
-                table.get_table_info().engine(),
-            ))
-        })?;
 
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;

@@ -203,7 +203,7 @@ pub mod sse {
 pub struct BlockInfoIndex {
     // the intervals will be like below:
     // (0,10)(11,29),(30,38). it's ordered.
-    intervals: Vec<Interval>,
+    pub intervals: Vec<Interval>,
     prefixs: Vec<u64>,
     length: usize,
 }
@@ -230,9 +230,6 @@ impl BlockInfoIndex {
         }
     }
 
-    pub fn print_intervals(&self) -> Vec<Interval> {
-        self.intervals.clone()
-    }
     /// 1.interval stands for the (start,end) in chunks for one block.
     /// 2.prefix is the segment_id_block_id composition.
     /// we can promise the ordered insert from outside.
