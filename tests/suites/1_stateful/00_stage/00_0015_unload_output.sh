@@ -19,13 +19,13 @@ for i in `seq 0 9`;do
 done
 
 echo ">>>> unload csv with detailed_output=true"
-echo "copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
+echo "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
 
 echo ">>>> unload csv with detailed_output=false"
 echo "copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=false" | $MYSQL
 
 echo ">>>> unload parquet with detailed_output=true"
-echo "copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
+echo "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
 
 echo ">>>> unload parquet with detailed_output=false"
 echo "copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=false" | $MYSQL
