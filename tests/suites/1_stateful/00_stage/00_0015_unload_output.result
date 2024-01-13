@@ -1,0 +1,32 @@
+>>>> drop table if exists t1
+>>>> create table t1 (a int)
+>>>> drop stage if exists s1
+>>>> create stage s1
+>>>> unload csv with detailed_output=true
+a/bc/data_UUID_0000_00000000.csv	2	1
+a/bc/data_UUID_0001_00000000.csv	2	1
+a/bc/data_UUID_0002_00000000.csv	2	1
+a/bc/data_UUID_0003_00000000.csv	2	1
+a/bc/data_UUID_0004_00000000.csv	2	1
+a/bc/data_UUID_0005_00000000.csv	2	1
+a/bc/data_UUID_0006_00000000.csv	2	1
+a/bc/data_UUID_0007_00000000.csv	2	1
+a/bc/data_UUID_0008_00000000.csv	2	1
+a/bc/data_UUID_0009_00000000.csv	2	1
+>>>> unload csv with detailed_output=false
+10	20	20
+>>>> unload parquet with detailed_output=true
+a/bc/data_UUID_0000_00000000.parquet	255	1
+a/bc/data_UUID_0001_00000000.parquet	255	1
+a/bc/data_UUID_0002_00000000.parquet	255	1
+a/bc/data_UUID_0003_00000000.parquet	255	1
+a/bc/data_UUID_0004_00000000.parquet	255	1
+a/bc/data_UUID_0005_00000000.parquet	255	1
+a/bc/data_UUID_0006_00000000.parquet	255	1
+a/bc/data_UUID_0007_00000000.parquet	255	1
+a/bc/data_UUID_0008_00000000.parquet	255	1
+a/bc/data_UUID_0009_00000000.parquet	255	1
+>>>> unload parquet with detailed_output=false
+10	50	2550
+>>>> drop stage if exists s1
+>>>> drop table if exists t1

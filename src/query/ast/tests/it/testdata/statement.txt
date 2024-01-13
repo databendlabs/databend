@@ -10153,7 +10153,7 @@ COPY INTO 's3://mybucket/data.csv'
                 )
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -10191,6 +10191,7 @@ CopyIntoLocation(
         },
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -10199,7 +10200,7 @@ CopyIntoLocation(
 COPY INTO '@my_stage/my data'
                 FROM mytable;
 ---------- Output ---------
-COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE= 0
+COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -10223,6 +10224,7 @@ CopyIntoLocation(
         file_format: {},
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -10238,7 +10240,7 @@ COPY INTO @my_stage
                 );
 ---------- Output ---------
 COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -10267,6 +10269,7 @@ CopyIntoLocation(
         },
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -13988,7 +13991,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE= 0
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -14007,7 +14010,7 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE= 0",
+        sql: "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
     },
 )
 
