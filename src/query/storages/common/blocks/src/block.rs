@@ -92,7 +92,7 @@ pub fn blocks_to_parquet(
 }
 
 fn col_encoding(data_type: &ArrowDataType) -> Encoding {
-    use common_arrow::arrow::datatypes::DataType;
+    use databend_common_arrow::arrow::datatypes::DataType;
     let lt = data_type.to_logical_type();
     match lt {
         DataType::Decimal(p, _) if *p <= 18 => Encoding::DeltaBinaryPacked,
