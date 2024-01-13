@@ -29,7 +29,6 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
@@ -244,15 +243,11 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
         }?;
-        // current role who created the table/database would be
-        if let Some(current_role) = self.ctx.get_current_role() {
-            req.table_meta.owner = Some(Ownership::new(current_role.name));
-        }
 
         let reply = catalog.create_table(req.clone()).await?;
 

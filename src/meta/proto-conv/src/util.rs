@@ -103,6 +103,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (71, "2024-01-02: Add: user.proto/password options", ),
     (72, "2024-01-09: Add: user.proto/CSVFileFormatParams add field `empty_field_as`", ),
     (73, "2024-01-11: Add: config.proto/StorageConfig add HuggingfaceConfig", ),
+    (74, "2024-01-12: Remove: owner in DatabaseMeta and TableMeta", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
