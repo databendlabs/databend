@@ -422,6 +422,7 @@ impl Plan {
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::DescPasswordPolicy(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
+            Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
@@ -466,6 +467,7 @@ impl Plan {
                 | Plan::ShowNetworkPolicies(_)
                 | Plan::DescPasswordPolicy(_)
                 | Plan::CopyIntoTable(_)
+                | Plan::CopyIntoLocation(_)
                 | Plan::ShowTasks(_)
                 | Plan::DescribeTask(_)
                 | Plan::DescConnection(_)
