@@ -319,7 +319,7 @@ pub async fn main() -> Result<()> {
         std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
     );
 
-    let _guards = trace::init_logging(&log_dir, &args.log_level, is_repl).await?;
+    let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
     info!("-> bendsql version: {}", VERSION.as_str());
 
     if args.check {

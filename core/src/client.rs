@@ -232,7 +232,7 @@ impl APIClient {
     pub fn handle_warnings(&self, resp: &QueryResponse) {
         if let Some(warnings) = &resp.warnings {
             for w in warnings {
-                warn!("server warning: {}", w);
+                warn!(target: "server_warnings", "server warning: {}", w);
             }
         }
     }
@@ -261,7 +261,7 @@ impl APIClient {
         }
         if resp.status() != 200 {
             return Err(Error::Request(format!(
-                "StartQuery failed with status {}: {}",
+                "Start Query failed with status {}: {}",
                 resp.status(),
                 resp.text().await?
             )));
@@ -298,14 +298,15 @@ impl APIClient {
                 return Err(Error::SessionTimeout(resp.text().await?));
             }
             return Err(Error::Request(format!(
-                "QueryPage failed with status {}: {}",
+                "Query Page failed with status {}: {}",
                 resp.status(),
                 resp.text().await?
             )));
         }
         let resp: QueryResponse = resp.json().await?;
         self.handle_session(&resp.session).await;
-        self.handle_warnings(&resp);
+        // TODO: duplicate warnings with start_query, maybe we should only print warnings on final response
+        // self.handle_warnings(&resp);
         match resp.error {
             Some(err) => Err(Error::InvalidResponse(err)),
             None => Ok(resp),

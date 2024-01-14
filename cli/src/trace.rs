@@ -27,7 +27,6 @@ const MAX_LOG_FILES: usize = 10;
 pub async fn init_logging(
     dir: &str,
     level: &str,
-    stderr: bool,
 ) -> Result<Vec<Box<dyn Drop + Send + Sync + 'static>>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
     let mut logger = fern::Dispatch::new();
@@ -54,21 +53,19 @@ pub async fn init_logging(
         .level(LevelFilter::from_str(level)?)
         .chain(Box::new(buffered_non_blocking) as Box<dyn Write + Send>);
     logger = logger.chain(dispatch_file);
-    if stderr {
-        let dispatch_stderr = fern::Dispatch::new()
-            .level(LevelFilter::Warn)
-            .format(|out, message, record| {
-                out.finish(format_args!(
-                    "[{}] - {} - [{}] {}",
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                    record.level(),
-                    record.target(),
-                    message
-                ))
-            })
-            .chain(std::io::stderr());
-        logger = logger.chain(dispatch_stderr);
-    }
+
+    let dispatch_stderr = fern::Dispatch::new()
+        .level(LevelFilter::Warn)
+        .filter(|metadata| metadata.target() == "server_warnings")
+        .format(|out, message, _| {
+            out.finish(format_args!(
+                "\x1B[{}m{}\x1B[0m",
+                fern::colors::Color::Yellow.to_fg_str(),
+                message
+            ))
+        })
+        .chain(std::io::stderr());
+    logger = logger.chain(dispatch_stderr);
 
     if logger.apply().is_err() {
         eprintln!("logger has already been set");
