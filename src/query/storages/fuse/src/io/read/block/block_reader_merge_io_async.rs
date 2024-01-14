@@ -165,10 +165,10 @@ impl BlockReader {
                 if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                     cached_column_array.push((*column_id, cache_array));
                     need_real_io_read = false;
-                }
-
-                // and then, check column data cache
-                if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                } else if let Some(cached_column_raw_data) =
+                    column_data_cache.get(&column_cache_key)
+                {
+                    // and then, check column data cache
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     need_real_io_read = false;
                 }
