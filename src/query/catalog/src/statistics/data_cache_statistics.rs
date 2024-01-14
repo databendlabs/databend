@@ -19,9 +19,9 @@ use serde::Serialize;
 
 #[derive(Default)]
 pub struct DataCacheMetrics {
-    bytes_from_storage: AtomicUsize,
-    bytes_from_disk_cache: AtomicUsize,
-    bytes_from_mem_cache: AtomicUsize,
+    bytes_from_remote_disk: AtomicUsize,
+    bytes_from_local_disk: AtomicUsize,
+    bytes_from_memory: AtomicUsize,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -38,14 +38,14 @@ impl DataCacheMetrics {
 
     pub fn as_values(&self) -> DataCacheMetricValues {
         DataCacheMetricValues {
-            bytes_from_storage: self
-                .bytes_from_storage
+            bytes_from_remote_disk: self
+                .bytes_from_remote_disk
                 .load(std::sync::atomic::Ordering::Relaxed),
-            bytes_from_disk_cache: self
-                .bytes_from_disk_cache
+            bytes_from_local_disk: self
+                .bytes_from_local_disk
                 .load(std::sync::atomic::Ordering::Relaxed),
-            bytes_from_mem_cache: self
-                .bytes_from_mem_cache
+            bytes_from_memory: self
+                .bytes_from_memory
                 .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
@@ -56,25 +56,25 @@ impl DataCacheMetrics {
         from_disk_cache: usize,
         from_mem_cache: usize,
     ) {
-        self.bytes_from_storage
+        self.bytes_from_remote_disk
             .fetch_add(bytes_from_storage, std::sync::atomic::Ordering::Relaxed);
-        self.bytes_from_disk_cache
+        self.bytes_from_local_disk
             .fetch_add(from_disk_cache, std::sync::atomic::Ordering::Relaxed);
-        self.bytes_from_mem_cache
+        self.bytes_from_memory
             .fetch_add(from_mem_cache, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn merge(&self, other: DataCacheMetricValues) {
-        self.bytes_from_storage.fetch_add(
-            other.bytes_from_storage,
+        self.bytes_from_remote_disk.fetch_add(
+            other.bytes_from_remote_disk,
             std::sync::atomic::Ordering::Relaxed,
         );
-        self.bytes_from_disk_cache.fetch_add(
-            other.bytes_from_disk_cache,
+        self.bytes_from_local_disk.fetch_add(
+            other.bytes_from_local_disk,
             std::sync::atomic::Ordering::Relaxed,
         );
-        self.bytes_from_mem_cache.fetch_add(
-            other.bytes_from_mem_cache,
+        self.bytes_from_memory.fetch_add(
+            other.bytes_from_memory,
             std::sync::atomic::Ordering::Relaxed,
         );
     }

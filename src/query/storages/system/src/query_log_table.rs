@@ -125,9 +125,9 @@ pub struct QueryLogElement {
     pub agg_spilled_rows: u64,
     pub group_by_spilled_bytes: u64,
     pub group_by_spilled_rows: u64,
-    pub bytes_from_storage: u64,
-    pub bytes_from_disk_cache: u64,
-    pub bytes_from_mem_cache: u64,
+    pub bytes_from_remote_disk: u64,
+    pub bytes_from_local_disk: u64,
+    pub bytes_from_memory: u64,
 
     // Client.
     pub client_info: String,
@@ -456,17 +456,17 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_storage)).as_ref());
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_remote_disk)).as_ref());
 
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_disk_cache)).as_ref());
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_local_disk)).as_ref());
 
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_mem_cache)).as_ref());
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_memory)).as_ref());
 
         // Client.
         columns
