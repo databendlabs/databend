@@ -384,16 +384,18 @@ impl BlockInfoIndex {
         let mut chunk_idx = 0;
         let mut partial_idx = 0;
         let mut offset = 0;
+        let mut new_chunk = true;
         while chunk_idx < chunks_offsets.len() && partial_idx < partial_unmodified.len() {
             // here is '<', not '<=', chunks_offsets[chunk_idx] is the count of chunks[chunk_idx]
             if partial_unmodified[partial_idx].0.1 < chunks_offsets[chunk_idx] {
-                if offset >= res.len() {
+                if new_chunk {
                     res.push((Vec::new(), chunk_idx as u64));
-                    assert_eq!(offset + 1, res.len());
+                    offset = res.len() - 1;
+                    new_chunk = false;
                 }
                 res[offset].0.push(partial_unmodified[partial_idx])
             } else {
-                offset += 1;
+                new_chunk = true;
                 chunk_idx += 1;
                 partial_idx -= 1;
             }
@@ -585,4 +587,32 @@ fn test_block_info_index() {
     }
     let res = block_info_index.gather_matched_all_blocks(&hits);
     assert!(res.len() == 2 && res[0] == 1 && res[1] == 2);
+}
+
+#[test]
+fn test_chunk_offsets_skip_chunk() {
+    // test chunk_offsets
+    // blocks: [0,10],[11,20],[21,30],[31,39],[40,50],[51,60]
+    // chunks: [0,20],[21,39],[40,60]
+    // chunks_offsets: [21],[40],[61]
+    // partial_unmodified: [((8,10),0),((40,46),4),((51,55),5)]
+    let partial_unmodified = vec![((8, 10), 0), ((40, 46), 4), ((51, 55), 5)];
+    let chunks_offsets = vec![21, 40, 61];
+    let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 39), (40, 50), (51, 60)];
+    let mut block_info_index = BlockInfoIndex::new_with_capacity(10);
+    for (idx, interval) in intervals.iter().enumerate() {
+        block_info_index.insert_block_offsets(*interval, idx as u64)
+    }
+    let res = block_info_index.chunk_offsets(&partial_unmodified, &chunks_offsets);
+    assert_eq!(res.len(), 2);
+    assert_eq!(res[0].0.len(), 1);
+    assert_eq!(res[0].0[0].0.0, 8);
+    assert_eq!(res[0].0[0].0.1, 10);
+
+    assert_eq!(res[1].0.len(), 2);
+    assert_eq!(res[1].0[0].0.0, 40);
+    assert_eq!(res[1].0[0].0.1, 46);
+
+    assert_eq!(res[1].0[1].0.0, 51);
+    assert_eq!(res[1].0[1].0.1, 55);
 }

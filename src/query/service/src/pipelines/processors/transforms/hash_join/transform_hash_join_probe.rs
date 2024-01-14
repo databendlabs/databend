@@ -145,10 +145,17 @@ impl TransformHashJoinProbe {
             self.output_data_blocks.push_back(data_block);
             return Ok(());
         }
+
+        let chunks_offsets = unsafe { &*self.join_probe_state.hash_join_state.chunk_offsets.get() };
         let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
         let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
+        let chunk_start = if item.1 == 0 {
+            0
+        } else {
+            chunks_offsets[(item.1 - 1) as usize]
+        };
         for (interval, prefix) in item.0 {
-            let indices = (interval.0..=interval.1)
+            let indices = ((interval.0 - chunk_start)..=(interval.1 - chunk_start))
                 .collect::<Vec<u32>>()
                 .chunks(self.max_block_size)
                 .map(|chunk| chunk.to_vec())
