@@ -101,6 +101,7 @@ impl<'a> Binder {
                 stage.copy_options.max_file_size = stmt.max_file_size;
             }
             stage.copy_options.single = stmt.single;
+            stage.copy_options.detailed_output = stmt.detailed_output;
         }
 
         Ok(())
