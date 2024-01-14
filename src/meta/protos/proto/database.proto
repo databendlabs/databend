@@ -21,7 +21,6 @@ syntax = "proto3";
 package databend_proto;
 
 import "share.proto";
-import "owner.proto";
 
 message DatabaseNameIdent {
   uint64 ver = 100;
@@ -64,7 +63,9 @@ message DatabaseMeta {
 
   optional ShareNameIdent from_share = 25;
 
-  optional Ownership owner = 26;
+  // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
+  // optional Ownership owner = 26;
+  reserved 30;
 }
 
 // Save db name id list history.

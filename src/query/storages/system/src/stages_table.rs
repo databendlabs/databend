@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -72,6 +73,8 @@ impl AsyncSystemTable for StagesTable {
             stages
         };
 
+        let user_api = UserApiProvider::instance();
+        let mut owners: Vec<Option<Vec<u8>>> = vec![];
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_type: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_params: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
@@ -82,7 +85,15 @@ impl AsyncSystemTable for StagesTable {
         let mut creator: Vec<Option<Vec<u8>>> = Vec::with_capacity(stages.len());
         let mut created_on = Vec::with_capacity(stages.len());
         for stage in stages.into_iter() {
-            name.push(stage.stage_name.clone().into_bytes());
+            let stage_name = stage.stage_name;
+            name.push(stage_name.clone().into_bytes());
+            owners.push(
+                user_api
+                    .get_ownership(&tenant, &OwnershipObject::Stage { name: stage_name })
+                    .await
+                    .ok()
+                    .and_then(|ownership| ownership.map(|o| o.role.as_bytes().to_vec())),
+            );
             stage_type.push(stage.stage_type.clone().to_string().into_bytes());
             stage_params.push(format!("{:?}", stage.stage_params).into_bytes());
             copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
@@ -111,6 +122,7 @@ impl AsyncSystemTable for StagesTable {
             StringType::from_opt_data(creator),
             TimestampType::from_data(created_on),
             StringType::from_data(comment),
+            StringType::from_opt_data(owners),
         ]))
     }
 }
@@ -134,6 +146,10 @@ impl StagesTable {
             ),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("comment", TableDataType::String),
+            TableField::new(
+                "owner",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
         ]);
         let table_info = TableInfo {
             desc: "'system'.'stages'".to_string(),
