@@ -112,6 +112,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
                 file_format: Default::default(),
                 single: Default::default(),
                 max_file_size: Default::default(),
+                detailed_output: false,
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -197,6 +198,10 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
             |(_, _, max_file_size)| CopyIntoLocationOption::MaxFileSize(max_file_size as usize),
+        ),
+        map(
+            rule! { DETAILED_OUTPUT ~ "=" ~ #literal_bool },
+            |(_, _, detailed_output)| CopyIntoLocationOption::DetailedOutput(detailed_output),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)

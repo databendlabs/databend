@@ -51,8 +51,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     datetime::register(registry);
     math::register(registry);
     map::register(registry);
-    binary::register(registry);
     string::register(registry);
+    binary::register(registry);
     string_multi_args::register(registry);
     tuple::register(registry);
     geo::register(registry);

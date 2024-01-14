@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -143,6 +144,7 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -436,7 +438,7 @@ impl FastFieldDecoderValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -450,7 +452,7 @@ impl FastFieldDecoderValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {

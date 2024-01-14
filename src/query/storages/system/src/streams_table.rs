@@ -32,6 +32,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -39,6 +40,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_users::UserApiProvider;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -71,6 +73,8 @@ impl AsyncSystemTable for StreamsTable {
             .iter()
             .map(|e| (e.name(), e.clone()))
             .collect();
+
+        let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
         let mut databases = vec![];
@@ -151,12 +155,13 @@ impl AsyncSystemTable for StreamsTable {
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
+                    let t_id = table.get_id();
                     if visibility_checker.check_table_visibility(
                         ctl_name,
                         db.name(),
                         table.name(),
                         db_id,
-                        table.get_id(),
+                        t_id,
                     ) && table.engine() == STREAM_ENGINE
                     {
                         catalogs.push(ctl_name.as_bytes().to_vec());
@@ -168,11 +173,17 @@ impl AsyncSystemTable for StreamsTable {
                         created_on.push(stream_info.meta.created_on.timestamp_micros());
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
                         owner.push(
-                            stream_info
-                                .meta
-                                .owner
-                                .as_ref()
-                                .map(|v| v.owner_role_name.as_bytes().to_vec()),
+                            user_api
+                                .get_ownership(&tenant, &OwnershipObject::Table {
+                                    catalog_name: ctl_name.to_string(),
+                                    db_id,
+                                    table_id: t_id,
+                                })
+                                .await
+                                .ok()
+                                .and_then(|ownership| {
+                                    ownership.map(|o| o.role.as_bytes().to_vec())
+                                }),
                         );
                         comment.push(stream_info.meta.comment.as_bytes().to_vec());
 

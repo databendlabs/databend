@@ -124,7 +124,7 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
@@ -193,8 +193,7 @@ impl BlockReader {
     }
 
     pub fn data_schema(&self) -> DataSchema {
-        let fields = self.data_fields();
-        DataSchema::new(fields)
+        self.schema().into()
     }
 
     pub fn report_cache_metrics<'a>(

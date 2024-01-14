@@ -673,7 +673,7 @@ mod tests {
         let mut reader = Cursor::new(data);
         let metadata = read_metadata(&mut reader)?;
         let rgs = metadata.row_groups;
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, None);
 
         let row_group_stats = collect_row_group_stats(&column_nodes, &rgs)?;

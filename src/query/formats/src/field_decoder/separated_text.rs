@@ -22,12 +22,12 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Number;
@@ -147,6 +147,7 @@ impl SeparatedTextDecoder {
                 *len += 1;
                 Ok(())
             }
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => {
                 c.data.extend_from_slice(data);
                 c.commit_row();
@@ -303,14 +304,14 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let rb = parse_bitmap(data)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         match parse_value(data) {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);

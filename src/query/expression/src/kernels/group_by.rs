@@ -20,7 +20,7 @@ use super::group_by_hash::HashMethodKeysU64;
 use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
-use super::group_by_hash::HashMethodSingleString;
+use super::group_by_hash::HashMethodSingleBinary;
 use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodDictionarySerializer;
@@ -52,11 +52,11 @@ impl DataBlock {
         if hash_key_types.len() == 1
             && matches!(
                 hash_key_types[0],
-                DataType::String | DataType::Variant | DataType::Bitmap
+                DataType::Binary | DataType::String | DataType::Variant | DataType::Bitmap
             )
         {
-            return Ok(HashMethodKind::SingleString(
-                HashMethodSingleString::default(),
+            return Ok(HashMethodKind::SingleBinary(
+                HashMethodSingleBinary::default(),
             ));
         }
 

@@ -23,9 +23,9 @@ use databend_common_catalog::table::AppendMode;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -586,7 +586,7 @@ impl TestFixture {
                     );
 
                     let mut builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                        BinaryColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
                     for i in 0..rows_per_block {
                         let mut obj = JsonbObject::new();
                         obj.insert(

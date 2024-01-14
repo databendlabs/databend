@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::BooleanArray;
-use arrow_array::LargeBinaryArray;
+use arrow_array::LargeStringArray;
 use arrow_array::RecordBatch;
 use arrow_array::UInt64Array;
 use chrono::Utc;
@@ -170,7 +170,7 @@ impl CompactionJob {
             let db_names = records
                 .column(0)
                 .as_any()
-                .downcast_ref::<arrow_array::LargeBinaryArray>()
+                .downcast_ref::<arrow_array::LargeStringArray>()
                 .unwrap();
             let db_ids = records
                 .column(1)
@@ -180,7 +180,7 @@ impl CompactionJob {
             let tb_names = records
                 .column(2)
                 .as_any()
-                .downcast_ref::<LargeBinaryArray>()
+                .downcast_ref::<LargeStringArray>()
                 .unwrap();
             let tb_ids = records
                 .column(3)
@@ -188,9 +188,9 @@ impl CompactionJob {
                 .downcast_ref::<UInt64Array>()
                 .unwrap();
             for i in 0..records.num_rows() {
-                let db_name = String::from_utf8_lossy(db_names.value(i)).to_string();
+                let db_name = db_names.value(i).to_owned();
                 let db_id = db_ids.value(i);
-                let tb_name = String::from_utf8_lossy(tb_names.value(i)).to_string();
+                let tb_name = tb_names.value(i).to_owned();
                 let tb_id = tb_ids.value(i);
                 match self
                     .compact_table(

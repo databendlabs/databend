@@ -26,6 +26,7 @@ message StorageConfig {
     ObsStorageConfig obs = 6;
     CosStorageConfig cos = 7;
     HdfsStorageConfig hdfs = 8;
+    HuggingfaceStorageConfig huggingface = 9;
   }
 }
 
@@ -124,4 +125,15 @@ message HdfsStorageConfig {
 
   string root = 1;
   string name_node = 2;
+}
+
+message HuggingfaceStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string repo_id = 1;
+  string repo_type = 2;
+  string revision = 3;
+  string root = 4;
+  string token = 5;
 }

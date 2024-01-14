@@ -57,7 +57,6 @@ fn test_decode_v5_database_meta() -> anyhow::Result<()> {
             tenant: "tenant".to_string(),
             share_name: "share".to_string(),
         }),
-        owner: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;
