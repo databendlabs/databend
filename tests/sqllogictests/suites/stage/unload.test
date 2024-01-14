@@ -22,9 +22,11 @@ statement ok
 create file format if not exists csv_gzip type=csv compression=gzip;
 
 # test csv
-statement ok
+query 
 copy into @unload from ii file_format=(type=csv);
 -----
+----
+3 12 12
 
 query 
 select right(name, 4), size from list_stage(location=>'@unload');
@@ -42,8 +44,10 @@ select $1, $2 from @unload(file_format=>'csv');
 statement ok
 remove @unload;
 
-statement ok
+query 
 copy into @unload from ii file_format=(format_name='csv_gzip');
+----
+3 12 32
 
 query 
 select right(name, 7), size from list_stage(location=>'@unload');
@@ -61,8 +65,10 @@ select $1, $2 from @unload(file_format => 'csv_gzip');
 statement ok
 remove @unload;
 
-statement ok
+query 
 copy into @unload from ii file_format=(format_name='tsv');
+----
+3 12 12
 
 query 
 select right(name, 4), size from list_stage(location=>'@unload');

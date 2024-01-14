@@ -42,6 +42,7 @@ fn test_decode_v60_copy_options() -> anyhow::Result<()> {
         max_file_size: 100,
         disable_variant_check: true,
         return_failed_only: true,
+        detailed_output: false,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), copy_options_v60.as_slice(), 0, want())?;

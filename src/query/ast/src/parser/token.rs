@@ -466,6 +466,8 @@ pub enum TokenKind {
     DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
+    #[token("DETAILED_OUTPUT", ignore(ascii_case))]
+    DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
