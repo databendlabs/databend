@@ -489,6 +489,19 @@ impl HashJoinProbeState {
         let chunks_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
+        let mut chunks_offsets_string = String::from("[");
+        for offset in chunks_offsets {
+            chunks_offsets_string.push_str(&format!("{},", offset).to_string());
+        }
+        chunks_offsets_string.push_str("]");
+        info!("chunks_offsets_string: {}", chunks_offsets_string);
+        let mut partial_unmodified_string = String::from("[");
+        for item in &partial_unmodified {
+            partial_unmodified_string
+                .push_str(&format!("({},{}),{}\n", item.0.0, item.0.1, item.1).to_string());
+        }
+        partial_unmodified_string.push_str("]");
+        info!("partial_unmodified_string: {}", partial_unmodified_string);
         // generate chunks
         info!("chunk len: {}", chunks_offsets.len());
         info!("intervals len: {} ", block_info_index.intervals.len());
