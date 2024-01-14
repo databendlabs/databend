@@ -160,20 +160,15 @@ impl BlockReader {
 
                 let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
 
-                let mut need_real_io_read = true;
                 // first, check column array object cache
                 if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                     cached_column_array.push((*column_id, cache_array));
-                    need_real_io_read = false;
-                } else if let Some(cached_column_raw_data) =
-                    column_data_cache.get(&column_cache_key)
-                {
-                    // and then, check column data cache
-                    cached_column_data.push((*column_id, cached_column_raw_data));
-                    need_real_io_read = false;
+                    continue;
                 }
 
-                if !need_real_io_read {
+                // and then, check column data cache
+                if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                    cached_column_data.push((*column_id, cached_column_raw_data));
                     continue;
                 }
 
