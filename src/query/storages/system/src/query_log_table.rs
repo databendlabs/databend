@@ -254,15 +254,15 @@ impl SystemLogElement for QueryLogElement {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "bytes_from_storage",
+                "bytes_from_remote_disk",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "bytes_from_disk_cache",
+                "bytes_from_local_disk",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "bytes_from_memory_cache",
+                "bytes_from_memory",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             // Client.
