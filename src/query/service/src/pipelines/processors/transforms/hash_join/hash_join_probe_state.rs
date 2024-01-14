@@ -489,28 +489,37 @@ impl HashJoinProbeState {
         let chunks_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
+
+        let mut intervals_string = String::from("[");
+        for offset in &block_info_index.intervals {
+            intervals_string.push_str(&format!("({},{}) ", offset.0, offset.1).to_string());
+        }
+        intervals_string.push_str("]");
+        info!("intervals_string: {}", intervals_string);
+
         let mut chunks_offsets_string = String::from("[");
         for offset in chunks_offsets {
             chunks_offsets_string.push_str(&format!("{},", offset).to_string());
         }
         chunks_offsets_string.push_str("]");
         info!("chunks_offsets_string: {}", chunks_offsets_string);
+
         let mut partial_unmodified_string = String::from("[");
         for item in &partial_unmodified {
             partial_unmodified_string
-                .push_str(&format!("({},{}),{}\n", item.0.0, item.0.1, item.1).to_string());
+                .push_str(&format!("({},{}),{} ", item.0.0, item.0.1, item.1).to_string());
         }
         partial_unmodified_string.push_str("]");
         info!("partial_unmodified_string: {}", partial_unmodified_string);
         // generate chunks
-        info!("chunk len: {}", chunks_offsets.len());
-        info!("intervals len: {} ", block_info_index.intervals.len());
+        info!("chunk len: {}", chunks_offsets.len()); // 100
+        info!("intervals len: {} ", block_info_index.intervals.len()); // 206
         info!(
-            "partial unmodified blocks num: {}",
+            "partial unmodified blocks num: {}", // 105
             partial_unmodified.len()
         );
         info!(
-            "all_matched_blocks blocks num: {}",
+            "all_matched_blocks blocks num: {}", // 0
             all_matched_blocks.len()
         );
         let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
