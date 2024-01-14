@@ -375,6 +375,12 @@ impl BlockInfoIndex {
         chunks_offsets: &Vec<u32>,
     ) -> Vec<(Vec<(Interval, u64)>, u64)> {
         let mut res = Vec::with_capacity(chunks_offsets.len());
+        if chunks_offsets.len() == 0 {
+            assert!(partial_unmodified.is_empty());
+        }
+        if partial_unmodified.is_empty() || chunks_offsets.is_empty() {
+            return res;
+        }
         let mut chunk_idx = 0;
         let mut partial_idx = 0;
         let mut offset = 0;
@@ -383,6 +389,7 @@ impl BlockInfoIndex {
             if partial_unmodified[partial_idx].0.1 < chunks_offsets[chunk_idx] {
                 if offset >= res.len() {
                     res.push((Vec::new(), chunk_idx as u64));
+                    assert_eq!(offset + 1, res.len());
                 }
                 res[offset].0.push(partial_unmodified[partial_idx])
             } else {
