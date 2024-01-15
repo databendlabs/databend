@@ -17,7 +17,7 @@ use std::ops::Deref;
 /// The identifier of a internal record used in an application upon kvapi::KVApi.
 ///
 /// E.g. TableId, DatabaseId.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Id(pub u64);
 
 impl Id {
