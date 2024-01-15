@@ -73,6 +73,7 @@ auth_type = "no_password"
 level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_1"
+prefix_filter = ""
 
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
