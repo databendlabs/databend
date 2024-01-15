@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -51,6 +52,7 @@ use databend_common_meta_app::share::*;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
@@ -59,7 +61,9 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
@@ -89,13 +93,76 @@ pub const DEFAULT_MGET_SIZE: usize = 256;
 pub async fn get_u64_value<T: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &T,
-) -> Result<(u64, u64), KVAppError> {
+) -> Result<(u64, u64), MetaError> {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
 
     if let Some(seq_v) = res {
         Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
+    }
+}
+
+/// Get raw key and value from meta store.
+///
+/// It returns a `TxnGetResponse` as the result.
+pub async fn get_raw_key_value<K>(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    k: &K,
+) -> Result<TxnGetResponse, MetaError>
+where
+    K: kvapi::Key,
+{
+    let key = k.to_string_key();
+    let res = kv_api.get_kv(&key).await?;
+    Ok(TxnGetResponse::new(key, res.map(pb::SeqV::from)))
+}
+
+pub fn deserialize_struct_get_response<K, T>(
+    resp: TxnGetResponse,
+) -> Result<(K, Option<SeqV<T>>), MetaError>
+where
+    K: kvapi::Key,
+    T: FromToProto,
+    T::PB: databend_common_protos::prost::Message + Default,
+{
+    let key = K::from_str_key(&resp.key).map_err(|e| {
+        let inv = InvalidReply::new(
+            format!("fail to parse {} key, {}", type_name::<K>(), resp.key),
+            &e,
+        );
+        MetaNetworkError::InvalidReply(inv)
+    })?;
+
+    if let Some(pb_seqv) = resp.value {
+        let seqv = SeqV::from(pb_seqv);
+        let value = deserialize_struct::<T>(&seqv.data)?;
+        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, value);
+        Ok((key, Some(seqv)))
+    } else {
+        Ok((key, None))
+    }
+}
+
+pub fn deserialize_id_get_response<K>(
+    resp: TxnGetResponse,
+) -> Result<(K, Option<SeqV<Id>>), MetaError>
+where K: kvapi::Key {
+    let key = K::from_str_key(&resp.key).map_err(|e| {
+        let inv = InvalidReply::new(
+            format!("fail to parse {} key, {}", type_name::<K>(), resp.key),
+            &e,
+        );
+        MetaNetworkError::InvalidReply(inv)
+    })?;
+
+    if let Some(pb_seqv) = resp.value {
+        let seqv = SeqV::from(pb_seqv);
+        let id = deserialize_u64(&seqv.data)?;
+        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, id);
+        Ok((key, Some(seqv)))
+    } else {
+        Ok((key, None))
     }
 }
 

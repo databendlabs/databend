@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
 #![feature(const_fn_floating_point_arithmetic)]
+#![feature(type_name_of_val)]
 
 extern crate databend_common_meta_types;
 
