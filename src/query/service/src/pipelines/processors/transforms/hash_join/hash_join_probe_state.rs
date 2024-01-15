@@ -491,14 +491,14 @@ impl HashJoinProbeState {
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
 
         // generate chunks
-        info!("chunk len: {}", chunks_offsets.len()); // 100
-        info!("intervals len: {} ", block_info_index.intervals.len()); // 206
+        info!("chunk len: {}", chunks_offsets.len());
+        info!("intervals len: {} ", block_info_index.intervals.len());
         info!(
-            "partial unmodified blocks num: {}", // 105
+            "partial unmodified blocks num: {}",
             partial_unmodified.len()
         );
         info!(
-            "all_matched_blocks blocks num: {}", // 0
+            "all_matched_blocks blocks num: {}",
             all_matched_blocks.len()
         );
         let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);

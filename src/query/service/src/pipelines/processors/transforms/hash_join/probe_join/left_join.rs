@@ -394,19 +394,20 @@ impl HashJoinProbeState {
                 let offset = if row_ptr.chunk_index == 0 {
                     row_ptr.row_index as usize
                 } else {
-                    (chunk_offsets[(row_ptr.chunk_index - 1) as usize] - 1) as usize
+                    chunk_offsets[(row_ptr.chunk_index - 1) as usize] as usize
                         + row_ptr.row_index as usize
                 };
 
                 let mut old_mactehd_counts =
                     unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
-                let new_matched_count = old_mactehd_counts + 1;
-                if old_mactehd_counts > 0 {
-                    return Err(ErrorCode::UnresolvableConflict(
-                        "multi rows from source match one and the same row in the target_table multi times in probe phase",
-                    ));
-                }
+                let mut new_matched_count = old_mactehd_counts + 1;
                 loop {
+                    if old_mactehd_counts > 0 {
+                        return Err(ErrorCode::UnresolvableConflict(
+                            "multi rows from source match one and the same row in the target_table multi times in probe phase",
+                        ));
+                    }
+
                     let res = unsafe {
                         (*pointer.0.add(offset)).compare_exchange_weak(
                             old_mactehd_counts,
@@ -415,9 +416,13 @@ impl HashJoinProbeState {
                             Ordering::SeqCst,
                         )
                     };
+
                     match res {
                         Ok(_) => break,
-                        Err(x) => old_mactehd_counts = x,
+                        Err(x) => {
+                            old_mactehd_counts = x;
+                            new_matched_count = old_mactehd_counts + 1;
+                        }
                     };
                 }
             }
