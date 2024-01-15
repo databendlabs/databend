@@ -18,7 +18,12 @@ CREATE TABLE `test`.`b` (    a bigint not null, b int null default null, c varch
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL
+b CREATE TABLE `b` (
+  `a` BIGINT NOT NULL,
+  `b` INT NULL DEFAULT NULL,
+  `c` VARCHAR NOT NULL,
+  `d` SMALLINT UNSIGNED NULL
+) ENGINE=NULL COMMENT = 'test b'
 
 statement ok
 set hide_options_in_show_create_table=0
@@ -26,7 +31,12 @@ set hide_options_in_show_create_table=0
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
+b CREATE TABLE `b` (
+  `a` BIGINT NOT NULL,
+  `b` INT NULL DEFAULT NULL,
+  `c` VARCHAR NOT NULL,
+  `d` SMALLINT UNSIGNED NULL
+) ENGINE=NULL COMMENT = 'test b'
 
 statement ok
 create view test.v_b as select * from `test`.`b`
