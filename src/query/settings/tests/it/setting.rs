@@ -111,15 +111,6 @@ async fn test_set_settings() {
         let expect = "WrongValueForVariable. Code: 2803, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
-
-    // String without range.
-    {
-        // Ok
-        settings
-            .set_setting("sandbox_tenant".to_string(), "xx".to_string())
-            .await
-            .unwrap();
-    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

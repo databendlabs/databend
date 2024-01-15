@@ -44,6 +44,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
@@ -190,6 +191,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -270,6 +272,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())
