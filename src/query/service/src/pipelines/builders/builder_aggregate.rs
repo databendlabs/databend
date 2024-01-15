@@ -22,6 +22,7 @@ use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::HashTableConfig;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
@@ -101,10 +102,18 @@ impl PipelineBuilder {
     pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
 
+        let max_block_size = self.settings.get_max_block_size()?;
+        let enable_experimental_aggregate_hashtable = self
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
+
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            enable_experimental_aggregate_hashtable,
+            max_block_size as usize,
             None,
         )?;
 
@@ -131,6 +140,9 @@ impl PipelineBuilder {
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
+        // Need a global atomic to read the max current radix bits hint
+        let partial_agg_config = HashTableConfig::default().with_partial(true);
+
         self.main_pipeline.add_transform(|input, output| {
             let transform = match params.aggregate_functions.is_empty() {
                 true => with_mappedhash_method!(|T| match method.clone() {
@@ -139,7 +151,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        partial_agg_config.clone(),
                     ),
                 }),
                 false => with_mappedhash_method!(|T| match method.clone() {
@@ -148,7 +161,8 @@ impl PipelineBuilder {
                         method,
                         input,
                         output,
-                        params.clone()
+                        params.clone(),
+                        partial_agg_config.clone(),
                     ),
                 }),
             }?;
@@ -220,10 +234,18 @@ impl PipelineBuilder {
     }
 
     pub(crate) fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
+        let max_block_size = self.settings.get_max_block_size()?;
+        let enable_experimental_aggregate_hashtable = self
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
+
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            enable_experimental_aggregate_hashtable,
+            max_block_size as usize,
             aggregate.limit,
         )?;
 
@@ -322,6 +344,8 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        enable_experimental_aggregate_hashtable: bool,
+        max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
@@ -361,6 +385,8 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            enable_experimental_aggregate_hashtable,
+            max_block_size,
             limit,
         )?;
 

@@ -229,10 +229,12 @@ impl PartitionedPayload {
         true
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.payloads.iter().map(|x| x.len()).sum()
     }
 
+    #[inline]
     pub fn partition_count(&self) -> usize {
         self.partition_count as usize
     }

@@ -204,6 +204,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         },
                     ));
                 }
+                Some(AggregateMeta::AggregateHashTable(_)) => todo!("AGG_HASHTABLE"),
                 Some(AggregateMeta::HashTable(payload)) => {
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(

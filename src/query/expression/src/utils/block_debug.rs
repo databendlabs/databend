@@ -60,6 +60,19 @@ pub fn assert_block_value_eq(a: &DataBlock, b: &DataBlock) {
     }
 }
 
+pub fn assert_block_value_sort_eq(a: &DataBlock, b: &DataBlock) {
+    assert!(a.num_columns() == b.num_columns());
+    assert!(a.num_rows() == b.num_rows());
+
+    let a = pretty_format_blocks(&[a.clone()]).unwrap();
+    let b = pretty_format_blocks(&[b.clone()]).unwrap();
+
+    let a: Vec<&str> = get_lines(&a);
+    let b: Vec<&str> = get_lines(&b);
+
+    assert_eq!(a, b);
+}
+
 /// Assert with order insensitive.
 /// ['a', 'b'] equals ['b', 'a']
 pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
@@ -72,6 +85,16 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     }
 
     let formatted = pretty_format_blocks(blocks).unwrap();
+    let actual_lines: Vec<&str> = get_lines(&formatted);
+
+    assert_eq!(
+        expected_lines, actual_lines,
+        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
+        test_name, expected_lines, actual_lines
+    );
+}
+
+fn get_lines(formatted: &str) -> Vec<&str> {
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     // sort except for header + footer
@@ -79,12 +102,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     if num_lines > 3 {
         actual_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
-
-    assert_eq!(
-        expected_lines, actual_lines,
-        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
-        test_name, expected_lines, actual_lines
-    );
+    actual_lines
 }
 
 /// Assert with order insensitive.

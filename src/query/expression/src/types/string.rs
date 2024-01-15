@@ -108,8 +108,11 @@ impl ValueType for StringType {
         col.index(index)
     }
 
-    #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    #[inline]
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
         col.index_unchecked(index)
     }
 
