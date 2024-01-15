@@ -362,6 +362,8 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("BINARY_FORMAT", ignore(ascii_case))]
+    BINARY_FORMAT,
     #[token("BITMAP", ignore(ascii_case))]
     BITMAP,
     #[token("BLOCKED_IP_LIST", ignore(ascii_case))]
@@ -741,6 +743,8 @@ pub enum TokenKind {
     OR,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
+    #[token("OUTPUT_HEADER", ignore(ascii_case))]
+    OUTPUT_HEADER,
     #[token("OUTER", ignore(ascii_case))]
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]

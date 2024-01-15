@@ -90,6 +90,7 @@ impl FastFieldDecoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
+                binary_format: Default::default(),
             },
             rounding_mode,
         }

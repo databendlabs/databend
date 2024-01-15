@@ -45,6 +45,7 @@ pub struct FileFormatOptionsExt {
     pub disable_variant_check: bool,
     pub timezone: Tz,
     pub is_select: bool,
+    pub is_clickhouse: bool,
 }
 
 impl FileFormatOptionsExt {
@@ -61,6 +62,7 @@ impl FileFormatOptionsExt {
             disable_variant_check: false,
             timezone,
             is_select,
+            is_clickhouse: false,
         };
         Ok(options)
     }
@@ -78,6 +80,7 @@ impl FileFormatOptionsExt {
             disable_variant_check: false,
             timezone,
             is_select: false,
+            is_clickhouse: true,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;
@@ -104,14 +107,24 @@ impl FileFormatOptionsExt {
         params: FileFormatParams,
     ) -> Result<Box<dyn OutputFormat>> {
         let output: Box<dyn OutputFormat> = match &params {
-            FileFormatParams::Csv(params) => match self.headers {
-                0 => Box::new(CSVOutputFormat::create(schema, params, self)),
-                1 => Box::new(CSVWithNamesOutputFormat::create(schema, params, self)),
-                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(
-                    schema, params, self,
-                )),
-                _ => unreachable!(),
-            },
+            FileFormatParams::Csv(params) => {
+                if self.is_clickhouse {
+                    match self.headers {
+                        0 => Box::new(CSVOutputFormat::create(schema, params, self)),
+                        1 => Box::new(CSVWithNamesOutputFormat::create(schema, params, self)),
+                        2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(
+                            schema, params, self,
+                        )),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    if params.output_header {
+                        Box::new(CSVWithNamesOutputFormat::create(schema, params, self))
+                    } else {
+                        Box::new(CSVOutputFormat::create(schema, params, self))
+                    }
+                }
+            }
             FileFormatParams::Tsv(params) => match self.headers {
                 0 => Box::new(TSVOutputFormat::create(schema, params, self)),
                 1 => Box::new(TSVWithNamesOutputFormat::create(schema, params, self)),
