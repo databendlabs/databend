@@ -117,12 +117,10 @@ impl FileFormatOptionsExt {
                         )),
                         _ => unreachable!(),
                     }
+                } else if params.output_header {
+                    Box::new(CSVWithNamesOutputFormat::create(schema, params, self))
                 } else {
-                    if params.output_header {
-                        Box::new(CSVWithNamesOutputFormat::create(schema, params, self))
-                    } else {
-                        Box::new(CSVOutputFormat::create(schema, params, self))
-                    }
+                    Box::new(CSVOutputFormat::create(schema, params, self))
                 }
             }
             FileFormatParams::Tsv(params) => match self.headers {
