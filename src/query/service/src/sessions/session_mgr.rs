@@ -89,7 +89,7 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        self.load_config_changes(&settings)?;
+        self.load_config_changes(&settings).await?;
         settings.load_global_changes().await?;
 
         self.create_with_settings(typ, settings)
@@ -115,7 +115,7 @@ impl SessionManager {
         Ok(())
     }
 
-    pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
+    pub async fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
         if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
             settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
@@ -127,7 +127,9 @@ impl SessionManager {
 
         if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
             unsafe {
-                settings.set_enterprise_license(enterprise_license_key)?;
+                settings
+                    .set_enterprise_license(enterprise_license_key)
+                    .await?;
             }
         }
         Ok(())

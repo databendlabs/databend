@@ -26,7 +26,9 @@ async fn test_session_setting() -> Result<()> {
     // Settings.
     {
         let settings = session.get_settings();
-        settings.set_setting("max_threads".to_string(), "3".to_string())?;
+        settings
+            .set_setting("max_threads".to_string(), "3".to_string())
+            .await?;
         let actual = settings.get_max_threads()?;
         let expect = 3;
         assert_eq!(actual, expect);
@@ -54,7 +56,9 @@ async fn test_session_setting_override() -> Result<()> {
         let overrided = settings.get_max_storage_io_requests()?;
         let expect = 1000;
         assert_eq!(overrided, expect);
-        settings.set_setting("max_storage_io_requests".to_string(), "300".to_string())?;
+        settings
+            .set_setting("max_storage_io_requests".to_string(), "300".to_string())
+            .await?;
         let actual = settings.get_max_storage_io_requests()?;
         let expect = 300;
         assert_eq!(actual, expect);
