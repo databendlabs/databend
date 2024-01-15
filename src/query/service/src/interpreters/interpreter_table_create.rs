@@ -293,13 +293,15 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let mut options = self.plan.options.clone();
+        let comment = options.remove(OPT_KEY_COMMENT);
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
-            options: self.plan.options.clone(),
+            options,
             engine_options: self.plan.engine_options.clone(),
             default_cluster_key: None,
             field_comments,
@@ -309,6 +311,7 @@ impl CreateTableInterpreter {
             } else {
                 Default::default()
             },
+            comment: comment.unwrap_or_default(),
             ..Default::default()
         };
 
