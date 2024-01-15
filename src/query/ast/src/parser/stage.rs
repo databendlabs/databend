@@ -83,15 +83,9 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
 
-    let ident_options = map(
-        rule! {(
-                NULL_FIELD_AS
-                | MISSING_FIELD_AS
-                | BINARY_FORMAT
-                ) ~ ^"=" ~ ^#ident
-        },
-        |(k, _, v)| (k.text().to_string(), v.name),
-    );
+    let ident_options = map(rule! { BINARY_FORMAT  ~ ^"=" ~ ^Ident }, |(k, _, v)| {
+        (k.text().to_string(), v.text().to_string())
+    });
 
     let string_options = map(
         rule! {
