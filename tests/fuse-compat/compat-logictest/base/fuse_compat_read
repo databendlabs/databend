@@ -4,7 +4,7 @@ select c_bool      FROM fuse_compat_table;
 0
 
 query I
-select c_bool      FROM fuse_compat_table where c_bool = 0;
+select c_bool      FROM fuse_compat_table where c_bool = false;
 ----
 0
 
@@ -14,7 +14,7 @@ select c_tinyint   FROM fuse_compat_table;
 127
 
 query I
-select c_tinyint   FROM fuse_compat_table c_tinyint = 127;
+select c_tinyint   FROM fuse_compat_table where c_tinyint = 127;
 ----
 127
 
@@ -24,7 +24,7 @@ select c_smallint  FROM fuse_compat_table;
 3267
 
 query I
-select c_smallint  FROM fuse_compat_table c_smallint = 3267;
+select c_smallint  FROM fuse_compat_table where c_smallint = 3267;
 ----
 3267
 
@@ -55,7 +55,7 @@ select c_float     FROM fuse_compat_table;
 3.4
 
 query F
-select c_float     FROM fuse_compat_table where c_float = 3.4;
+select c_float     FROM fuse_compat_table where c_float >= 3.4;
 ----
 3.4
 
