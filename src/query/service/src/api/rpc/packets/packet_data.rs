@@ -20,6 +20,7 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
@@ -58,6 +59,7 @@ pub enum DataPacket {
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MergeStatus(MergeStatus),
+    DataCacheMetrics(DataCacheMetricValues),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -74,6 +76,7 @@ impl DataPacket {
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
             DataPacket::QueryProfiles(_) => 0,
+            DataPacket::DataCacheMetrics(_) => 0,
         }
     }
 }
@@ -123,6 +126,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::MergeStatus(status) => FlightData {
                 app_metadata: vec![0x07],
                 data_body: serde_json::to_vec(&status)?,
+                data_header: vec![],
+                flight_descriptor: None,
+            },
+            DataPacket::DataCacheMetrics(metrics) => FlightData {
+                app_metadata: vec![0x08],
+                data_body: serde_json::to_vec(&metrics)?,
                 data_header: vec![],
                 flight_descriptor: None,
             },
@@ -179,6 +188,11 @@ impl TryFrom<FlightData> for DataPacket {
             0x07 => {
                 let status = serde_json::from_slice::<MergeStatus>(&flight_data.data_body)?;
                 Ok(DataPacket::MergeStatus(status))
+            }
+            0x08 => {
+                let status =
+                    serde_json::from_slice::<DataCacheMetricValues>(&flight_data.data_body)?;
+                Ok(DataPacket::DataCacheMetrics(status))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

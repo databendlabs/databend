@@ -125,6 +125,9 @@ pub struct QueryLogElement {
     pub agg_spilled_rows: u64,
     pub group_by_spilled_bytes: u64,
     pub group_by_spilled_rows: u64,
+    pub bytes_from_remote_disk: u64,
+    pub bytes_from_local_disk: u64,
+    pub bytes_from_memory: u64,
 
     // Client.
     pub client_info: String,
@@ -248,6 +251,18 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("cpu_usage", TableDataType::Number(NumberDataType::UInt32)),
             TableField::new(
                 "memory_usage",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_from_remote_disk",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_from_local_disk",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_from_memory",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             // Client.
@@ -437,6 +452,22 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::UInt64(self.memory_usage)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_remote_disk)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_local_disk)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_memory)).as_ref());
+
         // Client.
         columns
             .next()

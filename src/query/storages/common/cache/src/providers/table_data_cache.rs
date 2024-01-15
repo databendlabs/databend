@@ -101,9 +101,9 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
     }
 
     fn put(&self, k: String, v: Arc<Bytes>) {
-        // check if external(disk/redis) already have it.
+        // check if already cached
         if !self.external_cache.contains_key(&k) {
-            // populate the cache to external cache(disk/redis) asyncly
+            // populate the cache is necessary
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
