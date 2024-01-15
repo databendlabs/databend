@@ -14,3 +14,4 @@
 
 pub mod basic_statistics;
 pub use basic_statistics::BasicColumnStatistics;
+pub mod data_cache_statistics;

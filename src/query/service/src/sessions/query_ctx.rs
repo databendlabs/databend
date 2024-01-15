@@ -44,6 +44,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -398,6 +399,10 @@ impl TableContext for QueryContext {
         info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
+    }
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {

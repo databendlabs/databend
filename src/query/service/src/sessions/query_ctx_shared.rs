@@ -27,6 +27,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -116,6 +117,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
+
+    // Records query level data cache metrics
+    pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 }
 
 impl QueryContextShared {
@@ -159,6 +163,7 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
@@ -438,6 +443,10 @@ impl QueryContextShared {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.get_tenant();
         user_mgr.get_connection(&tenant, name).await
+    }
+
+    pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
+        &self.query_cache_metrics
     }
 }
 

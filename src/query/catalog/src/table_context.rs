@@ -58,6 +58,7 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
+use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -131,7 +132,7 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
     fn set_status_info(&self, info: &str);
-
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn partition_num(&self) -> usize {
