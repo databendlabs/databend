@@ -196,16 +196,15 @@ impl HashJoinBuildState {
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
 
-        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
-        let start_offset = build_state.generation_state.build_num_rows + old_size;
-        let end_offset = start_offset + input_rows - 1;
-
         // merge into target table as build side.
         if self
             .hash_join_state
             .need_merge_into_target_partial_modified_scan()
         {
             assert!(input.get_meta().is_some());
+            let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+            let start_offset = build_state.generation_state.build_num_rows + old_size;
+            let end_offset = start_offset + input_rows - 1;
             let block_meta_index =
                 BlockMetaIndex::downcast_ref_from(input.get_meta().unwrap()).unwrap();
             let row_prefix = compute_row_id_prefix(
