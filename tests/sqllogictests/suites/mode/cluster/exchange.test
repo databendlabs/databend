@@ -1,6 +1,3 @@
-statement ok
-set prefer_broadcast_join = 0
-
 query T
 explain select * from numbers(1) t, numbers(2) t1 where t.number = t1.number
 ----
@@ -16,7 +13,7 @@ Exchange
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [t.number (#0)]
-    │   ├── exchange type: Hash(t.number (#0))
+    │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── output columns: [number (#0)]
@@ -26,18 +23,15 @@ Exchange
     │       ├── partitions scanned: 1
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 1.00
-    └── Exchange(Probe)
-        ├── output columns: [t1.number (#1)]
-        ├── exchange type: Hash(t1.number (#1))
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── output columns: [number (#1)]
-            ├── read rows: 2
-            ├── read bytes: 16
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#1)]
+        ├── read rows: 2
+        ├── read bytes: 16
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
 explain select * from numbers(1) t, numbers(2) t1, numbers(3) t2 where t.number = t1.number and t.number = t2.number
@@ -54,7 +48,7 @@ Exchange
     ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#1), t.number (#0)]
-    │   ├── exchange type: Hash(t.number (#0))
+    │   ├── exchange type: Broadcast
     │   └── HashJoin
     │       ├── output columns: [t1.number (#1), t.number (#0)]
     │       ├── join type: INNER
@@ -64,7 +58,7 @@ Exchange
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [t.number (#0)]
-    │       │   ├── exchange type: Hash(t.number (#0))
+    │       │   ├── exchange type: Broadcast
     │       │   └── TableScan
     │       │       ├── table: default.system.numbers
     │       │       ├── output columns: [number (#0)]
@@ -74,94 +68,82 @@ Exchange
     │       │       ├── partitions scanned: 1
     │       │       ├── push downs: [filters: [], limit: NONE]
     │       │       └── estimated rows: 1.00
-    │       └── Exchange(Probe)
-    │           ├── output columns: [t1.number (#1)]
-    │           ├── exchange type: Hash(t1.number (#1))
-    │           └── TableScan
-    │               ├── table: default.system.numbers
-    │               ├── output columns: [number (#1)]
-    │               ├── read rows: 2
-    │               ├── read bytes: 16
-    │               ├── partitions total: 1
-    │               ├── partitions scanned: 1
-    │               ├── push downs: [filters: [], limit: NONE]
-    │               └── estimated rows: 2.00
-    └── Exchange(Probe)
-        ├── output columns: [t2.number (#2)]
-        ├── exchange type: Hash(t2.number (#2))
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── output columns: [number (#2)]
-            ├── read rows: 3
-            ├── read bytes: 24
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 3.00
+    │       └── TableScan(Probe)
+    │           ├── table: default.system.numbers
+    │           ├── output columns: [number (#1)]
+    │           ├── read rows: 2
+    │           ├── read bytes: 16
+    │           ├── partitions total: 1
+    │           ├── partitions scanned: 1
+    │           ├── push downs: [filters: [], limit: NONE]
+    │           └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#2)]
+        ├── read rows: 3
+        ├── read bytes: 24
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 3.00
 
 query T
 explain select * from (select number as a, number+1 as b from numbers(1)) t, numbers(2) t1, numbers(3) t2 where a = t1.number and b = t2.number
 ----
 Exchange
-├── output columns: [t2.number (#3), numbers.number (#0), b (#1), t1.number (#2)]
+├── output columns: [t2.number (#3), t1.number (#2), numbers.number (#0), b (#1)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [t2.number (#3), numbers.number (#0), b (#1), t1.number (#2)]
+    ├── output columns: [t2.number (#3), t1.number (#2), numbers.number (#0), b (#1)]
     ├── join type: INNER
-    ├── build keys: [t1.number (#2)]
-    ├── probe keys: [t.a (#0)]
+    ├── build keys: [t.b (#1)]
+    ├── probe keys: [t2.number (#3)]
     ├── filters: []
     ├── estimated rows: 6.00
     ├── Exchange(Build)
-    │   ├── output columns: [t1.number (#2)]
-    │   ├── exchange type: Hash(t1.number (#2))
-    │   └── TableScan
-    │       ├── table: default.system.numbers
-    │       ├── output columns: [number (#2)]
-    │       ├── read rows: 2
-    │       ├── read bytes: 16
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 2.00
-    └── Exchange(Probe)
-        ├── output columns: [t2.number (#3), numbers.number (#0), b (#1)]
-        ├── exchange type: Hash(t.a (#0))
-        └── HashJoin
-            ├── output columns: [t2.number (#3), numbers.number (#0), b (#1)]
-            ├── join type: INNER
-            ├── build keys: [t.b (#1)]
-            ├── probe keys: [t2.number (#3)]
-            ├── filters: []
-            ├── estimated rows: 3.00
-            ├── Exchange(Build)
-            │   ├── output columns: [numbers.number (#0), b (#1)]
-            │   ├── exchange type: Hash(t.b (#1))
-            │   └── EvalScalar
-            │       ├── output columns: [numbers.number (#0), b (#1)]
-            │       ├── expressions: [numbers.number (#0) + 1]
-            │       ├── estimated rows: 1.00
-            │       └── TableScan
-            │           ├── table: default.system.numbers
-            │           ├── output columns: [number (#0)]
-            │           ├── read rows: 1
-            │           ├── read bytes: 8
-            │           ├── partitions total: 1
-            │           ├── partitions scanned: 1
-            │           ├── push downs: [filters: [], limit: NONE]
-            │           └── estimated rows: 1.00
-            └── Exchange(Probe)
-                ├── output columns: [t2.number (#3)]
-                ├── exchange type: Hash(t2.number (#3))
-                └── TableScan
-                    ├── table: default.system.numbers
-                    ├── output columns: [number (#3)]
-                    ├── read rows: 3
-                    ├── read bytes: 24
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 3.00
+    │   ├── output columns: [t1.number (#2), b (#1), numbers.number (#0)]
+    │   ├── exchange type: Broadcast
+    │   └── HashJoin
+    │       ├── output columns: [t1.number (#2), b (#1), numbers.number (#0)]
+    │       ├── join type: INNER
+    │       ├── build keys: [t.a (#0)]
+    │       ├── probe keys: [t1.number (#2)]
+    │       ├── filters: []
+    │       ├── estimated rows: 2.00
+    │       ├── Exchange(Build)
+    │       │   ├── output columns: [numbers.number (#0), b (#1)]
+    │       │   ├── exchange type: Broadcast
+    │       │   └── EvalScalar
+    │       │       ├── output columns: [numbers.number (#0), b (#1)]
+    │       │       ├── expressions: [numbers.number (#0) + 1]
+    │       │       ├── estimated rows: 1.00
+    │       │       └── TableScan
+    │       │           ├── table: default.system.numbers
+    │       │           ├── output columns: [number (#0)]
+    │       │           ├── read rows: 1
+    │       │           ├── read bytes: 8
+    │       │           ├── partitions total: 1
+    │       │           ├── partitions scanned: 1
+    │       │           ├── push downs: [filters: [], limit: NONE]
+    │       │           └── estimated rows: 1.00
+    │       └── TableScan(Probe)
+    │           ├── table: default.system.numbers
+    │           ├── output columns: [number (#2)]
+    │           ├── read rows: 2
+    │           ├── read bytes: 16
+    │           ├── partitions total: 1
+    │           ├── partitions scanned: 1
+    │           ├── push downs: [filters: [], limit: NONE]
+    │           └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#3)]
+        ├── read rows: 3
+        ├── read bytes: 24
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 3.00
 
 query T
 explain select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
@@ -178,7 +160,7 @@ Exchange
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [sum(number) (#2), numbers.number (#0)]
-    │   ├── exchange type: Hash(t.number (#2))
+    │   ├── exchange type: Broadcast
     │   └── AggregateFinal
     │       ├── output columns: [sum(number) (#2), numbers.number (#0)]
     │       ├── group by: [number]
@@ -201,18 +183,15 @@ Exchange
     │                   ├── partitions scanned: 1
     │                   ├── push downs: [filters: [], limit: NONE]
     │                   └── estimated rows: 1.00
-    └── Exchange(Probe)
-        ├── output columns: [t1.number (#3)]
-        ├── exchange type: Hash(CAST(t1.number (#3) AS UInt64 NULL))
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── output columns: [number (#3)]
-            ├── read rows: 2
-            ├── read bytes: 16
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#3)]
+        ├── read rows: 2
+        ├── read bytes: 16
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
 explain fragments select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
@@ -239,10 +218,10 @@ Fragment 0:
 (empty)
 (empty)
 Fragment 1:
-  DataExchange: Shuffle
+  DataExchange: Broadcast
     ExchangeSink
     ├── output columns: [sum(number) (#2), numbers.number (#0)]
-    ├── destination fragment: [3]
+    ├── destination fragment: [2]
     └── AggregateFinal
         ├── output columns: [sum(number) (#2), numbers.number (#0)]
         ├── group by: [number]
@@ -254,26 +233,10 @@ Fragment 1:
 (empty)
 (empty)
 Fragment 2:
-  DataExchange: Shuffle
-    ExchangeSink
-    ├── output columns: [t1.number (#3)]
-    ├── destination fragment: [3]
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── output columns: [number (#3)]
-        ├── read rows: 2
-        ├── read bytes: 16
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 2.00
-(empty)
-(empty)
-Fragment 3:
   DataExchange: Merge
     ExchangeSink
     ├── output columns: [t1.number (#3), sum(number) (#2)]
-    ├── destination fragment: [4]
+    ├── destination fragment: [3]
     └── HashJoin
         ├── output columns: [t1.number (#3), sum(number) (#2)]
         ├── join type: INNER
@@ -284,19 +247,22 @@ Fragment 3:
         ├── ExchangeSource(Build)
         │   ├── output columns: [sum(number) (#2), numbers.number (#0)]
         │   └── source fragment: [1]
-        └── ExchangeSource(Probe)
-            ├── output columns: [t1.number (#3)]
-            └── source fragment: [2]
+        └── TableScan(Probe)
+            ├── table: default.system.numbers
+            ├── output columns: [number (#3)]
+            ├── read rows: 2
+            ├── read bytes: 16
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 2.00
 (empty)
 (empty)
-Fragment 4:
+Fragment 3:
     ExchangeSource
     ├── output columns: [t1.number (#3), sum(number) (#2)]
-    └── source fragment: [3]
+    └── source fragment: [2]
 (empty)
-
-statement ok
-set prefer_broadcast_join = 1
 
 query T
 explain
@@ -363,7 +329,7 @@ AggregateFinal
                 ├── estimated rows: 100.00
                 ├── Exchange(Build)
                 │   ├── output columns: [numbers.number (#3)]
-                │   ├── exchange type: Hash(t3.a (#3))
+                │   ├── exchange type: Broadcast
                 │   └── TableScan
                 │       ├── table: default.system.numbers
                 │       ├── output columns: [number (#3)]
@@ -373,18 +339,15 @@ AggregateFinal
                 │       ├── partitions scanned: 1
                 │       ├── push downs: [filters: [], limit: NONE]
                 │       └── estimated rows: 10.00
-                └── Exchange(Probe)
-                    ├── output columns: [numbers.number (#2)]
-                    ├── exchange type: Hash(t1.a (#2))
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── output columns: [number (#2)]
-                        ├── read rows: 10
-                        ├── read bytes: 80
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 10.00
+                └── TableScan(Probe)
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#2)]
+                    ├── read rows: 10
+                    ├── read bytes: 80
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 10.00
 
 
 query T
@@ -469,7 +432,7 @@ AggregateFinal
                         ├── estimated rows: 100.00
                         ├── Exchange(Build)
                         │   ├── output columns: [numbers.number (#3)]
-                        │   ├── exchange type: Hash(t3.a (#3))
+                        │   ├── exchange type: Broadcast
                         │   └── TableScan
                         │       ├── table: default.system.numbers
                         │       ├── output columns: [number (#3)]
@@ -479,18 +442,15 @@ AggregateFinal
                         │       ├── partitions scanned: 1
                         │       ├── push downs: [filters: [], limit: NONE]
                         │       └── estimated rows: 10.00
-                        └── Exchange(Probe)
-                            ├── output columns: [numbers.number (#2)]
-                            ├── exchange type: Hash(t1.a (#2))
-                            └── TableScan
-                                ├── table: default.system.numbers
-                                ├── output columns: [number (#2)]
-                                ├── read rows: 10
-                                ├── read bytes: 80
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                ├── push downs: [filters: [], limit: NONE]
-                                └── estimated rows: 10.00
+                        └── TableScan(Probe)
+                            ├── table: default.system.numbers
+                            ├── output columns: [number (#2)]
+                            ├── read rows: 10
+                            ├── read bytes: 80
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 10.00
 
 query T
 explain
@@ -624,39 +584,36 @@ query T
 explain select * from numbers(10) as t1 join numbers(20) as t2 on t1.number = t2.number;
 ----
 Exchange
-├── output columns: [t1.number (#0), t2.number (#1)]
+├── output columns: [t2.number (#1), t1.number (#0)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [t1.number (#0), t2.number (#1)]
+    ├── output columns: [t2.number (#1), t1.number (#0)]
     ├── join type: INNER
-    ├── build keys: [t2.number (#1)]
-    ├── probe keys: [t1.number (#0)]
+    ├── build keys: [t1.number (#0)]
+    ├── probe keys: [t2.number (#1)]
     ├── filters: []
     ├── estimated rows: 200.00
     ├── Exchange(Build)
-    │   ├── output columns: [t2.number (#1)]
-    │   ├── exchange type: Hash(t2.number (#1))
+    │   ├── output columns: [t1.number (#0)]
+    │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.system.numbers
-    │       ├── output columns: [number (#1)]
-    │       ├── read rows: 20
-    │       ├── read bytes: 160
+    │       ├── output columns: [number (#0)]
+    │       ├── read rows: 10
+    │       ├── read bytes: 80
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 20.00
-    └── Exchange(Probe)
-        ├── output columns: [t1.number (#0)]
-        ├── exchange type: Hash(t1.number (#0))
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── output columns: [number (#0)]
-            ├── read rows: 10
-            ├── read bytes: 80
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 10.00
+    │       └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#1)]
+        ├── read rows: 20
+        ├── read bytes: 160
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 20.00
 
 
 statement ok

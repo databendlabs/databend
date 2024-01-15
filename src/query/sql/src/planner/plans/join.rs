@@ -355,6 +355,10 @@ impl Operator for Join {
         RelOp::Join
     }
 
+    fn arity(&self) -> usize {
+        2
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -405,22 +409,37 @@ impl Operator for Join {
         let probe_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        match (&probe_prop.distribution, &build_prop.distribution) {
-            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
-            // Then required proper is broadcast, and the join will be broadcast.
-            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
+        if probe_prop.distribution == Distribution::Serial
+            || build_prop.distribution == Distribution::Serial
+        {
+            return Ok(PhysicalProperty {
+                distribution: Distribution::Serial,
+            });
+        }
+
+        if !matches!(self.join_type, JoinType::Inner) {
+            return Ok(PhysicalProperty {
                 distribution: Distribution::Random,
-            }),
+            });
+        }
 
-            // If the distribution of probe side is Random, we will pass through
-            // the distribution of build side.
-            (Distribution::Random, _) => Ok(PhysicalProperty {
-                distribution: build_prop.distribution.clone(),
-            }),
-
-            // Otherwise pass through probe side.
-            _ => Ok(PhysicalProperty {
+        match (&probe_prop.distribution, &build_prop.distribution) {
+            // If any side of the join is Broadcast, pass through the other side.
+            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
+            }),
+
+            // If both sides of the join are Hash, pass through the probe side.
+            // Although the build side is also Hash, it is more efficient to
+            // utilize the distribution on the probe side.
+            // As soon as we support subset property, we can pass through both sides.
+            (Distribution::Hash(_), Distribution::Hash(_)) => Ok(PhysicalProperty {
+                distribution: probe_prop.distribution.clone(),
+            }),
+
+            // Otherwise use random distribution.
+            _ => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
             }),
         }
     }
@@ -573,6 +592,7 @@ impl Operator for Join {
                 | JoinType::RightAnti
                 | JoinType::RightSemi
                 | JoinType::RightMark
+                | JoinType::RightSingle
         ) {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
@@ -586,6 +606,16 @@ impl Operator for Join {
                 },
             ]);
         }
+
+        // (Serial, Serial)
+        children_required.push(vec![
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+        ]);
 
         Ok(children_required)
     }
