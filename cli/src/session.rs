@@ -561,8 +561,7 @@ impl From<&str> for QueryKind {
                 | TokenKind::INSERT
                 | TokenKind::CREATE
                 | TokenKind::DROP
-                | TokenKind::OPTIMIZE
-                | TokenKind::COPY => QueryKind::Update,
+                | TokenKind::OPTIMIZE => QueryKind::Update,
                 _ => QueryKind::Query,
             },
             _ => QueryKind::Query,

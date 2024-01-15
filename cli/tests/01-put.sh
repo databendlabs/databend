@@ -20,13 +20,17 @@ SQL
 mkdir -p /tmp/abc
 cp "${PWD}/cli/tests/data/books.parquet" /tmp/abc/books.parquet
 
+echo "---- put ----"
 echo "put fs:///tmp/abc/b*.parquet @ss_01/abc/" | ${BENDSQL}
+echo "---- get ----"
 echo 'get @ss_01/abc fs:///tmp/edf' | ${BENDSQL}
 
+echo "---- copy ----"
 cat <<SQL | ${BENDSQL}
 COPY INTO books_01 FROM @ss_01/abc/ files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
 SQL
 
+echo "---- select ----"
 cat <<SQL | ${BENDSQL}
 SELECT * FROM books_01 LIMIT 2;
 SQL
