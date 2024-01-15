@@ -32,6 +32,15 @@ async fn test_session_setting() -> Result<()> {
         let actual = settings.get_max_threads()?;
         let expect = 3;
         assert_eq!(actual, expect);
+
+        settings
+            .set_setting("sandbox_tenant".to_string(), "xx".to_string())
+            .await?;
+
+        let actual = settings.get_sandbox_tenant()?;
+        let expect = "xx".to_string();
+
+        assert_eq!(actual, expect);
     }
 
     Ok(())
