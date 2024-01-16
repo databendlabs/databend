@@ -24,7 +24,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
 
@@ -146,7 +145,14 @@ impl TransformHashJoinProbe {
             return Ok(());
         }
 
-        let chunks_offsets = unsafe { &*self.join_probe_state.hash_join_state.chunk_offsets.get() };
+        let chunks_offsets = unsafe {
+            &*self
+                .join_probe_state
+                .hash_join_state
+                .merge_into_state
+                .chunk_offsets
+                .get()
+        };
         let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
         let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
         let chunk_start = if item.1 == 0 {
@@ -442,8 +448,7 @@ impl Processor for TransformHashJoinProbe {
                 if self
                     .join_probe_state
                     .hash_join_state
-                    .merge_into_target_table_index
-                    != DUMMY_TABLE_INDEX
+                    .need_merge_into_target_partial_modified_scan()
                 {
                     if let Some(item) = self
                         .join_probe_state

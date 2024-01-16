@@ -80,6 +80,25 @@ pub struct MatchedPtr(pub *mut AtomicU8);
 unsafe impl Send for MatchedPtr {}
 unsafe impl Sync for MatchedPtr {}
 
+pub struct MergeIntoState {
+    /// If we use target table as build side for merge into, we use this to track target table
+    /// and extract partial modified blocks from hashtable
+    pub(crate) merge_into_target_table_index: IndexType,
+    /// for now we don't support distributed, we will support in the next pr.
+    #[allow(unused)]
+    pub(crate) is_distributed_merge_into: bool,
+
+    /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
+    /// When merge into target table as build side, we should preserve block info index.
+    pub(crate) block_info_index: SyncUnsafeCell<BlockInfoIndex>,
+    /// we use matched to tag the matched offset in chunks.
+    pub(crate) matched: SyncUnsafeCell<Vec<u8>>,
+    /// the matched will be modified concurrently, so we use
+    /// atomic_pointers to pointer to matched
+    pub(crate) atomic_pointer: SyncUnsafeCell<MatchedPtr>,
+    /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
+    pub(crate) chunk_offsets: SyncUnsafeCell<Vec<u32>>,
+}
 /// Define some shared states for hash join build and probe.
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
@@ -129,23 +148,8 @@ pub struct HashJoinState {
 
     /// If the join node generate runtime filters, the scan node will use it to do prune.
     pub(crate) table_index: IndexType,
-    /// If we use target table as build side for merge into, we use this to track target table
-    /// and extract partial modified blocks from hashtable
-    pub(crate) merge_into_target_table_index: IndexType,
-    /// for now we don't support distributed, we will support in the next pr.
-    #[allow(unused)]
-    pub(crate) is_distributed_merge_into: bool,
 
-    /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
-    /// When merge into target table as build side, we should preserve block info index.
-    pub(crate) block_info_index: SyncUnsafeCell<BlockInfoIndex>,
-    /// we use matched to tag the matched offset in chunks.
-    pub(crate) matched: SyncUnsafeCell<Vec<u8>>,
-    /// the matched will be modified concurrently, so we use
-    /// atomic_pointers to pointer to matched
-    pub(crate) atomic_pointer: SyncUnsafeCell<MatchedPtr>,
-    /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
-    pub(crate) chunk_offsets: SyncUnsafeCell<Vec<u32>>,
+    pub(crate) merge_into_state: MergeIntoState,
 }
 
 impl HashJoinState {
@@ -193,16 +197,18 @@ impl HashJoinState {
             partition_id: AtomicI8::new(-2),
             enable_spill,
             table_index,
-            merge_into_target_table_index,
-            is_distributed_merge_into,
-            block_info_index: if merge_into_target_table_index == DUMMY_TABLE_INDEX {
-                SyncUnsafeCell::new(BlockInfoIndex::new_with_capacity(0))
-            } else {
-                SyncUnsafeCell::new(Default::default())
+            merge_into_state: MergeIntoState {
+                merge_into_target_table_index,
+                is_distributed_merge_into,
+                block_info_index: if merge_into_target_table_index == DUMMY_TABLE_INDEX {
+                    SyncUnsafeCell::new(BlockInfoIndex::new_with_capacity(0))
+                } else {
+                    SyncUnsafeCell::new(Default::default())
+                },
+                matched: SyncUnsafeCell::new(Vec::new()),
+                atomic_pointer: SyncUnsafeCell::new(MatchedPtr(std::ptr::null_mut())),
+                chunk_offsets: SyncUnsafeCell::new(Vec::with_capacity(100)),
             },
-            matched: SyncUnsafeCell::new(Vec::new()),
-            atomic_pointer: SyncUnsafeCell::new(MatchedPtr(std::ptr::null_mut())),
-            chunk_offsets: SyncUnsafeCell::new(Vec::with_capacity(100)),
         }))
     }
 
@@ -255,7 +261,7 @@ impl HashJoinState {
     }
 
     pub fn need_merge_into_target_partial_modified_scan(&self) -> bool {
-        self.merge_into_target_table_index != DUMMY_TABLE_INDEX
+        self.merge_into_state.merge_into_target_table_index != DUMMY_TABLE_INDEX
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {

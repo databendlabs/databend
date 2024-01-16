@@ -25,7 +25,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -381,9 +380,13 @@ impl HashJoinProbeState {
         valids: &Bitmap,
     ) -> Result<()> {
         // merge into target table as build side.
-        if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
-            let chunk_offsets = unsafe { &*self.hash_join_state.chunk_offsets.get() };
-            let pointer = unsafe { &*self.hash_join_state.atomic_pointer.get() };
+        if self
+            .hash_join_state
+            .need_merge_into_target_partial_modified_scan()
+        {
+            let chunk_offsets =
+                unsafe { &*self.hash_join_state.merge_into_state.chunk_offsets.get() };
+            let pointer = unsafe { &*self.hash_join_state.merge_into_state.atomic_pointer.get() };
             // add matched indexes.
             for (idx, row_ptr) in build_indexes[0..matched_idx].iter().enumerate() {
                 unsafe {

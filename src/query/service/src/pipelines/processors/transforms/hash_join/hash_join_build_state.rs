@@ -55,7 +55,6 @@ use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use ethnum::U256;
 use itertools::Itertools;
@@ -211,7 +210,8 @@ impl HashJoinBuildState {
                 block_meta_index.segment_idx as u64,
                 block_meta_index.block_idx as u64,
             );
-            let block_info_index = unsafe { &mut *self.hash_join_state.block_info_index.get() };
+            let block_info_index =
+                unsafe { &mut *self.hash_join_state.merge_into_state.block_info_index.get() };
             block_info_index
                 .insert_block_offsets((start_offset as u32, end_offset as u32), row_prefix);
         }
@@ -258,8 +258,12 @@ impl HashJoinBuildState {
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
 
-            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
-                let chunk_offsets = unsafe { &mut *self.hash_join_state.chunk_offsets.get() };
+            if self
+                .hash_join_state
+                .need_merge_into_target_partial_modified_scan()
+            {
+                let chunk_offsets =
+                    unsafe { &mut *self.hash_join_state.merge_into_state.chunk_offsets.get() };
                 chunk_offsets.push(build_state.generation_state.build_num_rows as u32);
             }
         }
@@ -420,10 +424,14 @@ impl HashJoinBuildState {
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
             // generate macthed offsets memory.
-            if self.hash_join_state.merge_into_target_table_index != DUMMY_TABLE_INDEX {
-                let matched = unsafe { &mut *self.hash_join_state.matched.get() };
+            if self
+                .hash_join_state
+                .need_merge_into_target_partial_modified_scan()
+            {
+                let matched = unsafe { &mut *self.hash_join_state.merge_into_state.matched.get() };
                 let build_state = unsafe { &*self.hash_join_state.build_state.get() };
-                let atomic_pointer = unsafe { &mut *self.hash_join_state.atomic_pointer.get() };
+                let atomic_pointer =
+                    unsafe { &mut *self.hash_join_state.merge_into_state.atomic_pointer.get() };
                 *matched = vec![0; build_state.generation_state.build_num_rows];
                 let pointer =
                     unsafe { std::mem::transmute::<*mut u8, *mut AtomicU8>(matched.as_mut_ptr()) };
