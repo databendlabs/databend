@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::NdJsonFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
@@ -31,19 +30,22 @@ use crate::common;
 //
 #[test]
 fn test_decode_v64_ndjson_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v64 = vec![
-        42, 29, 8, 1, 18, 13, 102, 105, 101, 108, 100, 95, 100, 101, 102, 97, 117, 108, 116, 26, 4,
-        110, 117, 108, 108, 160, 6, 64, 168, 6, 24,
+    let nd_json_file_format_params_v64 = vec![
+        8, 1, 18, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 26, 13, 70, 73, 69, 76,
+        68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 64, 168, 6, 24,
     ];
 
-    let want = || {
-        mt::principal::FileFormatParams::NdJson(NdJsonFileFormatParams {
-            compression: StageFileCompression::Gzip,
-            missing_field_as: NullAs::FieldDefault,
-            null_field_as: NullAs::Null,
-        })
+    let want = || NdJsonFileFormatParams {
+        compression: StageFileCompression::Gzip,
+        missing_field_as: NullAs::FieldDefault,
+        null_field_as: NullAs::FieldDefault,
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), file_format_params_v64.as_slice(), 0, want())?;
+    common::test_load_old(
+        func_name!(),
+        nd_json_file_format_params_v64.as_slice(),
+        64,
+        want(),
+    )?;
     Ok(())
 }

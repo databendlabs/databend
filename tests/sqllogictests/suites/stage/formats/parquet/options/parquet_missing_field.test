@@ -23,7 +23,7 @@ query error get diff schema
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet) pattern='.*[.]parquet'
 
 query 
-copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet missing_field_as='field_default') pattern='.*[.]parquet'
+copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT) pattern='.*[.]parquet'
 ----
 parquet/diff_schema/f1.parquet 10 0 NULL NULL
 parquet/diff_schema/f2.parquet 10 0 NULL NULL
@@ -53,5 +53,5 @@ NULL 228 NULL 248
 NULL 229 NULL 249
 
 query 
-copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet  missing_field_as='field_default') pattern='.*[.]parquet'
+copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet  missing_field_as = FIELD_DEFAULT) pattern='.*[.]parquet'
 ----
