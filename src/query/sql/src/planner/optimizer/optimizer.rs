@@ -228,6 +228,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             .optimize(Arc::new(s_expr.clone()))?;
         if optimized {
             s_expr = (*dp_res).clone();
+            s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
             dphyp_optimized = true;
         }
     }
@@ -259,15 +260,8 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
                 e
             );
 
-            s_expr = if !opt_ctx.enable_join_reorder {
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?
-            } else {
-                RecursiveOptimizer::new(
-                    &[RuleID::EliminateEvalScalar, RuleID::CommuteJoin],
-                    &opt_ctx,
-                )
-                .run(&s_expr)?
-            };
+            s_expr =
+                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
 
             if enable_distributed_query {
                 s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;

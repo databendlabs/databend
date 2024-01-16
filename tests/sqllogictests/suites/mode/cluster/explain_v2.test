@@ -328,48 +328,52 @@ Limit
                 └── estimated rows: 10.00
 
 query T
-explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
+explain select sum(a) from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a);
 ----
-Limit
-├── output columns: [numbers.number (#0), numbers.number (#1)]
-├── limit: 3
-├── offset: 0
-├── estimated rows: 3.00
-└── Sort
-    ├── output columns: [numbers.number (#0), numbers.number (#1)]
-    ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 50.00
-    └── HashJoin
-        ├── output columns: [numbers.number (#0), numbers.number (#1)]
-        ├── join type: RIGHT OUTER
-        ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
-        ├── probe keys: [x.a (#0)]
-        ├── filters: []
-        ├── estimated rows: 50.00
-        ├── Exchange(Build)
-        │   ├── output columns: [numbers.number (#1)]
-        │   ├── exchange type: Merge
-        │   └── TableScan
-        │       ├── table: default.system.numbers
-        │       ├── output columns: [number (#1)]
-        │       ├── read rows: 5
-        │       ├── read bytes: 40
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 5.00
-        └── Exchange(Probe)
-            ├── output columns: [numbers.number (#0)]
-            ├── exchange type: Merge
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── output columns: [number (#0)]
-                ├── read rows: 10
-                ├── read bytes: 80
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 10.00
+AggregateFinal
+├── output columns: [sum(a) (#2)]
+├── group by: []
+├── aggregate functions: [sum(number)]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [sum(a) (#2)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── output columns: [sum(a) (#2)]
+        ├── group by: []
+        ├── aggregate functions: [sum(number)]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: [numbers.number (#1)]
+            ├── join type: RIGHT OUTER
+            ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
+            ├── probe keys: [x.a (#0)]
+            ├── filters: []
+            ├── estimated rows: 50.00
+            ├── Exchange(Build)
+            │   ├── output columns: [numbers.number (#1)]
+            │   ├── exchange type: Hash(y.a (#1))
+            │   └── TableScan
+            │       ├── table: default.system.numbers
+            │       ├── output columns: [number (#1)]
+            │       ├── read rows: 5
+            │       ├── read bytes: 40
+            │       ├── partitions total: 1
+            │       ├── partitions scanned: 1
+            │       ├── push downs: [filters: [], limit: NONE]
+            │       └── estimated rows: 5.00
+            └── Exchange(Probe)
+                ├── output columns: [numbers.number (#0)]
+                ├── exchange type: Hash(x.a (#0))
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 10
+                    ├── read bytes: 80
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 10.00
 
 statement ok
 drop table t1;
