@@ -86,12 +86,13 @@ impl Interpreter for ShowGrantsInterpreter {
             let object = grant_entry.object();
             match object {
                 GrantObject::TableById(catalog_name, db_id, table_id) => {
-                    let privileges_str = if grant_entry.has_all_available_privileges() {
-                        "ALL".to_string()
-                    } else {
-                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
-                        privileges.to_string()
-                    };
+                    let privileges_str =
+                        if grant_entry.has_all_available_privileges_without_ownership() {
+                            "ALL".to_string()
+                        } else {
+                            let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
+                            privileges.to_string()
+                        };
                     let catalog = self.ctx.get_catalog(catalog_name).await?;
                     let db_name = catalog.get_db_name_by_id(*db_id).await?;
                     let table_name = catalog.get_table_name_by_id(*table_id).await?;
@@ -101,12 +102,13 @@ impl Interpreter for ShowGrantsInterpreter {
                     ));
                 }
                 GrantObject::DatabaseById(catalog_name, db_id) => {
-                    let privileges_str = if grant_entry.has_all_available_privileges() {
-                        "ALL".to_string()
-                    } else {
-                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
-                        privileges.to_string()
-                    };
+                    let privileges_str =
+                        if grant_entry.has_all_available_privileges_without_ownership() {
+                            "ALL".to_string()
+                        } else {
+                            let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
+                            privileges.to_string()
+                        };
                     let catalog = self.ctx.get_catalog(catalog_name).await?;
                     let db_name = catalog.get_db_name_by_id(*db_id).await?;
                     grant_list.push(format!(

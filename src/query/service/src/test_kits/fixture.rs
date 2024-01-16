@@ -176,11 +176,6 @@ impl TestFixture {
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
-        );
-
         let dummy_session = SessionManager::instance()
             .create_session(session_type)
             .await?;
