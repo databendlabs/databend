@@ -41,6 +41,7 @@ databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
@@ -57,7 +58,6 @@ minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
-arrow-schema ={ workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
