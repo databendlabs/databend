@@ -126,18 +126,18 @@ impl StreamColumnMeta {
             },
         )))
     }
+}
 
-    pub fn build_origin_block_row_num(&self, num_rows: usize) -> Value<AnyType> {
-        let mut row_ids = Vec::with_capacity(num_rows);
-        for i in 0..num_rows {
-            row_ids.push(i as u64);
-        }
-        let column = UInt64Type::from_data(row_ids);
-        Value::Column(Column::Nullable(Box::new(NullableColumn {
-            column,
-            validity: Bitmap::new_constant(true, num_rows),
-        })))
+pub fn build_origin_block_row_num(num_rows: usize) -> Value<AnyType> {
+    let mut row_ids = Vec::with_capacity(num_rows);
+    for i in 0..num_rows {
+        row_ids.push(i as u64);
     }
+    let column = UInt64Type::from_data(row_ids);
+    Value::Column(Column::Nullable(Box::new(NullableColumn {
+        column,
+        validity: Bitmap::new_constant(true, num_rows),
+    })))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -220,7 +220,7 @@ impl StreamColumn {
             ),
             StreamColumnType::OriginRowNum => BlockEntry::new(
                 DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                meta.build_origin_block_row_num(num_rows),
+                build_origin_block_row_num(num_rows),
             ),
         }
     }
