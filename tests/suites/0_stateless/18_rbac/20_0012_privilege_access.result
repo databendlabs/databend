@@ -60,7 +60,6 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
@@ -68,7 +67,6 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
@@ -77,7 +75,6 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
 3

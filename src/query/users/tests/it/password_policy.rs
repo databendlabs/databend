@@ -30,9 +30,9 @@ use databend_common_users::UserApiProvider;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let tenant = "test";
     let username = "test-user1";
     let hostname = "%";
     let pwd1 = "123456abcDEF!@#1";

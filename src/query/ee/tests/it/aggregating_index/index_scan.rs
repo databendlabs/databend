@@ -1087,7 +1087,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
             if let Some(s) = spill_settings.as_ref() {
                 let settings = session.get_settings();
                 // Make sure the operator will spill the aggregation.
-                settings.set_batch_settings(s).await?;
+                settings.set_batch_settings(s)?;
             }
 
             // Prepare table and data

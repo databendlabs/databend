@@ -1,10 +1,9 @@
-statement ok
-drop role if exists 'test-a'
+
 
 statement ok
 CREATE ROLE `test-a`
 
-statement error 2216
+statement error 2202
 CREATE ROLE `test-a`
 
 statement ok
@@ -19,14 +18,3 @@ CREATE ROLE IF NOT EXISTS `test-a`
 statement ok
 DROP ROLE `test-a`
 
-statement error 2217
-create role 'account_admin'
-
-statement error 2217
-create role 'account_admiN'
-
-statement error 2217
-create role 'Public'
-
-statement error 2217
-create role 'public'

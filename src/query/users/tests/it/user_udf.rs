@@ -23,9 +23,9 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_lambda_udf() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let tenant = "test";
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
@@ -90,9 +90,9 @@ async fn test_user_lambda_udf() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf_server() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let tenant = "test";
     let address = "http://127.0.0.1:8888";
     let arg_types = vec![DataType::String];
     let return_type = DataType::Boolean;
