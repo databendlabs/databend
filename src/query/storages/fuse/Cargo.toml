@@ -57,6 +57,7 @@ minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
+arrow-schema ={ workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

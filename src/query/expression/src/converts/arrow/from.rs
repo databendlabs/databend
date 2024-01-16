@@ -75,7 +75,7 @@ impl DataBlock {
 
         let mut columns = Vec::with_capacity(batch.columns().len());
         for (array, field) in batch.columns().iter().zip(schema.fields()) {
-            columns.push(Column::from_arrow_rs(array.clone(), field.data_type())?)
+            columns.push(Column::from_arrow_rs(array.as_ref(), field.data_type())?)
         }
 
         Ok((DataBlock::new_from_columns(columns), schema.clone()))
@@ -83,7 +83,7 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
+    pub fn from_arrow_rs(array: &dyn arrow_array::Array, data_type: &DataType) -> Result<Self> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = array.into();
         Column::from_arrow(arrow2_array.as_ref(), data_type)
     }

@@ -142,7 +142,7 @@ impl BlockReader {
                     chunk_arrays.push(array);
                 }
                 DeserializedArray::Cached(sized_column) => {
-                    chunk_arrays.push(&sized_column.0);
+                    chunk_arrays.push(&sized_column.0.as_array2());
                 }
             }
         }

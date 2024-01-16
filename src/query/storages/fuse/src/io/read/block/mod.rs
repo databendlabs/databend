@@ -21,6 +21,7 @@ mod block_reader_native;
 mod block_reader_native_deserialize;
 mod block_reader_parquet_deserialize;
 mod decompressor;
+mod parquet_rs;
 
 pub use block_reader::BlockReader;
 pub use block_reader_deserialize::DeserializedArray;

@@ -196,7 +196,7 @@ arrow-ord = { version = "47.0.0" }
 arrow-schema = { version = "47.0.0", features = ["serde"] }
 arrow-select = { version = "47.0.0" }
 parquet = { version = "47.0.0", features = ["async"] }
-parquet_rs = { package = "parquet", version = "47.0.0" }
+parquet_rs = { package = "parquet", version = "47.0.0", features = ["experimental"] }
 
 # Serialization
 prost = { version = "0.12.1" }
