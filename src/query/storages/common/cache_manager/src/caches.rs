@@ -59,28 +59,10 @@ pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatisti
 pub type ColumnArrayCache =
     NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
 pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (ArrayWrapper, ArrayRawDataUncompressedSize);
-
-pub enum ArrayWrapper {
-    Array2(Box<dyn databend_common_arrow::arrow::array::Array>),
-    ArrayRS(Box<dyn arrow::array::Array>),
-}
-
-impl ArrayWrapper {
-    pub fn as_array2(&self) -> &Box<dyn databend_common_arrow::arrow::array::Array> {
-        match self {
-            ArrayWrapper::Array2(array) => array,
-            ArrayWrapper::ArrayRS(_) => panic!("ArrayWrapper is ArrayRS"),
-        }
-    }
-
-    pub fn as_array_rs(&self) -> &Box<dyn arrow::array::Array> {
-        match self {
-            ArrayWrapper::Array2(_) => panic!("ArrayWrapper is Array2"),
-            ArrayWrapper::ArrayRS(array) => array,
-        }
-    }
-}
+pub type SizedColumnArray = (
+    Box<dyn databend_common_arrow::arrow::array::Array>,
+    ArrayRawDataUncompressedSize,
+);
 
 // Bind Type of cached objects to Caches
 //

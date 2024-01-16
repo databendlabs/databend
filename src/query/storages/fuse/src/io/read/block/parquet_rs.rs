@@ -21,6 +21,9 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_common_hashtable::HashMap;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet_rs::arrow::arrow_reader::RowGroups;
@@ -43,6 +46,7 @@ impl BlockReader {
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: Compression,
+        block_path: &str,
     ) -> databend_common_exception::Result<DataBlock> {
         // 1. Filter fields that need to be deserialized, use these fields to create a parquet schema
         let projected_table_schema = self.projected_schema.clone();
@@ -73,13 +77,15 @@ impl BlockReader {
                 }
             })
             .collect::<Vec<_>>();
-        let column_metas = column_ids
+        let reordered_column_metas = column_ids
             .iter()
             .map(|id| column_metas.get(id).unwrap().as_parquet().unwrap().clone())
             .collect::<Vec<_>>();
         // 3. Create RowGroupImpl, which is an adapter between parquet-rs and Fuse engine
         let mut column_chunk_metadatas = Vec::with_capacity(column_ids.len());
-        for (column_meta, column_descr) in column_metas.iter().zip(parquet_schema.columns()) {
+        for (column_meta, column_descr) in
+            reordered_column_metas.iter().zip(parquet_schema.columns())
+        {
             let column_chunk_metadata = ColumnChunkMetaData::builder(column_descr.clone())
                 .set_compression(compression)
                 .set_data_page_offset(0)
@@ -104,22 +110,33 @@ impl BlockReader {
         )?;
         let record = record_reader.next().unwrap()?;
         assert!(record_reader.next().is_none());
-        // 5. convert to DataBlock
+        // 5. convert to DataBlock, and put the deserialized array into the cache if necessary
         let mut new_deserialized_arrays = record.columns().iter();
         let mut all_arrays = Vec::with_capacity(projected_table_schema.fields().len());
         for field in projected_table_schema.fields().iter() {
             let data_item = column_chunks.get(&field.column_id).unwrap();
             match data_item {
-                DataItem::RawData(_) => {
-                    let array = new_deserialized_arrays.next().unwrap().as_ref();
-                    all_arrays.push(array.clone());
+                DataItem::RawData(raw_data) => {
+                    let array = new_deserialized_arrays.next().unwrap();
+                    let arrow2_array =
+                        <Box<dyn databend_common_arrow::arrow::array::Array>>::from(array.clone());
+                    all_arrays.push(arrow2_array.clone());
+                    if self.put_cache {
+                        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+                            let meta = column_metas.get(&field.column_id).unwrap();
+                            let (offset, len) = meta.offset_length();
+                            let key =
+                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
+                            cache.put(key.into(), Arc::new((arrow2_array, raw_data.len())));
+                        }
+                    }
                 }
-                DataItem::ColumnArray(array) => all_arrays.push(array.0.as_array_rs().as_ref()),
+                DataItem::ColumnArray(array) => all_arrays.push(array.0.clone()),
             }
         }
         let mut columns = Vec::with_capacity(all_arrays.len());
         for (array, field) in all_arrays.iter().zip(self.data_fields()) {
-            columns.push(Column::from_arrow_rs(array, field.data_type())?)
+            columns.push(Column::from_arrow(array.as_ref(), field.data_type())?)
         }
         let data_block = DataBlock::new_from_columns(columns);
         Ok(data_block)
