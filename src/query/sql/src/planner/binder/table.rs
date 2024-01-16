@@ -1063,7 +1063,7 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(&mut self, table_name: &str, cte_info: &CteInfo) -> Result<SExpr> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
@@ -1083,6 +1083,10 @@ impl Binder {
                 fields,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
+                name: format!(
+                    "{:?}-{:?}-{:?}",
+                    table_name, cte_info.cte_idx, cte_info.used_count
+                ),
                 stat: cte_info.stat_info.clone().unwrap(),
             }
             .into(),
@@ -1129,13 +1133,22 @@ impl Binder {
                 }
             }
         }
-        let alias_table_name = alias
+        let mut alias_table_name = alias
             .as_ref()
             .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| table_name.to_string());
+        if cte_info.materialized {
+            alias_table_name = format!(
+                "{:?}-{:?}-{:?}",
+                alias_table_name,
+                cte_info.cte_idx,
+                cte_info.used_count + 1
+            );
+        }
         for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(alias_table_name.clone());
+            column.table_index = None;
         }
 
         if cols_alias.len() > res_bind_context.columns.len() {
@@ -1187,7 +1200,12 @@ impl Binder {
                 .unwrap_or_else(|| table_name.to_string());
             for column in bound_ctx.columns.iter_mut() {
                 column.database_name = None;
-                column.table_name = Some(alias_table_name.clone());
+                column.table_name = Some(format!(
+                    "{:?}-{:?}-{:?}",
+                    alias_table_name,
+                    cte_info.cte_idx,
+                    cte_info.used_count + 1
+                ));
             }
             // Pass parent to bound_ctx
             bound_ctx.parent = bind_context.parent.clone();
@@ -1201,7 +1219,7 @@ impl Binder {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        let s_expr = self.bind_cte_scan(&cte_info)?;
+        let s_expr = self.bind_cte_scan(table_name, &cte_info)?;
         Ok((s_expr, new_bind_context))
     }
 
