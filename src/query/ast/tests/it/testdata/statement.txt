@@ -2506,6 +2506,7 @@ CreateStream(
                 },
             },
         ),
+        append_only: true,
         comment: Some(
             "this is a stream",
         ),

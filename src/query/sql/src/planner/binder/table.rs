@@ -359,9 +359,9 @@ impl Binder {
                         format!(
                             "select *, 'INSERT' as change$action, false as change$is_update, \
                             if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
-                            lpad(hex(_origin_block_row_num), 6, '0')), _base_row_id) as change$row_id \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_append._base_row_id) as change$row_id \
                             from {} as _change_append where not(is_not_null(_origin_version) and \
-                            (contains(_base_block_ids, _origin_block_id) or _origin_version < {}))",
+                            (contains(_change_append._base_block_ids, _origin_block_id) or _origin_version < {}))",
                             table_name, table_version
                         )
                     }
@@ -391,13 +391,13 @@ impl Binder {
                         format!(
                             "with _change as (select * from \
                             (select {}, _row_version, 'INSERT' as change$action, \
-                            if(is_not_null(_change_insert._origin_block_id), concat(to_uuid(_change_insert._origin_block_id), \
-                            lpad(hex(_change_insert._origin_block_row_num), 6, '0')), _change_insert._base_row_id) as change$row_id \
+                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_insert._base_row_id) as change$row_id \
                             from {} as _change_insert) as A \
                             FULL OUTER JOIN \
                             (select {}, _row_version, 'DELETE' as d_change$action, \
-                            if(is_not_null(_change_delete._origin_block_id), concat(to_uuid(_change_delete._origin_block_id), \
-                            lpad(hex(_change_delete._origin_block_row_num), 6, '0')), _change_delete._base_row_id) as d_change$row_id \
+                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_delete._base_row_id) as d_change$row_id \
                             from {} as _change_delete) as D \
                             ON A.change$row_id = D.d_change$row_id \
                             where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version) \

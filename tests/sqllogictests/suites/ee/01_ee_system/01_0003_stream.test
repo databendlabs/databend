@@ -46,7 +46,7 @@ statement error 1025
 create stream s1 on table t1
 
 statement ok
-create stream s1 on table t
+create stream s1 on table t append_only = true
 
 statement ok
 insert into t values(3)
@@ -61,11 +61,11 @@ select * from t
 2
 3
 
-query I
-select * from s
+query ITB
+select a, change$action, change$is_update from s
 ----
-2
-3
+2 INSERT 0
+3 INSERT 0
 
 query ITB
 select a, change$action, change$is_update from s1
@@ -75,27 +75,27 @@ select a, change$action, change$is_update from s1
 statement ok
 create stream s2 on table t at (stream => s) comment='this is a stream'
 
-query I
-select * from s2
+query ITB
+select a, change$action, change$is_update from s2
 ----
-2
-3
+2 INSERT 0
+3 INSERT 0
 
 statement ok
 create table t1(a int)
 
 statement ok
-insert into t1 select * from s
+insert into t1 select a from s
 
 query I
-select * from s
+select a from s
 ----
 
 statement ok
 insert into t values(4)
 
 statement ok
-replace into t1 on(a) select * from s
+replace into t1 on(a) select a from s
 
 query I
 select * from t1 order by a
@@ -108,7 +108,7 @@ statement ok
 set enable_experimental_merge_into = 1
 
 statement ok
-merge into t1 using (select * from s1) as t2 on t1.a = t2.a when matched then delete
+merge into t1 using (select a from s1) as t2 on t1.a = t2.a when matched then delete
 
 query I
 select * from t1
@@ -116,15 +116,15 @@ select * from t1
 2
 
 query I
-select * from s1
+select a from s1
 ----
 
-query I
-select * from s2 order by a
+query ITB
+select a, change$action, change$is_update from s2 order by a
 ----
-2
-3
-4
+2 INSERT 0
+3 INSERT 0
+4 INSERT 0
 
 statement ok
 create table t2(a int)
@@ -143,11 +143,11 @@ t2 CREATE TABLE `t2` (   `a` INT NULL ) ENGINE=FUSE CHANGE_TRACKING='true' COMPR
 statement ok
 insert into t2 values(3),(4)
 
-query I
-select * from s3
+query ITB
+select a, change$action, change$is_update from s3
 ----
-3
-4
+3 INSERT 0
+4 INSERT 0
 
 statement ok
 insert into t1 select s2.a from s2 join s3 on s2.a = s3.a
@@ -160,11 +160,11 @@ select * from t1 order by a
 4
 
 query I
-select * from s2
+select a from s2
 ----
 
 query I
-select * from s3
+select a from s3
 ----
 
 statement ok
@@ -228,26 +228,26 @@ drop stream s2
 ###############
 
 statement ok
-create table t_14062 (c int);
+create table t_14062 (c int)
 
 statement ok
-create stream s_14062 on table t_14062 ;
+create stream s_14062 on table t_14062
 
 statement ok
-insert into t_14062 values(1);
+insert into t_14062 values(1)
 
-query T
-select * from s_14062 where change$action = 'INSERT';
+query I
+select c from s_14062 where change$action = 'INSERT'
 ----
 1
 
-query T
-select * from s_14062 where change$is_update = false;
+query I
+select c from s_14062 where change$is_update = false
 ----
 1
 
-query T
-select * from s_14062 where change$row_id = '1';
+query I
+select c from s_14062 where change$row_id = '1'
 ----
 
 statement ok
@@ -265,18 +265,18 @@ drop table t_14062 all
 ###############
 
 statement ok
-create table t_14099 (a int, b int);
+create table t_14099 (a int, b int)
 
 statement ok
-create stream s_14099 on table t_14099 ;
+create stream s_14099 on table t_14099
 
 statement ok
-insert into t_14099 values(1, 1), (2, 2);
+insert into t_14099 values(1, 1), (2, 2)
 
-query T
-select * from s_14099 where a>1 limit 1;
+query IITB
+select a, b, change$action, change$is_update from s_14099 where a>1 limit 1
 ----
-2 2
+2 2 INSERT 0
 
 statement ok
 drop table t_14099 all
