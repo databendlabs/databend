@@ -143,8 +143,8 @@ impl InferFilterOptimizer {
         }
         if !self.is_falsy {
             // `derive_predicates` may change is_falsy to true.
-            let infered_predicates = self.derive_predicates();
-            new_predicates.extend(infered_predicates);
+            let derived_predicates = self.derive_predicates();
+            new_predicates.extend(derived_predicates);
         }
         if self.is_falsy {
             new_predicates = vec![
