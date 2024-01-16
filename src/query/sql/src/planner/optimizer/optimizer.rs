@@ -29,6 +29,7 @@ use super::Memo;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
+use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::util::contains_local_table_scan;
@@ -219,6 +220,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     if s_expr.contain_subquery() {
         s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
     }
+
+    // Pull up and infer filter.
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
 
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;

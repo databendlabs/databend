@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -26,66 +25,15 @@ use crate::optimizer::rule::constant::check_float_range;
 use crate::optimizer::rule::constant::check_int_range;
 use crate::optimizer::rule::constant::check_uint_range;
 use crate::optimizer::rule::constant::remove_trivial_type_cast;
-use crate::optimizer::rule::Rule;
-use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::PatternPlan;
-use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
-// The rule tries to infer new predicates from existing predicates, for example:
-// 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
-// 2. [A = 10 and A = B] => [B = 10]
-// TODO(Dousir9): [A = B and A = C] => [B = C]
-pub struct RuleInferFilter {
-    id: RuleID,
-    patterns: Vec<SExpr>,
-}
-
-impl RuleInferFilter {
-    pub fn new() -> Self {
-        Self {
-            id: RuleID::InferFilter,
-            // Filter
-            //  \
-            //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
-        }
-    }
-}
-
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
-pub struct Predicate {
+struct Predicate {
     op: ComparisonOp,
     constant: ConstantExpr,
-}
-
-pub struct PredicateSet {
-    exprs: Vec<ScalarExpr>,
-    num_exprs: usize,
-    expr_to_idx: HashMap<ScalarExpr, usize>,
-    equal_exprs: Vec<Vec<ScalarExpr>>,
-    predicates: Vec<Vec<Predicate>>,
-    is_merged: bool,
-    is_falsy: bool,
 }
 
 enum MergeResult {
@@ -95,63 +43,161 @@ enum MergeResult {
     None,
 }
 
-impl PredicateSet {
-    fn new() -> Self {
+pub struct InferFilterOptimizer {
+    exprs: Vec<ScalarExpr>,
+    expr_index: HashMap<ScalarExpr, usize>,
+    expr_equal_to: Vec<Vec<ScalarExpr>>,
+    predicates: Vec<Vec<Predicate>>,
+    is_falsy: bool,
+}
+
+impl InferFilterOptimizer {
+    pub fn new() -> Self {
         Self {
             exprs: vec![],
-            num_exprs: 0,
-            expr_to_idx: HashMap::new(),
-            equal_exprs: vec![],
+            expr_index: HashMap::new(),
+            expr_equal_to: vec![],
             predicates: vec![],
-            is_merged: false,
             is_falsy: false,
         }
+    }
+
+    pub fn run(mut self, mut predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+        for predicate in predicates.iter_mut() {
+            if let ScalarExpr::FunctionCall(func) = predicate {
+                if ComparisonOp::try_from_func_name(&func.func_name).is_some() {
+                    let (left, right) = remove_trivial_type_cast(
+                        func.arguments[0].clone(),
+                        func.arguments[1].clone(),
+                    );
+                    if left != func.arguments[0] {
+                        func.arguments[0] = left;
+                    }
+                    if right != func.arguments[1] {
+                        func.arguments[1] = right;
+                    }
+                }
+            }
+        }
+
+        let mut new_predicates = vec![];
+        for predicate in predicates.into_iter() {
+            if let ScalarExpr::FunctionCall(func) = &predicate {
+                if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
+                    match (
+                        func.arguments[0].is_column_ref(),
+                        func.arguments[1].is_column_ref(),
+                    ) {
+                        (true, true) => {
+                            if op == ComparisonOp::Equal {
+                                self.add_equal(&func.arguments[0], &func.arguments[1]);
+                            }
+                            new_predicates.push(predicate);
+                        }
+                        (true, false) => {
+                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
+                                let (is_adjusted, constant) = adjust_scalar(
+                                    constant.value.clone(),
+                                    func.arguments[0].data_type()?,
+                                );
+                                if is_adjusted {
+                                    self.add_predicate(&func.arguments[0], Predicate {
+                                        op,
+                                        constant,
+                                    });
+                                } else {
+                                    new_predicates.push(predicate);
+                                }
+                            } else {
+                                new_predicates.push(predicate);
+                            }
+                        }
+                        (false, true) => {
+                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[0] {
+                                let (is_adjusted, constant) = adjust_scalar(
+                                    constant.value.clone(),
+                                    func.arguments[1].data_type()?,
+                                );
+                                if is_adjusted {
+                                    self.add_predicate(&func.arguments[1], Predicate {
+                                        op: op.reverse(),
+                                        constant,
+                                    });
+                                } else {
+                                    new_predicates.push(predicate);
+                                }
+                            } else {
+                                new_predicates.push(predicate);
+                            }
+                        }
+                        (false, false) => {
+                            new_predicates.push(predicate);
+                        }
+                    }
+                } else {
+                    new_predicates.push(predicate);
+                }
+            } else {
+                new_predicates.push(predicate);
+            }
+        }
+        if !self.is_falsy {
+            // `derive_predicates` may change is_falsy to true.
+            let infered_predicates = self.derive_predicates();
+            new_predicates.extend(infered_predicates);
+        }
+        if self.is_falsy {
+            new_predicates = vec![
+                ConstantExpr {
+                    span: None,
+                    value: Scalar::Boolean(false),
+                }
+                .into(),
+            ];
+        }
+        Ok(new_predicates)
     }
 
     fn add_expr(
         &mut self,
         expr: &ScalarExpr,
         predicates: Vec<Predicate>,
-        equal_exprs: Vec<ScalarExpr>,
+        expr_equal_to: Vec<ScalarExpr>,
     ) {
+        self.expr_index.insert(expr.clone(), self.exprs.len());
         self.exprs.push(expr.clone());
-        self.expr_to_idx.insert(expr.clone(), self.num_exprs);
         self.predicates.push(predicates);
-        self.equal_exprs.push(equal_exprs);
-        self.num_exprs += 1;
+        self.expr_equal_to.push(expr_equal_to);
     }
 
     fn add_equal(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
-        match self.expr_to_idx.get(left) {
+        match self.expr_index.get(left) {
             Some(idx) => {
-                let equal_exprs = &mut self.equal_exprs[*idx];
-                equal_exprs.push(right.clone());
+                let expr_equal_to = &mut self.expr_equal_to[*idx];
+                expr_equal_to.push(right.clone());
             }
             None => self.add_expr(left, vec![], vec![right.clone()]),
         };
-        if self.expr_to_idx.get(right).is_none() {
+        if self.expr_index.get(right).is_none() {
             self.add_expr(right, vec![], vec![]);
         }
     }
 
     fn add_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
-        match self.expr_to_idx.get(left) {
+        match self.expr_index.get(left) {
             Some(idx) => {
                 let predicates = &mut self.predicates[*idx];
                 for predicate in predicates.iter_mut() {
                     match Self::merge(predicate, &right) {
                         MergeResult::None => {
                             self.is_falsy = true;
-                            self.is_merged = true;
                             return;
                         }
                         MergeResult::Left => {
-                            self.is_merged = true;
                             return;
                         }
                         MergeResult::Right => {
                             *predicate = right;
-                            self.is_merged = true;
                             return;
                         }
                         MergeResult::All => (),
@@ -323,17 +369,16 @@ impl PredicateSet {
         }
     }
 
-    fn derive_predicates(&mut self) -> (bool, Vec<ScalarExpr>) {
-        let mut is_updated = self.is_merged;
+    fn derive_predicates(&mut self) -> Vec<ScalarExpr> {
         let mut result = vec![];
-        let num_exprs = self.num_exprs;
+        let num_exprs = self.exprs.len();
         let mut parents = vec![0; num_exprs];
         for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
             *parent = i;
         }
-        for (left_idx, equal_exprs) in self.equal_exprs.iter().enumerate() {
-            for expr in equal_exprs.iter() {
-                let right_idx = self.expr_to_idx.get(expr).unwrap();
+        for (left_idx, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
+            for expr in expr_equal_to.iter() {
+                let right_idx = self.expr_index.get(expr).unwrap();
                 Self::union(&mut parents, left_idx, *right_idx);
             }
         }
@@ -354,17 +399,10 @@ impl PredicateSet {
         for predicates in self.predicates.iter_mut() {
             predicates.sort();
         }
-        for (scalar, idx) in self.expr_to_idx.iter() {
+        for (scalar, idx) in self.expr_index.iter() {
             let parent_idx = Self::find(&mut parents, *idx);
-            let old_predicates = &old_predicates_set[*idx];
             let parent_predicates = &self.predicates[parent_idx];
-            if old_predicates.len() != parent_predicates.len() {
-                is_updated = true;
-            }
-            for (i, predicate) in parent_predicates.iter().enumerate() {
-                if i < old_predicates.len() && &old_predicates[i] != predicate {
-                    is_updated = true;
-                }
+            for predicate in parent_predicates.iter() {
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
@@ -376,7 +414,7 @@ impl PredicateSet {
                 }));
             }
         }
-        (is_updated | self.is_falsy, result)
+        result
     }
 }
 
@@ -488,128 +526,4 @@ pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr
         span: None,
         value: scalar,
     })
-}
-
-impl Rule for RuleInferFilter {
-    fn id(&self) -> RuleID {
-        self.id
-    }
-
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut predicates = filter.predicates;
-        let mut new_predicates = vec![];
-        let mut is_rewritten = false;
-        let mut predicate_set = PredicateSet::new();
-        for predicate in predicates.iter_mut() {
-            if let ScalarExpr::FunctionCall(func) = predicate {
-                if ComparisonOp::try_from_func_name(&func.func_name).is_some() {
-                    let (left, right) = remove_trivial_type_cast(
-                        func.arguments[0].clone(),
-                        func.arguments[1].clone(),
-                    );
-                    if left != func.arguments[0] {
-                        is_rewritten = true;
-                        func.arguments[0] = left;
-                    }
-                    if right != func.arguments[1] {
-                        is_rewritten = true;
-                        func.arguments[1] = right;
-                    }
-                }
-            }
-        }
-        for predicate in predicates.into_iter() {
-            if let ScalarExpr::FunctionCall(func) = &predicate {
-                if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
-                    match (
-                        func.arguments[0].is_column_ref(),
-                        func.arguments[1].is_column_ref(),
-                    ) {
-                        (true, true) => {
-                            if op == ComparisonOp::Equal {
-                                predicate_set.add_equal(&func.arguments[0], &func.arguments[1]);
-                            }
-                            new_predicates.push(predicate);
-                        }
-                        (true, false) => {
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
-                                let (is_adjusted, constant) = adjust_scalar(
-                                    constant.value.clone(),
-                                    func.arguments[0].data_type()?,
-                                );
-                                if is_adjusted {
-                                    predicate_set.add_predicate(&func.arguments[0], Predicate {
-                                        op,
-                                        constant,
-                                    });
-                                } else {
-                                    new_predicates.push(predicate);
-                                }
-                            } else {
-                                new_predicates.push(predicate);
-                            }
-                        }
-                        (false, true) => {
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[0] {
-                                let (is_adjusted, constant) = adjust_scalar(
-                                    constant.value.clone(),
-                                    func.arguments[1].data_type()?,
-                                );
-                                if is_adjusted {
-                                    predicate_set.add_predicate(&func.arguments[1], Predicate {
-                                        op: op.reverse(),
-                                        constant,
-                                    });
-                                } else {
-                                    new_predicates.push(predicate);
-                                }
-                            } else {
-                                new_predicates.push(predicate);
-                            }
-                        }
-                        (false, false) => {
-                            new_predicates.push(predicate);
-                        }
-                    }
-                } else {
-                    new_predicates.push(predicate);
-                }
-            } else {
-                new_predicates.push(predicate);
-            }
-        }
-        is_rewritten |= predicate_set.is_merged;
-        if !predicate_set.is_falsy {
-            // `derive_predicates` may change is_falsy to true.
-            let (is_merged, infer_predicates) = predicate_set.derive_predicates();
-            is_rewritten |= is_merged;
-            new_predicates.extend(infer_predicates);
-        }
-        if predicate_set.is_falsy {
-            new_predicates = vec![
-                ConstantExpr {
-                    span: None,
-                    value: Scalar::Boolean(false),
-                }
-                .into(),
-            ];
-        }
-        if is_rewritten {
-            state.add_result(SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: new_predicates,
-                    }
-                    .into(),
-                ),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
-        }
-        Ok(())
-    }
-
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
-    }
 }

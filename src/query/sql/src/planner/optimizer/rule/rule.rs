@@ -31,7 +31,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateFilter,
         RuleID::EliminateSort,
         RuleID::MergeFilter,
-        RuleID::InferFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
@@ -81,7 +80,6 @@ pub enum RuleID {
     NormalizeAggregate,
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
-    InferFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
@@ -142,7 +140,6 @@ impl Display for RuleID {
             RuleID::NormalizeAggregate => write!(f, "NormalizeAggregate"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
-            RuleID::InferFilter => write!(f, "InferFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 

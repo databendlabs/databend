@@ -19,6 +19,7 @@ mod format;
 mod group;
 // mod heuristic;
 mod decorrelate;
+mod filter;
 mod hyper_dp;
 mod m_expr;
 mod memo;
