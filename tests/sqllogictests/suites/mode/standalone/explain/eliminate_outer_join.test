@@ -45,15 +45,15 @@ query T
 explain select * from t right join t t1 on t.a = t1.a
 ----
 HashJoin
-├── output columns: [t.a (#0), t1.a (#1)]
-├── join type: RIGHT OUTER
-├── build keys: [t1.a (#1)]
-├── probe keys: [t.a (#0)]
+├── output columns: [t1.a (#1), t.a (#0)]
+├── join type: LEFT OUTER
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
 ├── filters: []
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
-│   ├── output columns: [a (#1)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 10
 │   ├── read bytes: 74
 │   ├── partitions total: 1
@@ -63,7 +63,7 @@ HashJoin
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [a (#0)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
