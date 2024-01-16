@@ -57,6 +57,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -71,6 +72,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -89,6 +91,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }

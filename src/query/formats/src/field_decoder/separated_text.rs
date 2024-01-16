@@ -56,6 +56,7 @@ use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
+use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -91,6 +92,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: params.binary_format,
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -111,6 +113,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -131,6 +134,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -147,7 +151,12 @@ impl SeparatedTextDecoder {
                 *len += 1;
                 Ok(())
             }
-            ColumnBuilder::Binary(_c) => todo!("new string"),
+            ColumnBuilder::Binary(c) => {
+                let data = decode_binary(data, self.common_settings().binary_format)?;
+                c.data.extend_from_slice(&data);
+                c.commit_row();
+                Ok(())
+            }
             ColumnBuilder::String(c) => {
                 c.data.extend_from_slice(data);
                 c.commit_row();
@@ -174,7 +183,12 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
-            _ => unimplemented!(),
+            ColumnBuilder::EmptyArray { .. } => {
+                unreachable!("EmptyArray")
+            }
+            ColumnBuilder::EmptyMap { .. } => {
+                unreachable!("EmptyMap")
+            }
         }
     }
 

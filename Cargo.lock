@@ -2688,6 +2688,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "async-trait-fn",
+ "base64 0.21.0",
  "bstr 1.6.2",
  "chrono-tz",
  "databend-common-arrow",
