@@ -19,6 +19,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
 use databend_common_storages_share::save_share_spec;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -58,6 +59,7 @@ impl Interpreter for DropDatabaseInterpreter {
             };
 
             role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // actual drop database
