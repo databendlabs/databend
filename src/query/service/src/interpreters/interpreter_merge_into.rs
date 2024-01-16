@@ -163,11 +163,11 @@ impl MergeIntoInterpreter {
         // important flag:
         //      I. change join order: if true, target table as build side, if false, source as build side.
         //      II. distributed: this merge into is executed at a distributed stargety.
-        // 2.1 Left: there are macthed and not macthed, and change join order is false.
+        // 2.1 Left: there are macthed and not macthed, and change join order is true.
         // 2.2 Left Anti: change join order is true, but it's insert-only.
         // 2.3 Inner: this is matched only case.
-        //      2.3.1 change join order is true,
-        //      2.3.2 change join order is false.
+        //      2.3.1 change join order is true, target table as build side,it's matched-only.
+        //      2.3.2 change join order is false, source data as build side,it's matched-only.
         // 2.4 Right: change join order is false, there are macthed and not macthed
         // 2.5 Right Anti: change join order is false, but it's insert-only.
         // distributed execution stargeties:
@@ -175,6 +175,10 @@ impl MergeIntoInterpreter {
         // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
         // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
         // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
+
+        // for `target_build_optimization` we don't need to read rowId column. for now, there are two cases we don't read rowid:
+        // I. InsertOnly, the MergeIntoType is InsertOnly
+        // II. target build optimization for this pr. the MergeIntoType is MergeIntoType
         let mut target_build_optimization =
             matches!(self.plan.merge_type, MergeIntoType::FullOperation)
                 && !self.plan.columns_set.contains(&self.plan.row_id_index);
@@ -255,6 +259,8 @@ impl MergeIntoInterpreter {
             }
         }
 
+        // we use `merge_into_split_idx` to specify a column from target table to spilt a block
+        // from join into macthed part and unmacthed part.
         let mut merge_into_split_idx = DUMMY_COLUMN_INDEX;
         if matches!(merge_type, MergeIntoType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {

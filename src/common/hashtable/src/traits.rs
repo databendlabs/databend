@@ -13,9 +13,8 @@
 // limitations under the License.
 
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
-#![allow(unused_imports)]
+
 use std::hash::BuildHasher;
-use std::hash::Hasher;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -25,7 +24,6 @@ use ethnum::i256;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
-use crate::utils::Interval;
 use crate::RowPtr;
 
 /// # Safety
