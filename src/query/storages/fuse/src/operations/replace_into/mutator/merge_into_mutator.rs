@@ -786,8 +786,8 @@ mod tests {
             (
                 1,
                 range(
-                    Scalar::String("a".to_string().into_bytes()),
-                    Scalar::String("z".to_string().into_bytes()),
+                    Scalar::String("a".to_string()),
+                    Scalar::String("z".to_string()),
                 ),
             ),
             // range of xx_time [100, 200]
@@ -825,8 +825,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("y".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("y".to_string()),
             ),
             // for xx_time column, overlaps
             (
@@ -870,8 +870,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("b".to_string()),
             ),
             // for xx_time column, overlaps
             (

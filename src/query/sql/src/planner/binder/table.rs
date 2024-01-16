@@ -1496,8 +1496,7 @@ impl Binder {
 // copy from common-storages-fuse to avoid cyclic dependency.
 fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val.clone())
-            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        Scalar::String(val) => Ok(val.clone()),
         other => Err(ErrorCode::BadArguments(format!(
             "Expected a string value, but found a '{}'.",
             other

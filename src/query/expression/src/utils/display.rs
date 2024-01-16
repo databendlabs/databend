@@ -121,15 +121,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{:?}", v),
-                Err(_e) => {
-                    for c in *s {
-                        write!(f, "{c:02X}")?;
-                    }
-                    Ok(())
-                }
-            },
+            ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -212,15 +204,7 @@ impl<'a> Display for ScalarRef<'a> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "'{}'", v),
-                Err(_e) => {
-                    for c in *s {
-                        write!(f, "{c:02X}")?;
-                    }
-                    Ok(())
-                }
-            },
+            ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -955,14 +939,9 @@ impl Display for BooleanDomain {
 impl Display for StringDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(max) = &self.max {
-            write!(
-                f,
-                "{{{:?}..={:?}}}",
-                String::from_utf8_lossy(&self.min),
-                String::from_utf8_lossy(max)
-            )
+            write!(f, "{{{:?}..={:?}}}", &self.min, max)
         } else {
-            write!(f, "{{{:?}..}}", String::from_utf8_lossy(&self.min))
+            write!(f, "{{{:?}..}}", &self.min)
         }
     }
 }

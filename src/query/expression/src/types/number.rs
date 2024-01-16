@@ -168,6 +168,8 @@ impl<Num: Number> ValueType for NumberType<Num> {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         *col.get_unchecked(index)
     }
 
@@ -558,6 +560,8 @@ impl NumberColumn {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> NumberScalar {
+        debug_assert!(index < self.len());
+
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => NumberScalar::NUM_TYPE(*col.get_unchecked(index)),
         })

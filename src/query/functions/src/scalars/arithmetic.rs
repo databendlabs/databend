@@ -833,8 +833,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                         |_, _| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
                             move |val, output, ctx| {
-                                let str_val = String::from_utf8_lossy(val);
-                                match str_val.parse::<DEST_TYPE>() {
+                                match val.parse::<DEST_TYPE>() {
                                     Ok(new_val) => output.push(new_val),
                                     Err(e) => {
                                         ctx.set_error(output.len(), e.to_string());
@@ -854,8 +853,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                             StringType,
                             NullableType<NumberType<DEST_TYPE>>,
                         >(|val, output, _| {
-                            let str_val = String::from_utf8_lossy(val);
-                            if let Ok(new_val) = str_val.parse::<DEST_TYPE>() {
+                            if let Ok(new_val) = val.parse::<DEST_TYPE>() {
                                 output.push(new_val);
                             } else {
                                 output.push_null();
@@ -876,7 +874,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                         "to_string",
                         |_, _| FunctionDomain::Full,
                         |from, _| match from {
-                            ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
+                            ValueRef::Scalar(s) => Value::Scalar(s.to_string()),
                             ValueRef::Column(from) => {
                                 let options = NUM_TYPE::lexical_options();
                                 const FORMAT: u128 = lexical_core::format::STANDARD;
@@ -913,7 +911,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     "try_to_string",
                     |_, _| FunctionDomain::Full,
                     |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
+                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string())),
                         ValueRef::Column(from) => {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;

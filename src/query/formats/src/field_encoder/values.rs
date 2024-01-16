@@ -232,7 +232,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         self.write_string_inner(
-            unsafe { column.index_unchecked(row_index) },
+            unsafe { column.index_unchecked(row_index).as_bytes() },
             out_buf,
             in_nested,
         );

@@ -63,7 +63,7 @@ impl FieldEncoderJSON {
             }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.write_string(buf, out_buf);
+                self.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {

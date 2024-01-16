@@ -2620,8 +2620,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() >= 2 {
                     let box (arg, _) = self.resolve(args[1]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let sort_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(sort_order) = arg.value {
                             if sort_order.eq_ignore_ascii_case("asc") {
                                 asc = true;
                             } else if sort_order.eq_ignore_ascii_case("desc") {
@@ -2645,8 +2644,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() == 3 {
                     let box (arg, _) = self.resolve(args[2]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let nulls_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(nulls_order) = arg.value {
                             if nulls_order.eq_ignore_ascii_case("nulls first") {
                                 nulls_first = true;
                             } else if nulls_order.eq_ignore_ascii_case("nulls last") {
@@ -2685,8 +2683,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let box (arg, _) = self.resolve(args[1]).await.ok()?;
                 if let Ok(arg) = ConstantExpr::try_from(arg) {
-                    if let Scalar::String(arg) = arg.value {
-                        let aggr_func_name = unsafe { std::str::from_utf8_unchecked(&arg) };
+                    if let Scalar::String(aggr_func_name) = arg.value {
                         let func_name = format!("array_{}", aggr_func_name);
                         let args_ref: Vec<&Expr> = vec![args[0]];
                         return Some(
@@ -2754,7 +2751,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: databend_common_expression::Scalar::String(" ".as_bytes().to_vec()),
+                value: databend_common_expression::Scalar::String(" ".to_string()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -2782,7 +2779,7 @@ impl<'a> TypeChecker<'a> {
                 scale: *scale,
             })),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
-            Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
+            Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
         };
@@ -3092,7 +3089,7 @@ impl<'a> TypeChecker<'a> {
                 {
                     let key = ConstantExpr {
                         span,
-                        value: Scalar::String(field_name.clone().into_bytes()),
+                        value: Scalar::String(field_name.clone()),
                     }
                     .into();
 
@@ -3448,7 +3445,7 @@ impl<'a> TypeChecker<'a> {
         let keypaths_str = format!("{}", keypaths);
         let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
-            value: Scalar::String(keypaths_str.into_bytes()),
+            value: Scalar::String(keypaths_str),
         });
         let args = vec![scalar, path_scalar];
 

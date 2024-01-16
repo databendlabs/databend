@@ -29,7 +29,6 @@ use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
-use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -423,7 +422,6 @@ impl Column {
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
                     let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
-                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::LargeBinary) => {
@@ -437,7 +435,6 @@ impl Column {
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                     let column = StringColumn::new(arrow_col.values().clone(), offsets);
-                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::FixedSizeBinary(size)) => {
@@ -451,7 +448,6 @@ impl Column {
                         .map(|x| x * (*size) as u64)
                         .collect::<Vec<_>>();
                     let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
-                    column.check_utf8()?;
                     Column::String(column)
                 }
                 (DataType::String, ArrowDataType::Utf8) => {
@@ -467,10 +463,12 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::String(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    ))
+                    unsafe {
+                        Column::String(StringColumn::new_unchecked(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
+                    }
                 }
                 (DataType::String, ArrowDataType::LargeUtf8) => {
                     let arrow_col = arrow_col
@@ -482,7 +480,12 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                    unsafe {
+                        Column::String(StringColumn::new_unchecked(
+                            arrow_col.values().clone(),
+                            offsets,
+                        ))
+                    }
                 }
                 (DataType::Timestamp, ArrowDataType::Timestamp(uint, _)) => {
                     let values = arrow_col

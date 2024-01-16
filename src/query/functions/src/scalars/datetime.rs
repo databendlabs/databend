@@ -159,20 +159,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match (std::str::from_utf8(timestamp), std::str::from_utf8(format)) {
-                        (Ok(date), Ok(format)) => {
-                            // date need has timezone info.
-                            if let Ok(res) = DateTime::parse_from_str(date, format) {
-                                output.push(
-                                    res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros(),
-                                );
-                            } else {
-                                output.push_null();
-                            }
-                        }
-                        _ => {
-                            output.push_null();
-                        }
+                    // date need has timezone info.
+                    if let Ok(res) = DateTime::parse_from_str(timestamp, format) {
+                        output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
+                    } else {
+                        output.push_null();
                     }
                 }
             },
@@ -187,17 +178,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match (std::str::from_utf8(date), std::str::from_utf8(format)) {
-                        (Ok(date), Ok(format)) => match NaiveDate::parse_from_str(date, format) {
-                            Ok(res) => {
-                                output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
-                            }
-                            Err(e) => {
-                                ctx.set_error(output.len(), e.to_string());
-                                output.push_null();
-                            }
-                        },
-                        (Err(e), _) | (_, Err(e)) => {
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
+                        }
+                        Err(e) => {
                             ctx.set_error(output.len(), e.to_string());
                             output.push_null();
                         }
@@ -417,16 +402,8 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                     output.push_null();
                 } else {
                     let ts = date.to_timestamp(ctx.func_ctx.tz.tz);
-                    match std::str::from_utf8(format) {
-                        Ok(format) => {
-                            let res = ts.format(format).to_string();
-                            output.push(res.as_bytes());
-                        }
-                        Err(e) => {
-                            ctx.set_error(output.len(), e.to_string());
-                            output.push_null();
-                        }
-                    }
+                    let res = ts.format(format).to_string();
+                    output.push(&res);
                 }
             },
         ),
@@ -461,7 +438,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(StringDomain {
-                    min: vec![],
+                    min: "".to_string(),
                     max: None,
                 })),
             })
@@ -484,7 +461,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(StringDomain {
-                    min: vec![],
+                    min: "".to_string(),
                     max: None,
                 })),
             })

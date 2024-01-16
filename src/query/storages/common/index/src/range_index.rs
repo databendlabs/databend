@@ -221,11 +221,11 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                 DataType::String => Domain::String(StringDomain {
                     min: StringType::try_downcast_scalar(&stat.min().as_ref())
                         .unwrap()
-                        .to_vec(),
+                        .to_string(),
                     max: Some(
                         StringType::try_downcast_scalar(&stat.max().as_ref())
                             .unwrap()
-                            .to_vec()
+                            .to_string()
                     ),
                 }),
                 DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {

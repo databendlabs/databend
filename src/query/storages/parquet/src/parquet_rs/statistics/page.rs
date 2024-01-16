@@ -265,8 +265,8 @@ fn convert_page_index_byte_array(
     match (&index.min, &index.max, index.null_count) {
         (Some(min), Some(max), Some(null_count)) => {
             Some(ColumnStatistics {
-                min: Scalar::String(min.as_bytes().to_vec()),
-                max: Scalar::String(max.as_bytes().to_vec()),
+                min: Scalar::String(String::from_utf8(min.as_bytes().to_vec()).ok()?),
+                max: Scalar::String(String::from_utf8(max.as_bytes().to_vec()).ok()?),
                 null_count: null_count as u64,
                 in_memory_size: 0, // not needed,
                 distinct_of_values: None,

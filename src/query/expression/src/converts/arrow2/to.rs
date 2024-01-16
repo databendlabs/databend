@@ -301,11 +301,6 @@ impl Column {
                 )
             }
             Column::String(col) => {
-                // todo!("new string")
-                // always check utf8 until we can guarantee the correctness of data in string column
-                // #[cfg(debug_assertions)]
-                col.check_utf8().unwrap();
-
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
 

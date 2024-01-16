@@ -141,17 +141,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let data = match std::str::from_utf8(data) {
-                Ok(data) => data,
-                Err(_) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
-                    );
-                    output.push(vec![F32::from(0.0)].into());
-                    return;
-                }
-            };
             if ctx.func_ctx.openai_api_key.is_empty() {
                 ctx.set_error(output.len(), "openai_api_key is empty".to_string());
                 output.push(vec![F32::from(0.0)].into());
@@ -205,18 +194,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let data = match std::str::from_utf8(data) {
-                Ok(data) => data,
-                Err(_) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
-                    );
-                    output.put_str("");
-                    output.commit_row();
-                    return;
-                }
-            };
             if ctx.func_ctx.openai_api_key.is_empty() {
                 ctx.set_error(output.len(), "openai_api_key is empty".to_string());
                 output.put_str("");

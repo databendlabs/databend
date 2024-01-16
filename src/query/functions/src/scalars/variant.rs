@@ -100,1209 +100,1194 @@ use jsonb::type_of;
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("json_object_keys", &["object_keys"]);
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "parse_json",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
-            let val = to_string(s);
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-            }
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    //     "parse_json",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         // Variant value may be an invalid JSON, convert them to string and then parse.
+    //         let val = to_string(s);
+    //         match parse_value(val.as_bytes()) {
+    //             Ok(value) => {
+    //                 value.write_to_vec(&mut output.data);
+    //             }
+    //             Err(err) => {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //             }
+    //         }
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
-        "parse_json",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            match parse_value(s) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-            }
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
+    //     "parse_json",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         match parse_value(s.as_bytes()) {
+    //             Ok(value) => {
+    //                 value.write_to_vec(&mut output.data);
+    //             }
+    //             Err(err) => {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //             }
+    //         }
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "try_parse_json",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
-            let val = to_string(s);
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
-                    output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
-                    output.builder.commit_row();
-                }
-                Err(_) => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
+    //     "try_parse_json",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         // Variant value may be an invalid JSON, convert them to string and then parse.
+    //         let val = to_string(s);
+    //         match parse_value(val.as_bytes()) {
+    //             Ok(value) => {
+    //                 output.validity.push(true);
+    //                 value.write_to_vec(&mut output.builder.data);
+    //                 output.builder.commit_row();
+    //             }
+    //             Err(_) => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<StringType, VariantType, _, _>(
-        "try_parse_json",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match parse_value(s) {
-                Ok(value) => {
-                    output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
-                    output.builder.commit_row();
-                }
-                Err(_) => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<StringType, VariantType, _, _>(
+    //     "try_parse_json",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match parse_value(s.as_bytes()) {
+    //             Ok(value) => {
+    //                 output.validity.push(true);
+    //                 value.write_to_vec(&mut output.builder.data);
+    //                 output.builder.commit_row();
+    //             }
+    //             Err(_) => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
-        "check_json",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            // Variant value may be an invalid JSON, convert them to string and then check.
-            let val = to_string(s);
-            match parse_value(val.as_bytes()) {
-                Ok(_) => output.push_null(),
-                Err(e) => output.push(e.to_string().as_bytes()),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "check_json",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         // Variant value may be an invalid JSON, convert them to string and then check.
+    //         let val = to_string(s);
+    //         match parse_value(val.as_bytes()) {
+    //             Ok(_) => output.push_null(),
+    //             Err(e) => output.push(&e.to_string()),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<StringType, StringType, _, _>(
-        "check_json",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<StringType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match parse_value(s) {
-                Ok(_) => output.push_null(),
-                Err(e) => output.push(e.to_string().as_bytes()),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<StringType, StringType, _, _>(
+    //     "check_json",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<StringType, NullableType<StringType>>(|s, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match parse_value(s.as_bytes()) {
+    //             Ok(_) => output.push_null(),
+    //             Err(e) => output.push(&e.to_string()),
+    //         }
+    //     }),
+    // );
 
-    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
-        "length",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, _| {
-            val.and_then(|v| array_length(v).map(|v| v as u32))
-        }),
-    );
+    // registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
+    //     "length",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, _| {
+    //         val.and_then(|v| array_length(v).map(|v| v as u32))
+    //     }),
+    // );
 
-    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "json_object_keys",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
-            val.and_then(object_keys)
-        }),
-    );
+    // registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
+    //     "json_object_keys",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
+    //         val.and_then(object_keys)
+    //     }),
+    // );
 
-    registry.register_function_factory("get_by_keypath", |_, args_type| {
-        if args_type.len() != 2 {
-            return None;
-        }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "get_by_keypath".to_string(),
-                args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Variant)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
-            },
-        }))
-    });
+    // registry.register_function_factory("get_by_keypath", |_, args_type| {
+    //     if args_type.len() != 2 {
+    //         return None;
+    //     }
+    //     if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+    //         || (args_type[1].remove_nullable() != DataType::String
+    //             && args_type[1] != DataType::Null)
+    //     {
+    //         return None;
+    //     }
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "get_by_keypath".to_string(),
+    //             args_type: args_type.to_vec(),
+    //             return_type: DataType::Nullable(Box::new(DataType::Variant)),
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
+    //         },
+    //     }))
+    // });
 
-    registry.register_function_factory("get_by_keypath_string", |_, args_type| {
-        if args_type.len() != 2 {
-            return None;
-        }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "get_by_keypath_string".to_string(),
-                args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
-            },
-        }))
-    });
+    // registry.register_function_factory("get_by_keypath_string", |_, args_type| {
+    //     if args_type.len() != 2 {
+    //         return None;
+    //     }
+    //     if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+    //         || (args_type[1].remove_nullable() != DataType::String
+    //             && args_type[1] != DataType::Null)
+    //     {
+    //         return None;
+    //     }
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "get_by_keypath_string".to_string(),
+    //             args_type: args_type.to_vec(),
+    //             return_type: DataType::Nullable(Box::new(DataType::String)),
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
+    //         },
+    //     }))
+    // });
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
-        "get",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name(val, name, false) {
-                        Some(v) => {
-                            output.push(&v);
-                        }
-                        None => {
-                            output.push_null();
-                        }
-                    },
-                    Err(err) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!(
-                                "Unable convert name '{}' to string: {}",
-                                &String::from_utf8_lossy(name),
-                                err
-                            ),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    //     "get",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
+    //         |val, name, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match std::str::from_utf8(name) {
+    //                 Ok(name) => match get_by_name(val, name, false) {
+    //                     Some(v) => {
+    //                         output.push(&v);
+    //                     }
+    //                     None => {
+    //                         output.push_null();
+    //                     }
+    //                 },
+    //                 Err(err) => {
+    //                     ctx.set_error(
+    //                         output.len(),
+    //                         format!(
+    //                             "Unable convert name '{name}' to string: {err}",
+    //                         ),
+    //                     );
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
-        "get",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<VariantType>>(
-            |val, idx, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                if idx < 0 || idx > i32::MAX.into() {
-                    output.push_null();
-                } else {
-                    match get_by_index(val, idx as usize) {
-                        Some(v) => {
-                            output.push(&v);
-                        }
-                        None => {
-                            output.push_null();
-                        }
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
+    //     "get",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<VariantType>>(
+    //         |val, idx, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             if idx < 0 || idx > i32::MAX.into() {
+    //                 output.push_null();
+    //             } else {
+    //                 match get_by_index(val, idx as usize) {
+    //                     Some(v) => {
+    //                         output.push(&v);
+    //                     }
+    //                     None => {
+    //                         output.push_null();
+    //                     }
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
-        "get_ignore_case",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name(val, name, true) {
-                        Some(v) => output.push(&v),
-                        None => output.push_null(),
-                    },
-                    Err(err) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!(
-                                "Unable convert name '{}' to string: {}",
-                                &String::from_utf8_lossy(name),
-                                err
-                            ),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    //     "get_ignore_case",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
+    //         |val, name, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match std::str::from_utf8(name) {
+    //                 Ok(name) => match get_by_name(val, name, true) {
+    //                     Some(v) => output.push(&v),
+    //                     None => output.push_null(),
+    //                 },
+    //                 Err(err) => {
+    //                     ctx.set_error(
+    //                         output.len(),
+    //                         format!(
+    //                             "Unable convert name '{}' to string: {}",
+    //                             &String::from_utf8_lossy(name),
+    //                             err
+    //                         ),
+    //                     );
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, StringType, _, _>(
-        "get_string",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
-            |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name(val, name, false) {
-                        Some(v) => {
-                            output.push(to_string(&v).as_bytes());
-                        }
-                        None => output.push_null(),
-                    },
-                    Err(err) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!(
-                                "Unable convert name '{}' to string: {}",
-                                &String::from_utf8_lossy(name),
-                                err
-                            ),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, StringType, _, _>(
+    //     "get_string",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
+    //         |val, name, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match get_by_name(val, name, false) {
+    //                     Some(v) => {
+    //                         output.push(&to_string(&v));
+    //                     }
+    //                     None => output.push_null(),
+    //                 }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, Int64Type, StringType, _, _>(
-        "get_string",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<StringType>>(
-            |val, idx, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                if idx < 0 || idx > i32::MAX.into() {
-                    output.push_null();
-                } else {
-                    match get_by_index(val, idx as usize) {
-                        Some(v) => {
-                            output.push(to_string(&v).as_bytes());
-                        }
-                        None => {
-                            output.push_null();
-                        }
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, Int64Type, StringType, _, _>(
+    //     "get_string",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<StringType>>(
+    //         |val, idx, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             if idx < 0 || idx > i32::MAX.into() {
+    //                 output.push_null();
+    //             } else {
+    //                 match get_by_index(val, idx as usize) {
+    //                     Some(v) => {
+    //                         output.push(&to_string(&v));
+    //                     }
+    //                     None => {
+    //                         output.push_null();
+    //                     }
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
-        "json_path_query_array",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |val, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match parse_json_path(path) {
-                    Ok(json_path) => {
-                        get_by_path_array(
-                            val,
-                            json_path,
-                            &mut output.builder.data,
-                            &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
-                        }
-                    }
-                    Err(_) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    //     "json_path_query_array",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
+    //         |val, path, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match parse_json_path(path) {
+    //                 Ok(json_path) => {
+    //                     get_by_path_array(
+    //                         val,
+    //                         json_path,
+    //                         &mut output.builder.data,
+    //                         &mut output.builder.offsets,
+    //                     );
+    //                     if output.builder.offsets.len() == output.len() + 1 {
+    //                         output.push_null();
+    //                     } else {
+    //                         output.validity.push(true);
+    //                     }
+    //                 }
+    //                 Err(_) => {
+    //                     ctx.set_error(
+    //                         output.len(),
+    //                         format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
+    //                     );
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
-        "json_path_query_first",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |val, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match parse_json_path(path) {
-                    Ok(json_path) => {
-                        get_by_path_first(
-                            val,
-                            json_path,
-                            &mut output.builder.data,
-                            &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
-                        }
-                    }
-                    Err(_) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    //     "json_path_query_first",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
+    //         |val, path, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match parse_json_path(path) {
+    //                 Ok(json_path) => {
+    //                     get_by_path_first(
+    //                         val,
+    //                         json_path,
+    //                         &mut output.builder.data,
+    //                         &mut output.builder.offsets,
+    //                     );
+    //                     if output.builder.offsets.len() == output.len() + 1 {
+    //                         output.push_null();
+    //                     } else {
+    //                         output.validity.push(true);
+    //                     }
+    //                 }
+    //                 Err(_) => {
+    //                     ctx.set_error(
+    //                         output.len(),
+    //                         format!("Invalid JSON Path '{path}'"),
+    //                     );
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_function_factory("json_path_match", |_, args_type| {
-        if args_type.len() != 2 {
-            return None;
-        }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "json_path_match".to_string(),
-                args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, path_match)),
-            },
-        }))
-    });
+    // registry.register_function_factory("json_path_match", |_, args_type| {
+    //     if args_type.len() != 2 {
+    //         return None;
+    //     }
+    //     if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+    //         || (args_type[1].remove_nullable() != DataType::String
+    //             && args_type[1] != DataType::Null)
+    //     {
+    //         return None;
+    //     }
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "json_path_match".to_string(),
+    //             args_type: args_type.to_vec(),
+    //             return_type: DataType::Nullable(Box::new(DataType::Boolean)),
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, path_match)),
+    //         },
+    //     }))
+    // });
 
-    registry.register_function_factory("json_path_exists", |_, args_type| {
-        if args_type.len() != 2 {
-            return None;
-        }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "json_path_exists".to_string(),
-                args_type: args_type.to_vec(),
-                return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, ctx| {
-                    path_predicate_fn(args, ctx, |json, path| Ok(path_exists(json, path)))
-                }),
-            },
-        }))
-    });
+    // registry.register_function_factory("json_path_exists", |_, args_type| {
+    //     if args_type.len() != 2 {
+    //         return None;
+    //     }
+    //     if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+    //         || (args_type[1].remove_nullable() != DataType::String
+    //             && args_type[1] != DataType::Null)
+    //     {
+    //         return None;
+    //     }
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "json_path_exists".to_string(),
+    //             args_type: args_type.to_vec(),
+    //             return_type: DataType::Nullable(Box::new(DataType::Boolean)),
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::Full),
+    //             eval: Box::new(|args, ctx| {
+    //                 path_predicate_fn(args, ctx, |json, path| Ok(path_exists(json, path)))
+    //             }),
+    //         },
+    //     }))
+    // });
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
-        "get_path",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |val, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match parse_json_path(path) {
-                    Ok(json_path) => {
-                        get_by_path(
-                            val,
-                            json_path,
-                            &mut output.builder.data,
-                            &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
-                        }
-                    }
-                    Err(_) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
-                        );
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    //     "get_path",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
+    //         |val, path, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match parse_json_path(path) {
+    //                 Ok(json_path) => {
+    //                     get_by_path(
+    //                         val,
+    //                         json_path,
+    //                         &mut output.builder.data,
+    //                         &mut output.builder.offsets,
+    //                     );
+    //                     if output.builder.offsets.len() == output.len() + 1 {
+    //                         output.push_null();
+    //                     } else {
+    //                         output.validity.push(true);
+    //                     }
+    //                 }
+    //                 Err(_) => {
+    //                     ctx.set_error(
+    //                         output.len(),
+    //                         format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
+    //                     );
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
-        "json_extract_path_text",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<StringType, StringType, NullableType<StringType>>(
-            |s, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match parse_value(s) {
-                    Ok(val) => {
-                        let mut buf = Vec::new();
-                        val.write_to_vec(&mut buf);
-                        match parse_json_path(path) {
-                            Ok(json_path) => {
-                                let mut out_buf = Vec::new();
-                                let mut out_offsets = Vec::new();
-                                get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
-                                if out_offsets.is_empty() {
-                                    output.push_null();
-                                } else {
-                                    let json_str = to_string(&out_buf);
-                                    output.builder.put(json_str.as_bytes());
-                                    output.builder.commit_row();
-                                    output.validity.push(true);
-                                }
-                            }
-                            Err(_) => {
-                                ctx.set_error(
-                                    output.len(),
-                                    format!(
-                                        "Invalid JSON Path '{}'",
-                                        &String::from_utf8_lossy(path),
-                                    ),
-                                );
-                                output.push_null();
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push_null();
-                    }
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+    //     "json_extract_path_text",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<StringType, StringType, NullableType<StringType>>(
+    //         |s, path, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match parse_value(s.as_bytes()) {
+    //                 Ok(val) => {
+    //                     let mut buf = Vec::new();
+    //                     val.write_to_vec(&mut buf);
+    //                     match parse_json_path(path) {
+    //                         Ok(json_path) => {
+    //                             let mut out_buf = Vec::new();
+    //                             let mut out_offsets = Vec::new();
+    //                             get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
+    //                             if out_offsets.is_empty() {
+    //                                 output.push_null();
+    //                             } else {
+    //                                 let json_str = to_string(&out_buf);
+    //                                 output.builder.put(json_str);
+    //                                 output.builder.commit_row();
+    //                                 output.validity.push(true);
+    //                             }
+    //                         }
+    //                         Err(_) => {
+    //                             ctx.set_error(
+    //                                 output.len(),
+    //                                 format!(
+    //                                     "Invalid JSON Path '{}'",
+    //                                     &String::from_utf8_lossy(path),
+    //                                 ),
+    //                             );
+    //                             output.push_null();
+    //                         }
+    //                     }
+    //                 }
+    //                 Err(err) => {
+    //                     ctx.set_error(output.len(), err.to_string());
+    //                     output.push_null();
+    //                 }
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
-        "as_boolean",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match as_bool(v) {
-                Some(val) => output.push(val),
-                None => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    //     "as_boolean",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match as_bool(v) {
+    //             Some(val) => output.push(val),
+    //             None => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, Int64Type, _, _>(
-        "as_integer",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match as_i64(v) {
-                Some(val) => output.push(val),
-                None => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, Int64Type, _, _>(
+    //     "as_integer",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match as_i64(v) {
+    //             Some(val) => output.push(val),
+    //             None => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, Float64Type, _, _>(
-        "as_float",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match as_f64(v) {
-                Some(val) => output.push(val.into()),
-                None => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, Float64Type, _, _>(
+    //     "as_float",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match as_f64(v) {
+    //             Some(val) => output.push(val.into()),
+    //             None => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
-        "as_string",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match as_str(v) {
-                Some(val) => output.push(val.as_bytes()),
-                None => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "as_string",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match as_str(v) {
+    //             Some(val) => output.push(val.as_bytes()),
+    //             None => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "as_array",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            if is_array(v) {
-                output.push(v.as_bytes());
-            } else {
-                output.push_null()
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
+    //     "as_array",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         if is_array(v) {
+    //             output.push(v.as_bytes());
+    //         } else {
+    //             output.push_null()
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "as_object",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            if is_object(v) {
-                output.push(v.as_bytes());
-            } else {
-                output.push_null()
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
+    //     "as_object",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         if is_object(v) {
+    //             output.push(v.as_bytes());
+    //         } else {
+    //             output.push_null()
+    //         }
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
-        "to_variant",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(buf)
-            }
-            ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
-                Value::Column(new_col)
-            }
-        },
-    );
+    // registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
+    //     "to_variant",
+    //     |_, _| FunctionDomain::Full,
+    //     |val, ctx| match val {
+    //         ValueRef::Scalar(scalar) => {
+    //             let mut buf = Vec::new();
+    //             cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+    //             Value::Scalar(buf)
+    //         }
+    //         ValueRef::Column(col) => {
+    //             let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+    //             Value::Column(new_col)
+    //         }
+    //     },
+    // );
 
-    registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
-        "try_to_variant",
-        |_, _| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(())),
-            })
-        },
-        |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(Some(buf))
-            }
-            ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
-                Value::Column(NullableColumn {
-                    validity: Bitmap::new_constant(true, new_col.len()),
-                    column: new_col,
-                })
-            }
-        },
-    );
+    // registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
+    //     "try_to_variant",
+    //     |_, _| {
+    //         FunctionDomain::Domain(NullableDomain {
+    //             has_null: false,
+    //             value: Some(Box::new(())),
+    //         })
+    //     },
+    //     |val, ctx| match val {
+    //         ValueRef::Scalar(scalar) => {
+    //             let mut buf = Vec::new();
+    //             cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+    //             Value::Scalar(Some(buf))
+    //         }
+    //         ValueRef::Column(col) => {
+    //             let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+    //             Value::Column(NullableColumn {
+    //                 validity: Bitmap::new_constant(true, new_col.len()),
+    //                 column: new_col,
+    //             })
+    //         }
+    //     },
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
-        "to_boolean",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
-            }
-            match to_bool(val) {
-                Ok(value) => output.push(value),
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                    output.push(false);
-                }
-            }
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    //     "to_boolean",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push(false);
+    //                 return;
+    //             }
+    //         }
+    //         match to_bool(val) {
+    //             Ok(value) => output.push(value),
+    //             Err(err) => {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //                 output.push(false);
+    //             }
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
-        "try_to_boolean",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(
-            |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match to_bool(val) {
-                    Ok(value) => {
-                        output.push(value);
-                    }
-                    Err(_) => output.push_null(),
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    //     "try_to_boolean",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(
+    //         |val, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match to_bool(val) {
+    //                 Ok(value) => {
+    //                     output.push(value);
+    //                 }
+    //                 Err(_) => output.push_null(),
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
-        "to_string",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            match to_str(val) {
-                Ok(value) => output.put_slice(value.as_bytes()),
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-            }
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "to_string",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         match to_str(val) {
+    //             Ok(value) => output.put_slice(value.as_bytes()),
+    //             Err(err) => {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //             }
+    //         }
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
-        "try_to_string",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
-            |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match to_str(val) {
-                    Ok(value) => {
-                        output.validity.push(true);
-                        output.builder.put_slice(value.as_bytes());
-                        output.builder.commit_row();
-                    }
-                    Err(_) => output.push_null(),
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "try_to_string",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
+    //         |val, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match to_str(val) {
+    //                 Ok(value) => {
+    //                     output.validity.push(true);
+    //                     output.builder.put_slice(value.as_bytes());
+    //                     output.builder.commit_row();
+    //                 }
+    //                 Err(_) => output.push_null(),
+    //             }
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, DateType, _, _>(
-        "to_date",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(0);
-                    return;
-                }
-            }
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz)) {
-                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
-                None => {
-                    ctx.set_error(output.len(), "unable to cast to type `DATE`");
-                    output.push(0);
-                }
-            }
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, DateType, _, _>(
+    //     "to_date",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push(0);
+    //                 return;
+    //             }
+    //         }
+    //         match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz)) {
+    //             Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+    //             None => {
+    //                 ctx.set_error(output.len(), "unable to cast to type `DATE`");
+    //                 output.push(0);
+    //             }
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
-        "try_to_date",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
-            }
-            match as_str(val)
-                .and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
-                None => output.push_null(),
-            }
-        }),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
+    //     "try_to_date",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push_null();
+    //                 return;
+    //             }
+    //         }
+    //         match as_str(val)
+    //             .and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.func_ctx.tz.tz))
+    //         {
+    //             Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+    //             None => output.push_null(),
+    //         }
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, TimestampType, _, _>(
-        "to_timestamp",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, TimestampType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(0);
-                    return;
-                }
-            }
-            match as_str(val)
-                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(ts) => output.push(ts.timestamp_micros()),
-                None => {
-                    ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
-                    output.push(0);
-                }
-            }
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, TimestampType, _, _>(
+    //     "to_timestamp",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, TimestampType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.push(0);
+    //                 return;
+    //             }
+    //         }
+    //         match as_str(val)
+    //             .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
+    //         {
+    //             Some(ts) => output.push(ts.timestamp_micros()),
+    //             None => {
+    //                 ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
+    //                 output.push(0);
+    //             }
+    //         }
+    //     }),
+    // );
 
-    registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
-        "try_to_timestamp",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
-            |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match as_str(val) {
-                    Some(str_val) => {
-                        let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.func_ctx.tz.tz)
-                            .map(|ts| ts.timestamp_micros());
-                        match timestamp {
-                            Some(timestamp) => output.push(timestamp),
-                            None => output.push_null(),
-                        }
-                    }
-                    None => output.push_null(),
-                }
-            },
-        ),
-    );
+    // registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
+    //     "try_to_timestamp",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
+    //         |val, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push_null();
+    //                     return;
+    //                 }
+    //             }
+    //             match as_str(val) {
+    //                 Some(str_val) => {
+    //                     let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.func_ctx.tz.tz)
+    //                         .map(|ts| ts.timestamp_micros());
+    //                     match timestamp {
+    //                         Some(timestamp) => output.push(timestamp),
+    //                         None => output.push_null(),
+    //                     }
+    //                 }
+    //                 None => output.push_null(),
+    //             }
+    //         },
+    //     ),
+    // );
 
-    for dest_type in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match dest_type {
-            NumberDataType::NUM_TYPE => {
-                let name = format!("to_{dest_type}").to_lowercase();
-                registry
-                    .register_passthrough_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
-                        &name,
-                        |_, _| FunctionDomain::MayThrow,
-                        vectorize_with_builder_1_arg::<VariantType, NumberType<NUM_TYPE>>(
-                            move |val, output, ctx| {
-                                if let Some(validity) = &ctx.validity {
-                                    if !validity.get_bit(output.len()) {
-                                        output.push(NUM_TYPE::default());
-                                        return;
-                                    }
-                                }
-                                type Native = <NUM_TYPE as Number>::Native;
+    // for dest_type in ALL_NUMERICS_TYPES {
+    //     with_number_mapped_type!(|NUM_TYPE| match dest_type {
+    //         NumberDataType::NUM_TYPE => {
+    //             let name = format!("to_{dest_type}").to_lowercase();
+    //             registry
+    //                 .register_passthrough_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
+    //                     &name,
+    //                     |_, _| FunctionDomain::MayThrow,
+    //                     vectorize_with_builder_1_arg::<VariantType, NumberType<NUM_TYPE>>(
+    //                         move |val, output, ctx| {
+    //                             if let Some(validity) = &ctx.validity {
+    //                                 if !validity.get_bit(output.len()) {
+    //                                     output.push(NUM_TYPE::default());
+    //                                     return;
+    //                                 }
+    //                             }
+    //                             type Native = <NUM_TYPE as Number>::Native;
 
-                                let value: Option<Native> = if dest_type.is_float() {
-                                    to_f64(val).ok().and_then(num_traits::cast::cast)
-                                } else if dest_type.is_signed() {
-                                    to_i64(val).ok().and_then(num_traits::cast::cast)
-                                } else {
-                                    to_u64(val).ok().and_then(num_traits::cast::cast)
-                                };
-                                match value {
-                                    Some(value) => output.push(value.into()),
-                                    None => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!("unable to cast to type {dest_type}",),
-                                        );
-                                        output.push(NUM_TYPE::default());
-                                    }
-                                }
-                            },
-                        ),
-                    );
+    //                             let value: Option<Native> = if dest_type.is_float() {
+    //                                 to_f64(val).ok().and_then(num_traits::cast::cast)
+    //                             } else if dest_type.is_signed() {
+    //                                 to_i64(val).ok().and_then(num_traits::cast::cast)
+    //                             } else {
+    //                                 to_u64(val).ok().and_then(num_traits::cast::cast)
+    //                             };
+    //                             match value {
+    //                                 Some(value) => output.push(value.into()),
+    //                                 None => {
+    //                                     ctx.set_error(
+    //                                         output.len(),
+    //                                         format!("unable to cast to type {dest_type}",),
+    //                                     );
+    //                                     output.push(NUM_TYPE::default());
+    //                                 }
+    //                             }
+    //                         },
+    //                     ),
+    //                 );
 
-                let name = format!("try_to_{dest_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
-                        &name,
-                        |_, _| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<
-                            VariantType,
-                            NullableType<NumberType<NUM_TYPE>>,
-                        >(move |val, output, ctx| {
-                            if let Some(validity) = &ctx.validity {
-                                if !validity.get_bit(output.len()) {
-                                    output.push_null();
-                                    return;
-                                }
-                            }
-                            if dest_type.is_float() {
-                                if let Ok(value) = to_f64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            } else if dest_type.is_signed() {
-                                if let Ok(value) = to_i64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            } else {
-                                if let Ok(value) = to_u64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            }
-                        }),
-                    );
-            }
-        });
-    }
+    //             let name = format!("try_to_{dest_type}").to_lowercase();
+    //             registry
+    //                 .register_combine_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
+    //                     &name,
+    //                     |_, _| FunctionDomain::Full,
+    //                     vectorize_with_builder_1_arg::<
+    //                         VariantType,
+    //                         NullableType<NumberType<NUM_TYPE>>,
+    //                     >(move |val, output, ctx| {
+    //                         if let Some(validity) = &ctx.validity {
+    //                             if !validity.get_bit(output.len()) {
+    //                                 output.push_null();
+    //                                 return;
+    //                             }
+    //                         }
+    //                         if dest_type.is_float() {
+    //                             if let Ok(value) = to_f64(val) {
+    //                                 if let Some(new_value) = num_traits::cast::cast(value) {
+    //                                     output.push(new_value);
+    //                                 } else {
+    //                                     output.push_null();
+    //                                 }
+    //                             } else {
+    //                                 output.push_null();
+    //                             }
+    //                         } else if dest_type.is_signed() {
+    //                             if let Ok(value) = to_i64(val) {
+    //                                 if let Some(new_value) = num_traits::cast::cast(value) {
+    //                                     output.push(new_value);
+    //                                 } else {
+    //                                     output.push_null();
+    //                                 }
+    //                             } else {
+    //                                 output.push_null();
+    //                             }
+    //                         } else {
+    //                             if let Ok(value) = to_u64(val) {
+    //                                 if let Some(new_value) = num_traits::cast::cast(value) {
+    //                                     output.push(new_value);
+    //                                 } else {
+    //                                     output.push_null();
+    //                                 }
+    //                             } else {
+    //                                 output.push_null();
+    //                             }
+    //                         }
+    //                     }),
+    //                 );
+    //         }
+    //     });
+    // }
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
-        "json_to_string",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            let s = to_string(val);
-            output.put_slice(s.as_bytes());
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "json_to_string",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         let s = to_string(val);
+    //         output.put_slice(s.as_bytes());
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
-        "json_pretty",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            let s = to_pretty_string(val);
-            output.put_slice(s.as_bytes());
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+    //     "json_pretty",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         let s = to_pretty_string(val);
+    //         output.put_slice(s.as_bytes());
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_1_arg(
-        "json_strip_nulls",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            if let Err(err) = strip_nulls(val, &mut output.data) {
-                ctx.set_error(output.len(), err.to_string());
-            };
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg(
+    //     "json_strip_nulls",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         if let Err(err) = strip_nulls(val, &mut output.data) {
+    //             ctx.set_error(output.len(), err.to_string());
+    //         };
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_passthrough_nullable_2_arg(
-        "concat",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
-            |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
-                }
-                if let Err(err) = concat(left, right, &mut output.data) {
-                    ctx.set_error(output.len(), err.to_string());
-                };
-                output.commit_row();
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "concat",
+    //     |_, _, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+    //         |left, right, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.commit_row();
+    //                     return;
+    //                 }
+    //             }
+    //             if let Err(err) = concat(left, right, &mut output.data) {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //             };
+    //             output.commit_row();
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_1_arg(
-        "json_typeof",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            match type_of(val) {
-                Ok(result) => output.put_str(result),
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-            };
-            output.commit_row();
-        }),
-    );
+    // registry.register_passthrough_nullable_1_arg(
+    //     "json_typeof",
+    //     |_, _| FunctionDomain::MayThrow,
+    //     vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+    //         if let Some(validity) = &ctx.validity {
+    //             if !validity.get_bit(output.len()) {
+    //                 output.commit_row();
+    //                 return;
+    //             }
+    //         }
+    //         match type_of(val) {
+    //             Ok(result) => output.put_str(result),
+    //             Err(err) => {
+    //                 ctx.set_error(output.len(), err.to_string());
+    //             }
+    //         };
+    //         output.commit_row();
+    //     }),
+    // );
 
-    registry.register_function_factory("json_object", |_, args_type| {
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "json_object".to_string(),
-                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
-                return_type: DataType::Variant,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_fn),
-            },
-        }))
-    });
+    // registry.register_function_factory("json_object", |_, args_type| {
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "json_object".to_string(),
+    //             args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+    //             return_type: DataType::Variant,
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(json_object_fn),
+    //         },
+    //     }))
+    // });
 
-    registry.register_function_factory("try_json_object", |_, args_type| {
-        let f = Function {
-            signature: FunctionSignature {
-                name: "try_json_object".to_string(),
-                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
-                return_type: DataType::Variant,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_fn),
-            },
-        };
-        Some(Arc::new(f.error_to_null()))
-    });
+    // registry.register_function_factory("try_json_object", |_, args_type| {
+    //     let f = Function {
+    //         signature: FunctionSignature {
+    //             name: "try_json_object".to_string(),
+    //             args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+    //             return_type: DataType::Variant,
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::Full),
+    //             eval: Box::new(json_object_fn),
+    //         },
+    //     };
+    //     Some(Arc::new(f.error_to_null()))
+    // });
 
-    registry.register_function_factory("json_object_keep_null", |_, args_type| {
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "json_object_keep_null".to_string(),
-                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
-                return_type: DataType::Variant,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_keep_null_fn),
-            },
-        }))
-    });
+    // registry.register_function_factory("json_object_keep_null", |_, args_type| {
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "json_object_keep_null".to_string(),
+    //             args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+    //             return_type: DataType::Variant,
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(json_object_keep_null_fn),
+    //         },
+    //     }))
+    // });
 
-    registry.register_function_factory("try_json_object_keep_null", |_, args_type| {
-        let f = Function {
-            signature: FunctionSignature {
-                name: "try_json_object_keep_null".to_string(),
-                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
-                return_type: DataType::Variant,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_keep_null_fn),
-            },
-        };
-        Some(Arc::new(f.error_to_null()))
-    });
+    // registry.register_function_factory("try_json_object_keep_null", |_, args_type| {
+    //     let f = Function {
+    //         signature: FunctionSignature {
+    //             name: "try_json_object_keep_null".to_string(),
+    //             args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+    //             return_type: DataType::Variant,
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::Full),
+    //             eval: Box::new(json_object_keep_null_fn),
+    //         },
+    //     };
+    //     Some(Arc::new(f.error_to_null()))
+    // });
 
-    registry.register_function_factory("json_array", |_, args_type| {
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "json_array".to_string(),
-                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
-                return_type: DataType::Variant,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_array_fn),
-            },
-        }))
-    });
+    // registry.register_function_factory("json_array", |_, args_type| {
+    //     Some(Arc::new(Function {
+    //         signature: FunctionSignature {
+    //             name: "json_array".to_string(),
+    //             args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+    //             return_type: DataType::Variant,
+    //         },
+    //         eval: FunctionEval::Scalar {
+    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+    //             eval: Box::new(json_array_fn),
+    //         },
+    //     }))
+    // });
 
-    registry.register_passthrough_nullable_2_arg(
-        "json_contains_in_left",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
-            |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                let result = contains(left, right);
-                output.push(result);
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "json_contains_in_left",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+    //         |left, right, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push(false);
+    //                     return;
+    //                 }
+    //             }
+    //             let result = contains(left, right);
+    //             output.push(result);
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_2_arg(
-        "json_contains_in_right",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
-            |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                let result = contains(right, left);
-                output.push(result);
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "json_contains_in_right",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+    //         |left, right, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push(false);
+    //                     return;
+    //                 }
+    //             }
+    //             let result = contains(right, left);
+    //             output.push(result);
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_2_arg(
-        "json_exists_any_keys",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
-            |val, keys, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                let result = exists_any_keys(val, keys.iter());
-                output.push(result);
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "json_exists_any_keys",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
+    //         |val, keys, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push(false);
+    //                     return;
+    //                 }
+    //             }
+    //             let result = exists_any_keys(val, keys.iter());
+    //             output.push(result);
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_2_arg(
-        "json_exists_all_keys",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
-            |val, keys, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                let result = exists_all_keys(val, keys.iter());
-                output.push(result);
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "json_exists_all_keys",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
+    //         |val, keys, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push(false);
+    //                     return;
+    //                 }
+    //             }
+    //             let result = exists_all_keys(val, keys.iter());
+    //             output.push(result);
+    //         },
+    //     ),
+    // );
 
-    registry.register_passthrough_nullable_2_arg(
-        "json_exists_key",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
-            |val, key, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
-                }
-                let result = exists_all_keys(val, once(key));
-                output.push(result);
-            },
-        ),
-    );
+    // registry.register_passthrough_nullable_2_arg(
+    //     "json_exists_key",
+    //     |_, _, _| FunctionDomain::Full,
+    //     vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
+    //         |val, key, output, ctx| {
+    //             if let Some(validity) = &ctx.validity {
+    //                 if !validity.get_bit(output.len()) {
+    //                     output.push(false);
+    //                     return;
+    //                 }
+    //             }
+    //             let result = exists_all_keys(val, once(key));
+    //             output.push(result);
+    //         },
+    //     ),
+    // );
 }
 
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -1368,7 +1353,7 @@ fn json_object_impl_fn(
                     continue;
                 }
                 let key = match k {
-                    ScalarRef::String(v) => unsafe { String::from_utf8_unchecked(v.to_vec()) },
+                    ScalarRef::String(v) => v,
                     _ => {
                         has_err = true;
                         ctx.set_error(builder.len(), "Key must be a string value");
@@ -1430,7 +1415,7 @@ fn get_by_keypath_fn(
     string_res: bool,
 ) -> Value<AnyType> {
     let scalar_keypath = match &args[1] {
-        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v)),
+        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v.as_bytes())),
         _ => None,
     };
     let len_opt = args.iter().find_map(|arg| match arg {
@@ -1453,7 +1438,7 @@ fn get_by_keypath_fn(
             ValueRef::Column(col) => {
                 let scalar = unsafe { col.index_unchecked(idx) };
                 let path = match scalar {
-                    ScalarRef::String(buf) => Some(parse_key_paths(buf)),
+                    ScalarRef::String(buf) => Some(parse_key_paths(buf.as_bytes())),
                     _ => None,
                 };
                 Cow::Owned(path)
@@ -1523,8 +1508,7 @@ where
 {
     let scalar_jsonpath = match &args[1] {
         ValueRef::Scalar(ScalarRef::String(v)) => {
-            let res = parse_json_path(v)
-                .map_err(|_| format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(v)));
+            let res = parse_json_path(v.as_bytes()).map_err(|_| format!("Invalid JSON Path '{v}'"));
             Some(res)
         }
         _ => None,
@@ -1546,9 +1530,8 @@ where
                 let scalar = unsafe { col.index_unchecked(idx) };
                 match scalar {
                     ScalarRef::String(buf) => {
-                        let res = parse_json_path(buf).map_err(|_| {
-                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(buf))
-                        });
+                        let res = parse_json_path(buf.as_bytes())
+                            .map_err(|_| format!("Invalid JSON Path '{buf}'"));
                         Some(res)
                     }
                     _ => None,

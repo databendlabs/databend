@@ -237,12 +237,12 @@ impl Domain {
                 has_true: this.has_true || other.has_true,
             }),
             (Domain::String(this), Domain::String(other)) => Domain::String(StringDomain {
-                min: this.min.as_slice().min(&other.min).to_vec(),
+                min: this.min.as_str().min(&other.min).to_string(),
                 max: this
                     .max
                     .as_ref()
                     .zip(other.max.as_ref())
-                    .map(|(self_max, other_max)| self_max.max(other_max).to_vec()),
+                    .map(|(self_max, other_max)| self_max.max(other_max).to_string()),
             }),
             (Domain::Timestamp(this), Domain::Timestamp(other)) => {
                 Domain::Timestamp(SimpleDomain {
@@ -493,32 +493,172 @@ impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
 
 impl SimpleDomainCmp for StringDomain {
     fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_eq(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max || *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 
     fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_noteq(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max || *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 
     fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_gt(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else if *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 
     fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_gte(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else if *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 
     fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_lt(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else if *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 
     fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
-        d1.domain_lte(&d2)
+        match (&self.max, &other.max) {
+            (None, None) => FunctionDomain::Full,
+            (Some(self_max), Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else if *self_max <= other.min {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (Some(self_max), None) => {
+                if other.min >= *self_max {
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+            (None, Some(other_max)) => {
+                if self.min >= *other_max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+                } else {
+                    FunctionDomain::Full
+                }
+            }
+        }
     }
 }

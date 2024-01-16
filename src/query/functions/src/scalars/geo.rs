@@ -183,13 +183,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             "geohash_decode",
             |_, _| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
-                |encoded, builder, ctx| match std::str::from_utf8(encoded)
-                    .map_err(|e| e.to_string())
-                    .and_then(|s| geohash::decode(s).map_err(|e| e.to_string()))
-                {
+                |encoded, builder, ctx| match geohash::decode(encoded) {
                     Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
                     Err(e) => {
-                        ctx.set_error(builder.len(), e);
+                        ctx.set_error(builder.len(), e.to_string());
                         builder.push((F64::from(0.0), F64::from(0.0)))
                     }
                 },

@@ -49,7 +49,7 @@ impl Datum {
             }
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
             Scalar::Binary(v) => Some(Datum::Bytes(v)),
-            Scalar::String(v) => Some(Datum::Bytes(v)),
+            Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),
             _ => None,
         }
     }
