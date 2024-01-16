@@ -362,6 +362,8 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("BINARY_FORMAT", ignore(ascii_case))]
+    BINARY_FORMAT,
     #[token("BITMAP", ignore(ascii_case))]
     BITMAP,
     #[token("BLOCKED_IP_LIST", ignore(ascii_case))]
@@ -466,6 +468,8 @@ pub enum TokenKind {
     DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
+    #[token("DETAILED_OUTPUT", ignore(ascii_case))]
+    DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
@@ -498,6 +502,8 @@ pub enum TokenKind {
     EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
+    #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
+    EMPTY_FIELD_AS,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
@@ -737,6 +743,8 @@ pub enum TokenKind {
     OR,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
+    #[token("OUTPUT_HEADER", ignore(ascii_case))]
+    OUTPUT_HEADER,
     #[token("OUTER", ignore(ascii_case))]
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]

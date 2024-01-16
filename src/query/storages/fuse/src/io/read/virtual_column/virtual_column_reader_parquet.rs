@@ -99,7 +99,7 @@ impl VirtualColumnReader {
             );
 
             let merge_io_result =
-                BlockReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, ranges)
+                BlockReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
                     .ok()?;
 
             Some(VirtualMergeIOReadResult::create(
@@ -144,7 +144,7 @@ impl VirtualColumnReader {
                 read_settings,
                 self.dal.clone(),
                 loc,
-                ranges,
+                &ranges,
                 self.reader.put_cache,
             )
             .await

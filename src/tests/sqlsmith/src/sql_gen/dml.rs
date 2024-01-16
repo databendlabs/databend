@@ -536,6 +536,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
+                        binary_format: Default::default(),
                     },
                     quote_char: b'\'',
                 };

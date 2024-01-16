@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
@@ -25,7 +26,9 @@ use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
-use crate::optimizer::group::GroupState;
+use crate::optimizer::RelExpr;
+use crate::optimizer::RequiredProperty;
+use crate::plans::Operator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +52,10 @@ pub struct OptimizeGroupTask {
     #[educe(Debug(ignore))]
     pub ctx: Arc<dyn TableContext>,
 
+    pub required_prop: RequiredProperty,
+
     pub state: OptimizeGroupState,
+    pub owner_expr: Option<(IndexType, IndexType)>,
     pub group_index: IndexType,
     pub last_optimized_expr_index: Option<IndexType>,
 
@@ -58,23 +64,26 @@ pub struct OptimizeGroupTask {
 }
 
 impl OptimizeGroupTask {
-    pub fn new(ctx: Arc<dyn TableContext>, group_index: IndexType) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        owner_expr: Option<(IndexType, IndexType)>,
+        group_index: IndexType,
+        required_prop: RequiredProperty,
+    ) -> Self {
         Self {
             ctx,
+            required_prop,
             state: OptimizeGroupState::Init,
             group_index,
             last_optimized_expr_index: None,
             ref_count: Rc::new(SharedCounter::new()),
             parent: None,
+            owner_expr,
         }
     }
 
-    pub fn with_parent(
-        ctx: Arc<dyn TableContext>,
-        group_index: IndexType,
-        parent: &Rc<SharedCounter>,
-    ) -> Self {
-        let mut task = Self::new(ctx, group_index);
+    pub fn with_parent(self, parent: &Rc<SharedCounter>) -> Self {
+        let mut task = self;
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -101,7 +110,9 @@ impl OptimizeGroupTask {
         let event = match self.state {
             OptimizeGroupState::Init => self.explore_group(optimizer, scheduler)?,
             OptimizeGroupState::Explored => self.optimize_group(optimizer, scheduler)?,
-            OptimizeGroupState::Optimized => unreachable!(),
+            OptimizeGroupState::Optimized => Err(ErrorCode::Internal(
+                "Invalid transition from Optimized state".to_string(),
+            ))?,
         };
 
         match (self.state, event) {
@@ -113,7 +124,10 @@ impl OptimizeGroupTask {
             (OptimizeGroupState::Explored, OptimizeGroupEvent::Optimized) => {
                 self.state = OptimizeGroupState::Optimized;
             }
-            _ => unreachable!(),
+            _ => Err(ErrorCode::Internal(format!(
+                "Invalid transition from {:?} with {:?}",
+                self.state, event
+            )))?,
         }
 
         Ok(())
@@ -142,27 +156,50 @@ impl OptimizeGroupTask {
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group_mut(self.group_index)?;
 
-        // Check if there is new added `MExpr`s.
-        let start_index = self.last_optimized_expr_index.unwrap_or_default();
-        if start_index == group.num_exprs() {
-            group.set_state(GroupState::Optimized);
+        if group.best_prop(&self.required_prop).is_some() {
             if let Some(parent) = &self.parent {
                 parent.dec();
             }
             return Ok(OptimizeGroupEvent::Optimized);
         }
 
-        for m_expr in group.m_exprs.iter() {
-            let task = OptimizeExprTask::with_parent(
-                self.ctx.clone(),
-                self.group_index,
-                m_expr.index,
-                &self.ref_count,
-            );
-            scheduler.add_task(Task::OptimizeExpr(task));
+        // Check if there is new added `MExpr`s.
+        let start_index = self.last_optimized_expr_index.unwrap_or_default();
+        if start_index == group.num_exprs() {
+            if let Some(parent) = &self.parent {
+                parent.dec();
+            }
+            return Ok(OptimizeGroupEvent::Optimized);
         }
 
+        let m_exprs = group.m_exprs[start_index..].to_vec();
+
         self.last_optimized_expr_index = Some(group.num_exprs());
+
+        for m_expr in m_exprs.iter() {
+            if Some((self.group_index, m_expr.index)) == self.owner_expr {
+                continue;
+            }
+
+            let rel_expr = RelExpr::with_m_expr(m_expr, &optimizer.memo);
+            let children_required_props = if optimizer.enforce_distribution {
+                rel_expr.compute_required_prop_children(self.ctx.clone(), &self.required_prop)?
+            } else {
+                vec![vec![RequiredProperty::default(); m_expr.plan.arity()]]
+            };
+
+            for required_props in children_required_props {
+                let task = OptimizeExprTask::new(
+                    self.ctx.clone(),
+                    self.group_index,
+                    m_expr.index,
+                    self.required_prop.clone(),
+                    required_props,
+                )
+                .with_parent(&self.ref_count);
+                scheduler.add_task(Task::OptimizeExpr(task));
+            }
+        }
 
         Ok(OptimizeGroupEvent::Optimizing)
     }

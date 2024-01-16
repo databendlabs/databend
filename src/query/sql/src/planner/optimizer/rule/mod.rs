@@ -28,7 +28,6 @@ pub use rule::Rule;
 pub use rule::RuleID;
 pub use rule::RulePtr;
 pub use rule::DEFAULT_REWRITE_RULES;
-pub use rule::RESIDUAL_RULES;
 pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
 pub use transform_result::TransformResult;

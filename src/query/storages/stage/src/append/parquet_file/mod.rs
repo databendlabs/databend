@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod decorrelate;
-#[allow(clippy::module_inception)]
-mod heuristic;
-mod subquery_rewriter;
-
-pub use decorrelate::decorrelate_subquery;
-pub use heuristic::HeuristicOptimizer;
-pub use heuristic::DEFAULT_REWRITE_RULES;
-pub use heuristic::RESIDUAL_RULES;
-pub use subquery_rewriter::FlattenInfo;
-pub use subquery_rewriter::SubqueryRewriter;
+mod block_batch;
+mod limit_file_size_processor;
+mod pipeline;
+mod writer_processor;
+pub(crate) use pipeline::append_data_to_parquet_files;

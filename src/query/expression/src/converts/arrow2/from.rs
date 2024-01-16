@@ -26,8 +26,10 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
+use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -54,7 +56,7 @@ impl TryFrom<&ArrowSchema> for TableSchema {
             .map(|f| f.try_into())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(TableSchema::new(fields))
+        Ok(TableSchema::new_from(fields, schema.metadata.clone()))
     }
 }
 
@@ -68,7 +70,7 @@ impl TryFrom<&ArrowSchema> for DataSchema {
             .map(|f| f.try_into())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(DataSchema::new(fields))
+        Ok(DataSchema::new_from(fields, schema.metadata.clone()))
     }
 }
 
@@ -113,11 +115,10 @@ fn arrow_type_to_table_type(ty: &ArrowDataType, is_nullable: bool) -> Result<Tab
             arrow_type_to_table_type(&f.data_type, f.is_nullable)?
         )),
 
-        ArrowDataType::Binary
-        | ArrowDataType::LargeBinary
-        | ArrowDataType::FixedSizeBinary(_)
-        | ArrowDataType::Utf8
-        | ArrowDataType::LargeUtf8 => TableDataType::String,
+        ArrowDataType::Binary | ArrowDataType::LargeBinary | ArrowDataType::FixedSizeBinary(_) =>
+            TableDataType::Binary,
+
+        ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => TableDataType::String,
 
         ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
         ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
@@ -346,7 +347,7 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::Binary(StringColumn::new(
+                    Column::Binary(BinaryColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
@@ -361,7 +362,52 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Binary(StringColumn::new(arrow_col.values().clone(), offsets))
+                    Column::Binary(BinaryColumn::new(arrow_col.values().clone(), offsets))
+                }
+                (DataType::Binary, ArrowDataType::FixedSizeBinary(size)) => {
+                    let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<databend_common_arrow::arrow::array::FixedSizeBinaryArray>()
+                    .expect(
+                        "fail to read `Binary` from arrow: array should be `FixedSizeBinaryArray`",
+                    );
+                    let offsets = (0..arrow_col.len() as u64 + 1)
+                        .map(|x| x * (*size) as u64)
+                        .collect::<Vec<_>>();
+                    Column::Binary(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (DataType::Binary, ArrowDataType::Utf8) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i32>>()
+                        .expect(
+                            "fail to read `Binary` from arrow: array should be `Utf8Array<i32>`",
+                        );
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Binary(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (DataType::Binary, ArrowDataType::LargeUtf8) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::Utf8Array<i64>>()
+                        .expect(
+                            "fail to read `Binary` from arrow: array should be `Utf8Array<i64>`",
+                        );
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Binary(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::String, ArrowDataType::Binary) => {
                     let arrow_col = arrow_col
@@ -376,10 +422,9 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::String(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    ))
+                    let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
+                    column.check_utf8()?;
+                    Column::String(column)
                 }
                 (DataType::String, ArrowDataType::LargeBinary) => {
                     let arrow_col = arrow_col
@@ -391,7 +436,9 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                    let column = StringColumn::new(arrow_col.values().clone(), offsets);
+                    column.check_utf8()?;
+                    Column::String(column)
                 }
                 (DataType::String, ArrowDataType::FixedSizeBinary(size)) => {
                     let arrow_col = arrow_col
@@ -403,10 +450,9 @@ impl Column {
                     let offsets = (0..arrow_col.len() as u64 + 1)
                         .map(|x| x * (*size) as u64)
                         .collect::<Vec<_>>();
-                    Column::String(StringColumn::new(
-                        arrow_col.values().clone(),
-                        offsets.into(),
-                    ))
+                    let column = StringColumn::new(arrow_col.values().clone(), offsets.into());
+                    column.check_utf8()?;
+                    Column::String(column)
                 }
                 (DataType::String, ArrowDataType::Utf8) => {
                     let arrow_col = arrow_col
@@ -483,7 +529,7 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::Variant(StringColumn::new(
+                    Column::Variant(BinaryColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
@@ -499,7 +545,7 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::Variant(StringColumn::new(
+                    Column::Variant(BinaryColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
@@ -517,7 +563,7 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    Column::Variant(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::Variant, ArrowDataType::LargeBinary) => {
                     let arrow_col = arrow_col
@@ -529,7 +575,7 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    Column::Variant(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::Array(ty), ArrowDataType::List(_)) => {
                     let values_col = arrow_col
@@ -609,7 +655,7 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::Bitmap(StringColumn::new(
+                    Column::Bitmap(BinaryColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
@@ -627,7 +673,7 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    Column::Bitmap(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (DataType::Bitmap, ArrowDataType::Binary) => {
                     let arrow_col = arrow_col
@@ -642,7 +688,7 @@ impl Column {
                         .iter()
                         .map(|x| *x as u64)
                         .collect::<Vec<_>>();
-                    Column::Bitmap(StringColumn::new(
+                    Column::Bitmap(BinaryColumn::new(
                         arrow_col.values().clone(),
                         offsets.into(),
                     ))
@@ -657,7 +703,7 @@ impl Column {
                     let offsets = arrow_col.offsets().clone().into_inner();
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                    Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    Column::Bitmap(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (data_type, ArrowDataType::Extension(_, arrow_type, _)) => {
                     from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)?

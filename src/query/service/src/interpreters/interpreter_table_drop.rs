@@ -25,6 +25,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -99,7 +100,7 @@ impl Interpreter for DropTableInterpreter {
         let resp = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: self.plan.if_exists,
-                tenant,
+                tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,
@@ -110,13 +111,14 @@ impl Interpreter for DropTableInterpreter {
         // but the table still exists, in the interval maybe some unexpected things will happen.
         // drop the ownership
         let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
-        role_api
-            .revoke_ownership(&OwnershipObject::Table {
-                catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().ident.db_id,
-                table_id: tbl.get_table_info().ident.table_id,
-            })
-            .await?;
+        let owner_object = OwnershipObject::Table {
+            catalog_name: self.plan.catalog.clone(),
+            db_id: db.get_db_info().ident.db_id,
+            table_id: tbl.get_table_info().ident.table_id,
+        };
+
+        role_api.revoke_ownership(&owner_object).await?;
+        RoleCacheManager::instance().invalidate_cache(&tenant);
 
         // if `plan.all`, truncate, then purge the historical data
         if self.plan.all {

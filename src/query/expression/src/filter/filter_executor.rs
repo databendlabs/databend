@@ -81,7 +81,7 @@ impl FilterExecutor {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
         let selector = Selector::new(evaluator, data_block.num_rows());
         selector.select(
-            &self.select_expr,
+            &mut self.select_expr,
             &mut self.true_selection,
             &mut self.false_selection,
         )

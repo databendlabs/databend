@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// use std::time::Instant;
+
+use std::time::Instant;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
 use crate::types::DataType;
@@ -54,7 +59,7 @@ impl<'a> Selector<'a> {
     // all selected indices are stored in `true_selection`.
     pub fn select(
         &self,
-        select_expr: &SelectExpr,
+        select_expr: &mut SelectExpr,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
     ) -> Result<usize> {
@@ -75,7 +80,7 @@ impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     fn process_select_expr(
         &self,
-        select_expr: &SelectExpr,
+        select_expr: &mut SelectExpr,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -84,7 +89,7 @@ impl<'a> Selector<'a> {
         count: usize,
     ) -> Result<usize> {
         let count = match select_expr {
-            SelectExpr::And(exprs) => self.process_and(
+            SelectExpr::And((exprs, permutation)) => self.process_and(
                 exprs,
                 true_selection,
                 false_selection,
@@ -92,8 +97,9 @@ impl<'a> Selector<'a> {
                 mutable_false_idx,
                 select_strategy,
                 count,
+                permutation,
             )?,
-            SelectExpr::Or(exprs) => self.process_or(
+            SelectExpr::Or((exprs, permutation)) => self.process_or(
                 exprs,
                 true_selection,
                 false_selection,
@@ -101,6 +107,7 @@ impl<'a> Selector<'a> {
                 mutable_false_idx,
                 select_strategy,
                 count,
+                permutation,
             )?,
             SelectExpr::Compare((select_op, exprs, generics)) => self.process_compare(
                 select_op,
@@ -151,18 +158,22 @@ impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     fn process_and(
         &self,
-        exprs: &Vec<SelectExpr>,
+        exprs: &mut Vec<SelectExpr>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
         mutable_false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
+        permutation: &mut FilterPermutation,
     ) -> Result<usize> {
+        let instant = Instant::now();
         let mut temp_mutable_true_idx = *mutable_true_idx;
         let mut temp_mutable_false_idx = *mutable_false_idx;
         let exprs_len = exprs.len();
-        for (i, expr) in exprs.iter().enumerate() {
+        for i in 0..exprs.len() {
+            let idx = permutation.get(i);
+            let expr = &mut exprs[idx];
             let true_count = self.process_select_expr(
                 expr,
                 true_selection,
@@ -189,6 +200,10 @@ impl<'a> Selector<'a> {
             }
         }
         *mutable_false_idx = temp_mutable_false_idx;
+
+        let runtime = instant.elapsed().as_millis() as u64;
+        permutation.add_statistics(runtime);
+
         Ok(count)
     }
 
@@ -196,18 +211,22 @@ impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     fn process_or(
         &self,
-        exprs: &Vec<SelectExpr>,
+        exprs: &mut Vec<SelectExpr>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
         mutable_false_idx: &mut usize,
         mut select_strategy: SelectStrategy,
         mut count: usize,
+        permutation: &mut FilterPermutation,
     ) -> Result<usize> {
+        let instant = Instant::now();
         let mut temp_mutable_true_idx = *mutable_true_idx;
         let mut temp_mutable_false_idx = *mutable_false_idx;
         let exprs_len = exprs.len();
-        for (i, expr) in exprs.iter().enumerate() {
+        for i in 0..exprs.len() {
+            let idx = permutation.get(i);
+            let expr = &mut exprs[idx];
             let true_count = self.process_select_expr(
                 expr,
                 true_selection,
@@ -235,6 +254,10 @@ impl<'a> Selector<'a> {
         }
         let count = temp_mutable_true_idx - *mutable_true_idx;
         *mutable_true_idx = temp_mutable_true_idx;
+
+        let runtime = instant.elapsed().as_millis() as u64;
+        permutation.add_statistics(runtime);
+
         Ok(count)
     }
 

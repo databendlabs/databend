@@ -173,7 +173,7 @@ where
                     .map(|key| key.fast_hash()),
             );
         }
-        HashMethodKind::SingleString(method) => {
+        HashMethodKind::SingleBinary(method) => {
             let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method

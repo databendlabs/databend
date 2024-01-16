@@ -27,6 +27,7 @@ use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
@@ -384,6 +385,41 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+/// Huggingface uri looks like `hf://opendal/huggingface-testdata/path/to/file`.
+///
+/// We need to parse `huggingface-testdata` from the root.
+fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let (repo_name, root) = root
+        .trim_start_matches('/')
+        .split_once('/')
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                "input uri is not a valid huggingface uri",
+            )
+        })?;
+
+    let sp = StorageParams::Huggingface(StorageHuggingfaceConfig {
+        repo_id: format!("{}/{repo_name}", l.name),
+        repo_type: l
+            .connection
+            .get("repo_type")
+            .cloned()
+            .unwrap_or_else(|| "dataset".to_string()),
+        revision: l
+            .connection
+            .get("revision")
+            .cloned()
+            .unwrap_or_else(|| "main".to_string()),
+        root: root.to_string(),
+        token: l.connection.get("token").cloned().unwrap_or_default(),
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub async fn parse_uri_location(
     l: &mut UriLocation,
@@ -482,6 +518,7 @@ pub async fn parse_uri_location(
             }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
+        Scheme::Huggingface => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,

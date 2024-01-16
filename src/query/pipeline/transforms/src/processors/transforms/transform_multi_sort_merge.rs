@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -164,7 +164,7 @@ fn create_processor(
                     remove_order_col,
                 )?)
             }
-            _ => Box::new(MultiSortMergeProcessor::<StringColumn>::create(
+            _ => Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
                 inputs,
                 output,
                 schema,
@@ -175,7 +175,7 @@ fn create_processor(
             )?),
         }
     } else {
-        Box::new(MultiSortMergeProcessor::<StringColumn>::create(
+        Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
             inputs,
             output,
             schema,

@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storages_stage::StageTable;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
@@ -73,11 +74,12 @@ impl Interpreter for DropUserStageInterpreter {
             // we should do `drop ownership` after actually drop stage,
             // drop the ownership
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
-            role_api
-                .revoke_ownership(&OwnershipObject::Stage {
-                    name: self.plan.name.clone(),
-                })
-                .await?;
+            let owner_object = OwnershipObject::Stage {
+                name: self.plan.name.clone(),
+            };
+
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;

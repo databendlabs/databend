@@ -1,0 +1,27 @@
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1 (col1 int, col2 int);
+
+statement ok
+insert into table t1 values (1,2), (3, 5);
+
+statement ok
+drop stage if exists s1
+
+statement ok
+create stage s1;
+
+statement ok
+remove @s1;
+
+statement ok
+copy into @s1 from t1 file_format = (type = 'csv', output_header=true);
+
+query 
+select $1, $2 from @s1 (file_format => 'csv') order by $1;
+----
+1 2
+3 5
+col1 col2

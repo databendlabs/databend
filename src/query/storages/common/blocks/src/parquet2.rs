@@ -14,6 +14,7 @@
 
 use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::parquet::write::transverse;
 use databend_common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use databend_common_arrow::arrow::io::parquet::write::WriteOptions;
@@ -35,7 +36,7 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    let arrow_schema = schema.as_ref().to_arrow();
+    let arrow_schema = ArrowSchema::from(schema.as_ref());
 
     let row_group_write_options = WriteOptions {
         write_statistics: false,

@@ -100,7 +100,6 @@ fn test_decode_v44_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
-        owner: None,
     };
 
     common::test_load_old(func_name!(), bytes.as_slice(), 44, want())?;

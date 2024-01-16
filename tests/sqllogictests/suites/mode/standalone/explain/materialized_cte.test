@@ -21,9 +21,11 @@ MaterializedCTE
     ├── filters: []
     ├── estimated rows: 100.00
     ├── CTEScan(Build)
-    │   └── CTE index: 0, sub index: 2
+    │   ├── CTE index: 0, sub index: 2
+    │   └── estimated rows: 10.00
     └── CTEScan(Probe)
-        └── CTE index: 0, sub index: 1
+        ├── CTE index: 0, sub index: 1
+        └── estimated rows: 10.00
 
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
@@ -42,7 +44,8 @@ MaterializedCTE
 └── MaterializedCTE
     ├── output columns: [numbers.number (#0)]
     ├── CTEScan
-    │   └── CTE index: 0, sub index: 2
+    │   ├── CTE index: 0, sub index: 2
+    │   └── estimated rows: 10.00
     └── HashJoin
         ├── output columns: [numbers.number (#0)]
         ├── join type: INNER
@@ -51,6 +54,8 @@ MaterializedCTE
         ├── filters: []
         ├── estimated rows: 100.00
         ├── CTEScan(Build)
-        │   └── CTE index: 1, sub index: 1
+        │   ├── CTE index: 1, sub index: 1
+        │   └── estimated rows: 10.00
         └── CTEScan(Probe)
-            └── CTE index: 0, sub index: 1
+            ├── CTE index: 0, sub index: 1
+            └── estimated rows: 10.00

@@ -947,6 +947,7 @@ dependencies = [
  "databend-common-license",
  "databend-common-meta-app",
  "databend-common-meta-embedded",
+ "databend-common-users",
  "databend-query",
  "pyo3",
  "pyo3-build-config 0.18.3",
@@ -2086,9 +2087,9 @@ dependencies = [
 
 [[package]]
 name = "csv"
-version = "1.2.2"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626ae34994d3d8d668f4269922248239db4ae42d538b14c398b74a52208e8086"
+checksum = "ac574ff4d437a7b5ad237ef331c17ccca63c46479e5b5453eb8e10bb99a759fe"
 dependencies = [
  "csv-core",
  "itoa",
@@ -2098,9 +2099,9 @@ dependencies = [
 
 [[package]]
 name = "csv-core"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
+checksum = "5efa2b3d7902f4b634a20cae3c9c4e6209dc4779feb6863329607560143efa70"
 dependencies = [
  "memchr",
 ]
@@ -2621,8 +2622,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "databend-common-arrow",
- "databend-common-meta-stoerr",
- "databend-common-meta-types",
  "http",
  "opendal",
  "parquet",
@@ -2677,6 +2676,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "simdutf8",
  "terminal_size",
  "tonic 0.10.2",
  "typetag",
@@ -2689,6 +2689,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "async-trait-fn",
+ "base64 0.21.0",
  "bstr 1.6.2",
  "chrono-tz",
  "databend-common-arrow",
@@ -2863,6 +2864,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-protos",
  "databend-common-storage",
+ "enumflags2",
  "minitrace",
  "mockall",
  "serde_json",
@@ -2945,6 +2947,7 @@ dependencies = [
  "databend-common-tracing",
  "derive_more",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "minitrace",
@@ -3077,6 +3080,7 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "databend-common-exception",
  "prost 0.12.1",
  "serde",
  "serde_json",
@@ -3105,8 +3109,11 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-building",
+ "databend-common-exception",
  "databend-common-meta-stoerr",
+ "databend-common-tracing",
  "derive_more",
+ "log",
  "num-derive",
  "num-traits",
  "openraft 0.9.0",
@@ -3452,6 +3459,7 @@ dependencies = [
 name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "dashmap",
  "databend-common-catalog",
  "databend-common-config",
@@ -3466,6 +3474,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
+ "tokio",
 ]
 
 [[package]]
@@ -5310,9 +5319,9 @@ checksum = "ee1b05cbd864bcaecbd3455d6d967862d446e4ebfc3c2e5e5b9841e53cba6673"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
 ]
@@ -7532,9 +7541,9 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
+checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
@@ -9587,9 +9596,9 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "pest"
@@ -13136,12 +13145,12 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "143b538f18257fac9cad154828a57c6bf5157e1aa604d4816b5995bf6de87ae5"
+checksum = "31e6302e3bb753d46e83516cae55ae196fc0c309407cf11ab35cc51a4c2a4633"
 dependencies = [
  "form_urlencoded",
- "idna 0.4.0",
+ "idna 0.5.0",
  "percent-encoding",
  "serde",
 ]
@@ -13166,9 +13175,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.4.1"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
+checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
  "getrandom 0.2.11",
  "serde",

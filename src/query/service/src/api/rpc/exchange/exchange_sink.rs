@@ -127,7 +127,12 @@ impl ExchangeSorting for SinkExchangeSorting {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(ExchangeSerializeMeta::downcast_ref_from)
-            .unwrap();
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Failed to downcast ExchangeSerializeMeta from BlockMeta: {:?}",
+                    block_meta
+                ))
+            })?;
 
         Ok(shuffle_meta.block_number)
     }

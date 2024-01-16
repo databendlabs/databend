@@ -16,12 +16,24 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 
 #[derive(Debug)]
+pub struct FileOutputBuffer {
+    pub buffer: Vec<u8>,
+    pub row_counts: usize,
+}
+
+impl FileOutputBuffer {
+    pub fn create(buffer: Vec<u8>, row_counts: usize) -> Self {
+        FileOutputBuffer { buffer, row_counts }
+    }
+}
+
+#[derive(Debug)]
 pub struct FileOutputBuffers {
-    pub buffers: Vec<Vec<u8>>,
+    pub buffers: Vec<FileOutputBuffer>,
 }
 
 impl FileOutputBuffers {
-    pub fn create_block(buffers: Vec<Vec<u8>>) -> DataBlock {
+    pub fn create_block(buffers: Vec<FileOutputBuffer>) -> DataBlock {
         DataBlock::empty_with_meta(Box::new(FileOutputBuffers { buffers }))
     }
 }

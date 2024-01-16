@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+databend-common-exception = { path = "../../common/exception" }
 
 anyerror = { workspace = true }
 prost = { workspace = true }

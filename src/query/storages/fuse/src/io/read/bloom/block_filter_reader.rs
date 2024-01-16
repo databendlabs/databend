@@ -114,7 +114,7 @@ async fn load_bloom_filter_by_columns<'a>(
     // 4. build index schema
     let fields = col_metas
         .iter()
-        .map(|(_, (name, _col_chunk_mea))| TableField::new(name, TableDataType::String))
+        .map(|(_, (name, _col_chunk_mea))| TableField::new(name, TableDataType::Binary))
         .collect();
 
     let filter_schema = TableSchema::new(fields);

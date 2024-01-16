@@ -218,10 +218,6 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
-            owner: match p.owner {
-                Some(owner) => Some(mt::Ownership::from_pb(owner)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -258,10 +254,6 @@ impl FromToProto for mt::TableMeta {
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
-            owner: match self.owner.as_ref() {
-                Some(o) => Some(o.to_pb()?),
-                None => None,
-            },
         };
         Ok(p)
     }

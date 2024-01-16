@@ -1500,7 +1500,7 @@ impl<'a> TypeChecker<'a> {
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
                 span: d.span(),
-                is_try: return_type.is_nullable(),
+                is_try: false,
                 argument: Box::new(d),
                 target_type: Box::new(return_type.clone()),
             }))
@@ -1760,6 +1760,7 @@ impl<'a> TypeChecker<'a> {
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Null => DataType::Null,
+            DataType::Binary => DataType::Binary,
             DataType::String => DataType::String,
             _ => {
                 return Err(ErrorCode::BadDataValueType(format!(

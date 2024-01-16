@@ -53,13 +53,7 @@ fn test_to_projection_mask() -> Result<()> {
         }),
         TableField::new("h", TableDataType::String),
     ]);
-    let arrow_fields = schema.to_arrow().fields;
-    let arrow_schema = arrow_schema::Schema::new(
-        arrow_fields
-            .into_iter()
-            .map(arrow_schema::Field::from)
-            .collect::<Vec<_>>(),
-    );
+    let arrow_schema = (&schema).into();
     let schema_desc = arrow_to_parquet_schema(&arrow_schema)?;
 
     // (Projection, ProjectionMask)

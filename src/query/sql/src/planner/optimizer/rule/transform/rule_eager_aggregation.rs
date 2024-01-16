@@ -368,12 +368,12 @@ impl Rule for RuleEagerAggregation {
 
     fn apply(
         &self,
-        a_expr: &SExpr,
+        s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let mut matched_idx = 0;
         for (idx, pattern) in self.patterns.iter().enumerate() {
-            if a_expr.match_pattern(pattern) {
+            if s_expr.match_pattern(pattern) {
                 matched_idx = idx + 1;
                 break;
             }
@@ -390,7 +390,7 @@ impl Rule for RuleEagerAggregation {
             _ => unreachable!(),
         };
 
-        let eval_scalar_expr = a_expr;
+        let eval_scalar_expr = s_expr;
         let sort_expr = eval_scalar_expr.child(0)?;
         let final_agg_expr = match has_sort {
             true => sort_expr.child(0)?,
@@ -1267,7 +1267,7 @@ impl Rule for RuleEagerAggregation {
 // (4) The data type of the aggregate column is either Number or Nullable(Number).
 // Return the (Vec index, func index, func_name) for each eager aggregation function.
 fn get_eager_aggregation_functions(
-    idx: usize,
+    _idx: usize,
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
@@ -1299,12 +1299,6 @@ fn get_eager_aggregation_functions(
                             }
                         }
                     }
-                } else if idx == 1
-                    && aggregate_function.args.is_empty()
-                    && aggregate_function.func_name.as_str() == "count"
-                {
-                    // count(*) does not belong to the left or right child, so we push it down to the probe side.
-                    valid = true;
                 }
                 if valid {
                     return Some((

@@ -31,6 +31,8 @@ pub use column_stat::NewStatistic;
 #[cfg(feature = "z3-prove")]
 pub use constraint::ConstraintSet;
 pub use enforcer::require_property;
+pub use enforcer::DistributionEnforcer;
+pub use enforcer::Enforcer;
 pub use histogram::histogram_from_ndv;
 pub use histogram::Histogram;
 pub use histogram::HistogramBucket;

@@ -226,7 +226,6 @@ impl Parquet2DeserializeTransform {
                 func_ctx,
                 reader,
                 filter,
-                top_k,
             }) => {
                 let chunks = reader.read_from_merge_io(column_chunks)?;
 
@@ -241,19 +240,7 @@ impl Parquet2DeserializeTransform {
                 };
 
                 let mut prewhere_block = reader.deserialize(part, chunks, push_down)?;
-                // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
-                if let Some((index, sorter)) = top_k {
-                    let col = prewhere_block
-                        .get_by_offset(*index)
-                        .value
-                        .as_column()
-                        .unwrap();
-                    if sorter.never_match_any(col) {
-                        return Ok(None);
-                    }
-                }
-
-                // Step 2: Read Prewhere columns and get the filter
+                // Step 1: Read Prewhere columns and get the filter
                 let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator
                     .run(filter)
@@ -261,31 +248,16 @@ impl Parquet2DeserializeTransform {
                     .try_downcast::<BooleanType>()
                     .unwrap();
 
-                // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
+                // Step 2: Apply the filter, if it's all filtered, we can skip the remain columns.
                 if FilterHelpers::is_all_unset(&filter) {
                     return Ok(None);
                 }
-
-                // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                let filter = if let Some((index, sorter)) = top_k {
-                    let top_k_column = prewhere_block
-                        .get_by_offset(*index)
-                        .value
-                        .as_column()
-                        .unwrap();
-                    let mut bitmap =
-                        FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                    sorter.push_column(top_k_column, &mut bitmap);
-                    Value::Column(bitmap.into())
-                } else {
-                    filter
-                };
 
                 if FilterHelpers::is_all_unset(&filter) {
                     return Ok(None);
                 }
 
-                // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
+                // Step 4 Remove columns that are not needed for output. Use dummy column to replace them.
                 let mut columns = prewhere_block.columns().to_vec();
                 for (col, f) in columns.iter_mut().zip(reader.output_schema().fields()) {
                     if !self.output_schema.has_field(f.name()) {
@@ -293,7 +265,7 @@ impl Parquet2DeserializeTransform {
                     }
                 }
 
-                // Step 6: Read remain columns.
+                // Step 5: Read remain columns.
                 let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
 
                 let can_push_down = chunks

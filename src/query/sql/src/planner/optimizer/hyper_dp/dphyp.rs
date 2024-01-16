@@ -37,6 +37,7 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
+const EMIT_THRESHOLD: usize = 10000;
 const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
@@ -52,6 +53,8 @@ pub struct DPhpy {
     relation_set_tree: RelationSetTree,
     // non-equi conditions
     filters: HashSet<Filter>,
+    // The number of times emit_csg_cmp is called
+    emit_count: usize,
 }
 
 impl DPhpy {
@@ -65,11 +68,12 @@ impl DPhpy {
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
+            emit_count: 0,
         }
     }
 
-    fn new_children(&mut self, s_expr: Arc<SExpr>) -> Result<(Arc<SExpr>, bool)> {
-        // Parallel process children
+    fn new_children(&mut self, s_expr: Arc<SExpr>) -> Result<Arc<SExpr>> {
+        // Parallel process children: start a new dphyp for each child.
         let ctx = self.ctx.clone();
         let metadata = self.metadata.clone();
         let left_expr = s_expr.children()[0].clone();
@@ -88,6 +92,8 @@ impl DPhpy {
         let (left_expr, _) = left_res.0?;
         let right_res = right_res.join()?;
         let (right_expr, _) = right_res.0?;
+
+        // Merge `table_index_map` of left and right into current `table_index_map`.
         let relation_idx = self.join_relations.len() as IndexType;
         for table_index in left_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
@@ -95,10 +101,7 @@ impl DPhpy {
         for table_index in right_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
         }
-        Ok((
-            Arc::new(s_expr.replace_children([left_expr, right_expr])),
-            true,
-        ))
+        Ok(Arc::new(s_expr.replace_children([left_expr, right_expr])))
     }
 
     // Traverse the s_expr and get all base relations and join conditions
@@ -110,23 +113,17 @@ impl DPhpy {
         join_relation: Option<Arc<SExpr>>,
         is_subquery: bool,
     ) -> Result<(Arc<SExpr>, bool)> {
-        // Start to traverse and stop when meet join
-        if s_expr.is_pattern() {
-            return Ok((s_expr, true));
-        }
-
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
-            if optimized {
-                let relation_idx = self.join_relations.len() as IndexType;
-                for table_index in dphyp.table_index_map.keys() {
-                    self.table_index_map.insert(*table_index, relation_idx);
-                }
-                self.join_relations.push(JoinRelation::new(&new_s_expr));
+            let (new_s_expr, _) = dphyp.optimize(s_expr)?;
+            // Merge `table_index_map` of subquery into current `table_index_map`.
+            let relation_idx = self.join_relations.len() as IndexType;
+            for table_index in dphyp.table_index_map.keys() {
+                self.table_index_map.insert(*table_index, relation_idx);
             }
-            return Ok((new_s_expr, optimized));
+            self.join_relations.push(JoinRelation::new(&new_s_expr));
+            return Ok((new_s_expr, true));
         }
 
         match s_expr.plan.as_ref() {
@@ -190,9 +187,9 @@ impl DPhpy {
                     self.filters.insert(filter);
                 }
                 if !is_inner_join {
-                    let (new_s_expr, optimized) = self.new_children(s_expr)?;
+                    let new_s_expr = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
-                    Ok((new_s_expr, optimized))
+                    Ok((new_s_expr, true))
                 } else {
                     let left_res = self.get_base_relations(
                         s_expr.children()[0].clone(),
@@ -248,9 +245,9 @@ impl DPhpy {
                 }
             }
             RelOperator::UnionAll(_) => {
-                let (new_s_expr, optimized) = self.new_children(s_expr)?;
+                let new_s_expr = self.new_children(s_expr)?;
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
-                Ok((new_s_expr, optimized))
+                Ok((new_s_expr, true))
             }
             RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
                 unreachable!()
@@ -322,25 +319,23 @@ impl DPhpy {
         for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
             neighbors.sort();
         }
-        let optimized = self.solve()?;
+        self.join_reorder()?;
         // Get all join relations in `relation_set_tree`
         let all_relations = self
             .relation_set_tree
             .get_relation_set(&(0..self.join_relations.len()).collect())?;
-        if optimized {
-            if let Some(final_plan) = self.dp_table.get(&all_relations) {
-                self.join_reorder(final_plan, &s_expr)
-            } else {
-                // Maybe exist cross join, which make graph disconnected
-                Ok((s_expr, false))
-            }
+        if let Some(final_plan) = self.dp_table.get(&all_relations) {
+            self.generate_final_plan(final_plan, &s_expr)
         } else {
+            // Maybe exist cross join, which make graph disconnected
             Ok((s_expr, false))
         }
     }
 
-    // This method will run dynamic programming algorithm to find the optimal join order
-    fn solve(&mut self) -> Result<bool> {
+    // Adaptive Optimization:
+    // If the if the query graph is simple enough, it uses dynamic programming to construct the optimal join tree,
+    // if that is not possible within the given optimization budget, it switches to a greedy approach.
+    fn join_reorder(&mut self) -> Result<()> {
         // Initial `dp_table` with plan for single relation
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
@@ -355,9 +350,21 @@ impl DPhpy {
                 cardinality: Some(ce),
                 s_expr: None,
             };
-            let _ = self.dp_table.insert(nodes, join);
+            self.dp_table.insert(nodes, join);
         }
 
+        // First, try to use dynamic programming to find the optimal join order.
+        if !self.join_reorder_by_dphyp()? {
+            // When DPhpy takes too much time during join ordering, it is necessary to exit the dynamic programming algorithm
+            // and switch to a greedy algorithm to minimizes the overall query time.
+            self.join_reorder_by_greedy()?;
+        }
+
+        Ok(())
+    }
+
+    // Join reorder by dynamic programming algorithm.
+    fn join_reorder_by_dphyp(&mut self) -> Result<bool> {
         // Choose all nodes as enumeration start node once (desc order)
         for idx in (0..self.join_relations.len()).rev() {
             // Get node from `relation_set_tree`
@@ -366,7 +373,6 @@ impl DPhpy {
             if !self.emit_csg(&node)? {
                 return Ok(false);
             }
-
             // Create forbidden node set
             // Forbid node idx will less than current idx
             let forbidden_nodes = (0..idx).collect();
@@ -374,6 +380,97 @@ impl DPhpy {
             if !self.enumerate_csg_rec(&node, &forbidden_nodes)? {
                 return Ok(false);
             }
+        }
+        Ok(true)
+    }
+
+    // Join reorder by greedy algorithm.
+    fn join_reorder_by_greedy(&mut self) -> Result<bool> {
+        // The Greedy Operator Ordering starts with a single relation and iteratively adds the relation that minimizes the cost of the join.
+        // the algorithm terminates when all relations have been added, the cost of a join is the sum of the cardinalities of the node involved
+        // in the tree, the algorithm is not guaranteed to find the optimal join tree, it is guaranteed to find it in polynomial time.
+        // Create join relations list, all relations have been inserted into dp_table in func `join_reorder`.
+        let mut join_relations = (0..self.join_relations.len())
+            .map(|idx| self.relation_set_tree.get_relation_set_by_index(idx))
+            .collect::<Result<Vec<_>>>()?;
+        // When all relations have been added, the algorithm terminates.
+        while join_relations.len() > 1 {
+            // The cost is the sum of the cardinalities of the node involved in the tree.
+            let mut min_cost = f64::INFINITY;
+            // Pick the pair of relations with the minimum cost.
+            let mut left_idx = 0;
+            let mut right_idx = 0;
+            let mut new_relations = vec![];
+            for i in 0..join_relations.len() {
+                let left_relation = &join_relations[i];
+                for (j, right_relation) in join_relations.iter().enumerate().skip(i + 1) {
+                    // Check if left_relation set and right_relation set are connected, if connected, get join conditions.
+                    let join_conditions = self
+                        .query_graph
+                        .is_connected(left_relation, right_relation)?;
+                    if !join_conditions.is_empty() {
+                        // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the
+                        // minimum cost pair in `dp_table`.
+                        let cost =
+                            self.emit_csg_cmp(left_relation, right_relation, join_conditions)?;
+                        // Update the minimum cost pair.
+                        if cost < min_cost {
+                            min_cost = cost;
+                            left_idx = i;
+                            right_idx = j;
+                            // Update the new relation set in this iteration.
+                            new_relations = union(left_relation, right_relation);
+                        }
+                    }
+                }
+            }
+            // The minimum cost has no updates, which means there are no connected relation set pairs.
+            if min_cost == f64::INFINITY {
+                // Pick the pair of relation sets with the minimum cost and connect them with a cross product.
+                let mut lowest_cost = Vec::with_capacity(2);
+                let mut lowest_index = Vec::with_capacity(2);
+                for (i, relation) in join_relations.iter().enumerate().take(2) {
+                    let mut join_node = self.dp_table.get(relation).unwrap().clone();
+                    let cardinality = join_node.cardinality(&self.join_relations)?;
+                    lowest_cost.push(cardinality);
+                    lowest_index.push(i);
+                }
+                if lowest_cost[1] < lowest_cost[0] {
+                    lowest_cost.swap(0, 1);
+                    lowest_index.swap(0, 1);
+                }
+                // Update the minimum cost relation set pair.
+                for (i, relation) in join_relations.iter().enumerate().skip(2) {
+                    let mut join_node = self.dp_table.get(relation).unwrap().clone();
+                    let cardinality = join_node.cardinality(&self.join_relations)?;
+                    if cardinality < lowest_cost[0] {
+                        lowest_cost[1] = cardinality;
+                        lowest_index[1] = i;
+                        lowest_cost.swap(0, 1);
+                        lowest_index.swap(0, 1);
+                    } else if cardinality < lowest_cost[1] {
+                        lowest_cost[1] = cardinality;
+                        lowest_index[1] = i;
+                    }
+                }
+                // Update the minimum cost index pair.
+                left_idx = lowest_index[0];
+                right_idx = lowest_index[1];
+                // Store the new relation set in this iteration.
+                new_relations = union(&join_relations[left_idx], &join_relations[right_idx]);
+                // Emit csg-cmp-pair and insert the cross product into `dp_table`.
+                self.emit_csg_cmp(
+                    &join_relations[left_idx],
+                    &join_relations[right_idx],
+                    vec![],
+                )?;
+            }
+            if left_idx > right_idx {
+                std::mem::swap(&mut left_idx, &mut right_idx);
+            }
+            join_relations.remove(right_idx);
+            join_relations.remove(left_idx);
+            join_relations.push(new_relations);
         }
         Ok(true)
     }
@@ -400,7 +497,7 @@ impl DPhpy {
             // Check if neighbor is connected with `nodes`
             let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
             if !join_conditions.is_empty()
-                && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
+                && !self.try_emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
             {
                 return Ok(false);
             }
@@ -458,13 +555,31 @@ impl DPhpy {
         Ok(true)
     }
 
+    fn try_emit_csg_cmp(
+        &mut self,
+        left: &[IndexType],
+        right: &[IndexType],
+        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    ) -> Result<bool> {
+        self.emit_count += 1;
+        // If `emit_count` is greater than `EMIT_THRESHOLD`, we need to stop dynamic programming,
+        // otherwise it will take too much time
+        match self.emit_count > EMIT_THRESHOLD {
+            false => {
+                self.emit_csg_cmp(left, right, join_conditions)?;
+                Ok(true)
+            }
+            true => Ok(false),
+        }
+    }
+
     // EmitCsgCmp will join the optimal plan from left and right
     fn emit_csg_cmp(
         &mut self,
         left: &[IndexType],
         right: &[IndexType],
         mut join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
-    ) -> Result<bool> {
+    ) -> Result<f64> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
         let parent_set = union(left, right);
@@ -515,11 +630,23 @@ impl DPhpy {
             join_node.set_cost(cost);
         }
 
+        let cost = if parent_node.is_none() {
+            join_node.cost
+        } else {
+            let parent_node = parent_node.unwrap();
+            if parent_node.cost < join_node.cost {
+                parent_node.cost
+            } else {
+                join_node.cost
+            }
+        };
+
         if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
             // Update `dp_table`
             self.dp_table.insert(parent_set, join_node);
         }
-        Ok(true)
+
+        Ok(cost)
     }
 
     // The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
@@ -545,7 +672,7 @@ impl DPhpy {
             if merged_relation_set.len() > right.len()
                 && self.dp_table.contains_key(&merged_relation_set)
                 && !join_conditions.is_empty()
-                && !self.emit_csg_cmp(left, &merged_relation_set, join_conditions)?
+                && !self.try_emit_csg_cmp(left, &merged_relation_set, join_conditions)?
             {
                 return Ok(false);
             }
@@ -563,7 +690,11 @@ impl DPhpy {
     }
 
     // Map join order in `JoinNode` to `SExpr`
-    fn join_reorder(&self, final_plan: &JoinNode, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
+    fn generate_final_plan(
+        &self,
+        final_plan: &JoinNode,
+        s_expr: &SExpr,
+    ) -> Result<(Arc<SExpr>, bool)> {
         // Convert `final_plan` to `SExpr`
         let join_expr = final_plan.s_expr(&self.join_relations);
         // Find first join node in `s_expr`, then replace it with `join_expr`

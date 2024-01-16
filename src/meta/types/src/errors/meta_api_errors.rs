@@ -15,6 +15,7 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
+use databend_common_exception::ErrorCode;
 use tonic::Status;
 
 use crate::errors;
@@ -200,5 +201,11 @@ impl From<RaftError<ClientWriteError>> for MetaAPIError {
             }
             RaftError::Fatal(f) => MetaAPIError::DataError(MetaDataError::WriteError(f)),
         }
+    }
+}
+
+impl From<MetaAPIError> for ErrorCode {
+    fn from(e: MetaAPIError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
     }
 }

@@ -5,9 +5,9 @@
 # shellcheck disable=SC2034
 data_dir="tests/sqllogictests/data"
 
-db="tpch"
+db="tpch_test"
 
-echo "CREATE DATABASE IF NOT EXISTS tpch" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE DATABASE IF NOT EXISTS tpch_test" | $BENDSQL_CLIENT_CONNECT
 
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT

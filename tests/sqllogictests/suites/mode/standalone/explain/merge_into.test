@@ -71,3 +71,9 @@ target_table: default.default.salaries2
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+statement ok
+drop table employees2;
+
+statement ok
+drop table salaries2;
