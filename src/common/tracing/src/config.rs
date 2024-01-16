@@ -37,6 +37,7 @@ impl Config {
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
+                prefix_filter: "databend_".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
@@ -55,6 +56,7 @@ pub struct FileConfig {
     pub dir: String,
     pub format: String,
     pub limit: usize,
+    pub prefix_filter: String,
 }
 
 impl Display for FileConfig {
@@ -75,6 +77,7 @@ impl Default for FileConfig {
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         }
     }
 }

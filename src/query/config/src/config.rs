@@ -1940,6 +1940,15 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
     #[serde(rename = "limit")]
     pub file_limit: usize,
+
+    /// Log prefix filter
+    #[clap(
+        long = "log-file-prefix-filter",
+        value_name = "VALUE",
+        default_value = "databend_"
+    )]
+    #[serde(rename = "prefix_filter")]
+    pub file_prefix_filter: String,
 }
 
 impl Default for FileLogConfig {
@@ -1958,6 +1967,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -1970,6 +1980,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_prefix_filter: inner.prefix_filter,
         }
     }
 }
