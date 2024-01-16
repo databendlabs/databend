@@ -47,12 +47,14 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 7
 1
 0
+1	64	262
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
