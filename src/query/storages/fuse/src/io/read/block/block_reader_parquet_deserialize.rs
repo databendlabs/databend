@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use databend_common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
@@ -24,7 +23,6 @@ use databend_common_arrow::arrow::io::parquet::read::ArrayIter;
 use databend_common_arrow::arrow::io::parquet::read::InitNested;
 use databend_common_arrow::parquet::compression::Compression as ParquetCompression;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
-use databend_common_arrow::parquet::metadata::SchemaDescriptor;
 use databend_common_arrow::parquet::read::PageMetaData;
 use databend_common_arrow::parquet::read::PageReader;
 use databend_common_exception::ErrorCode;
@@ -33,9 +31,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 
@@ -95,95 +90,24 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
-        }
-
-        let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());
-        let mut need_to_fill_default_val = false;
-        let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
-        let field_deserialization_ctx = FieldDeserializationContext {
-            column_metas,
-            column_chunks: &column_chunks,
-            num_rows,
-            compression,
-            uncompressed_buffer: &uncompressed_buffer,
-            parquet_schema_descriptor: &None::<SchemaDescriptor>,
-        };
-        for column_node in &self.project_column_nodes {
-            let deserialized_column = self
-                .deserialize_field(&field_deserialization_ctx, column_node)
-                .map_err(|e| {
-                    e.add_message(format!(
-                        "failed to deserialize column: {:?}, location {} ",
-                        column_node, block_path
-                    ))
-                })?;
-            match deserialized_column {
-                None => {
-                    need_to_fill_default_val = true;
-                    need_default_vals.push(true);
-                }
-                Some(v) => {
-                    deserialized_column_arrays.push(v);
-                    need_default_vals.push(false);
-                }
-            }
-        }
-
-        // assembly the arrays
-        let mut chunk_arrays = vec![];
-        for array in &deserialized_column_arrays {
-            match array {
-                DeserializedArray::Deserialized((_, array, ..)) => {
-                    chunk_arrays.push(array);
-                }
-                DeserializedArray::NoNeedToCache(array) => {
-                    chunk_arrays.push(array);
-                }
-                DeserializedArray::Cached(sized_column) => {
-                    chunk_arrays.push(&sized_column.0);
-                }
-            }
-        }
-
-        // build data block
-        let chunk = Chunk::try_new(chunk_arrays)?;
-        let data_block = if !need_to_fill_default_val {
-            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())?
-        } else {
-            let data_schema = self.data_schema();
-            let mut default_vals = Vec::with_capacity(need_default_vals.len());
-            for (i, need_default_val) in need_default_vals.iter().enumerate() {
-                if !need_default_val {
-                    default_vals.push(None);
-                } else {
-                    default_vals.push(Some(self.default_vals[i].clone()));
-                }
-            }
-            DataBlock::create_with_default_value_and_chunk(
-                &data_schema,
-                &chunk,
-                &default_vals,
+        let use_parquet2 = self.ctx.get_settings().get_use_parquet2()?;
+        match use_parquet2 {
+            true => self.deserialize_column_chunks_2(
+                block_path,
                 num_rows,
-            )?
-        };
-
-        // populate cache if necessary
-        if self.put_cache {
-            if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-                // populate array cache items
-                for item in deserialized_column_arrays.into_iter() {
-                    if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                        let meta = column_metas.get(&column_id).unwrap();
-                        let (offset, len) = meta.offset_length();
-                        let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                        cache.put(key.into(), Arc::new((array, size)))
-                    }
-                }
-            }
+                compression,
+                column_metas,
+                column_chunks,
+                uncompressed_buffer,
+            ),
+            false => self.deserialize_column_chunks_1(
+                num_rows,
+                column_metas,
+                column_chunks,
+                compression,
+                block_path,
+            ),
         }
-        Ok(data_block)
     }
 
     #[allow(clippy::too_many_arguments)]

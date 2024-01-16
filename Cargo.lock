@@ -4486,6 +4486,7 @@ dependencies = [
  "enum-as-inner",
  "futures",
  "futures-util",
+ "parquet",
  "pot",
  "rmp-serde",
  "serde",

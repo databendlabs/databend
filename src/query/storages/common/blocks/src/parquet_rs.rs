@@ -17,9 +17,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet_rs::arrow::ArrowWriter;
-use parquet_rs::basic::Compression;
 use parquet_rs::basic::Encoding;
-use parquet_rs::basic::ZstdLevel;
 use parquet_rs::file::properties::EnabledStatistics;
 use parquet_rs::file::properties::WriterProperties;
 use parquet_rs::format::FileMetaData;
@@ -32,9 +30,8 @@ pub fn blocks_to_parquet(
     compression: TableCompression,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
-    let compression = to_parquet_rs_compression(compression);
     let props = WriterProperties::builder()
-        .set_compression(compression)
+        .set_compression(compression.into())
         .set_max_row_group_size(usize::MAX)
         .set_encoding(Encoding::PLAIN)
         .set_dictionary_enabled(false)
@@ -52,13 +49,4 @@ pub fn blocks_to_parquet(
     }
     let file_meta = writer.close()?;
     Ok(file_meta)
-}
-
-fn to_parquet_rs_compression(compression: TableCompression) -> Compression {
-    match compression {
-        TableCompression::None => Compression::UNCOMPRESSED,
-        TableCompression::LZ4 => Compression::LZ4_RAW,
-        TableCompression::Snappy => Compression::SNAPPY,
-        TableCompression::Zstd => Compression::ZSTD(ZstdLevel::default()),
-    }
 }

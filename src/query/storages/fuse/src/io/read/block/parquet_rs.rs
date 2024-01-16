@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
@@ -20,17 +21,16 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
-use databend_common_hashtable::HashMap;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::Compression;
 use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet_rs::arrow::arrow_reader::RowGroups;
 use parquet_rs::arrow::arrow_to_parquet_schema;
 use parquet_rs::arrow::parquet_to_arrow_field_levels;
 use parquet_rs::arrow::ProjectionMask;
-use parquet_rs::basic::Compression;
 use parquet_rs::column::page::PageIterator;
 use parquet_rs::column::page::PageReader;
 use parquet_rs::errors::Result as ParquetResult;
@@ -40,12 +40,12 @@ use parquet_rs::file::serialized_reader::SerializedPageReader;
 use super::block_reader_merge_io::DataItem;
 use super::BlockReader;
 impl BlockReader {
-    pub(crate) fn deserialize_column_chunks(
+    pub(crate) fn deserialize_column_chunks_1(
         &self,
         num_rows: usize,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
-        compression: Compression,
+        compression: &Compression,
         block_path: &str,
     ) -> databend_common_exception::Result<DataBlock> {
         // 1. Filter fields that need to be deserialized, use these fields to create a parquet schema
@@ -83,6 +83,7 @@ impl BlockReader {
             .collect::<Vec<_>>();
         // 3. Create RowGroupImpl, which is an adapter between parquet-rs and Fuse engine
         let mut column_chunk_metadatas = Vec::with_capacity(column_ids.len());
+        let compression = parquet_rs::basic::Compression::from(*compression);
         for (column_meta, column_descr) in
             reordered_column_metas.iter().zip(parquet_schema.columns())
         {
