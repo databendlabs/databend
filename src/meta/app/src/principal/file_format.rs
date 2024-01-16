@@ -31,6 +31,7 @@ use crate::principal::StageFileFormatType;
 const OPT_FIELD_DELIMITER: &str = "field_delimiter";
 const OPT_RECORDE_DELIMITER: &str = "record_delimiter";
 const OPT_SKIP_HEADER: &str = "skip_header";
+const OPT_OUTPUT_HEADER: &str = "output_header";
 const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
@@ -40,6 +41,7 @@ const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
+const OPT_BINARY_FORMAT: &str = "binary_format";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -207,10 +209,17 @@ impl FileFormatParams {
                     .map(|s| EmptyFieldAs::from_str(&s))
                     .transpose()?
                     .unwrap_or_default();
+                let binary_format = ast
+                    .options
+                    .remove(OPT_BINARY_FORMAT)
+                    .map(|s| BinaryFormat::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
                 let error_on_column_count_mismatch = ast.take_bool(
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
+                let output_header = ast.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
@@ -222,6 +231,8 @@ impl FileFormatParams {
                     quote,
                     error_on_column_count_mismatch,
                     empty_field_as,
+                    binary_format,
+                    output_header,
                 })
             }
             StageFileFormatType::Tsv => {
@@ -309,14 +320,22 @@ impl TryFrom<FileFormatOptionsAst> for FileFormatParams {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CsvFileFormatParams {
     pub compression: StageFileCompression,
-    pub headers: u64,
+
+    // basic
     pub field_delimiter: String,
     pub record_delimiter: String,
-    pub null_display: String,
-    pub nan_display: String,
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+
+    // header
+    pub headers: u64,
+    pub output_header: bool,
+
+    // field
+    pub binary_format: BinaryFormat,
+    pub null_display: String,
+    pub nan_display: String,
     pub empty_field_as: EmptyFieldAs,
 }
 
@@ -333,6 +352,8 @@ impl Default for CsvFileFormatParams {
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
             empty_field_as: Default::default(),
+            output_header: false,
+            binary_format: Default::default(),
         }
     }
 }
@@ -484,6 +505,36 @@ impl Display for NullAs {
             NullAs::Null => write!(f, "null"),
             NullAs::FieldDefault => write!(f, "field_default"),
             NullAs::TypeDefault => write!(f, "type_default"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum BinaryFormat {
+    #[default]
+    Hex,
+    Base64,
+}
+
+impl FromStr for BinaryFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "hex" => Ok(Self::Hex),
+            "base64" => Ok(Self::Base64),
+            _ => Err(ErrorCode::InvalidArgument(format!(
+                "invalid value ({s}) for binary_format, available values hex | base64."
+            ))),
+        }
+    }
+}
+
+impl Display for BinaryFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Hex => write!(f, "hex"),
+            Self::Base64 => write!(f, "base64"),
         }
     }
 }

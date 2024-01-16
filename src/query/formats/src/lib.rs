@@ -17,6 +17,7 @@
 #![feature(cursor_remaining)]
 #![feature(lazy_cell)]
 
+mod binary;
 mod clickhouse;
 mod common_settings;
 mod delimiter;

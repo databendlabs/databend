@@ -239,11 +239,14 @@ pub fn init_logging(
             fern::Dispatch::new()
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
-                .filter(|meta| {
-                    if meta.target().starts_with("databend_") {
-                        true
-                    } else {
-                        meta.level() <= LevelFilter::Error
+                .filter({
+                    let prefix_filter = cfg.file.prefix_filter.clone();
+                    move |meta| {
+                        if prefix_filter.is_empty() || meta.target().starts_with(&prefix_filter) {
+                            true
+                        } else {
+                            meta.level() <= LevelFilter::Error
+                        }
                     }
                 })
                 .chain(normal_logger),

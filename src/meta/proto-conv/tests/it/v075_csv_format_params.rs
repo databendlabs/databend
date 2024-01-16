@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use minitrace::func_name;
 
@@ -29,28 +31,29 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v53_csv_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v32 = vec![
-        18, 29, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 3, 110, 97, 110, 50, 1, 92, 58,
-        1, 39, 160, 6, 32, 168, 6, 24,
+fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
+    let file_format_params_v75 = vec![
+        18, 58, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 6, 109, 121, 95, 110, 97, 110,
+        50, 1, 124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 115, 116, 114, 105, 110,
+        103, 90, 6, 98, 97, 115, 101, 54, 52, 96, 1, 160, 6, 75, 168, 6, 24,
     ];
     let want = || {
         mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
             compression: StageFileCompression::Gzip,
             headers: 1,
-            output_header: false,
+            output_header: true,
             field_delimiter: "fd".to_string(),
             record_delimiter: "rd".to_string(),
-            null_display: "\\N".to_string(),
-            nan_display: "nan".to_string(),
-            escape: "\\".to_string(),
+            null_display: "Null".to_string(),
+            nan_display: "my_nan".to_string(),
+            escape: "|".to_string(),
             quote: "\'".to_string(),
-            error_on_column_count_mismatch: true,
-            empty_field_as: Default::default(),
-            binary_format: Default::default(),
+            error_on_column_count_mismatch: false,
+            empty_field_as: EmptyFieldAs::String,
+            binary_format: BinaryFormat::Base64,
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
+    common::test_load_old(func_name!(), file_format_params_v75.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
