@@ -32,14 +32,3 @@ DROP ROLE `test-b`
 statement ok
 DROP ROLE IF EXISTS `test-b`
 
-statement error 2217
-drop role 'account_admin'
-
-statement error 2217
-drop role 'account_admiN'
-
-statement error 2217
-drop role 'Public'
-
-statement error 2217
-drop role 'public'

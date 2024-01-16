@@ -43,9 +43,10 @@ use crate::role::role_api::RoleApi;
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
-static TXN_MAX_RETRY_TIMES: u32 = 5;
-
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
+static BUILTIN_ROLE_PUBLIC: &str = "public";
+
+static TXN_MAX_RETRY_TIMES: u32 = 5;
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
@@ -143,7 +144,7 @@ impl RoleApi for RoleMgr {
         ));
 
         let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
+            ErrorCode::UserAlreadyExists(format!("Role '{}' already exists.", role_info.name))
         })?;
 
         Ok(res_seq)
@@ -248,8 +249,7 @@ impl RoleApi for RoleMgr {
             }
         }
 
-        // account_admin has all privilege, no need to grant ownership.
-        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
+        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN && new_role != BUILTIN_ROLE_PUBLIC {
             let new_key = self.make_role_key(new_role);
             let SeqV {
                 seq: new_seq,

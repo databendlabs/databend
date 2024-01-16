@@ -66,11 +66,7 @@ impl Interpreter for SettingInterpreter {
                                 .set_global_setting(var.variable.clone(), tz.to_string())
                                 .await
                         }
-                        false => {
-                            settings
-                                .set_setting(var.variable.clone(), tz.to_string())
-                                .await
-                        }
+                        false => settings.set_setting(var.variable.clone(), tz.to_string()),
                     }?;
 
                     true
@@ -84,11 +80,7 @@ impl Interpreter for SettingInterpreter {
                                 .set_global_setting(var.variable.clone(), var.value.clone())
                                 .await
                         }
-                        false => {
-                            settings
-                                .set_setting(var.variable.clone(), var.value.clone())
-                                .await
-                        }
+                        false => settings.set_setting(var.variable.clone(), var.value.clone()),
                     }?;
 
                     true
