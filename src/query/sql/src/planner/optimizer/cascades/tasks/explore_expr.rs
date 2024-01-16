@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
@@ -56,8 +57,6 @@ pub struct ExploreExprTask {
 
     pub ref_count: Rc<SharedCounter>,
     pub parent: Option<Rc<SharedCounter>>,
-
-    should_terminate: bool,
 }
 
 impl ExploreExprTask {
@@ -73,7 +72,6 @@ impl ExploreExprTask {
             m_expr_index,
             ref_count: Rc::new(SharedCounter::new()),
             parent: None,
-            should_terminate: false,
         }
     }
 
@@ -83,21 +81,13 @@ impl ExploreExprTask {
         self
     }
 
-    pub fn with_termination(mut self) -> Self {
-        self.should_terminate = true;
-        self
-    }
-
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<()> {
         if matches!(self.state, ExploreExprState::ExploredSelf) {
             return Ok(());
-        }
-        if self.should_terminate {
-            return self.terminate();
         }
         self.transition(optimizer, scheduler)?;
         scheduler.add_task(Task::ExploreExpr(self));
@@ -107,7 +97,7 @@ impl ExploreExprTask {
     fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<()> {
         let event = match self.state {
             ExploreExprState::Init => self.explore_children(optimizer, scheduler)?,
@@ -125,7 +115,10 @@ impl ExploreExprTask {
             (ExploreExprState::ExploredChildren, ExploreExprEvent::ExploredSelf) => {
                 self.state = ExploreExprState::ExploredSelf;
             }
-            _ => unreachable!(),
+            _ => Err(ErrorCode::Internal(format!(
+                "Invalid transition from {:?} with {:?}",
+                self.state, event
+            )))?,
         }
 
         Ok(())
@@ -134,7 +127,7 @@ impl ExploreExprTask {
     fn explore_children(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo
@@ -162,7 +155,7 @@ impl ExploreExprTask {
     fn explore_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo
@@ -185,15 +178,5 @@ impl ExploreExprTask {
             parent.dec();
         }
         Ok(ExploreExprEvent::ExploredSelf)
-    }
-
-    fn terminate(&mut self) -> Result<()> {
-        if let Some(parent) = &self.parent {
-            parent.dec();
-        }
-
-        self.state = ExploreExprState::ExploredSelf;
-
-        Ok(())
     }
 }

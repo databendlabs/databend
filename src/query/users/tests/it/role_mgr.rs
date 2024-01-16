@@ -26,9 +26,9 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let role_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "tenant1";
+    let role_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+
     let role_name = "test-role1".to_string();
 
     // add role
@@ -42,7 +42,7 @@ async fn test_role_manager() -> Result<()> {
         let role_info = RoleInfo::new(&role_name);
         let res = role_mgr.add_role(tenant, role_info, false).await;
         assert!(res.is_err());
-        assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS,);
+        assert_eq!(res.err().unwrap().code(), ErrorCode::ROLE_ALREADY_EXISTS,);
     }
 
     // add role

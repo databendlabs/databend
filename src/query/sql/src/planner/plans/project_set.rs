@@ -48,6 +48,10 @@ impl Operator for ProjectSet {
         RelOp::ProjectSet
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,
@@ -110,14 +114,5 @@ impl Operator for ProjectSet {
         required: &RequiredProperty,
     ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![required.clone()]])
     }
 }

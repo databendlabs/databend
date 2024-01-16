@@ -45,7 +45,7 @@ pub struct MExpr {
 }
 
 impl MExpr {
-    pub fn create(
+    pub fn new(
         group_index: IndexType,
         index: IndexType,
         plan: Arc<RelOperator>,

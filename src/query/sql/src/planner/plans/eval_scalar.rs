@@ -56,6 +56,10 @@ impl Operator for EvalScalar {
         RelOp::EvalScalar
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -108,14 +112,5 @@ impl Operator for EvalScalar {
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

@@ -35,6 +35,10 @@ impl Operator for PatternPlan {
         self.plan_type.clone()
     }
 
+    fn arity(&self) -> usize {
+        0
+    }
+
     fn is_pattern(&self) -> bool {
         true
     }
