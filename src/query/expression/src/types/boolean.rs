@@ -110,6 +110,8 @@ impl ValueType for BooleanType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         col.get_bit_unchecked(index)
     }
 

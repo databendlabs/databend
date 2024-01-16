@@ -68,7 +68,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            ValueRef::Scalar(val) => Value::Scalar(val.to_vec()),
+            ValueRef::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
             ValueRef::Column(col) => Value::Column(col.into()),
         },
     );
@@ -77,7 +77,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            ValueRef::Scalar(val) => Value::Scalar(Some(val.to_vec())),
+            ValueRef::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
             ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: Bitmap::new_constant(true, col.len()),
                 column: col.into(),
@@ -213,7 +213,7 @@ pub fn vectorize_binary_to_string(
 /// String to Binary scalar function with estimated output column capacity.
 pub fn vectorize_string_to_binary(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &mut BinaryColumnBuilder, &mut EvalContext) + Copy,
+    func: impl Fn(&str, &mut BinaryColumnBuilder, &mut EvalContext) + Copy,
 ) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Value<BinaryType> + Copy {
     move |arg1, ctx| match arg1 {
         ValueRef::Scalar(val) => {

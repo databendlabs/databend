@@ -113,7 +113,7 @@ pub enum Scalar {
     Date(i32),
     Boolean(bool),
     Binary(Vec<u8>),
-    String(Vec<u8>),
+    String(String),
     Array(Column),
     Map(Column),
     Bitmap(Vec<u8>),
@@ -131,7 +131,7 @@ pub enum ScalarRef<'a> {
     Decimal(DecimalScalar),
     Boolean(bool),
     Binary(&'a [u8]),
-    String(&'a [u8]),
+    String(&'a str),
     Timestamp(i64),
     Date(i32),
     Array(Column),
@@ -345,7 +345,7 @@ impl Scalar {
             Scalar::Decimal(d) => ScalarRef::Decimal(*d),
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
             Scalar::Binary(s) => ScalarRef::Binary(s.as_slice()),
-            Scalar::String(s) => ScalarRef::String(s.as_slice()),
+            Scalar::String(s) => ScalarRef::String(s.as_str()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
@@ -362,8 +362,8 @@ impl Scalar {
             DataType::EmptyArray => Scalar::EmptyArray,
             DataType::EmptyMap => Scalar::EmptyMap,
             DataType::Boolean => Scalar::Boolean(false),
-            DataType::Binary => Scalar::Binary(vec![]),
-            DataType::String => Scalar::String(vec![]),
+            DataType::Binary => Scalar::Binary(Vec::new()),
+            DataType::String => Scalar::String(String::new()),
             DataType::Number(num_ty) => Scalar::Number(match num_ty {
                 NumberDataType::UInt8 => NumberScalar::UInt8(0),
                 NumberDataType::UInt16 => NumberScalar::UInt16(0),
@@ -441,7 +441,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Decimal(d) => Scalar::Decimal(*d),
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
             ScalarRef::Binary(s) => Scalar::Binary(s.to_vec()),
-            ScalarRef::String(s) => Scalar::String(s.to_vec()),
+            ScalarRef::String(s) => Scalar::String(s.to_string()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
@@ -483,8 +483,8 @@ impl<'a> ScalarRef<'a> {
                 has_true: false,
             }),
             ScalarRef::String(s) => Domain::String(StringDomain {
-                min: s.to_vec(),
-                max: Some(s.to_vec()),
+                min: s.to_string(),
+                max: Some(s.to_string()),
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
@@ -927,8 +927,8 @@ impl Column {
             Column::String(col) => {
                 let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
                 Domain::String(StringDomain {
-                    min: min.to_vec(),
-                    max: Some(max.to_vec()),
+                    min: min.to_string(),
+                    max: Some(max.to_string()),
                 })
             }
             Column::Timestamp(col) => {
@@ -1085,8 +1085,8 @@ impl Column {
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(5)
-                            .map(u8::from)
-                            .collect::<Vec<_>>()
+                            .map(char::from)
+                            .collect::<String>()
                     })
                     .collect_vec(),
             ),
@@ -1620,7 +1620,7 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
-                builder.put_slice(value);
+                builder.put_str(value);
                 builder.commit_row();
             }
             (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
@@ -1813,11 +1813,13 @@ impl ColumnBuilder {
             }
             ColumnBuilder::String(builder) => {
                 for row in 0..rows {
-                    #[cfg(debug_assertions)]
-                    (&reader[step * row..]).check_utf8().unwrap();
+                    let bytes = &reader[step * row..];
 
-                    let reader = &reader[step * row..];
-                    builder.put_slice(reader);
+                    #[cfg(debug_assertions)]
+                    bytes.check_utf8().unwrap();
+
+                    let s = unsafe { std::str::from_utf8_unchecked(bytes) };
+                    builder.put_str(s);
                     builder.commit_row();
                 }
             }

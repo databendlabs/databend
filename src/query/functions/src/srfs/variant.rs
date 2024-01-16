@@ -78,41 +78,38 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let path_arg = args[1].clone().to_owned();
                     let mut results = Vec::with_capacity(ctx.num_rows);
                     match path_arg {
-                        Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
-                            Ok(json_path) => {
-                                let selector = Selector::new(json_path, SelectorMode::All);
-                                for (row, max_nums_per_row) in
-                                    max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
-                                {
-                                    let val = unsafe { val_arg.index_unchecked(row) };
-                                    let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
-                                    if let ScalarRef::Variant(val) = val {
-                                        selector.select(
-                                            val,
-                                            &mut builder.data,
-                                            &mut builder.offsets,
-                                        );
+                        Value::Scalar(Scalar::String(path)) => {
+                            match parse_json_path(path.as_bytes()) {
+                                Ok(json_path) => {
+                                    let selector = Selector::new(json_path, SelectorMode::All);
+                                    for (row, max_nums_per_row) in
+                                        max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                                    {
+                                        let val = unsafe { val_arg.index_unchecked(row) };
+                                        let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
+                                        if let ScalarRef::Variant(val) = val {
+                                            selector.select(
+                                                val,
+                                                &mut builder.data,
+                                                &mut builder.offsets,
+                                            );
+                                        }
+                                        let array =
+                                            Column::Variant(builder.build()).wrap_nullable(None);
+                                        let array_len = array.len();
+                                        *max_nums_per_row =
+                                            std::cmp::max(*max_nums_per_row, array_len);
+                                        results.push((
+                                            Value::Column(Column::Tuple(vec![array])),
+                                            array_len,
+                                        ));
                                     }
-                                    let array =
-                                        Column::Variant(builder.build()).wrap_nullable(None);
-                                    let array_len = array.len();
-                                    *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
-                                    results.push((
-                                        Value::Column(Column::Tuple(vec![array])),
-                                        array_len,
-                                    ));
+                                }
+                                Err(_) => {
+                                    ctx.set_error(0, format!("Invalid JSON Path '{}'", &path,));
                                 }
                             }
-                            Err(_) => {
-                                ctx.set_error(
-                                    0,
-                                    format!(
-                                        "Invalid JSON Path '{}'",
-                                        &String::from_utf8_lossy(&path),
-                                    ),
-                                );
-                            }
-                        },
+                        }
                         _ => {
                             for (row, max_nums_per_row) in
                                 max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
@@ -121,7 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 let path = unsafe { path_arg.index_unchecked(row) };
                                 let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                 if let ScalarRef::String(path) = path {
-                                    match parse_json_path(path) {
+                                    match parse_json_path(path.as_bytes()) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
                                                 let selector =
@@ -136,10 +133,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         Err(_) => {
                                             ctx.set_error(
                                                 row,
-                                                format!(
-                                                    "Invalid JSON Path '{}'",
-                                                    &String::from_utf8_lossy(path),
-                                                ),
+                                                format!("Invalid JSON Path '{}'", &path,),
                                             );
                                             break;
                                         }
@@ -297,23 +291,18 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     if args.len() >= 2 {
                         match &args[1] {
-                            ValueRef::Scalar(ScalarRef::String(v)) => match parse_json_path(v) {
-                                Ok(jsonpath) => {
-                                    let path = unsafe { std::str::from_utf8_unchecked(v) };
-                                    let selector = Selector::new(jsonpath, SelectorMode::First);
-                                    json_path = Some((path, selector));
+                            ValueRef::Scalar(ScalarRef::String(v)) => {
+                                match parse_json_path(v.as_bytes()) {
+                                    Ok(jsonpath) => {
+                                        let selector = Selector::new(jsonpath, SelectorMode::First);
+                                        json_path = Some((v, selector));
+                                    }
+                                    Err(_) => {
+                                        ctx.set_error(0, format!("Invalid JSON Path {v:?}",));
+                                        return results;
+                                    }
                                 }
-                                Err(_) => {
-                                    ctx.set_error(
-                                        0,
-                                        format!(
-                                            "Invalid JSON Path {:?}",
-                                            String::from_utf8_lossy(v)
-                                        ),
-                                    );
-                                    return results;
-                                }
-                            },
+                            }
                             ValueRef::Column(_) => {
                                 ctx.set_error(
                                     0,
@@ -360,30 +349,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     if args.len() >= 5 {
                         match args[4] {
                             ValueRef::Scalar(ScalarRef::String(v)) => {
-                                match String::from_utf8(v.to_vec()) {
-                                    Ok(val) => match val.to_lowercase().as_str() {
-                                        "object" => {
-                                            mode = FlattenMode::Object;
-                                        }
-                                        "array" => {
-                                            mode = FlattenMode::Array;
-                                        }
-                                        "both" => {
-                                            mode = FlattenMode::Both;
-                                        }
-                                        _ => {
-                                            ctx.set_error(0, format!("Invalid mode {:?}", val));
-                                            return results;
-                                        }
-                                    },
-                                    Err(_) => {
-                                        ctx.set_error(
-                                            0,
-                                            format!(
-                                                "Invalid mode string {:?}",
-                                                String::from_utf8_lossy(v)
-                                            ),
-                                        );
+                                match v.to_lowercase().as_str() {
+                                    "object" => {
+                                        mode = FlattenMode::Object;
+                                    }
+                                    "array" => {
+                                        mode = FlattenMode::Array;
+                                    }
+                                    "both" => {
+                                        mode = FlattenMode::Both;
+                                    }
+                                    _ => {
+                                        ctx.set_error(0, format!("Invalid mode {v:?}"));
                                         return results;
                                     }
                                 }
@@ -672,10 +649,10 @@ impl FlattenGenerator {
                     };
 
                     if let Some(key_builder) = key_builder {
-                        key_builder.push(name.as_bytes());
+                        key_builder.push(name.as_ref());
                     }
                     if let Some(path_builder) = path_builder {
-                        path_builder.put_slice(inner_path.as_bytes());
+                        path_builder.put_str(&inner_path);
                         path_builder.commit_row();
                     }
                     if let Some(index_builder) = index_builder {
@@ -768,13 +745,13 @@ impl FlattenGenerator {
         let key_column = if let Some(key_builder) = key_builder {
             NullableType::<StringType>::upcast_column(key_builder.build())
         } else {
-            StringType::upcast_column(StringColumnBuilder::repeat(&[], rows).build())
+            StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
                 .wrap_nullable(None)
         };
         let path_column = if let Some(path_builder) = path_builder {
             StringType::upcast_column(path_builder.build()).wrap_nullable(None)
         } else {
-            StringType::upcast_column(StringColumnBuilder::repeat(&[], rows).build())
+            StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
                 .wrap_nullable(None)
         };
         let index_column = if let Some(index_builder) = index_builder {

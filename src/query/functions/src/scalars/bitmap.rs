@@ -20,6 +20,7 @@ use std::ops::Sub;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::bitmap::BitmapType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
@@ -41,10 +42,10 @@ use itertools::join;
 use roaring::RoaringTreemap;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<StringType, BitmapType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, BitmapType, _, _>(
         "to_bitmap",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
+        vectorize_with_builder_1_arg::<BinaryType, BitmapType>(|s, builder, ctx| {
             match parse_bitmap(s) {
                 Ok(rb) => {
                     rb.serialize_into(&mut builder.data).unwrap();

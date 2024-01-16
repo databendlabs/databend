@@ -12,7 +12,7 @@ use crate::common::new_block;
 
 #[test]
 fn test_split_block() {
-    let value = b"abc";
+    let value = "abc";
     let n = 10;
     let block = new_block(&[Column::String(
         StringColumnBuilder::repeat(&value[..], n).build(),
@@ -27,7 +27,7 @@ fn test_split_block() {
 
 #[test]
 fn test_box_render_block() {
-    let value = b"abc";
+    let value = "abc";
     let n = 10;
     let block = new_block(&[
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),

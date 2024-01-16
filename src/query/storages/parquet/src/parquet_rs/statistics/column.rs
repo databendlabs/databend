@@ -27,7 +27,7 @@ use super::utils::decode_decimal128_from_bytes;
 use super::utils::decode_decimal256_from_bytes;
 
 /// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnStatistics {
+pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<ColumnStatistics> {
     let (max, min) = if s.has_min_max_set() {
         match s {
             Statistics::Boolean(s) => (Scalar::Boolean(*s.max()), Scalar::Boolean(*s.min())),
@@ -110,8 +110,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
             Statistics::Float(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::Double(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::ByteArray(s) => (
-                Scalar::String(s.max().as_bytes().to_vec()),
-                Scalar::String(s.min().as_bytes().to_vec()),
+                Scalar::String(String::from_utf8(s.max().as_bytes().to_vec()).ok()?),
+                Scalar::String(String::from_utf8(s.min().as_bytes().to_vec()).ok()?),
             ),
             Statistics::FixedLenByteArray(s) => {
                 let (max, min) = (s.max(), s.min());
@@ -131,11 +131,11 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
     } else {
         (Scalar::Null, Scalar::Null)
     };
-    ColumnStatistics::new(
+    Some(ColumnStatistics::new(
         min,
         max,
         s.null_count(),
         0, // this field is not used.
         s.distinct_count(),
-    )
+    ))
 }

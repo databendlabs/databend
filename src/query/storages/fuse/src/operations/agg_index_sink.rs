@@ -78,11 +78,7 @@ impl AggIndexSink {
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
-            let location = unsafe {
-                String::from_utf8_unchecked(StringType::to_owned_scalar(
-                    block_name_col.index(i).unwrap(),
-                ))
-            };
+            let location = block_name_col.index(i).unwrap().to_string();
 
             self.location_data
                 .entry(location)

@@ -33,6 +33,7 @@ use itertools::Itertools;
 use jsonb::convert_to_comparable;
 use jsonb::parse_value;
 use ordered_float::OrderedFloat;
+use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::thread_rng;
@@ -303,13 +304,8 @@ fn test_binary() {
 
 #[test]
 fn test_string() {
-    let col = StringType::from_opt_data(vec![
-        Some("hello".as_bytes().to_vec()),
-        Some("he".as_bytes().to_vec()),
-        None,
-        Some("foo".as_bytes().to_vec()),
-        Some("".as_bytes().to_vec()),
-    ]);
+    let col =
+        StringType::from_opt_data(vec![Some("hello"), Some("he"), None, Some("foo"), Some("")]);
 
     let converter =
         RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
@@ -327,13 +323,13 @@ fn test_string() {
 
     let col = StringType::from_opt_data(vec![
         None,
-        Some(vec![0_u8; 0]),
-        Some(vec![0_u8; 6]),
-        Some(vec![0_u8; BLOCK_SIZE]),
-        Some(vec![0_u8; BLOCK_SIZE + 1]),
-        Some(vec![1_u8; 6]),
-        Some(vec![1_u8; BLOCK_SIZE]),
-        Some(vec![1_u8; BLOCK_SIZE + 1]),
+        Some(String::from_utf8(vec![0_u8; 0]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; 6]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; BLOCK_SIZE]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; BLOCK_SIZE + 1]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; 6]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; BLOCK_SIZE]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; BLOCK_SIZE + 1]).unwrap()),
     ]);
     let num_rows = col.len();
 
@@ -481,7 +477,12 @@ fn generate_string_column(len: usize, valid_percent: f64) -> Column {
         .map(|_| {
             rng.gen_bool(valid_percent).then(|| {
                 let len = rng.gen_range(0..100);
-                (0..len).map(|_| rng.gen_range(0..128)).collect_vec()
+                thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    // randomly generate 5 characters.
+                    .take(len)
+                    .map(char::from)
+                    .collect::<String>()
             })
         })
         .collect::<Vec<_>>();

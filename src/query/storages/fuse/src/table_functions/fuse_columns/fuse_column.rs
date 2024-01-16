@@ -103,7 +103,7 @@ impl<'a> FuseColumn<'a> {
         let limit = self.limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
-        let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
+        let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);
         let mut block_size = vec![];
@@ -177,10 +177,7 @@ impl<'a> FuseColumn<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(snapshot_id.to_vec())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(snapshot_id))),
                 BlockEntry::new(
                     DataType::Timestamp,
                     Value::Scalar(Scalar::Timestamp(timestamp)),
