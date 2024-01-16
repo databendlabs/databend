@@ -372,7 +372,6 @@ impl HashJoinProbeState {
     }
 
     #[inline]
-    #[allow(clippy::too_many_arguments)]
     fn check_and_set_matched(
         &self,
         build_indexes: &[RowPtr],
@@ -384,9 +383,17 @@ impl HashJoinProbeState {
             .hash_join_state
             .need_merge_into_target_partial_modified_scan()
         {
-            let chunk_offsets =
-                unsafe { &*self.hash_join_state.merge_into_state.chunk_offsets.get() };
-            let pointer = unsafe { &*self.hash_join_state.merge_into_state.atomic_pointer.get() };
+            let merge_into_state = unsafe {
+                &*self
+                    .hash_join_state
+                    .merge_into_state
+                    .as_ref()
+                    .unwrap()
+                    .get()
+            };
+            let chunk_offsets = &merge_into_state.chunk_offsets;
+
+            let pointer = &merge_into_state.atomic_pointer;
             // add matched indexes.
             for (idx, row_ptr) in build_indexes[0..matched_idx].iter().enumerate() {
                 unsafe {

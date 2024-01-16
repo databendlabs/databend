@@ -183,6 +183,36 @@ impl HashJoinBuildState {
         }))
     }
 
+    fn build_merge_into_block_info_index(&self, input: DataBlock, old_size: usize) {
+        // merge into target table as build side.
+        if self
+            .hash_join_state
+            .need_merge_into_target_partial_modified_scan()
+        {
+            assert!(input.get_meta().is_some());
+            let merge_into_state = unsafe {
+                &mut *self
+                    .hash_join_state
+                    .merge_into_state
+                    .as_ref()
+                    .unwrap()
+                    .get()
+            };
+            let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+            let start_offset = build_state.generation_state.build_num_rows + old_size;
+            let end_offset = start_offset + input.num_rows() - 1;
+            let block_meta_index =
+                BlockMetaIndex::downcast_ref_from(input.get_meta().unwrap()).unwrap();
+            let row_prefix = compute_row_id_prefix(
+                block_meta_index.segment_idx as u64,
+                block_meta_index.block_idx as u64,
+            );
+            let block_info_index = &mut merge_into_state.block_info_index;
+            block_info_index
+                .insert_block_offsets((start_offset as u32, end_offset as u32), row_prefix);
+        }
+    }
+
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
@@ -195,26 +225,7 @@ impl HashJoinBuildState {
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
 
-        // merge into target table as build side.
-        if self
-            .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
-        {
-            assert!(input.get_meta().is_some());
-            let build_state = unsafe { &*self.hash_join_state.build_state.get() };
-            let start_offset = build_state.generation_state.build_num_rows + old_size;
-            let end_offset = start_offset + input_rows - 1;
-            let block_meta_index =
-                BlockMetaIndex::downcast_ref_from(input.get_meta().unwrap()).unwrap();
-            let row_prefix = compute_row_id_prefix(
-                block_meta_index.segment_idx as u64,
-                block_meta_index.block_idx as u64,
-            );
-            let block_info_index =
-                unsafe { &mut *self.hash_join_state.merge_into_state.block_info_index.get() };
-            block_info_index
-                .insert_block_offsets((start_offset as u32, end_offset as u32), row_prefix);
-        }
+        self.build_merge_into_block_info_index(input.clone(), old_size);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
@@ -262,8 +273,15 @@ impl HashJoinBuildState {
                 .hash_join_state
                 .need_merge_into_target_partial_modified_scan()
             {
-                let chunk_offsets =
-                    unsafe { &mut *self.hash_join_state.merge_into_state.chunk_offsets.get() };
+                let merge_into_state = unsafe {
+                    &mut *self
+                        .hash_join_state
+                        .merge_into_state
+                        .as_ref()
+                        .unwrap()
+                        .get()
+                };
+                let chunk_offsets = &mut merge_into_state.chunk_offsets;
                 chunk_offsets.push(build_state.generation_state.build_num_rows as u32);
             }
         }
@@ -428,10 +446,17 @@ impl HashJoinBuildState {
                 .hash_join_state
                 .need_merge_into_target_partial_modified_scan()
             {
-                let matched = unsafe { &mut *self.hash_join_state.merge_into_state.matched.get() };
+                let merge_into_state = unsafe {
+                    &mut *self
+                        .hash_join_state
+                        .merge_into_state
+                        .as_ref()
+                        .unwrap()
+                        .get()
+                };
+                let matched = &mut merge_into_state.matched;
                 let build_state = unsafe { &*self.hash_join_state.build_state.get() };
-                let atomic_pointer =
-                    unsafe { &mut *self.hash_join_state.merge_into_state.atomic_pointer.get() };
+                let atomic_pointer = &mut merge_into_state.atomic_pointer;
                 *matched = vec![0; build_state.generation_state.build_num_rows];
                 let pointer =
                     unsafe { std::mem::transmute::<*mut u8, *mut AtomicU8>(matched.as_mut_ptr()) };

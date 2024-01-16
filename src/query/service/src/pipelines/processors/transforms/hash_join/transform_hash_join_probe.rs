@@ -144,15 +144,16 @@ impl TransformHashJoinProbe {
             self.output_data_blocks.push_back(data_block);
             return Ok(());
         }
-
-        let chunks_offsets = unsafe {
+        let merge_into_state = unsafe {
             &*self
                 .join_probe_state
                 .hash_join_state
                 .merge_into_state
-                .chunk_offsets
+                .as_ref()
+                .unwrap()
                 .get()
         };
+        let chunks_offsets = &merge_into_state.chunk_offsets;
         let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
         let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
         let chunk_start = if item.1 == 0 {
@@ -161,14 +162,13 @@ impl TransformHashJoinProbe {
             chunks_offsets[(item.1 - 1) as usize]
         };
         for (interval, prefix) in item.0 {
-            let indices = ((interval.0 - chunk_start)..=(interval.1 - chunk_start))
-                .collect::<Vec<u32>>()
-                .chunks(self.max_block_size)
-                .map(|chunk| chunk.to_vec())
-                .collect::<Vec<Vec<u32>>>();
-            for range in indices.iter() {
+            for start in ((interval.0 - chunk_start)..=(interval.1 - chunk_start))
+                .step_by(self.max_block_size)
+            {
+                let end = (interval.1 - chunk_start).min(start + self.max_block_size as u32 - 1);
+                let range = (start..=end).collect::<Vec<u32>>();
                 let data_block = chunk_block.take(
-                    range,
+                    &range,
                     &mut self.probe_state.generation_state.string_items_buf,
                 )?;
                 assert!(!data_block.is_empty());

@@ -484,10 +484,17 @@ impl HashJoinProbeState {
     }
 
     pub fn generate_merge_into_final_scan_task(&self) -> Result<()> {
-        let block_info_index =
-            unsafe { &*self.hash_join_state.merge_into_state.block_info_index.get() };
-        let matched = unsafe { &*self.hash_join_state.merge_into_state.matched.get() };
-        let chunks_offsets = unsafe { &*self.hash_join_state.merge_into_state.chunk_offsets.get() };
+        let merge_into_state = unsafe {
+            &*self
+                .hash_join_state
+                .merge_into_state
+                .as_ref()
+                .unwrap()
+                .get()
+        };
+        let block_info_index = &merge_into_state.block_info_index;
+        let matched = &merge_into_state.matched;
+        let chunks_offsets = &merge_into_state.chunk_offsets;
         let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
         let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
 
