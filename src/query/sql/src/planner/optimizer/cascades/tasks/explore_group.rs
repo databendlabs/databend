@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
@@ -52,8 +53,6 @@ pub struct ExploreGroupTask {
 
     pub ref_count: Rc<SharedCounter>,
     pub parent: Option<Rc<SharedCounter>>,
-
-    pub should_terminate: bool,
 }
 
 impl ExploreGroupTask {
@@ -65,7 +64,6 @@ impl ExploreGroupTask {
             last_explored_m_expr: None,
             ref_count: Rc::new(SharedCounter::new()),
             parent: None,
-            should_terminate: false,
         }
     }
 
@@ -75,22 +73,13 @@ impl ExploreGroupTask {
         self
     }
 
-    /// Mark this task as a termination task.
-    pub fn with_termination(mut self) -> Self {
-        self.should_terminate = true;
-        self
-    }
-
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<()> {
         if matches!(self.state, ExploreGroupState::Explored) {
             return Ok(());
-        }
-        if self.should_terminate {
-            return self.terminate(optimizer);
         }
         self.transition(optimizer, scheduler)?;
         scheduler.add_task(Task::ExploreGroup(self));
@@ -100,7 +89,7 @@ impl ExploreGroupTask {
     pub fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<()> {
         let event = match self.state {
             ExploreGroupState::Init => self.explore_group(optimizer, scheduler)?,
@@ -113,7 +102,10 @@ impl ExploreGroupTask {
             (ExploreGroupState::Init, ExploreGroupEvent::Explored) => {
                 self.state = ExploreGroupState::Explored;
             }
-            _ => unreachable!(),
+            _ => Err(ErrorCode::Internal(format!(
+                "Invalid state transition from {:?} with event {:?}",
+                self.state, event
+            )))?,
         }
 
         Ok(())
@@ -122,7 +114,7 @@ impl ExploreGroupTask {
     fn explore_group(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<ExploreGroupEvent> {
         let group = optimizer.memo.group_mut(self.group_index)?;
 
@@ -145,16 +137,5 @@ impl ExploreGroupTask {
         self.last_explored_m_expr = Some(group.num_exprs());
 
         Ok(ExploreGroupEvent::Exploring)
-    }
-
-    pub fn terminate(&mut self, cascades_optimizer: &mut CascadesOptimizer) -> Result<()> {
-        if let Some(parent) = &self.parent {
-            parent.dec();
-        }
-
-        let group = cascades_optimizer.memo.group_mut(self.group_index)?;
-        group.set_state(GroupState::Explored);
-
-        Ok(())
     }
 }

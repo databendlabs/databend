@@ -36,5 +36,6 @@ fn rule_set_rs_l1() -> RuleSet {
         RuleID::CommuteJoinBaseTable,
         RuleID::LeftExchangeJoin,
         RuleID::EagerAggregation,
+        RuleID::CommuteJoin,
     ])
 }

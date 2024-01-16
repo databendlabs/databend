@@ -25,6 +25,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 
+/// TODO(leiysky): deprecate this, should use cascades planner instead.
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
     let required = RequiredProperty {
         distribution: Distribution::Any,
