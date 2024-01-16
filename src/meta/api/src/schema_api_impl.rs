@@ -173,6 +173,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
@@ -1685,18 +1686,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let key_table_count = CountTablesKey::new(tenant);
 
         // The keys of values to re-fetch for every retry in this txn.
-        let fetches = vec![
-            TxnOp::get(key_dbid.to_string_key()),
-            TxnOp::get(key_dbid_tbname.to_string_key()),
-            TxnOp::get(key_table_id_list.to_string_key()),
-            TxnOp::get(key_table_count.to_string_key()),
+        let keys = vec![
+            key_dbid.to_string_key(),
+            key_dbid_tbname.to_string_key(),
+            key_table_id_list.to_string_key(),
+            key_table_count.to_string_key(),
         ];
+        let fetches = keys
+            .iter()
+            .map(|k| TxnOp::get(k.clone()))
+            .collect::<Vec<_>>();
 
         // Initialize required key-values
-
-        let (succ, responses) = send_txn(self, TxnRequest::unconditional(fetches.clone())).await?;
-        assert!(succ);
-        let mut data = into_get_responses(responses)?;
+        let mut data = {
+            let values = self.mget_kv(&keys).await?;
+            keys.iter()
+                .zip(values.into_iter())
+                .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                .collect::<Vec<_>>()
+        };
 
         // Initialize table count if needed
         assert_eq!(data[3].key, key_table_count.to_string_key());
@@ -1704,10 +1712,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             init_table_count(self, &key_table_count).await?;
 
             // Re-fetch
-            let (succ, responses) =
-                send_txn(self, TxnRequest::unconditional(fetches.clone())).await?;
-            assert!(succ);
-            data = into_get_responses(responses)?;
+            data = {
+                let values = self.mget_kv(&keys).await?;
+                keys.iter()
+                    .zip(values.into_iter())
+                    .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                    .collect::<Vec<_>>()
+            };
         }
 
         let mut trials = txn_backoff(None, func_name!());
