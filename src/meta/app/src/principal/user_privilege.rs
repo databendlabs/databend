@@ -131,11 +131,17 @@ pub struct UserPrivilegeSet {
     privileges: BitFlags<UserPrivilegeType>,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl UserPrivilegeSet {
     pub fn empty() -> Self {
         UserPrivilegeSet {
             privileges: BitFlags::empty(),
         }
+    }
+
+    #[inline(always)]
+    pub fn len(self) -> usize {
+        self.privileges.len()
     }
 
     pub fn iter(self) -> impl Iterator<Item = UserPrivilegeType> {
