@@ -3801,7 +3801,6 @@ dependencies = [
  "futures-util",
  "log",
  "minitrace",
- "opendal",
 ]
 
 [[package]]

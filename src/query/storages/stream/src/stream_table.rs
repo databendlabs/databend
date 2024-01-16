@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt::Display;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -42,9 +40,9 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
-use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -57,49 +55,22 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::table::ChangeAction;
+use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::stream_pruner::StreamPruner;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
-pub const OPT_KEY_TABLE_NAME: &str = "table_name";
-pub const OPT_KEY_DATABASE_NAME: &str = "table_database";
-pub const OPT_KEY_TABLE_ID: &str = "table_id";
-pub const OPT_KEY_TABLE_VER: &str = "table_version";
-pub const OPT_KEY_MODE: &str = "mode";
-
-pub const MODE_APPEND_ONLY: &str = "append_only";
-
-#[derive(Clone)]
-pub enum StreamMode {
-    AppendOnly,
-}
-
 pub enum StreamStatus {
     MayHaveData,
     NoData,
-}
-
-impl FromStr for StreamMode {
-    type Err = ErrorCode;
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            MODE_APPEND_ONLY => Ok(StreamMode::AppendOnly),
-            _ => Err(ErrorCode::IllegalStream(format!(
-                "invalid stream mode: {}",
-                s
-            ))),
-        }
-    }
-}
-
-impl Display for StreamMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            StreamMode::AppendOnly => MODE_APPEND_ONLY.to_string(),
-        })
-    }
 }
 
 pub struct StreamTable {
@@ -296,41 +267,37 @@ impl StreamTable {
         let (del_blocks, add_blocks) = self
             .collect_incremental_blocks(ctx.clone(), fuse_table)
             .await?;
-        let summary = add_blocks.len();
+
+        let change_action = push_downs.as_ref().map_or(ChangeAction::Append, |v| {
+            v.change_action.clone().unwrap_or(ChangeAction::Append)
+        });
+        let mut push_downs = push_downs;
+        let (blocks, base_block_ids_scalar) = match change_action {
+            ChangeAction::Append => {
+                let mut base_block_ids = Vec::with_capacity(del_blocks.len());
+                for base_block in del_blocks {
+                    let block_id = block_id_from_location(&base_block.location.0)?;
+                    base_block_ids.push(block_id);
+                }
+                let base_block_ids_scalar =
+                    Scalar::Array(Decimal128Type::from_data(base_block_ids));
+                push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
+                (add_blocks, Some(base_block_ids_scalar))
+            }
+            ChangeAction::Insert => (add_blocks, None),
+            ChangeAction::Delete => (del_blocks, None),
+        };
+
+        let summary = blocks.len();
         if summary == 0 {
             return Ok((PartStatistics::default(), Partitions::default()));
         }
 
-        let mut base_block_ids = Vec::with_capacity(del_blocks.len());
-        for base_block in del_blocks {
-            let block_id = block_id_from_location(&base_block.location.0)?;
-            base_block_ids.push(block_id);
-        }
-        let base_block_ids_scalar = Scalar::Array(Decimal128Type::from_data(base_block_ids));
-        let push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
-
         let table_schema = fuse_table.schema_with_stream();
-        let bloom_index_cols = fuse_table.bloom_index_cols();
-        let (cluster_keys, cluster_key_meta) =
-            if !fuse_table.is_native() || fuse_table.cluster_key_meta().is_none() {
-                (vec![], None)
-            } else {
-                (
-                    fuse_table.cluster_keys(ctx.clone()),
-                    fuse_table.cluster_key_meta(),
-                )
-            };
-        let stream_pruner = StreamPruner::create(
-            &ctx,
-            fuse_table.get_operator(),
-            table_schema.clone(),
-            push_downs.clone(),
-            cluster_key_meta,
-            cluster_keys,
-            bloom_index_cols,
-        )?;
+        let stream_pruner =
+            StreamPruner::create(&ctx, table_schema.clone(), push_downs.clone(), fuse_table)?;
 
-        let block_metas = stream_pruner.pruning(add_blocks).await?;
+        let block_metas = stream_pruner.pruning(blocks).await?;
         let pruning_stats = stream_pruner.pruning_stats();
 
         log::info!(
@@ -352,12 +319,14 @@ impl StreamTable {
             summary,
             pruning_stats,
         )?;
-        let wrapper =
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![StreamTablePart::create(
-                parts,
-                base_block_ids_scalar,
-            )]);
-        Ok((stats, wrapper))
+        if let Some(base_block_ids_scalar) = base_block_ids_scalar {
+            let wrapper = Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![
+                StreamTablePart::create(parts, base_block_ids_scalar),
+            ]);
+            Ok((stats, wrapper))
+        } else {
+            Ok((stats, parts))
+        }
     }
 
     #[minitrace::trace]
@@ -383,7 +352,7 @@ impl Table for StreamTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (CHANGE_ROW_ID_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+        (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
     /// whether column prune(projection) can help in table read

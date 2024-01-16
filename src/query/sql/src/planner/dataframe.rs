@@ -99,7 +99,7 @@ impl Dataframe {
             );
 
             binder
-                .bind_base_table(&bind_context, database, table_index)
+                .bind_base_table(&bind_context, database, table_index, None)
                 .await
         } else {
             binder.bind_table_reference(&mut bind_context, &table).await

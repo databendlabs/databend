@@ -44,9 +44,6 @@ pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
-pub const CHANGE_ACTION_COLUMN_ID: u32 = u32::MAX - 7;
-pub const CHANGE_IS_UPDATE_COLUMN_ID: u32 = u32::MAX - 8;
-pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 9;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -76,7 +73,7 @@ pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= CHANGE_ROW_ID_COLUMN_ID
+    column_id >= BASE_BLOCK_IDS_COLUMN_ID
 }
 
 #[inline]

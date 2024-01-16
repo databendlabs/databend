@@ -22,7 +22,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -58,9 +57,6 @@ impl Transform for TransformAddInternalColumns {
                 InternalColumnMeta::downcast_from(meta).ok_or(ErrorCode::Internal("It's a bug"))?;
             let num_rows = block.num_rows();
             for internal_column in self.internal_columns.values() {
-                if internal_column.column_id() == CHANGE_ROW_ID_COLUMN_ID {
-                    continue;
-                }
                 let column =
                     internal_column.generate_column_values(&internal_column_meta, num_rows);
                 block.add_column(column);
