@@ -1,7 +1,4 @@
 statement ok
-set prefer_broadcast_join = 1
-
-statement ok
 drop table if exists t1
 
 
@@ -131,12 +128,12 @@ NULL NULL 2 3
 NULL NULL 6 8
 
 query IIII
-select * from t1 right join t2 on t1.a > t2.c order by t2.c
+select * from t1 right join t2 on t1.a > t2.c order by t1.a, t1.b, t2.c, t2.d
 ----
-7 8 1 4
 3 4 1 4
-7 8 2 3
 3 4 2 3
+7 8 1 4
+7 8 2 3
 7 8 6 8
 
 query IIII
@@ -426,8 +423,9 @@ CREATE TABLE z1(c0BOOLEAN BOOL NULL DEFAULT(true))
 statement ok
 INSERT INTO z0(c1float, c0boolean) VALUES (0.27563244104385376, false), (0.7913353443145752, false)
 
-statement ok
+query TTI
 select * from z1 right join z0 on false limit 0
+----
 
 
 statement ok
@@ -463,9 +461,24 @@ INSERT INTO t2(c1float) VALUES (0.9702655076980591)
 statement ok
 INSERT INTO t2(c1float, c2varchar) VALUES (0.5340723991394043, '02'), (0.4661566913127899, '1261837')
 
-statement ok
-SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean
-
+query TTI
+SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean ORDER BY t0.c0boolean, t1.c0boolean, t1.c1float
+----
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
 
 statement ok
 drop table t0
@@ -475,6 +488,3 @@ drop table t1
 
 statement ok
 drop table t2
-
-statement ok
-set prefer_broadcast_join = 0

@@ -19,6 +19,8 @@ use databend_common_exception::Result;
 
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
+use crate::optimizer::PhysicalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::IndexType;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -34,7 +36,7 @@ where T: Into<f64>
 
 impl Display for Cost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{:.3}", self.0)
     }
 }
 
@@ -57,4 +59,6 @@ pub struct CostContext {
     pub group_index: IndexType,
     pub expr_index: IndexType,
     pub cost: Cost,
+    pub physical_prop: PhysicalProperty,
+    pub children_required_props: Vec<RequiredProperty>,
 }

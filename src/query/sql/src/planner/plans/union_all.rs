@@ -51,6 +51,10 @@ impl Operator for UnionAll {
         RelOp::UnionAll
     }
 
+    fn arity(&self) -> usize {
+        2
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -86,9 +90,19 @@ impl Operator for UnionAll {
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        let left_child = rel_expr.derive_physical_prop_child(0)?;
+        let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+
+        if left_physical_prop.distribution == Distribution::Serial
+            || right_physical_prop.distribution == Distribution::Serial
+        {
+            return Ok(PhysicalProperty {
+                distribution: Distribution::Serial,
+            });
+        }
+
         Ok(PhysicalProperty {
-            distribution: left_child.distribution,
+            distribution: Distribution::Random,
         })
     }
 
@@ -144,34 +158,28 @@ impl Operator for UnionAll {
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
+        _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut children_required = vec![];
+        // (Any, Any)
+        let mut children_required = vec![vec![
+            RequiredProperty {
+                distribution: Distribution::Any,
+            },
+            RequiredProperty {
+                distribution: Distribution::Any,
+            },
+        ]];
 
-        let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-        let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
-        if left_physical_prop.distribution == Distribution::Serial
-            || right_physical_prop.distribution == Distribution::Serial
-        {
-            children_required.push(vec![
-                RequiredProperty {
-                    distribution: Distribution::Serial,
-                },
-                RequiredProperty {
-                    distribution: Distribution::Serial,
-                },
-            ]);
-        } else {
-            children_required.push(vec![
-                RequiredProperty {
-                    distribution: Distribution::Any,
-                },
-                RequiredProperty {
-                    distribution: Distribution::Any,
-                },
-            ]);
-        }
+        // (Serial, Serial)
+        children_required.push(vec![
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+        ]);
 
         Ok(children_required)
     }

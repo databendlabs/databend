@@ -56,9 +56,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     ]
 });
 
-pub static RESIDUAL_RULES: LazyLock<Vec<RuleID>> =
-    LazyLock::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
-
 pub type RulePtr = Box<dyn Rule>;
 
 pub trait Rule {

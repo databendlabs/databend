@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -25,7 +24,6 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
-use super::cost::CostContext;
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
@@ -33,6 +31,7 @@ use crate::binder::MergeIntoType;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
+use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::util::contains_local_table_scan;
@@ -40,14 +39,12 @@ use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
-use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
-use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone, Educe)]
@@ -171,9 +168,9 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
-                    let (memo, cost_map) = get_optimized_memo(opt_ctx, *s_expr.clone())?;
+                    let memo = get_optimized_memo(opt_ctx, *s_expr.clone())?;
                     Ok(Plan::Explain {
-                        kind: ExplainKind::Memo(display_memo(&memo, &cost_map)?),
+                        kind: ExplainKind::Memo(display_memo(&memo)?),
                         plan,
                     })
                 } else {
@@ -211,13 +208,14 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
         }
         Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan),
 
-        // Passthrough statements.
+        // Pass through statements.
         _ => Ok(plan),
     }
 }
 
 pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
-    let contains_local_table_scan = contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+    let enable_distributed_query = opt_ctx.enable_distributed_optimization
+        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
@@ -227,56 +225,91 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
 
-    {
-        // Cost based optimization
-        let mut dphyp_optimized = false;
-        if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-            let (dp_res, optimized) =
-                DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-                    .optimize(Arc::new(s_expr.clone()))?;
-            if optimized {
-                s_expr = (*dp_res).clone();
-                dphyp_optimized = true;
-            }
+    // Cost based optimization
+    let mut dphyp_optimized = false;
+    if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
+        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+            .optimize(Arc::new(s_expr.clone()))?;
+        if optimized {
+            s_expr = (*dp_res).clone();
+            s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
+            dphyp_optimized = true;
         }
-        let mut cascades = CascadesOptimizer::create(
-            opt_ctx.table_ctx.clone(),
-            opt_ctx.metadata.clone(),
-            dphyp_optimized,
-        )?;
-        s_expr = cascades.optimize(s_expr)?;
     }
+    let mut cascades = CascadesOptimizer::new(
+        opt_ctx.table_ctx.clone(),
+        opt_ctx.metadata.clone(),
+        dphyp_optimized,
+        enable_distributed_query,
+    )?;
 
-    s_expr = if !opt_ctx.enable_join_reorder {
-        RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?
-    } else {
-        RecursiveOptimizer::new(&RESIDUAL_RULES, &opt_ctx).run(&s_expr)?
+    // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+    s_expr = match cascades.optimize(s_expr.clone()) {
+        Ok(mut s_expr) => {
+            s_expr =
+                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+
+            // Push down sort and limit
+            // TODO(leiysky): do this optimization in cascades optimizer
+            if enable_distributed_query {
+                let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+                s_expr = sort_and_limit_optimizer.optimize(&s_expr)?;
+            }
+            s_expr
+        }
+
+        Err(e) => {
+            info!(
+                "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
+                e
+            );
+
+            s_expr =
+                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+
+            if enable_distributed_query {
+                s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
+            }
+
+            s_expr
+        }
     };
-
-    // Run distributed query optimization.
-    //
-    // So far, we don't have ability to execute distributed query
-    // with reading data from local tales(e.g. system tables).
-    let enable_distributed_query =
-        opt_ctx.enable_distributed_optimization && !contains_local_table_scan;
-    if enable_distributed_query {
-        s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
-    }
 
     Ok(s_expr)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
-fn get_optimized_memo(
-    opt_ctx: OptimizerContext,
-    s_expr: SExpr,
-) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let result = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
+fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
+    let enable_distributed_query = opt_ctx.enable_distributed_optimization
+        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
-    let mut cascades =
-        CascadesOptimizer::create(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone(), false)?;
-    cascades.optimize(result)?;
-    Ok((cascades.memo, cascades.best_cost_map))
+    // Decorrelate subqueries, after this step, there should be no subquery in the expression.
+    if s_expr.contain_subquery() {
+        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+    }
+
+    // Run default rewrite rules
+    s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
+
+    // Cost based optimization
+    let mut dphyp_optimized = false;
+    if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
+        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+            .optimize(Arc::new(s_expr.clone()))?;
+        if optimized {
+            s_expr = (*dp_res).clone();
+            dphyp_optimized = true;
+        }
+    }
+    let mut cascades = CascadesOptimizer::new(
+        opt_ctx.table_ctx.clone(),
+        opt_ctx.metadata.clone(),
+        dphyp_optimized,
+        enable_distributed_query,
+    )?;
+    cascades.optimize(s_expr)?;
+
+    Ok(cascades.memo)
 }
 
 fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {

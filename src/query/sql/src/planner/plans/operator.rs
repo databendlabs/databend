@@ -46,6 +46,9 @@ pub trait Operator {
     /// Get relational operator kind
     fn rel_op(&self) -> RelOp;
 
+    /// Get arity of this operator
+    fn arity(&self) -> usize;
+
     /// Is this operator a pattern operator
     fn is_pattern(&self) -> bool {
         false
@@ -72,10 +75,12 @@ pub trait Operator {
     /// Enumerate all possible combinations of required property for children
     fn compute_required_prop_children(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>>;
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty::default(); self.arity()]])
+    }
 }
 
 /// Relational operator
@@ -147,6 +152,29 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
+        }
+    }
+
+    fn arity(&self) -> usize {
+        match self {
+            RelOperator::Scan(rel_op) => rel_op.arity(),
+            RelOperator::CteScan(rel_op) => rel_op.arity(),
+            RelOperator::Join(rel_op) => rel_op.arity(),
+            RelOperator::EvalScalar(rel_op) => rel_op.arity(),
+            RelOperator::Filter(rel_op) => rel_op.arity(),
+            RelOperator::Aggregate(rel_op) => rel_op.arity(),
+            RelOperator::Sort(rel_op) => rel_op.arity(),
+            RelOperator::Limit(rel_op) => rel_op.arity(),
+            RelOperator::Exchange(rel_op) => rel_op.arity(),
+            RelOperator::AddRowNumber(rel_op) => rel_op.arity(),
+            RelOperator::UnionAll(rel_op) => rel_op.arity(),
+            RelOperator::DummyTableScan(rel_op) => rel_op.arity(),
+            RelOperator::Window(rel_op) => rel_op.arity(),
+            RelOperator::ProjectSet(rel_op) => rel_op.arity(),
+            RelOperator::MaterializedCte(rel_op) => rel_op.arity(),
+            RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
+            RelOperator::Udf(rel_op) => rel_op.arity(),
+            RelOperator::Pattern(rel_op) => rel_op.arity(),
         }
     }
 
