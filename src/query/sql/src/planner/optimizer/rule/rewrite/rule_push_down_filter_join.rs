@@ -153,7 +153,7 @@ pub fn try_push_down_filter_join(
                 right_push_down.push(predicate.clone());
             }
             JoinPredicate::Left(_) => {
-                if matches!(join.join_type, JoinType::Right) {
+                if matches!(join.join_type, JoinType::Right | JoinType::Full) {
                     original_predicates.push(predicate);
                     continue;
                 }
@@ -161,7 +161,7 @@ pub fn try_push_down_filter_join(
                 left_push_down.push(predicate);
             }
             JoinPredicate::Right(_) => {
-                if matches!(join.join_type, JoinType::Left) {
+                if matches!(join.join_type, JoinType::Left | JoinType::Full) {
                     original_predicates.push(predicate);
                     continue;
                 }
