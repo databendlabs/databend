@@ -89,6 +89,7 @@ async fn main() {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         },
         stderr: StderrConfig {
             on: true,

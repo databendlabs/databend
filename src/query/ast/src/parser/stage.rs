@@ -83,6 +83,10 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
 
+    let ident_options = map(rule! { BINARY_FORMAT  ~ ^"=" ~ ^Ident }, |(k, _, v)| {
+        (k.text().to_string(), v.text().to_string())
+    });
+
     let string_options = map(
         rule! {
             (TYPE
@@ -111,7 +115,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let bool_options = map(
         rule! {
-            ERROR_ON_COLUMN_COUNT_MISMATCH ~ ^"=" ~ ^#literal_bool
+            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), v.to_string()),
     );
@@ -129,7 +133,14 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { ((#option_type | #option_compression | #string_options | #int_options | #bool_options | #none_options) ~ ","?)* },
+        rule! { ((
+        #option_type
+        | #option_compression
+        | #ident_options
+        | #string_options
+        | #int_options
+        | #bool_options
+        | #none_options) ~ ","?)* },
         |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
     )(i)
 }
