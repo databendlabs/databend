@@ -67,7 +67,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::String)
+        Ok(DataType::Binary)
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -120,7 +120,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let str_builder = builder.as_string_mut().unwrap();
+        let str_builder = builder.as_binary_mut().unwrap();
         self.serialize(place, &mut str_builder.data)?;
         str_builder.commit_row();
         Ok(())

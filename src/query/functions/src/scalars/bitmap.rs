@@ -17,8 +17,8 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::ops::Sub;
 
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::bitmap::BitmapType;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
@@ -377,7 +377,7 @@ enum LogicOp {
 fn bitmap_logic_operate(
     arg1: &[u8],
     arg2: &[u8],
-    builder: &mut StringColumnBuilder,
+    builder: &mut BinaryColumnBuilder,
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {

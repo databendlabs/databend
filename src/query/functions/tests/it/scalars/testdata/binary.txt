@@ -1,0 +1,293 @@
+ast            : length(to_binary('latin'))
+raw expr       : length(to_binary('latin'))
+checked expr   : length<Binary>(to_binary<String>("latin"))
+optimized expr : 5_u64
+output type    : UInt64
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : length(to_binary(NULL))
+raw expr       : length(to_binary(NULL))
+checked expr   : length<Binary NULL>(to_binary<String NULL>(CAST(NULL AS String NULL)))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : length(a)
+raw expr       : length(a::Binary)
+checked expr   : length<Binary>(a)
+evaluation:
++--------+--------------------------------------+----------------------------+
+|        | a                                    | Output                     |
++--------+--------------------------------------+----------------------------+
+| Type   | Binary                               | UInt64                     |
+| Domain | Undefined                            | {0..=18446744073709551615} |
+| Row 0  | 6C6174696E                           | 5                          |
+| Row 1  | D0BAD0B8D180D0B8D0BBD0BBD0B8D186D0B0 | 18                         |
+| Row 2  | DEADBEEF                             | 4                          |
++--------+--------------------------------------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                     |
++--------+----------------------------------------------------------------------------------------------------------+
+| a      | BinaryColumn { data: 0x6c6174696ed0bad0b8d180d0b8d0bbd0bbd0b8d186d0b0deadbeef, offsets: [0, 5, 23, 27] } |
+| Output | UInt64([5, 18, 4])                                                                                       |
++--------+----------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_base64('Abc')
+raw expr       : to_base64('Abc')
+checked expr   : to_base64<Binary>(to_binary<String>("Abc"))
+optimized expr : "QWJj"
+output type    : String
+output domain  : {"QWJj"..="QWJj"}
+output         : 'QWJj'
+
+
+ast            : to_base64('123')
+raw expr       : to_base64('123')
+checked expr   : to_base64<Binary>(to_binary<String>("123"))
+optimized expr : "MTIz"
+output type    : String
+output domain  : {"MTIz"..="MTIz"}
+output         : 'MTIz'
+
+
+ast            : to_base64(Null)
+raw expr       : to_base64(NULL)
+checked expr   : to_base64<Binary NULL>(CAST(NULL AS Binary NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_base64(a)
+raw expr       : to_base64(a::String)
+checked expr   : to_base64<Binary>(to_binary<String>(a))
+evaluation:
++--------+-----------------+--------+
+|        | a               | Output |
++--------+-----------------+--------+
+| Type   | String          | String |
+| Domain | {"123"..="Abc"} | {""..} |
+| Row 0  | 'Abc'           | 'QWJj' |
+| Row 1  | '123'           | 'MTIz' |
++--------+-----------------+--------+
+evaluation (internal):
++--------+---------------------------------------------------------------+
+| Column | Data                                                          |
++--------+---------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263313233, offsets: [0, 3, 6] }     |
+| Output | StringColumn { data: 0x51574a6a4d54497a, offsets: [0, 4, 8] } |
++--------+---------------------------------------------------------------+
+
+
+ast            : to_hex(to_binary('abc'))
+raw expr       : to_hex(to_binary('abc'))
+checked expr   : to_hex<Binary>(to_binary<String>("abc"))
+optimized expr : "616263"
+output type    : String
+output domain  : {"616263"..="616263"}
+output         : '616263'
+
+
+ast            : to_hex(to_binary(a))
+raw expr       : to_hex(to_binary(a::String))
+checked expr   : to_hex<Binary>(to_binary<String>(a))
+evaluation:
++--------+-----------------+--------------------+
+|        | a               | Output             |
++--------+-----------------+--------------------+
+| Type   | String          | String             |
+| Domain | {"abc"..="def"} | {""..}             |
+| Row 0  | 'abc'           | '616263'           |
+| Row 1  | 'def'           | '646566'           |
+| Row 2  | 'databend'      | '6461746162656e64' |
++--------+-----------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
+| Output | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : from_base64('QWJj')::String
+raw expr       : CAST(from_base64('QWJj') AS String)
+checked expr   : to_string<Binary>(from_base64<String>("QWJj"))
+optimized expr : "Abc"
+output type    : String
+output domain  : {"Abc"..="Abc"}
+output         : 'Abc'
+
+
+ast            : from_base64('MTIz')::String
+raw expr       : CAST(from_base64('MTIz') AS String)
+checked expr   : to_string<Binary>(from_base64<String>("MTIz"))
+optimized expr : "123"
+output type    : String
+output domain  : {"123"..="123"}
+output         : '123'
+
+
+ast            : from_base64(a)::String
+raw expr       : CAST(from_base64(a::String) AS String)
+checked expr   : to_string<Binary>(from_base64<String>(a))
+evaluation:
++--------+-------------------+---------+
+|        | a                 | Output  |
++--------+-------------------+---------+
+| Type   | String            | String  |
+| Domain | {"MTIz"..="QWJj"} | Unknown |
+| Row 0  | 'QWJj'            | 'Abc'   |
+| Row 1  | 'MTIz'            | '123'   |
++--------+-------------------+---------+
+evaluation (internal):
++--------+---------------------------------------------------------------+
+| Column | Data                                                          |
++--------+---------------------------------------------------------------+
+| a      | StringColumn { data: 0x51574a6a4d54497a, offsets: [0, 4, 8] } |
+| Output | StringColumn { data: 0x416263313233, offsets: [0, 3, 6] }     |
++--------+---------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | from_base64('!@#')
+  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. while evaluating function `from_base64('!@#')`
+
+
+
+ast            : from_hex('6461746162656e64')::String
+raw expr       : CAST(from_hex('6461746162656e64') AS String)
+checked expr   : to_string<Binary>(from_hex<String>("6461746162656e64"))
+optimized expr : "databend"
+output type    : String
+output domain  : {"databend"..="databend"}
+output         : 'databend'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | from_hex('6461746162656e6')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Odd number of digits while evaluating function `from_hex('6461746162656e6')`
+
+
+
+ast            : from_hex(s)::String
+raw expr       : CAST(from_hex(s::String) AS String)
+checked expr   : to_string<Binary>(from_hex<String>(s))
+evaluation:
++--------+-----------------------+------------+
+|        | s                     | Output     |
++--------+-----------------------+------------+
+| Type   | String                | String     |
+| Domain | {"616263"..="646566"} | Unknown    |
+| Row 0  | '616263'              | 'abc'      |
+| Row 1  | '646566'              | 'def'      |
+| Row 2  | '6461746162656e64'    | 'databend' |
++--------+-----------------------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
+| Output | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_from_base64('QWJj')::String
+raw expr       : CAST(TRY_from_base64('QWJj') AS String)
+checked expr   : CAST(try_from_base64<String>("QWJj") AS String)
+optimized expr : "Abc"
+output type    : String
+output domain  : {"Abc"..="Abc"}
+output         : 'Abc'
+
+
+ast            : TRY_from_base64('MTIz')::String
+raw expr       : CAST(TRY_from_base64('MTIz') AS String)
+checked expr   : CAST(try_from_base64<String>("MTIz") AS String)
+optimized expr : "123"
+output type    : String
+output domain  : {"123"..="123"}
+output         : '123'
+
+
+ast            : TRY_from_base64(a)::String
+raw expr       : CAST(TRY_from_base64(a::String) AS String)
+checked expr   : CAST(try_from_base64<String>(a) AS String)
+evaluation:
++--------+-------------------+---------+
+|        | a                 | Output  |
++--------+-------------------+---------+
+| Type   | String            | String  |
+| Domain | {"MTIz"..="QWJj"} | Unknown |
+| Row 0  | 'QWJj'            | 'Abc'   |
+| Row 1  | 'MTIz'            | '123'   |
++--------+-------------------+---------+
+evaluation (internal):
++--------+---------------------------------------------------------------+
+| Column | Data                                                          |
++--------+---------------------------------------------------------------+
+| a      | StringColumn { data: 0x51574a6a4d54497a, offsets: [0, 4, 8] } |
+| Output | StringColumn { data: 0x416263313233, offsets: [0, 3, 6] }     |
++--------+---------------------------------------------------------------+
+
+
+ast            : TRY_from_base64('!@#')
+raw expr       : TRY_from_base64('!@#')
+checked expr   : try_from_base64<String>("!@#")
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_from_hex('6461746162656e64')::String
+raw expr       : CAST(TRY_from_hex('6461746162656e64') AS String)
+checked expr   : CAST(try_from_hex<String>("6461746162656e64") AS String)
+optimized expr : "databend"
+output type    : String
+output domain  : {"databend"..="databend"}
+output         : 'databend'
+
+
+ast            : TRY_from_hex('6461746162656e6')
+raw expr       : TRY_from_hex('6461746162656e6')
+checked expr   : try_from_hex<String>("6461746162656e6")
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_from_hex(s)::String
+raw expr       : CAST(TRY_from_hex(s::String) AS String)
+checked expr   : CAST(try_from_hex<String>(s) AS String)
+evaluation:
++--------+-----------------------+------------+
+|        | s                     | Output     |
++--------+-----------------------+------------+
+| Type   | String                | String     |
+| Domain | {"616263"..="646566"} | Unknown    |
+| Row 0  | '616263'              | 'abc'      |
+| Row 1  | '646566'              | 'def'      |
+| Row 2  | '6461746162656e64'    | 'databend' |
++--------+-----------------------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x36313632363336343635363636343631373436313632363536653634, offsets: [0, 6, 12, 28] } |
+| Output | StringColumn { data: 0x6162636465666461746162656e64, offsets: [0, 3, 6, 14] }                              |
++--------+------------------------------------------------------------------------------------------------------------+
+
+

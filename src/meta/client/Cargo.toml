@@ -28,6 +28,7 @@ databend-common-tracing = { path = "../../common/tracing" }
 
 derive_more = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }

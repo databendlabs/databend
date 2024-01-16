@@ -16,6 +16,7 @@ use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -56,6 +57,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -70,6 +72,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -88,6 +91,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -121,7 +125,7 @@ impl FieldEncoderValues {
 
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested),
 
-            Column::Binary(c) => self.write_binary(c, row_index, out_buf, in_nested),
+            Column::Binary(c) => self.write_binary(c, row_index, out_buf),
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
@@ -215,18 +219,9 @@ impl FieldEncoderValues {
         out_buf.extend_from_slice(data.as_bytes());
     }
 
-    fn write_binary(
-        &self,
-        column: &StringColumn,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        in_nested: bool,
-    ) {
-        self.write_string_inner(
-            unsafe { column.index_unchecked(row_index) },
-            out_buf,
-            in_nested,
-        );
+    fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
     }
 
     fn write_string(
@@ -269,7 +264,7 @@ impl FieldEncoderValues {
 
     fn write_bitmap(
         &self,
-        _column: &StringColumn,
+        _column: &BinaryColumn,
         _row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
@@ -280,7 +275,7 @@ impl FieldEncoderValues {
 
     fn write_variant(
         &self,
-        column: &StringColumn,
+        column: &BinaryColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,

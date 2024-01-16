@@ -171,6 +171,10 @@ impl ShowCreateTableInterpreter {
             });
         }
 
+        if !table_info.meta.comment.is_empty() {
+            table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
+        }
+
         let block = DataBlock::new(
             vec![
                 BlockEntry::new(

@@ -42,12 +42,16 @@ fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> Data
         let order_by_field = schema.field(desc[0].offset);
         if matches!(
             order_by_field.data_type(),
-            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::Binary
+                | DataType::String
         ) {
             return order_by_field.data_type().clone();
         }
     }
-    DataType::String
+    DataType::Binary
 }
 
 #[inline(always)]

@@ -43,6 +43,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -399,6 +400,10 @@ impl TableContext for QueryContext {
         *status = info.to_string();
     }
 
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
+    }
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
@@ -535,6 +540,10 @@ impl TableContext for QueryContext {
     }
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_available_roles().await
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_effective_roles().await
     }
 
     fn get_current_session_id(&self) -> String {

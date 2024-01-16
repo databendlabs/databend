@@ -17,11 +17,13 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
@@ -50,17 +52,8 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
-                let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-                let mut expr = expr.remove(0);
-                if expr.data_type() != f.data_type() {
-                    expr = Expr::Cast {
-                        span: None,
-                        is_try: f.data_type().is_nullable(),
-                        expr: Box::new(expr),
-                        dest_type: f.data_type().clone(),
-                    };
-                }
-                expr
+                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+                check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
                 // #issue13932
                 // if there is a non-null constraint, we should return an error

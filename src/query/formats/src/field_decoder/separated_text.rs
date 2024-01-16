@@ -22,12 +22,12 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Number;
@@ -56,6 +56,7 @@ use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
+use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -91,6 +92,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: params.binary_format,
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -111,6 +113,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -131,6 +134,7 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
             rounding_mode,
@@ -145,6 +149,12 @@ impl SeparatedTextDecoder {
         match column {
             ColumnBuilder::Null { len } => {
                 *len += 1;
+                Ok(())
+            }
+            ColumnBuilder::Binary(c) => {
+                let data = decode_binary(data, self.common_settings().binary_format)?;
+                c.data.extend_from_slice(&data);
+                c.commit_row();
                 Ok(())
             }
             ColumnBuilder::String(c) => {
@@ -173,7 +183,12 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
-            _ => unimplemented!(),
+            ColumnBuilder::EmptyArray { .. } => {
+                unreachable!("EmptyArray")
+            }
+            ColumnBuilder::EmptyMap { .. } => {
+                unreachable!("EmptyMap")
+            }
         }
     }
 
@@ -303,14 +318,14 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let rb = parse_bitmap(data)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         match parse_value(data) {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);

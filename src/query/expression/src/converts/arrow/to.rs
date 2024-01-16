@@ -33,15 +33,15 @@ use crate::TableField;
 use crate::TableSchema;
 
 impl From<&DataSchema> for ArrowSchema {
-    fn from(value: &DataSchema) -> Self {
-        let fields = value
+    fn from(schema: &DataSchema) -> Self {
+        let fields = schema
             .fields
             .iter()
             .map(|f| arrow_field_from_arrow2_field(Arrow2Field::from(f)))
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
-            metadata: Default::default(),
+            metadata: schema.metadata.clone().into_iter().collect(),
         }
     }
 }
@@ -55,7 +55,7 @@ impl From<&TableSchema> for ArrowSchema {
             .collect::<Vec<_>>();
         ArrowSchema {
             fields: Fields::from(fields),
-            metadata: Default::default(),
+            metadata: schema.metadata.clone().into_iter().collect(),
         }
     }
 }
@@ -83,7 +83,7 @@ impl DataBlock {
             .zip(data_schema.fields())
         {
             let column = entry.value.to_owned().into_column().unwrap();
-            let array = column.into_arrow_rs()?;
+            let array = column.into_arrow_rs();
             let arrow_field = ArrowField::new(
                 f.name(),
                 array.data_type().clone(),
@@ -98,10 +98,10 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn into_arrow_rs(self) -> Result<Arc<dyn arrow_array::Array>> {
+    pub fn into_arrow_rs(self) -> Arc<dyn arrow_array::Array> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = self.as_arrow();
         let arrow_array: Arc<dyn arrow_array::Array> = arrow2_array.into();
-        Ok(arrow_array)
+        arrow_array
     }
 }
 

@@ -19,12 +19,12 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -120,10 +120,7 @@ impl Interpreter for CreateDatabaseInterpreter {
                 .await?;
         }
 
-        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
-        if let Some(role) = self.ctx.get_current_role() {
-            create_db_req.meta.owner = Some(Ownership::new(role.name))
-        }
+        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
@@ -139,6 +136,7 @@ impl Interpreter for CreateDatabaseInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())

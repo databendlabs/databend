@@ -40,6 +40,10 @@ impl Operator for Exchange {
         RelOp::Exchange
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }
@@ -67,14 +71,5 @@ impl Operator for Exchange {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

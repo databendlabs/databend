@@ -16,7 +16,6 @@ storage-hdfs = ["databend-common-storage/storage-hdfs"]
 ignored = ["strum"]
 
 [dependencies]
-chrono-tz = { workspace = true }
 databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-grpc = { path = "../../common/grpc" }
@@ -25,6 +24,7 @@ databend-common-storage = { path = "../../common/storage" }
 databend-common-tracing = { path = "../../common/tracing" }
 databend-common-users = { path = "../users" }
 
+chrono-tz = { workspace = true }
 clap = { workspace = true }
 hex = "0.4.3"
 log = { workspace = true }

@@ -16,6 +16,7 @@
 #![feature(thread_local)]
 #![feature(int_roundings)]
 #![allow(clippy::diverging_sub_expression)]
+#![feature(assert_matches)]
 
 extern crate core;
 

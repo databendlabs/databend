@@ -16,5 +16,5 @@ mod buffers;
 pub(crate) mod limit_file_size_processor;
 mod pipeline;
 mod serialize_processor;
-pub(crate) mod sink_processor;
+pub(crate) mod writer_processor;
 pub(crate) use pipeline::append_data_to_row_based_files;
