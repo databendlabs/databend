@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 mod builder_aggregate;
 mod builder_append_table;
 mod builder_commit;
@@ -37,6 +36,7 @@ mod builder_udf;
 mod builder_union_all;
 mod builder_update;
 mod builder_window;
+mod merge_into_join_optimizations;
 
 pub use builder_replace_into::ValueSource;
 pub use builder_sort::SortPipelineBuilder;

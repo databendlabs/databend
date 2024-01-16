@@ -27,8 +27,6 @@ use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::IndexType;
-use databend_common_sql::DUMMY_TABLE_INDEX;
-use databend_common_storages_fuse::operations::need_reserve_block_info;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -129,17 +127,7 @@ impl PipelineBuilder {
         let id = join.probe.get_table_index();
         // for merge into target table as build side.
         let (build_table_index, is_distributed_merge_into) =
-            if matches!(&*join.build, PhysicalPlan::TableScan(_)) {
-                let (need_block_info, is_distributed) =
-                    need_reserve_block_info(self.ctx.clone(), join.build.get_table_index());
-                if need_block_info {
-                    (join.build.get_table_index(), is_distributed)
-                } else {
-                    (DUMMY_TABLE_INDEX, false)
-                }
-            } else {
-                (DUMMY_TABLE_INDEX, false)
-            };
+            self.get_merge_into_optimization_flag(join);
 
         let state =
             self.build_join_state(join, id, build_table_index, is_distributed_merge_into)?;

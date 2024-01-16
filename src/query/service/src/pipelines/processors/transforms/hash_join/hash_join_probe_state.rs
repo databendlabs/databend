@@ -57,7 +57,7 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
-pub type ChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
+pub type MergeIntoChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -84,7 +84,7 @@ pub struct HashJoinProbeState {
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
     /// for merge into target as build side.
     pub(crate) final_merge_into_partial_unmodified_scan_tasks:
-        RwLock<VecDeque<ChunkPartialUnmodified>>,
+        RwLock<VecDeque<MergeIntoChunkPartialUnmodified>>,
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
@@ -433,15 +433,6 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    pub fn probe_merge_into_partial_modified_done(&self) -> Result<()> {
-        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            // Divide the final scan phase into multiple tasks.
-            self.generate_merge_into_final_scan_task()?;
-        }
-        Ok(())
-    }
-
     pub fn finish_spill(&self) -> Result<()> {
         self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
         let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
@@ -483,49 +474,8 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    pub fn generate_merge_into_final_scan_task(&self) -> Result<()> {
-        let merge_into_state = unsafe {
-            &*self
-                .hash_join_state
-                .merge_into_state
-                .as_ref()
-                .unwrap()
-                .get()
-        };
-        let block_info_index = &merge_into_state.block_info_index;
-        let matched = &merge_into_state.matched;
-        let chunks_offsets = &merge_into_state.chunk_offsets;
-        let partial_unmodified = block_info_index.gather_all_partial_block_offsets(matched);
-        let all_matched_blocks = block_info_index.gather_matched_all_blocks(matched);
-
-        // generate chunks
-        info!("chunk len: {}", chunks_offsets.len());
-        info!("intervals len: {} ", block_info_index.intervals.len());
-        info!(
-            "partial unmodified blocks num: {}",
-            partial_unmodified.len()
-        );
-        info!(
-            "all_matched_blocks blocks num: {}",
-            all_matched_blocks.len()
-        );
-        let mut tasks = block_info_index.chunk_offsets(&partial_unmodified, chunks_offsets);
-        info!("partial unmodified chunk num: {}", tasks.len());
-        for prefix in all_matched_blocks {
-            // deleted block
-            tasks.push((Vec::new(), prefix));
-        }
-        *self.final_merge_into_partial_unmodified_scan_tasks.write() = tasks.into();
-        Ok(())
-    }
-
     pub fn final_scan_task(&self) -> Option<usize> {
         let mut tasks = self.final_scan_tasks.write();
-        tasks.pop_front()
-    }
-
-    pub fn final_merge_into_partial_unmodified_scan_task(&self) -> Option<ChunkPartialUnmodified> {
-        let mut tasks = self.final_merge_into_partial_unmodified_scan_tasks.write();
         tasks.pop_front()
     }
 

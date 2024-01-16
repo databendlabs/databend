@@ -17,17 +17,14 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::split_prefix;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
-use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
 
-use super::hash_join_probe_state::ChunkPartialUnmodified;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -57,13 +54,13 @@ pub struct TransformHashJoinProbe {
     output_port: Arc<OutputPort>,
 
     input_data: VecDeque<DataBlock>,
-    output_data_blocks: VecDeque<DataBlock>,
+    pub(crate) output_data_blocks: VecDeque<DataBlock>,
     projections: ColumnSet,
     step: HashJoinProbeStep,
     step_logs: Vec<HashJoinProbeStep>,
-    join_probe_state: Arc<HashJoinProbeState>,
-    probe_state: ProbeState,
-    max_block_size: usize,
+    pub(crate) join_probe_state: Arc<HashJoinProbeState>,
+    pub(crate) probe_state: ProbeState,
+    pub(crate) max_block_size: usize,
     outer_scan_finished: bool,
     processor_id: usize,
 
@@ -120,70 +117,6 @@ impl TransformHashJoinProbe {
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
-        }
-        Ok(())
-    }
-
-    fn final_merge_into_partial_unmodified_scan(
-        &mut self,
-        item: ChunkPartialUnmodified,
-    ) -> Result<()> {
-        // matched whole block, need to delete
-        if item.0.is_empty() {
-            let prefix = item.1;
-            let (segment_idx, block_idx) = split_prefix(prefix);
-            info!(
-                "matched whole block: segment_idx: {}, block_idx: {}",
-                segment_idx, block_idx
-            );
-            let data_block = DataBlock::empty_with_meta(Box::new(BlockMetaIndex {
-                segment_idx: segment_idx as usize,
-                block_idx: block_idx as usize,
-                inner: None,
-            }));
-            self.output_data_blocks.push_back(data_block);
-            return Ok(());
-        }
-        let merge_into_state = unsafe {
-            &*self
-                .join_probe_state
-                .hash_join_state
-                .merge_into_state
-                .as_ref()
-                .unwrap()
-                .get()
-        };
-        let chunks_offsets = &merge_into_state.chunk_offsets;
-        let build_state = unsafe { &*self.join_probe_state.hash_join_state.build_state.get() };
-        let chunk_block = &build_state.generation_state.chunks[item.1 as usize];
-        let chunk_start = if item.1 == 0 {
-            0
-        } else {
-            chunks_offsets[(item.1 - 1) as usize]
-        };
-        for (interval, prefix) in item.0 {
-            for start in ((interval.0 - chunk_start)..=(interval.1 - chunk_start))
-                .step_by(self.max_block_size)
-            {
-                let end = (interval.1 - chunk_start).min(start + self.max_block_size as u32 - 1);
-                let range = (start..=end).collect::<Vec<u32>>();
-                let data_block = chunk_block.take(
-                    &range,
-                    &mut self.probe_state.generation_state.string_items_buf,
-                )?;
-                assert!(!data_block.is_empty());
-                let (segment_idx, block_idx) = split_prefix(prefix);
-                info!(
-                    "matched partial block: segment_idx: {}, block_idx: {}",
-                    segment_idx, block_idx
-                );
-                let data_block = data_block.add_meta(Some(Box::new(BlockMetaIndex {
-                    segment_idx: segment_idx as usize,
-                    block_idx: block_idx as usize,
-                    inner: None,
-                })))?;
-                self.output_data_blocks.push_back(data_block);
-            }
         }
         Ok(())
     }
@@ -275,6 +208,13 @@ impl TransformHashJoinProbe {
                 .hash_join_state
                 .need_merge_into_target_partial_modified_scan()
             {
+                assert!(matches!(
+                    self.join_probe_state
+                        .hash_join_state
+                        .hash_join_desc
+                        .join_type,
+                    JoinType::Left
+                ));
                 self.join_probe_state
                     .probe_merge_into_partial_modified_done()?;
                 Ok(Event::Async)
@@ -444,7 +384,6 @@ impl Processor for TransformHashJoinProbe {
                 Ok(())
             }
             HashJoinProbeStep::FinalScan => {
-                // if self.join_probe_state.h
                 if self
                     .join_probe_state
                     .hash_join_state

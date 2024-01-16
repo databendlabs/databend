@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 mod build_spill;
 mod build_state;
 mod common;
@@ -19,6 +18,7 @@ mod desc;
 mod hash_join_build_state;
 mod hash_join_probe_state;
 mod hash_join_state;
+mod merge_into_hash_join_optimization;
 mod probe_join;
 mod probe_spill;
 mod probe_state;

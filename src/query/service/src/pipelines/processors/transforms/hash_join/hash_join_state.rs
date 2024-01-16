@@ -16,7 +16,6 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
-use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -32,16 +31,15 @@ use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::BlockInfoIndex;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 use ethnum::U256;
 use parking_lot::RwLock;
 
+use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
@@ -75,27 +73,6 @@ pub enum HashJoinHashTable {
     KeysU256(FixedKeyHashJoinHashTable<U256>),
 }
 
-pub struct MatchedPtr(pub *mut AtomicU8);
-
-unsafe impl Send for MatchedPtr {}
-unsafe impl Sync for MatchedPtr {}
-
-pub struct MergeIntoState {
-    /// for now we don't support distributed, we will support in the next pr.
-    #[allow(unused)]
-    pub(crate) is_distributed_merge_into: bool,
-
-    /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
-    /// When merge into target table as build side, we should preserve block info index.
-    pub(crate) block_info_index: BlockInfoIndex,
-    /// we use matched to tag the matched offset in chunks.
-    pub(crate) matched: Vec<u8>,
-    /// the matched will be modified concurrently, so we use
-    /// atomic_pointers to pointer to matched
-    pub(crate) atomic_pointer: MatchedPtr,
-    /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
-    pub(crate) chunk_offsets: Vec<u32>,
-}
 /// Define some shared states for hash join build and probe.
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
@@ -194,17 +171,10 @@ impl HashJoinState {
             partition_id: AtomicI8::new(-2),
             enable_spill,
             table_index,
-            merge_into_state: if merge_into_target_table_index != DUMMY_TABLE_INDEX {
-                Some(SyncUnsafeCell::new(MergeIntoState {
-                    is_distributed_merge_into,
-                    block_info_index: Default::default(),
-                    matched: Vec::new(),
-                    atomic_pointer: MatchedPtr(std::ptr::null_mut()),
-                    chunk_offsets: Vec::with_capacity(100),
-                }))
-            } else {
-                None
-            },
+            merge_into_state: MergeIntoState::try_create_merge_into_state(
+                merge_into_target_table_index,
+                is_distributed_merge_into,
+            ),
         }))
     }
 
@@ -254,10 +224,6 @@ impl HashJoinState {
 
     pub fn need_mark_scan(&self) -> bool {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
-    }
-
-    pub fn need_merge_into_target_partial_modified_scan(&self) -> bool {
-        self.merge_into_state.is_some()
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {

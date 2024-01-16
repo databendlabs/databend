@@ -14,7 +14,6 @@
 
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -369,75 +368,6 @@ impl HashJoinProbeState {
         };
 
         Ok(self.merge_eq_block(probe_block, build_block, matched_idx))
-    }
-
-    #[inline]
-    fn check_and_set_matched(
-        &self,
-        build_indexes: &[RowPtr],
-        matched_idx: usize,
-        valids: &Bitmap,
-    ) -> Result<()> {
-        // merge into target table as build side.
-        if self
-            .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
-        {
-            let merge_into_state = unsafe {
-                &*self
-                    .hash_join_state
-                    .merge_into_state
-                    .as_ref()
-                    .unwrap()
-                    .get()
-            };
-            let chunk_offsets = &merge_into_state.chunk_offsets;
-
-            let pointer = &merge_into_state.atomic_pointer;
-            // add matched indexes.
-            for (idx, row_ptr) in build_indexes[0..matched_idx].iter().enumerate() {
-                unsafe {
-                    if !valids.get_bit_unchecked(idx) {
-                        continue;
-                    }
-                }
-                let offset = if row_ptr.chunk_index == 0 {
-                    row_ptr.row_index as usize
-                } else {
-                    chunk_offsets[(row_ptr.chunk_index - 1) as usize] as usize
-                        + row_ptr.row_index as usize
-                };
-
-                let mut old_mactehd_counts =
-                    unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
-                let mut new_matched_count = old_mactehd_counts + 1;
-                loop {
-                    if old_mactehd_counts > 0 {
-                        return Err(ErrorCode::UnresolvableConflict(
-                            "multi rows from source match one and the same row in the target_table multi times in probe phase",
-                        ));
-                    }
-
-                    let res = unsafe {
-                        (*pointer.0.add(offset)).compare_exchange_weak(
-                            old_mactehd_counts,
-                            new_matched_count,
-                            Ordering::SeqCst,
-                            Ordering::SeqCst,
-                        )
-                    };
-
-                    match res {
-                        Ok(_) => break,
-                        Err(x) => {
-                            old_mactehd_counts = x;
-                            new_matched_count = old_mactehd_counts + 1;
-                        }
-                    };
-                }
-            }
-        }
-        Ok(())
     }
 
     #[inline]
