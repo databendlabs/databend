@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use bstr::ByteSlice;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
@@ -181,10 +180,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
-            "rpad",
-            |_, _, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-                |s, pad_len, pad, output, ctx| {
+        "rpad",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
+            |s, pad_len, pad, output, ctx| {
                 let pad_len = pad_len as usize;
                 let s_len = s.chars().count();
                 if pad_len > MAX_PADDING_LENGTH {
@@ -209,13 +208,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 output.commit_row();
             }),
-        );
+    );
 
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
-            "replace",
-            |_, _, _, _| FunctionDomain::Full,
-            vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
-                |str, from, to, output, _| {
+        "replace",
+        |_, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+            |str, from, to, output, _| {
                 if from.is_empty() || from == to {
                     output.put_str(str);
                     output.commit_row();
@@ -233,13 +232,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 output.commit_row();
             }),
-        );
+    );
 
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
-            "translate",
-            |_, _, _, _| FunctionDomain::Full,
-            vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
-                |str, from, to, output, _| {
+        "translate",
+        |_, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+            |str, from, to, output, _| {
                 if from.is_empty() || from == to {
                     output.put_str(str);
                     output.commit_row();
@@ -257,7 +256,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 });
                 output.commit_row();
             }),
-        );
+    );
 
     registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
         "to_uuid",
@@ -270,35 +269,35 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-        registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
-            "strcmp",
-            |_, _, _| FunctionDomain::Full,
-            |s1, s2, _| {
-                let res = match s1.chars().count().cmp(&s2.chars().count()) {
-                    Ordering::Equal => {
-                        let mut res = Ordering::Equal;
-                        for (s1i, s2i) in izip!(s1.chars(), s2.chars()) {
-                            match s1i.cmp(&s2i) {
-                                Ordering::Equal => continue,
-                                ord => {
-                                    res = ord;
-                                    break;
-                                }
+    registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
+        "strcmp",
+        |_, _, _| FunctionDomain::Full,
+        |s1, s2, _| {
+            let res = match s1.len().cmp(&s2.len()) {
+                Ordering::Equal => {
+                    let mut res = Ordering::Equal;
+                    for (s1i, s2i) in izip!(s1.chars(), s2.chars()) {
+                        match s1i.cmp(&s2i) {
+                            Ordering::Equal => continue,
+                            ord => {
+                                res = ord;
+                                break;
                             }
                         }
-                        res
                     }
-                    ord => ord,
-                };
-                match res {
-                    Ordering::Equal => 0,
-                    Ordering::Greater => 1,
-                    Ordering::Less => -1,
+                    res
                 }
-            },
-        );
+                ord => ord,
+            };
+            match res {
+                Ordering::Equal => 0,
+                Ordering::Greater => 1,
+                Ordering::Less => -1,
+            }
+        },
+    );
 
-    let find_at = |str: &str, substr: &str, pos: u64| {
+    let find_at = |s: &str, substr: &str, pos: u64| {
         if substr.is_empty() {
             // the same behavior as MySQL, Postgres and Clickhouse
             return if pos == 0 { 1_u64 } else { pos };
@@ -309,8 +308,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             return 0_u64;
         }
         let p = pos - 1;
-        if let Some((byte_pos, _)) = str.char_indices().nth(p) {
-            str[byte_pos..].find(substr).map_or(0, |i| (i + 1 + p) as _)
+        if p + substr.chars().count() <= s.chars().count() {
+            let sub_chars = substr.chars().collect::<Vec<_>>();
+            let chars = s.chars().collect::<Vec<_>>();
+            chars[p..]
+                .windows(sub_chars.len())
+                .position(|w| w == sub_chars)
+                .map_or(0, |i| i + 1 + p) as u64
         } else {
             0_u64
         }
@@ -318,50 +322,74 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "instr",
         |_, _, _| FunctionDomain::Full,
-        move |str: &str, substr: &str, _| find_at(str, substr, 1),
+        move |s: &str, substr: &str, _| find_at(s, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "position",
         |_, _, _| FunctionDomain::Full,
-        move |substr: &str, str: &str, _| find_at(str, substr, 1),
+        move |substr: &str, s: &str, _| find_at(s, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "locate",
         |_, _, _| FunctionDomain::Full,
-        move |substr: &str, str: &str, _| find_at(str, substr, 1),
+        move |substr: &str, s: &str, _| find_at(s, substr, 1),
     );
 
     registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
         "locate",
         |_, _, _, _| FunctionDomain::Full,
-        move |substr: &str, str: &str, pos: u64, _| find_at(str, substr, pos),
+        move |substr: &str, s: &str, pos: u64, _| find_at(s, substr, pos),
     );
 
-    // registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //     "quote",
-    //     |_, _| FunctionDomain::Full,
-    //     vectorize_string_to_string(
-    //         |col| col.data().len() * 2,
-    //         |val, output, _| {
-    //             for ch in val.chars() {
-    //                 match ch {
-    //                     0 => output.put_slice(&[b'\\', b'0']),
-    //                     b'\'' => output.put_slice(&[b'\\', b'\'']),
-    //                     b'\"' => output.put_slice(&[b'\\', b'\"']),
-    //                     8 => output.put_slice(&[b'\\', b'b']),
-    //                     b'\n' => output.put_slice(&[b'\\', b'n']),
-    //                     b'\r' => output.put_slice(&[b'\\', b'r']),
-    //                     b'\t' => output.put_slice(&[b'\\', b't']),
-    //                     b'\\' => output.put_slice(&[b'\\', b'\\']),
-    //                     c => output.put_char(*c),
-    //                 }
-    //             }
-    //             output.commit_row();
-    //         },
-    //     ),
-    // );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "quote",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len() * 2,
+            |val, output, _| {
+                for ch in val.chars() {
+                    match ch {
+                        '\0' => {
+                            output.put_char('\\');
+                            output.put_char('0');
+                        }
+                        '\'' => {
+                            output.put_char('\\');
+                            output.put_char('\'');
+                        }
+                        '\"' => {
+                            output.put_char('\\');
+                            output.put_char('\"');
+                        }
+                        '\u{8}' => {
+                            output.put_char('\\');
+                            output.put_char('b');
+                        }
+                        '\n' => {
+                            output.put_char('\\');
+                            output.put_char('n');
+                        }
+                        '\r' => {
+                            output.put_char('\\');
+                            output.put_char('r');
+                        }
+                        '\t' => {
+                            output.put_char('\\');
+                            output.put_char('t');
+                        }
+                        '\\' => {
+                            output.put_char('\\');
+                            output.put_char('\\');
+                        }
+                        c => output.put_char(c),
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "reverse",
@@ -667,7 +695,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "substr",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-            |s, pos, output, ctx| {
+            |s, pos, output, _| {
                 substr_utf8(output, s, pos, s.len() as u64);
             },
         ),
@@ -675,18 +703,18 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
         "substr",
-             |_, _, _, _| FunctionDomain::Full,
-             vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, ctx| {
-                substr_utf8(output, s, pos, len);
-             }),
-         );
+        |_, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
+            substr_utf8(output, s, pos, len);
+        }),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
             "split",
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
-                |s, sep, output, ctx| {
+                |s, sep, output, _| {
                     if s == sep {
                         output.builder.commit_row();
                     } else if sep.is_empty() {
@@ -708,7 +736,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             "split_part",
             |_, _, _, _| FunctionDomain::Full,
             vectorize_with_builder_3_arg::<StringType, StringType, NumberType<i64>, StringType>(
-                |s, sep, part, output, ctx| {
+                |s, sep, part, output, _| {
                     if sep.is_empty() {
                         if part == 0 || part == 1 || part == -1 {
                             output.put_str(s);

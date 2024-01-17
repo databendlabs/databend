@@ -16,12 +16,9 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
-use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::NumberColumn;
@@ -850,7 +847,6 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
 
 pub mod regexp {
     use databend_common_expression::types::string::StringColumnBuilder;
-    use regex::Match;
     use regex::Regex;
     use regex::RegexBuilder;
 
