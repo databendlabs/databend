@@ -5,6 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
 
 echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
 
@@ -93,8 +94,8 @@ echo "create database default2" | $BENDSQL_CLIENT_CONNECT
 
 echo "create view default2.v_t20_0012 as select * from default.t20_0012_a" | $BENDSQL_CLIENT_CONNECT
 echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
-## Only grant privilege for view table, now this user can access the view under default2 db, 
-## but can not access the tables under the `default` database, stil raises permission error 
+## Only grant privilege for view table, now this user can access the view under default2 db,
+## but can not access the tables under the `default` database, stil raises permission error
 ## on SELECT default2.v_t20_0012
 echo "GRANT SELECT ON default2.v_t20_0012 TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "REVOKE SELECT ON default.t20_0012_a FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
@@ -189,14 +190,14 @@ echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
 
 echo "create stage s3;" | $BENDSQL_CLIENT_CONNECT
-echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT
+echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT | $RM_UUID
 
 # need err
 echo "insert into t select * from t1" | $USER_B_CONNECT
 echo "insert into t select * from @s3" | $USER_B_CONNECT
 echo "create table t2 as select * from t" | $USER_B_CONNECT
 echo "create table t2 as select * from @s3" | $USER_B_CONNECT
-echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT | $RM_UUID
 echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
 echo "grant select on default.t to b" | $BENDSQL_CLIENT_CONNECT
@@ -208,7 +209,7 @@ echo "insert into t select * from @s3" | $USER_B_CONNECT
 echo "create table t2 as select * from t" | $USER_B_CONNECT
 echo "drop table t2" | $BENDSQL_CLIENT_CONNECT
 echo "create table t2 as select * from @s3" | $USER_B_CONNECT
-echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT | $RM_UUID
 echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
 ## check after alter table/db name, table id and db id is normal.

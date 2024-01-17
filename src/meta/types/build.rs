@@ -107,7 +107,7 @@ fn build_proto() {
         )
         .type_attribute(
             "TxnOpResponse.response",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, derive_more::TryInto)]",
         )
         .type_attribute(
             "TxnOpResponse",
