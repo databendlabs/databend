@@ -143,8 +143,9 @@ impl InferFilterOptimizer {
         }
         if !self.is_falsy {
             // `derive_predicates` may change is_falsy to true.
-            let derived_predicates = self.derive_predicates();
-            new_predicates.extend(derived_predicates);
+            let mut derived_predicates = self.derive_predicates();
+            derived_predicates.extend(new_predicates);
+            new_predicates = derived_predicates;
         }
         if self.is_falsy {
             new_predicates = vec![
@@ -382,10 +383,6 @@ impl InferFilterOptimizer {
                 Self::union(&mut parents, left_idx, *right_idx);
             }
         }
-        let mut old_predicates_set = self.predicates.clone();
-        for predicates in old_predicates_set.iter_mut() {
-            predicates.sort();
-        }
         for idx in 0..num_exprs {
             let parent_idx = Self::find(&mut parents, idx);
             if idx != parent_idx {
@@ -395,9 +392,6 @@ impl InferFilterOptimizer {
                     self.add_predicate(&expr, predicate);
                 }
             }
-        }
-        for predicates in self.predicates.iter_mut() {
-            predicates.sort();
         }
         for (scalar, idx) in self.expr_index.iter() {
             let parent_idx = Self::find(&mut parents, *idx);
