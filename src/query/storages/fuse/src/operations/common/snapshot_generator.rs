@@ -105,6 +105,7 @@ pub struct SnapshotMerged {
     pub merged_statistics: Statistics,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub enum ConflictResolveContext {
     AppendOnly((SnapshotMerged, TableSchemaRef)),
