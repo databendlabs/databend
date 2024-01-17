@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use stringslice::StringSlice;
 use std::cmp::Ordering;
 use std::io::Write;
 
@@ -37,6 +36,7 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use itertools::izip;
 use itertools::Itertools;
+use stringslice::StringSlice;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
@@ -179,7 +179,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
     );
 
-        registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
             "rpad",
             |_, _, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
@@ -210,7 +210,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         );
 
-        registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
             "replace",
             |_, _, _, _| FunctionDomain::Full,
             vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
@@ -242,7 +242,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         );
 
-        registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
             "translate",
             |_, _, _, _| FunctionDomain::Full,
             vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(

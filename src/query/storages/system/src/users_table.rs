@@ -54,35 +54,25 @@ impl AsyncSystemTable for UsersTable {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
 
-        let mut names: Vec<Vec<u8>> = users.iter().map(|x| x.name.as_bytes().to_vec()).collect();
-        let mut hostnames: Vec<Vec<u8>> = users
+        let mut names: Vec<String> = users.iter().map(|x| x.name.clone()).collect();
+        let mut hostnames: Vec<String> = users.iter().map(|x| x.hostname.clone()).collect();
+        let mut auth_types: Vec<String> = users
             .iter()
-            .map(|x| x.hostname.as_bytes().to_vec())
+            .map(|x| x.auth_info.get_type().to_str().into())
             .collect();
-        let mut auth_types: Vec<Vec<u8>> = users
+        let mut default_roles: Vec<String> = users
             .iter()
-            .map(|x| x.auth_info.get_type().to_str().as_bytes().to_vec())
+            .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
-        let mut default_roles: Vec<Vec<u8>> = users
-            .iter()
-            .map(|x| {
-                x.option
-                    .default_role()
-                    .cloned()
-                    .unwrap_or_default()
-                    .as_bytes()
-                    .to_vec()
-            })
-            .collect();
-        let mut is_configureds: Vec<Vec<u8>> = vec!["NO".as_bytes().to_vec(); users.len()];
+        let mut is_configureds: Vec<String> = vec!["NO".to_string(); users.len()];
 
         let configured_users = UserApiProvider::instance().get_configured_users();
         for (name, auth_info) in configured_users {
-            names.push(name.as_bytes().to_vec());
-            hostnames.push("%".as_bytes().to_vec());
-            auth_types.push(auth_info.get_type().to_str().as_bytes().to_vec());
-            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.as_bytes().to_vec());
-            is_configureds.push("YES".as_bytes().to_vec());
+            names.push(name.clone());
+            hostnames.push("%".to_string());
+            auth_types.push(auth_info.get_type().to_str().into());
+            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.into());
+            is_configureds.push("YES".to_string());
         }
 
         // please note that do NOT display the auth_string field in the result, because there're risks of

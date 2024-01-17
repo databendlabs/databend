@@ -76,10 +76,10 @@ impl AsyncSystemTable for BackgroundJobTable {
         let mut creator = Vec::with_capacity(jobs.len());
         let mut create_time = Vec::with_capacity(jobs.len());
         for (_, name, job) in jobs {
-            names.push(name.as_bytes().to_vec());
+            names.push(name.clone());
             let job_type = job.job_params.as_ref().map(|x| x.job_type.clone());
             if let Some(job_type) = job_type {
-                job_types.push(Some(job_type.to_string().as_bytes().to_vec()));
+                job_types.push(Some(job_type.to_string()));
                 match job_type {
                     BackgroundJobType::INTERVAL => {
                         scheduled_job_interval_secs.push(Some(
@@ -95,19 +95,13 @@ impl AsyncSystemTable for BackgroundJobTable {
                     BackgroundJobType::CRON => {
                         scheduled_job_interval_secs.push(None);
                         scheduled_job_cron_expression.push(Some(
-                            job.job_params
-                                .as_ref()
-                                .unwrap()
-                                .scheduled_job_cron
-                                .clone()
-                                .as_bytes()
-                                .to_vec(),
+                            job.job_params.as_ref().unwrap().scheduled_job_cron.clone(),
                         ));
                         scheduled_job_cron_timezone.push(
                             job.job_params
                                 .unwrap()
                                 .scheduled_job_timezone
-                                .map(|tz| tz.to_string().as_bytes().to_vec()),
+                                .map(|tz| tz.to_string()),
                         );
                     }
                     BackgroundJobType::ONESHOT => {
@@ -122,16 +116,12 @@ impl AsyncSystemTable for BackgroundJobTable {
                 scheduled_job_cron_expression.push(None);
                 scheduled_job_cron_timezone.push(None);
             }
-            task_types.push(job.task_type.to_string().as_bytes().to_vec());
-            job_states.push(
-                job.job_status
-                    .as_ref()
-                    .map(|x| x.job_state.to_string().as_bytes().to_vec()),
-            );
+            task_types.push(job.task_type.to_string());
+            job_states.push(job.job_status.as_ref().map(|x| x.job_state.to_string()));
             last_task_ids.push(
                 job.job_status
                     .as_ref()
-                    .and_then(|x| x.last_task_id.clone().map(|x| x.as_bytes().to_vec())),
+                    .and_then(|x| x.last_task_id.clone().map(|x| x.clone())),
             );
             last_task_run_at.push(
                 job.job_status
@@ -143,9 +133,9 @@ impl AsyncSystemTable for BackgroundJobTable {
                     .as_ref()
                     .and_then(|x| x.next_task_scheduled_time.map(|x| x.timestamp_micros())),
             );
-            message.push(job.message.as_bytes().to_vec());
+            message.push(job.message.clone());
             last_updated.push(job.last_updated.map(|t| t.timestamp_micros()));
-            creator.push(job.creator.map(|x| x.to_string().as_bytes().to_vec()));
+            creator.push(job.creator.map(|x| x.to_string()));
             create_time.push(job.created_at.timestamp_micros());
         }
 

@@ -64,7 +64,7 @@ impl AsyncSystemTable for TempFilesTable {
         let tenant = ctx.get_tenant();
         let operator = DataOperator::instance().operator();
 
-        let mut temp_files_name = vec![];
+        let mut temp_files_name: Vec<String> = vec![];
         let mut temp_files_content_length = vec![];
         let mut temp_files_last_modified = vec![];
 
@@ -81,7 +81,7 @@ impl AsyncSystemTable for TempFilesTable {
                 let metadata = entry.metadata();
 
                 if metadata.is_file() {
-                    temp_files_name.push(entry.name().as_bytes().to_vec());
+                    temp_files_name.push(entry.name().into());
 
                     temp_files_last_modified
                         .push(metadata.last_modified().map(|x| x.timestamp_micros()));
@@ -95,7 +95,7 @@ impl AsyncSystemTable for TempFilesTable {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String("Spill".as_bytes().to_owned())),
+                    Value::Scalar(Scalar::String("Spill".to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,

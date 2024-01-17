@@ -75,10 +75,10 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
         for (_, name, task) in tasks {
-            names.push(name.as_bytes().to_vec());
-            types.push(task.task_type.to_string().as_bytes().to_vec());
-            stats.push(task.task_state.to_string().as_bytes().to_vec());
-            messages.push(task.message.as_bytes().to_vec());
+            names.push(name.clone());
+            types.push(task.task_type.to_string());
+            stats.push(task.task_state.to_string());
+            messages.push(task.message.clone());
             compaction_stats.push(
                 task.compaction_task_stats
                     .as_ref()
@@ -98,11 +98,8 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 table_ids.push(0);
                 task_run_secs.push(None);
             }
-            creators.push(task.creator.map(|s| s.to_string().as_bytes().to_vec()));
-            trigger.push(
-                task.manual_trigger
-                    .map(|s| s.trigger.to_string().as_bytes().to_vec()),
-            );
+            creators.push(task.creator.map(|s| s.to_string()));
+            trigger.push(task.manual_trigger.map(|s| s.trigger.to_string()));
             create_timestamps.push(task.created_at.timestamp_micros());
             update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
         }

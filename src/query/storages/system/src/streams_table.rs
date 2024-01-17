@@ -84,7 +84,7 @@ impl AsyncSystemTable for StreamsTable {
         let mut table_name = vec![];
         let mut invalid_reason = vec![];
         let mut mode = vec![];
-        let mut names = vec![];
+        let mut names: Vec<String> = vec![];
         let mut stream_id = vec![];
         let mut created_on = vec![];
         let mut updated_on = vec![];
@@ -101,11 +101,9 @@ impl AsyncSystemTable for StreamsTable {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
                         if col_name == "database" {
-                            if let Scalar::String(s) = scalar {
-                                if let Ok(database) = String::from_utf8(s.clone()) {
-                                    if !db_name.contains(&database) {
-                                        db_name.push(database);
-                                    }
+                            if let Scalar::String(database) = scalar {
+                                if !db_name.contains(database) {
+                                    db_name.push(database.clone());
                                 }
                             }
                         }
@@ -164,11 +162,11 @@ impl AsyncSystemTable for StreamsTable {
                         t_id,
                     ) && table.engine() == STREAM_ENGINE
                     {
-                        catalogs.push(ctl_name.as_bytes().to_vec());
-                        databases.push(name.as_bytes().to_vec());
+                        catalogs.push(ctl_name.clone());
+                        databases.push(name.clone());
 
                         let stream_info = table.get_table_info();
-                        names.push(table.name().as_bytes().to_vec());
+                        names.push(table.name().into());
                         stream_id.push(stream_info.ident.table_id);
                         created_on.push(stream_info.meta.created_on.timestamp_micros());
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
@@ -181,27 +179,20 @@ impl AsyncSystemTable for StreamsTable {
                                 })
                                 .await
                                 .ok()
-                                .and_then(|ownership| {
-                                    ownership.map(|o| o.role.as_bytes().to_vec())
-                                }),
+                                .and_then(|ownership| ownership.map(|o| o.role.clone())),
                         );
-                        comment.push(stream_info.meta.comment.as_bytes().to_vec());
+                        comment.push(stream_info.meta.comment.clone());
 
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
-                        table_name.push(
-                            format!(
-                                "{}.{}",
-                                stream_table.source_table_database(),
-                                stream_table.source_table_name()
-                            )
-                            .as_bytes()
-                            .to_vec(),
-                        );
-                        mode.push(stream_table.mode().to_string().as_bytes().to_vec());
+                        table_name.push(format!(
+                            "{}.{}",
+                            stream_table.source_table_database(),
+                            stream_table.source_table_name()
+                        ));
+                        mode.push(stream_table.mode().to_string());
                         table_version.push(stream_table.offset());
                         table_id.push(stream_table.source_table_id());
-                        snapshot_location
-                            .push(stream_table.snapshot_loc().map(|v| v.as_bytes().to_vec()));
+                        snapshot_location.push(stream_table.snapshot_loc().map(|v| v.clone()));
 
                         let mut reason = "".to_string();
                         match stream_table.source_table(ctx.clone()).await {
@@ -221,7 +212,7 @@ impl AsyncSystemTable for StreamsTable {
                                 reason = e.display_text();
                             }
                         }
-                        invalid_reason.push(reason.as_bytes().to_vec());
+                        invalid_reason.push(reason.clone());
                     }
                 }
             }
