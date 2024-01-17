@@ -3,9 +3,8 @@
 #### create table ontime ...
 >>>> ALTER TABLE ontime ADD COLUMN new_col int NOT NULL DEFAULT 3;
 #### create stage data...
->>>> copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = parquet  missing_field_as = 'field_default');
-ontime_200.parquet	199	0	NULL	NULL
 >>>> copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = parquet  missing_field_as = field_default);
+ontime_200.parquet	199	0	NULL	NULL
 <<<<
 >>>>  select tail_number, new_col from ontime where dayofmonth=1 order by new_col
 N315PQ	3
@@ -19,6 +18,7 @@ N901XJ	3
 N909XJ	3
 <<<<
 >>>> copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = parquet  missing_field_as = 'field_default') force=true;
+ontime_200.parquet	199	0	NULL	NULL
 <<<<
 >>>> DROP TABLE IF EXISTS ontime
 >>>> DROP STAGE IF EXISTS data
