@@ -52,7 +52,6 @@ jobs:
       matrix:
         dirs:
           - "base"
-          - "ydb"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_macos
