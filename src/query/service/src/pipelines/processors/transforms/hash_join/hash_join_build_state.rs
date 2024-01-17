@@ -184,14 +184,14 @@ impl HashJoinBuildState {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
 
         let input_rows = input.num_rows();
-        buffer.push(input.clone());
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
 
-        self.merge_into_try_build_block_info_index(input, old_size);
+        self.merge_into_try_build_block_info_index(input.clone(), old_size);
+        buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
