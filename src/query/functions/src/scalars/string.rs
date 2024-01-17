@@ -298,73 +298,70 @@ pub fn register(registry: &mut FunctionRegistry) {
     //         },
     //     );
 
-    //     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
-    //         if substr.is_empty() {
-    //             // the same behavior as MySQL, Postgres and Clickhouse
-    //             return if pos == 0 { 1_u64 } else { pos };
-    //         }
+    let find_at = |str: &str, substr: &str, pos: u64| {
+        if substr.is_empty() {
+            // the same behavior as MySQL, Postgres and Clickhouse
+            return if pos == 0 { 1_u64 } else { pos };
+        }
 
-    //         let pos = pos as usize;
-    //         if pos == 0 {
-    //             return 0_u64;
-    //         }
-    //         let p = pos - 1;
-    //         if p + substr.len() <= str.len() {
-    //             str[p..]
-    //                 .windows(substr.len())
-    //                 .position(|w| w == substr)
-    //                 .map_or(0, |i| i + 1 + p) as u64
-    //         } else {
-    //             0_u64
-    //         }
-    //     };
-    //     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
-    //         "instr",
-    //         |_, _, _| FunctionDomain::Full,
-    //         move |str: &[u8], substr: &[u8], _| find_at(str, substr, 1),
-    //     );
+        let pos = pos as usize;
+        if pos == 0 {
+            return 0_u64;
+        }
+        let p = pos - 1;
+        if let Some((byte_pos, _)) = str.char_indices().nth(p) {
+            str[byte_pos..].find(substr).map_or(0, |i| (i + 1 + p) as _)
+        } else {
+            0_u64
+        }
+    };
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "instr",
+        |_, _, _| FunctionDomain::Full,
+        move |str: &str, substr: &str, _| find_at(str, substr, 1),
+    );
 
-    //     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
-    //         "position",
-    //         |_, _, _| FunctionDomain::Full,
-    //         move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
-    //     );
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "position",
+        |_, _, _| FunctionDomain::Full,
+        move |substr: &str, str: &str, _| find_at(str, substr, 1),
+    );
 
-    //     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
-    //         "locate",
-    //         |_, _, _| FunctionDomain::Full,
-    //         move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
-    //     );
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+        "locate",
+        |_, _, _| FunctionDomain::Full,
+        move |substr: &str, str: &str, _| find_at(str, substr, 1),
+    );
 
-    //     registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
-    //         "locate",
-    //         |_, _, _, _| FunctionDomain::Full,
-    //         move |substr: &[u8], str: &[u8], pos: u64, _| find_at(str, substr, pos),
-    //     );
+    registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
+        "locate",
+        |_, _, _, _| FunctionDomain::Full,
+        move |substr: &str, str: &str, pos: u64, _| find_at(str, substr, pos),
+    );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "quote",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len() * 2,
-    //             |val, output, _| {
-    //                 for ch in val {
-    //                     match ch {
-    //                         0 => output.put_slice(&[b'\\', b'0']),
-    //                         b'\'' => output.put_slice(&[b'\\', b'\'']),
-    //                         b'\"' => output.put_slice(&[b'\\', b'\"']),
-    //                         8 => output.put_slice(&[b'\\', b'b']),
-    //                         b'\n' => output.put_slice(&[b'\\', b'n']),
-    //                         b'\r' => output.put_slice(&[b'\\', b'r']),
-    //                         b'\t' => output.put_slice(&[b'\\', b't']),
-    //                         b'\\' => output.put_slice(&[b'\\', b'\\']),
-    //                         c => output.put_u8(*c),
-    //                     }
+    // registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+    //     "quote",
+    //     |_, _| FunctionDomain::Full,
+    //     vectorize_string_to_string(
+    //         |col| col.data().len() * 2,
+    //         |val, output, _| {
+    //             for ch in val.chars() {
+    //                 match ch {
+    //                     0 => output.put_slice(&[b'\\', b'0']),
+    //                     b'\'' => output.put_slice(&[b'\\', b'\'']),
+    //                     b'\"' => output.put_slice(&[b'\\', b'\"']),
+    //                     8 => output.put_slice(&[b'\\', b'b']),
+    //                     b'\n' => output.put_slice(&[b'\\', b'n']),
+    //                     b'\r' => output.put_slice(&[b'\\', b'r']),
+    //                     b'\t' => output.put_slice(&[b'\\', b't']),
+    //                     b'\\' => output.put_slice(&[b'\\', b'\\']),
+    //                     c => output.put_char(*c),
     //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    //             }
+    //             output.commit_row();
+    //         },
+    //     ),
+    // );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "reverse",
