@@ -21,10 +21,10 @@ use log::info;
 use super::tasks::Task;
 use super::CascadesOptimizer;
 
-/// It will cost about 2000ns to execute a task in average,
-/// so the default task limit is 10,000,000 which means the
-/// optimizer will cost at most 10s to optimize a query.
-pub const DEFAULT_TASK_LIMIT: u64 = 5_000_000;
+/// It will cost about 4000ns to execute a task in average,
+/// so the default task limit is 1,250,000 which means the
+/// optimizer will cost at most 5s to optimize a query.
+pub const DEFAULT_TASK_LIMIT: u64 = 1_250_000;
 
 pub struct SchedulerStat {
     pub scheduled_task_count: u64,
@@ -32,6 +32,11 @@ pub struct SchedulerStat {
     pub apply_rule_task_count: u64,
     pub optimize_task_count: u64,
     pub total_execution_time: Duration,
+
+    pub optimize_group_count: u64,
+    pub optimize_group_prune_count: u64,
+    pub optimize_group_expr_count: u64,
+    pub optimize_group_expr_prune_count: u64,
 }
 
 pub struct Scheduler {
@@ -43,7 +48,7 @@ pub struct Scheduler {
     task_limit: u64,
 
     /// Statistics of the scheduler.
-    stat: SchedulerStat,
+    pub(super) stat: SchedulerStat,
 }
 
 impl Scheduler {
@@ -57,6 +62,10 @@ impl Scheduler {
                 apply_rule_task_count: 0,
                 optimize_task_count: 0,
                 total_execution_time: Duration::default(),
+                optimize_group_count: 0,
+                optimize_group_prune_count: 0,
+                optimize_group_expr_count: 0,
+                optimize_group_expr_prune_count: 0,
             },
         }
     }
@@ -69,7 +78,7 @@ impl Scheduler {
 
     pub fn run(&mut self, optimizer: &mut CascadesOptimizer) -> Result<()> {
         let start = std::time::Instant::now();
-        while let Some(task) = self.task_queue.pop_front() {
+        while let Some(mut task) = self.task_queue.pop_front() {
             if self.stat.scheduled_task_count > self.task_limit {
                 // The number of scheduled tasks exceeds the limit, stop scheduling new tasks.
                 info!(
@@ -90,24 +99,43 @@ impl Scheduler {
             match task {
                 Task::ExploreGroup(_) | Task::ExploreExpr(_) => self.stat.explore_task_count += 1,
                 Task::ApplyRule(_) => self.stat.apply_rule_task_count += 1,
-                Task::OptimizeGroup(_) | Task::OptimizeExpr(_) => {
-                    self.stat.optimize_task_count += 1
+                Task::OptimizeGroup(_) => {
+                    self.stat.optimize_group_count += 1;
+                    self.stat.optimize_task_count += 1;
+                }
+                Task::OptimizeExpr(_) => {
+                    self.stat.optimize_group_expr_count += 1;
+                    self.stat.optimize_task_count += 1;
                 }
             }
 
-            task.execute(optimizer, self)?;
+            // Execute the task until it is finished or it is blocked by other tasks.
+            while let Some(new_task) = task.execute(optimizer, self)? {
+                if new_task.ref_count() > 0 {
+                    // The task is still referenced by other tasks, requeue it.
+                    self.add_task(new_task);
+                    break;
+                } else {
+                    task = new_task;
+                    continue;
+                }
+            }
         }
 
         self.stat.total_execution_time = start.elapsed();
 
         info!(
-            "optimizer stats - total task number: {}, total execution time: {:.3}s, average execution time: {}ns, explore task number: {}, apply rule task number: {}, optimize task number: {}",
+            "optimizer stats - total task number: {}, total execution time: {:.3}s, average execution time: {}ns, explore task number: {}, apply_rule task number: {}, optimize task number: {}, optimize_group task number: {}, optimize_group pruned number: {}, optimize_group_expr task number: {}, optimize group expr pruned number: {}",
             self.stat.scheduled_task_count,
             self.stat.total_execution_time.as_secs_f64(),
             self.stat.total_execution_time.as_nanos() / self.stat.scheduled_task_count as u128,
             self.stat.explore_task_count,
             self.stat.apply_rule_task_count,
             self.stat.optimize_task_count,
+            self.stat.optimize_group_count,
+            self.stat.optimize_group_prune_count,
+            self.stat.optimize_group_expr_count,
+            self.stat.optimize_group_expr_prune_count,
         );
 
         Ok(())
