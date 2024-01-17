@@ -4,7 +4,7 @@ drop table if exists t
 statement ok
 create table t(id string, a int default 2, b int not null default 2)
 
-query error 2004.*NULL_FIELD_AS cannot be ERROR
+query error 2004.*Invalid option value: NULL_FIELD_AS is set to ERROR. The valid values are NULL | FIELD_DEFAULT.
 copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = ERROR) on_error = continue
 
 # default:  null_field_as = NULL missing_field_as = ERROR
