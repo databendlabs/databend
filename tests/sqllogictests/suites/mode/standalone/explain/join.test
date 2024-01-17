@@ -30,7 +30,7 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -40,7 +40,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [number (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

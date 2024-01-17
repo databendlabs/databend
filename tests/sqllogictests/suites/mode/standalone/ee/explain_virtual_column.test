@@ -124,7 +124,7 @@ EvalScalar
     ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 130
+    ├── read bytes: 252
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

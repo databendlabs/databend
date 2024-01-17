@@ -20,7 +20,7 @@ TableScan
 ├── table: default.default.t_nullable_prune
 ├── output columns: [a (#0)]
 ├── read rows: 6
-├── read bytes: 78
+├── read bytes: 76
 ├── partitions total: 2
 ├── partitions scanned: 2
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
