@@ -159,12 +159,12 @@ explain select t.number from t, t1, t2 where t1.number = t2.number and t.number 
 HashJoin
 ├── output columns: [t.number (#0)]
 ├── join type: INNER
-├── build keys: [t2.number (#2)]
-├── probe keys: [t1.number (#1)]
+├── build keys: [t1.number (#1)]
+├── probe keys: [t2.number (#2)]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
-│   ├── output columns: [t2.number (#2), t.number (#0)]
+│   ├── output columns: [t1.number (#1), t.number (#0)]
 │   ├── join type: CROSS
 │   ├── build keys: []
 │   ├── probe keys: []
@@ -185,25 +185,25 @@ HashJoin
 │   │       ├── push downs: [filters: [t.number (#0) = 1], limit: NONE]
 │   │       └── estimated rows: 1.00
 │   └── TableScan(Probe)
-│       ├── table: default.default.t2
-│       ├── output columns: [number (#2)]
-│       ├── read rows: 100
-│       ├── read bytes: 172
+│       ├── table: default.default.t1
+│       ├── output columns: [number (#1)]
+│       ├── read rows: 10
+│       ├── read bytes: 65
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 100.00
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [number (#1)]
-    ├── read rows: 10
-    ├── read bytes: 65
+    ├── table: default.default.t2
+    ├── output columns: [number (#2)]
+    ├── read rows: 100
+    ├── read bytes: 172
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+    └── estimated rows: 100.00
 
 # check outer join is converted to inner join
 

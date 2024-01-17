@@ -70,7 +70,7 @@ impl Task {
     pub fn execute(
         self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler<'_>,
+        scheduler: &mut Scheduler,
     ) -> Result<()> {
         match self {
             Task::ApplyRule(task) => task.execute(optimizer),
