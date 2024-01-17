@@ -56,6 +56,7 @@ use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::decimal::DecimalType;
+use crate::types::geo::GeometryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -84,6 +85,7 @@ use crate::values::decimal::DecimalColumnVec;
 use crate::values::map::KvPair;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
+use crate::with_geometry_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 
@@ -158,6 +160,7 @@ pub enum Column {
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(BinaryColumn),
+    Geometry(GeometryColumn),
 }
 
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
@@ -1016,6 +1019,9 @@ impl Column {
                 DataType::Tuple(inner)
             }
             Column::Variant(_) => DataType::Variant,
+            Column::Geometry(g) => with_geometry_type!(|GEO_TYPE| match g {
+                GeometryColumn::GEO_TYPE => DataType::Geometry(GeometryDataType::GEO_TYPE),
+            }),
         }
     }
 

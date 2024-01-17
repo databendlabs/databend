@@ -25,6 +25,7 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geo::AsArrow;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -155,6 +156,11 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
         TableDataType::Variant => ArrowDataType::Extension(
             ARROW_EXT_TYPE_VARIANT.to_string(),
             Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geometry(geometry) => ArrowDataType::Extension(
+            geometry.extension_name().to_string(),
+            Box::new(geometry.to_arrow2_type()),
             None,
         ),
     }
@@ -409,6 +415,7 @@ impl Column {
                     .unwrap(),
                 )
             }
+            Column::Geometry(col) => col.as_arrow(arrow_type),
         }
     }
 }

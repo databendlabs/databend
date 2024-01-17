@@ -36,6 +36,7 @@ educe = "0.4"
 enum-as-inner = "0.5"
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
+geoarrow = { git = "https://github.com/geoarrow/geoarrow-rs" }
 hex = "0.4.3"
 itertools = { workspace = true }
 jsonb = { workspace = true }

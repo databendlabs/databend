@@ -37,6 +37,7 @@
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
 #![feature(lazy_cell)]
+#![feature(let_chains)]
 
 #[allow(dead_code)]
 mod block;

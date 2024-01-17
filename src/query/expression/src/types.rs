@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geo;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -51,6 +52,7 @@ pub use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
+pub use self::geo::GeometryDataType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
@@ -86,6 +88,7 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+    Geometry(GeometryDataType),
 
     // Used internally for generic types
     Generic(usize),

@@ -33,6 +33,7 @@ use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::DecimalSize;
+use crate::types::GeometryDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::F32;
@@ -142,6 +143,8 @@ fn arrow_type_to_table_type(ty: &ArrowDataType, is_nullable: bool) -> Result<Tab
             ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
             ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
             ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+            "geoarrow.point" => TableDataType::Geometry(GeometryDataType::Point),
+            "geoarrow.linestring" => TableDataType::Geometry(GeometryDataType::LineString),
             _ => arrow_type_to_table_type(data_type, is_nullable)?,
         },
         _ => {

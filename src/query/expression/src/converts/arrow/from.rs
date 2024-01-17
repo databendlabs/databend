@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::EXTENSION_KEY;
+use super::GEO_EXTENSION_KEY;
 use crate::types::DataType;
 use crate::Column;
 use crate::DataBlock;
@@ -115,6 +116,10 @@ fn arrow2_field_from_arrow_field(field: &ArrowField) -> Arrow2Field {
 
     if let Some(extension_type) = field.metadata().get(EXTENSION_KEY) {
         data_type = Arrow2DataType::Extension(extension_type.clone(), Box::new(data_type), None);
+    }
+    if let Some(geo_extension_type) = field.metadata().get(GEO_EXTENSION_KEY) {
+        data_type =
+            Arrow2DataType::Extension(geo_extension_type.clone(), Box::new(data_type), None);
     }
 
     Arrow2Field::new(field.name(), data_type, field.is_nullable())

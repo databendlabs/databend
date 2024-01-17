@@ -25,6 +25,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::types::decimal::DecimalDataType;
+use crate::types::geo::GeometryDataType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::BlockMetaInfo;
@@ -189,6 +190,9 @@ pub enum TableDataType {
         fields_type: Vec<TableDataType>,
     },
     Variant,
+
+    // Geometry
+    Geometry(GeometryDataType),
 }
 
 impl DataSchema {
@@ -1162,6 +1166,7 @@ impl From<&TableDataType> for DataType {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
             TableDataType::Variant => DataType::Variant,
+            TableDataType::Geometry(ty) => DataType::Geometry(*ty),
         }
     }
 }
@@ -1384,6 +1389,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         }
         DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
+        DataType::Geometry(geo_type) => Ok(TableDataType::Geometry(*geo_type)),
         DataType::Tuple(fields) => {
             let fields_type = fields
                 .iter()

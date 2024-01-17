@@ -16,3 +16,4 @@ mod from;
 mod to;
 
 pub const EXTENSION_KEY: &str = "Extension";
+pub const GEO_EXTENSION_KEY: &str = "ARROW::extension::name";
