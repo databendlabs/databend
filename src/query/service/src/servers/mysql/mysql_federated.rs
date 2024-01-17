@@ -43,9 +43,8 @@ impl MySQLFederated {
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
-            value.as_bytes().to_vec(),
-        ])]);
+        let block =
+            DataBlock::new_from_columns(vec![StringType::from_data(vec![value.to_string()])]);
         Some((schema, block))
     }
 
@@ -59,8 +58,8 @@ impl MySQLFederated {
             TableField::new("Value", TableDataType::String),
         ]);
         let block = DataBlock::new_from_columns(vec![
-            StringType::from_data(vec![name.as_bytes().to_vec()]),
-            StringType::from_data(vec![value.as_bytes().to_vec()]),
+            StringType::from_data(vec![name.to_string()]),
+            StringType::from_data(vec![value.to_string()]),
         ]);
         Some((schema, block))
     }
@@ -103,7 +102,7 @@ impl MySQLFederated {
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(StringType::from_data(vec![value.as_bytes().to_vec()]));
+                    values.push(StringType::from_data(vec![value]));
                 } else {
                     // @@aa
                     // var is 'aa'
@@ -113,7 +112,7 @@ impl MySQLFederated {
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(StringType::from_data(vec![value.as_bytes().to_vec()]));
+                    values.push(StringType::from_data(vec![value]));
                 }
             }
         }

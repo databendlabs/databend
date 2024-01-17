@@ -166,7 +166,7 @@ pub(crate) async fn dump_tables(
     let tenant = ctx.get_tenant();
     let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
-    let mut tables = Vec::new();
+    let mut tables: Vec<String> = Vec::new();
     let mut databases: Vec<String> = Vec::new();
 
     if let Some(push_downs) = push_downs {

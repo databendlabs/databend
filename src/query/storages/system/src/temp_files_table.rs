@@ -81,7 +81,7 @@ impl AsyncSystemTable for TempFilesTable {
                 let metadata = entry.metadata();
 
                 if metadata.is_file() {
-                    temp_files_name.push(entry.name().into());
+                    temp_files_name.push(entry.name().to_string());
 
                     temp_files_last_modified
                         .push(metadata.last_modified().map(|x| x.timestamp_micros()));

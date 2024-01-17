@@ -58,7 +58,7 @@ impl AsyncSystemTable for UsersTable {
         let mut hostnames: Vec<String> = users.iter().map(|x| x.hostname.clone()).collect();
         let mut auth_types: Vec<String> = users
             .iter()
-            .map(|x| x.auth_info.get_type().to_str().into())
+            .map(|x| x.auth_info.get_type().to_str().to_string())
             .collect();
         let mut default_roles: Vec<String> = users
             .iter()
@@ -70,8 +70,8 @@ impl AsyncSystemTable for UsersTable {
         for (name, auth_info) in configured_users {
             names.push(name.clone());
             hostnames.push("%".to_string());
-            auth_types.push(auth_info.get_type().to_str().into());
-            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.into());
+            auth_types.push(auth_info.get_type().to_str().to_string());
+            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
             is_configureds.push("YES".to_string());
         }
 

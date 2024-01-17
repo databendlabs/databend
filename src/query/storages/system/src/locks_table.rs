@@ -101,11 +101,11 @@ impl AsyncSystemTable for LocksTable {
             for info in lock_infos {
                 lock_table_id.push(info.key.get_table_id());
                 lock_revision.push(info.revision);
-                lock_type.push(info.meta.lock_type.to_string());
+                lock_type.push(info.meta.lock_type.to_string().clone());
                 if info.meta.acquired_on.is_some() {
-                    lock_status.push("HOLDING".to_string());
+                    lock_status.push("HOLDING".clone());
                 } else {
-                    lock_status.push("WAITING".to_string());
+                    lock_status.push("WAITING".clone());
                 }
                 lock_user.push(info.meta.user.clone());
                 lock_node.push(info.meta.node.clone());

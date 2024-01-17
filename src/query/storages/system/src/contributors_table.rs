@@ -44,7 +44,7 @@ impl SyncSystemTable for ContributorsTable {
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
         let contributors: Vec<String> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')
-            .map(|x| x.trim().into())
+            .map(|x| x.trim().to_string())
             .collect();
 
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(

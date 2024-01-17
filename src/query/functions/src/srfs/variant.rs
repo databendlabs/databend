@@ -468,7 +468,7 @@ fn unnest_variant_obj(
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
             for (key, val) in vals {
-                key_builder.put_slice(&key);
+                key_builder.put_str(&String::from_utf8_lossy(&key));
                 key_builder.commit_row();
                 val_builder.put_slice(&val);
                 val_builder.commit_row();
@@ -592,7 +592,7 @@ impl FlattenGenerator {
                     key_builder.push_null();
                 }
                 if let Some(path_builder) = path_builder {
-                    path_builder.put_slice(inner_path.as_bytes());
+                    path_builder.put_str(&inner_path);
                     path_builder.commit_row();
                 }
                 if let Some(index_builder) = index_builder {

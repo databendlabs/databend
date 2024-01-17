@@ -62,26 +62,23 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
 
     for task_run in task_runs {
         let tr: databend_common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
-        name.push(tr.task_name.clone());
+        name.push(tr.task_name);
         id.push(tr.task_id);
-        owner.push(tr.owner.clone());
-        comment.push(tr.comment.map(|s| s.clone()));
-        schedule.push(tr.schedule_options.map(|s| s.clone()));
-        warehouse.push(
-            tr.warehouse_options
-                .and_then(|s| s.warehouse.map(|v| v.clone())),
-        );
+        owner.push(tr.owner);
+        comment.push(tr.comment);
+        schedule.push(tr.schedule_options);
+        warehouse.push(tr.warehouse_options.and_then(|s| s.warehouse.map(|v| v)));
         state.push(tr.state.to_string());
         exception_code.push(tr.error_code);
-        exception_text.push(tr.error_message.map(|s| s.clone()));
-        definition.push(tr.query_text.clone());
-        condition_text.push(tr.condition_text.clone());
-        run_id.push(tr.run_id.clone());
-        query_id.push(tr.query_id.clone());
+        exception_text.push(tr.error_message);
+        definition.push(tr.query_text);
+        condition_text.push(tr.condition_text);
+        run_id.push(tr.run_id);
+        query_id.push(tr.query_id);
         attempt_number.push(tr.attempt_number);
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
-        root_task_id.push(tr.root_task_id.clone());
+        root_task_id.push(tr.root_task_id);
     }
     Ok(DataBlock::new_from_columns(vec![
         StringType::from_data(name),

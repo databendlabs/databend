@@ -56,8 +56,8 @@ impl AsyncSystemTable for CatalogsTable {
             .list_catalogs(&ctx.get_tenant())
             .await?
             .into_iter()
-            .map(|v| v.name().into())
-            .collect::<Vec<String>>();
+            .map(|v| v.name())
+            .collect::<Vec<_>>();
 
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(
             catalog_names,

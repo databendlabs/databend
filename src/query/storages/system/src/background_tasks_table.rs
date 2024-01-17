@@ -75,10 +75,10 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
         for (_, name, task) in tasks {
-            names.push(name.clone());
+            names.push(name);
             types.push(task.task_type.to_string());
             stats.push(task.task_state.to_string());
-            messages.push(task.message.clone());
+            messages.push(task.message);
             compaction_stats.push(
                 task.compaction_task_stats
                     .as_ref()

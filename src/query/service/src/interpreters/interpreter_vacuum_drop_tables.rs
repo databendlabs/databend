@@ -138,12 +138,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 if let Some(limit) = self.plan.option.limit {
                     len = min(len, limit);
                 }
-                let mut tables: Vec<Vec<u8>> = Vec::with_capacity(len);
-                let mut files: Vec<Vec<u8>> = Vec::with_capacity(len);
+                let mut tables: Vec<String> = Vec::with_capacity(len);
+                let mut files: Vec<String> = Vec::with_capacity(len);
                 let purge_files = &purge_files[0..len];
                 for file in purge_files.iter() {
-                    tables.push(file.0.to_string().as_bytes().to_vec());
-                    files.push(file.1.to_string().as_bytes().to_vec());
+                    tables.push(file.0.to_string());
+                    files.push(file.1.to_string());
                 }
 
                 PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

@@ -131,7 +131,7 @@ impl<'a> FuseBlock<'a> {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_location.put_slice(block.location.0.as_bytes());
+                    block_location.put_str(&block.location.0);
                     block_location.commit_row();
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);

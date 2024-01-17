@@ -82,7 +82,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
                     let table_id = table.get_id();
                     if let Some(virtual_column_meta) = virtual_column_meta_map.remove(&table_id) {
                         database_names.push(database.clone());
-                        table_names.push(table.name().into());
+                        table_names.push(table.name().to_string());
                         virtual_columns.push(virtual_column_meta.virtual_columns.join(", "));
                         created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
                         updated_on_columns

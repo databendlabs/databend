@@ -189,7 +189,7 @@ where TablesTable<T>: HistoryAware
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
-                let mut db_name = Vec::new();
+                let mut db_name: Vec<String> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
@@ -286,7 +286,7 @@ where TablesTable<T>: HistoryAware
                                 })
                                 .await
                                 .ok()
-                                .and_then(|ownership| ownership.map(|o| o.role.into())),
+                                .and_then(|ownership| ownership.map(|o| o.role.to_string())),
                         );
                     }
                 }
@@ -323,12 +323,18 @@ where TablesTable<T>: HistoryAware
             index_size.push(stats.as_ref().and_then(|v| v.index_size));
         }
 
-        let names: Vec<String> = database_tables.iter().map(|v| v.name().into()).collect();
+        let names: Vec<String> = database_tables
+            .iter()
+            .map(|v| v.name().to_string())
+            .collect();
         let table_id: Vec<u64> = database_tables
             .iter()
             .map(|v| v.get_table_info().ident.table_id)
             .collect();
-        let engines: Vec<String> = database_tables.iter().map(|v| v.engine().into()).collect();
+        let engines: Vec<String> = database_tables
+            .iter()
+            .map(|v| v.engine().to_string())
+            .collect();
         let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
             .iter()

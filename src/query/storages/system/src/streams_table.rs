@@ -96,7 +96,7 @@ impl AsyncSystemTable for StreamsTable {
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
-                let mut db_name = Vec::new();
+                let mut db_name: Vec<String> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
@@ -166,7 +166,7 @@ impl AsyncSystemTable for StreamsTable {
                         databases.push(name.clone());
 
                         let stream_info = table.get_table_info();
-                        names.push(table.name().into());
+                        names.push(table.name().to_string());
                         stream_id.push(stream_info.ident.table_id);
                         created_on.push(stream_info.meta.created_on.timestamp_micros());
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
@@ -192,7 +192,7 @@ impl AsyncSystemTable for StreamsTable {
                         mode.push(stream_table.mode().to_string());
                         table_version.push(stream_table.offset());
                         table_id.push(stream_table.source_table_id());
-                        snapshot_location.push(stream_table.snapshot_loc().map(|v| v.clone()));
+                        snapshot_location.push(stream_table.snapshot_loc());
 
                         let mut reason = "".to_string();
                         match stream_table.source_table(ctx.clone()).await {
@@ -212,7 +212,7 @@ impl AsyncSystemTable for StreamsTable {
                                 reason = e.display_text();
                             }
                         }
-                        invalid_reason.push(reason.clone());
+                        invalid_reason.push(reason);
                     }
                 }
             }

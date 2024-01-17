@@ -48,7 +48,7 @@ impl SyncSystemTable for BuildOptionsTable {
         if let Some(features) = option_env!("VERGEN_CARGO_FEATURES") {
             cargo_features = features
                 .split_terminator(',')
-                .map(|x| x.trim().into())
+                .map(|x| x.trim().to_string())
                 .collect();
         } else {
             cargo_features = vec!["not available".to_string()];
@@ -56,7 +56,7 @@ impl SyncSystemTable for BuildOptionsTable {
 
         let mut target_features: Vec<String> = env!("DATABEND_CARGO_CFG_TARGET_FEATURE")
             .split_terminator(',')
-            .map(|x| x.trim().into())
+            .map(|x| x.trim().to_string())
             .collect();
 
         let length = max(cargo_features.len(), target_features.len());

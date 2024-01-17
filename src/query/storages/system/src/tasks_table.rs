@@ -59,18 +59,15 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     for task in tasks {
         let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
         created_on.push(tsk.created_at.timestamp_micros());
-        name.push(tsk.task_name.clone());
+        name.push(tsk.task_name);
         id.push(tsk.task_id);
-        owner.push(tsk.owner.clone());
-        comment.push(tsk.comment.map(|s| s.clone()));
-        warehouse.push(
-            tsk.warehouse_options
-                .and_then(|s| s.warehouse.map(|v| v.clone())),
-        );
-        schedule.push(tsk.schedule_options.map(|s| s.clone()));
+        owner.push(tsk.owner);
+        comment.push(tsk.comment);
+        warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse.map(|v| v)));
+        schedule.push(tsk.schedule_options);
         status.push(tsk.status.to_string());
-        definition.push(tsk.query_text.clone());
-        condition_text.push(tsk.condition_text.clone());
+        definition.push(tsk.query_text);
+        condition_text.push(tsk.condition_text);
         // join by comma
         after.push(tsk.after.into_iter().collect::<Vec<_>>().join(","));
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));

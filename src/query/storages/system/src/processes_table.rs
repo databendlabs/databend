@@ -55,7 +55,7 @@ impl SyncSystemTable for ProcessesTable {
 
         let local_node = ctx.get_cluster().local_id.clone();
 
-        let mut nodes: Vec<String> = Vec::with_capacity(processes_info.len());
+        let mut nodes = Vec::with_capacity(processes_info.len());
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
@@ -87,15 +87,11 @@ impl SyncSystemTable for ProcessesTable {
             processes_state.push(process_info.state.to_string());
             processes_database.push(process_info.database.clone());
             processes_host.push(ProcessesTable::process_host(&process_info.client_address));
-            processes_user.push(
-                ProcessesTable::process_option_value(process_info.user.clone())
-                    .name
-                    .clone(),
-            );
-            processes_extra_info.push(
-                ProcessesTable::process_option_value(process_info.session_extra_info.clone())
-                    .clone(),
-            );
+            processes_user
+                .push(ProcessesTable::process_option_value(process_info.user.clone()).name);
+            processes_extra_info.push(ProcessesTable::process_option_value(
+                process_info.session_extra_info.clone(),
+            ));
             processes_memory_usage.push(process_info.memory_usage);
             processes_scan_progress_read_rows.push(scan_progress.rows as u64);
             processes_scan_progress_read_bytes.push(scan_progress.bytes as u64);

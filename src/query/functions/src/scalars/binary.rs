@@ -38,6 +38,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 
@@ -204,8 +205,8 @@ fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Va
     vectorize_binary_to_string(
         |col| col.data().len(),
         |val, output, ctx| {
-            if simdutf8::basic::from_utf8(val).is_ok() {
-                output.put_slice(val);
+            if let Ok(val) = simdutf8::basic::from_utf8(val) {
+                output.put_str(val);
             } else {
                 ctx.set_error(output.len(), "invalid utf8 sequence");
             }
@@ -329,9 +330,8 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
         .collect::<Vec<_>>();
     let result = BinaryColumn::new(values.into(), offsets.into());
 
-    let col = Column::Binary(result);
     match len {
-        Some(_) => Value::Column(col),
-        _ => Value::Scalar(AnyType::index_column(&col, 0).unwrap().to_owned()),
+        Some(_) => Value::Column(Column::Binary(result)),
+        _ => Value::Scalar(Scalar::Binary(result.index(0).unwrap().to_vec())),
     }
 }

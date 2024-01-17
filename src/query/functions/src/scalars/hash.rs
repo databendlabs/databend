@@ -173,7 +173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         String::new()
                     },
                 };
-                output.put_slice(res.as_bytes());
+                output.put_str(&res);
                 output.commit_row();
             },
         ),
