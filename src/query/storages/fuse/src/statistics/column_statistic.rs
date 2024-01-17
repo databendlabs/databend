@@ -130,6 +130,19 @@ pub fn gen_columns_statistics(
     Ok(statistics)
 }
 
+pub fn scalar_min_max(scalar: Scalar) -> Option<(Scalar, Scalar)> {
+    if RangeIndex::supported_type(&scalar.as_ref().infer_data_type()) {
+        if let Some((min, Some(max))) = scalar
+            .clone()
+            .trim_min(STATS_STRING_PREFIX_LEN)
+            .map(|min| (min, scalar.trim_max(STATS_STRING_PREFIX_LEN)))
+        {
+            return Some((min, max));
+        }
+    }
+    None
+}
+
 pub mod traverse {
     use databend_common_expression::types::map::KvPair;
     use databend_common_expression::types::AnyType;

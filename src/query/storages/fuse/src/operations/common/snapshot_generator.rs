@@ -389,19 +389,24 @@ impl SnapshotGenerator for AppendGenerator {
                         .iter()
                         .for_each(|(col_id, default_value)| {
                             if !summary.col_stats.contains_key(col_id) {
-                                let (null_count, distinct_of_values) = if default_value.is_null() {
-                                    (summary.row_count, Some(0))
-                                } else {
-                                    (0, Some(1))
-                                };
-                                let col_stat = ColumnStatistics::new(
-                                    default_value.to_owned(),
-                                    default_value.to_owned(),
-                                    null_count,
-                                    0,
-                                    distinct_of_values,
-                                );
-                                summary.col_stats.insert(*col_id, col_stat);
+                                if let Some((min, max)) =
+                                    crate::statistics::scalar_min_max(default_value.clone())
+                                {
+                                    let (null_count, distinct_of_values) =
+                                        if default_value.is_null() {
+                                            (summary.row_count, Some(0))
+                                        } else {
+                                            (0, Some(1))
+                                        };
+                                    let col_stat = ColumnStatistics::new(
+                                        min,
+                                        max,
+                                        null_count,
+                                        0,
+                                        distinct_of_values,
+                                    );
+                                    summary.col_stats.insert(*col_id, col_stat);
+                                }
                             }
                         });
                 }
