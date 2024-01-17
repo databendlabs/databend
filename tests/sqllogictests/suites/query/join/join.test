@@ -261,14 +261,14 @@ statement ok
 insert into t values(1),(2),(3);
 
 query ITI
-select * from (select a, 'A' as name from t) t1 full outer join (select number from numbers(5)) t2 on t1.a = t2.number where t1.name is not null;
+select * from (select a, 'A' as name from t) t1 full outer join (select number from numbers(5)) t2 on t1.a = t2.number where t1.name is not null order by a;
 ----
 1 A 1
 2 A 2
 3 A 3
 
 query ITI
-select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number where t1.name is not null;
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number where t1.name is not null order by a;
 ----
 1 1 A
 2 2 A
