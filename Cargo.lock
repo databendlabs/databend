@@ -2921,6 +2921,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "opendal",
+ "paste",
  "serde",
  "serde_json",
  "sha1",

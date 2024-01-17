@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -264,7 +265,12 @@ impl FileFormatParams {
         if old {
             Ok(params)
         } else {
-            params.check()?;
+            params.check().map_err(|msg| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid option value for file format {} {msg}",
+                    params.get_type().to_string()
+                ))
+            })?;
             if ast.options.is_empty() {
                 Ok(params)
             } else {
@@ -276,24 +282,32 @@ impl FileFormatParams {
         }
     }
 
-    pub fn check(&self) -> Result<()> {
+    pub fn check(&self) -> std::result::Result<(), String> {
+        macro_rules! check_option {
+            ($params:expr, $option_name:ident) => {{
+                let v = &$params.$option_name;
+                paste! { let check_fn  = [<check_$option_name>]; }
+                check_fn(v).map_err(|msg| format!("({}='{v}'): {msg}.", stringify!($option_name),))
+            }};
+        }
+
         match self {
             FileFormatParams::Tsv(p) => {
-                check_str_len(&p.field_delimiter, 1, 1, "TSV", "field_delimiter")?;
-                check_str_len(&p.quote, 1, 1, "TSV", "quote")?;
-                check_str_len(&p.escape, 1, 1, "TSV", "escape")?;
-                check_nan_display(&p.nan_display)?;
-                check_record_delimiter(&p.record_delimiter)?;
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
             }
             FileFormatParams::Csv(p) => {
-                check_str_len(&p.field_delimiter, 1, 1, "CSV", "field_delimiter")?;
-                check_str_len(&p.quote, 1, 1, "CSV", "quote")?;
-                check_str_len(&p.escape, 0, 1, "CSV", "escape")?;
-                check_nan_display(&p.nan_display)?;
-                check_record_delimiter(&p.record_delimiter)?;
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
             }
             FileFormatParams::Xml(p) => {
-                check_str_len(&p.row_tag, 1, 1014, "XML", "row_tag")?;
+                check_option!(p, row_tag)?;
             }
             _ => {}
         }
@@ -689,50 +703,57 @@ impl Display for FileFormatParams {
     }
 }
 
-pub fn check_str_len(
-    option: &str,
-    min: usize,
-    max: usize,
-    fmt_name: &str,
-    option_name: &str,
-) -> Result<()> {
+pub fn check_row_tag(option: &str) -> std::result::Result<(), String> {
     let len = option.as_bytes().len();
-    if len < min || len > max {
-        Err(ErrorCode::InvalidArgument(format!(
-            "len of option {option_name} for {fmt_name} must in [{min}, {max}], got {option}"
-        )))
+    let (max, min) = (1024, 1);
+    if len > max || len < min {
+        Err(format!("length must in [{min}, {max}]"))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
+    let len = option.as_bytes().len();
+    if len != 1 {
+        Err("only accept one char".into())
+    } else if option.as_bytes()[0].is_ascii_alphanumeric() {
+        return Err("not accept alphanumeric".into());
     } else {
         Ok(())
     }
 }
 
 /// `\r\n` or u8
-pub fn check_record_delimiter(option: &str) -> Result<()> {
+pub fn check_record_delimiter(option: &str) -> std::result::Result<(), String> {
     match option.len() {
-        1 => {}
-        2 => {
-            if option != "\r\n" {
-                return Err(ErrorCode::InvalidArgument(
-                    "record_delimiter with two chars can only be '\\r\\n'",
-                ));
-            };
+        1 => {
+            if option.as_bytes()[0].is_ascii_alphanumeric() {
+                Err("not accept alphanumeric".into())
+            } else {
+                Ok(())
+            }
         }
-        _ => {
-            return Err(ErrorCode::InvalidArgument(
-                "record_delimiter must be one char or '\\r\\n'",
-            ));
-        }
+        2 if option == "\r\n" => Ok(()),
+        _ => Err("only accept one char or '\\r\\n'".into()),
     }
-    Ok(())
 }
 
-fn check_nan_display(nan_display: &str) -> Result<()> {
-    let lower = nan_display.to_lowercase();
-    if lower != "nan" && lower != "null" {
-        Err(ErrorCode::InvalidArgument(
-            "nan_display must be literal `nan` or `null` (case-insensitive)",
-        ))
-    } else {
-        Ok(())
+fn check_nan_display(nan_display: &str) -> std::result::Result<(), String> {
+    check_choices(nan_display, &["nan", "NaN", "null", "NULL"])
+}
+
+pub fn check_quote(option: &str) -> std::result::Result<(), String> {
+    check_choices(option, &["\'", "\"", "`"])
+}
+
+pub fn check_escape(option: &str) -> std::result::Result<(), String> {
+    check_choices(option, &["\\", ""])
+}
+
+pub fn check_choices(v: &str, choices: &[&str]) -> std::result::Result<(), String> {
+    if !choices.contains(&v) {
+        return Err(format!("must be one of {choices:?}"));
     }
+    Ok(())
 }

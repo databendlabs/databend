@@ -4,6 +4,9 @@ drop table if exists v
 statement ok
 create table v (a variant not null)
 
+query error Invalid option value for file format Csv \(escape='x'\): must be one of \["\\\\", ""\]
+copy into v from @data/csv/ file_format = (type = CSV escape = 'x')
+
 query TIITI
 copy into v from @data/csv/escape_default.csv file_format = (type = CSV)
 ----
