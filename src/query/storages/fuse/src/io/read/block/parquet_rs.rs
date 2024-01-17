@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_schema::Schema;
 use bytes::Bytes;
+use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -63,7 +63,8 @@ impl BlockReader {
             metadata: projected_table_schema.metadata.clone(),
             next_column_id: projected_table_schema.next_column_id,
         };
-        let arrow_schema = Schema::from(&need_deserialize_schema);
+        let arrow_schema =
+            table_schema_to_arrow_schema_ignore_inside_nullable(&need_deserialize_schema);
         let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
         // 2. Reorder the column chunks and column metas in dfs order according to the filtered schema
         let column_ids = need_deserialize_schema.to_leaf_column_ids();
