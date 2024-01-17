@@ -1132,7 +1132,7 @@ Limit
     ├── estimated rows: 0.08
     ├── Filter(Build)
     │   ├── output columns: [a.id (#0), a.c1 (#1)]
-    │   ├── filters: [is_true(CAST(a.c1 (#1) AS Int64 NULL) >= 1683648000), is_true(CAST(a.c1 (#1) AS Int64 NULL) <= 1683734400)]
+    │   ├── filters: [is_true(a.c1 (#1) >= 1683648000), is_true(a.c1 (#1) <= 1683734400)]
     │   ├── estimated rows: 0.20
     │   └── TableScan
     │       ├── table: default.default.a
@@ -1142,11 +1142,11 @@ Limit
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [and_filters(CAST(a.c1 (#1) AS Int64 NULL) >= 1683648000, CAST(a.c1 (#1) AS Int64 NULL) <= 1683734400)], limit: NONE]
+    │       ├── push downs: [filters: [and_filters(a.c1 (#1) >= 1683648000, a.c1 (#1) <= 1683734400)], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
         ├── output columns: [b.id (#2), b.c1 (#3)]
-        ├── filters: [is_true(CAST(b.c1 (#3) AS Int64 NULL) >= 1683648000), is_true(CAST(b.c1 (#3) AS Int64 NULL) <= 1683734400)]
+        ├── filters: [is_true(b.c1 (#3) >= 1683648000), is_true(b.c1 (#3) <= 1683734400)]
         ├── estimated rows: 0.40
         └── TableScan
             ├── table: default.default.b
@@ -1156,7 +1156,7 @@ Limit
             ├── partitions total: 2
             ├── partitions scanned: 2
             ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [and_filters(CAST(b.c1 (#3) AS Int64 NULL) >= 1683648000, CAST(b.c1 (#3) AS Int64 NULL) <= 1683734400)], limit: NONE]
+            ├── push downs: [filters: [and_filters(b.c1 (#3) >= 1683648000, b.c1 (#3) <= 1683734400)], limit: NONE]
             └── estimated rows: 2.00
 
 statement ok
@@ -1254,7 +1254,7 @@ Filter
     ├── estimated rows: 3.00
     ├── Filter(Build)
     │   ├── output columns: [b.id (#2)]
-    │   ├── filters: [is_true(id (#2) = b.id (#2))]
+    │   ├── filters: [is_true(b.id (#2) = b.id (#2))]
     │   ├── estimated rows: 0.40
     │   └── TableScan
     │       ├── table: default.default.b
@@ -1264,7 +1264,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(id (#2) = b.id (#2))], limit: NONE]
+    │       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
     │       └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.default.a
@@ -1633,7 +1633,7 @@ Filter
     │               ├── estimated rows: 0.00
     │               └── Filter
     │                   ├── output columns: [t1.a (#3), t1.c (#5)]
-    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
     │                   ├── estimated rows: 0.00
     │                   └── TableScan
     │                       ├── table: default.default.t1
@@ -1642,7 +1642,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -1688,7 +1688,7 @@ Filter
     │               ├── estimated rows: 0.00
     │               └── Filter
     │                   ├── output columns: [t1.a (#3), t1.c (#5)]
-    │                   ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │                   ├── filters: [is_true(a (#3) = a (#3))]
     │                   ├── estimated rows: 0.00
     │                   └── TableScan
     │                       ├── table: default.default.t1
@@ -1697,7 +1697,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(a (#3) = a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2

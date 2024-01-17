@@ -506,7 +506,7 @@ explain select * from (select number as a from numbers(10)) as t(b) where t.b > 
 ----
 Filter
 ├── output columns: [numbers.number (#0)]
-├── filters: [numbers.number (#0) > 5]
+├── filters: [t.b (#0) > 5]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
@@ -515,5 +515,5 @@ Filter
     ├── read bytes: 80
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+    ├── push downs: [filters: [t.b (#0) > 5], limit: NONE]
     └── estimated rows: 10.00
