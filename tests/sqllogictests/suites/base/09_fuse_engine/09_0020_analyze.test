@@ -8,6 +8,9 @@ statement ok
 USE db_09_0020
 
 statement ok
+set enable_table_lock = 0
+
+statement ok
 create table t(a uint64)
 
 statement ok
@@ -112,6 +115,9 @@ query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
 (0,2);
+
+statement ok
+set enable_table_lock = 1
 
 statement ok
 DROP TABLE t

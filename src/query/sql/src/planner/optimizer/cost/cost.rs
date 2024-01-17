@@ -14,6 +14,7 @@
 
 use std::fmt::Display;
 use std::ops::Add;
+use std::ops::AddAssign;
 
 use databend_common_exception::Result;
 
@@ -45,6 +46,12 @@ impl Add for Cost {
 
     fn add(self, rhs: Self) -> Self::Output {
         Cost(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for Cost {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
     }
 }
 
