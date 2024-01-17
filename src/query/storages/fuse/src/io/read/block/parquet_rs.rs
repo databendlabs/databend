@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
@@ -48,6 +48,9 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
     ) -> databend_common_exception::Result<DataBlock> {
+        if column_chunks.is_empty() {
+            return self.build_default_values_block(num_rows);
+        }
         // 1. Filter fields that need to be deserialized, use these fields to create a parquet schema
         let projected_table_schema = self.projected_schema.clone();
         let mut need_deserialize_fields = Vec::new();
@@ -136,11 +139,21 @@ impl BlockReader {
                 DataItem::ColumnArray(array) => all_arrays.push(array.0.clone()),
             }
         }
-        let mut columns = Vec::with_capacity(all_arrays.len());
-        for (array, field) in all_arrays.iter().zip(self.data_fields()) {
-            columns.push(Column::from_arrow(array.as_ref(), field.data_type())?)
+        let chunk = Chunk::try_new(all_arrays)?;
+        let mut default_vals = Vec::with_capacity(self.default_vals.len());
+        for (i, field) in projected_table_schema.fields().iter().enumerate() {
+            let data_item = column_chunks.get(&field.column_id);
+            match data_item {
+                Some(_) => default_vals.push(None),
+                None => default_vals.push(Some(self.default_vals[i].clone())),
+            }
         }
-        let data_block = DataBlock::new_from_columns(columns);
+        let data_block = DataBlock::create_with_default_value_and_chunk(
+            &self.data_schema(),
+            &chunk,
+            &default_vals,
+            num_rows,
+        )?;
         Ok(data_block)
     }
 }
