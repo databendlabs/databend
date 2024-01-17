@@ -805,7 +805,7 @@ impl HashJoinBuildState {
             {
                 return Ok(());
             }
-            if let Expr::ColumnRef { id, .. } = probe_key {
+            if let Some(Expr::ColumnRef { id, .. }) = probe_key {
                 let mut columns = Vec::with_capacity(data_blocks.len());
                 for block in data_blocks.iter() {
                     if block.num_columns() == 0 {
@@ -858,8 +858,10 @@ impl HashJoinBuildState {
             if let Some(distinct_build_column) =
                 dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
             {
-                if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
-                    runtime_filter.add_inlist(filter);
+                if let Some(probe_key) = probe_key {
+                    if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
+                        runtime_filter.add_inlist(filter);
+                    }
                 }
             }
         }
@@ -878,6 +880,7 @@ impl HashJoinBuildState {
             .build_keys
             .iter()
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
+            .filter_map(|(b, p)| p.as_ref().map(|p| (b, p)))
         {
             if !build_key.data_type().remove_nullable().is_numeric() {
                 return Ok(());
