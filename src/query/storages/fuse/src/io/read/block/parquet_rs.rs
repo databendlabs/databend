@@ -55,10 +55,8 @@ impl BlockReader {
         let projected_table_schema = self.projected_schema.clone();
         let mut need_deserialize_fields = Vec::new();
         for field in projected_table_schema.fields().iter() {
-            let data_item = column_chunks.get(&field.column_id).unwrap();
-            match data_item {
-                DataItem::RawData(_) => need_deserialize_fields.push(field.clone()),
-                DataItem::ColumnArray(_) => {}
+            if let Some(DataItem::RawData(_)) = column_chunks.get(&field.column_id) {
+                need_deserialize_fields.push(field.clone())
             }
         }
         let need_deserialize_schema = TableSchema {
