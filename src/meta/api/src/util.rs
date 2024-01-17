@@ -52,7 +52,6 @@ use databend_common_meta_app::share::*;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
@@ -101,21 +100,6 @@ pub async fn get_u64_value<T: kvapi::Key>(
     } else {
         Ok((0, 0))
     }
-}
-
-/// Get raw key and value from meta store.
-///
-/// It returns a `TxnGetResponse` as the result.
-pub async fn get_raw_key_value<K>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    k: &K,
-) -> Result<TxnGetResponse, MetaError>
-where
-    K: kvapi::Key,
-{
-    let key = k.to_string_key();
-    let res = kv_api.get_kv(&key).await?;
-    Ok(TxnGetResponse::new(key, res.map(pb::SeqV::from)))
 }
 
 pub fn deserialize_struct_get_response<K, T>(
