@@ -2933,6 +2933,7 @@ dependencies = [
 name = "databend-common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "databend-common-arrow",
  "databend-common-base",
