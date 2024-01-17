@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
+use bstr::ByteSlice;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
@@ -266,16 +267,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         );
 
-    //     registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
-    //         "to_uuid",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
-    //             let uuid = Uuid::from_u128(arg as u128);
-    //             let str = uuid.as_simple().to_string();
-    //             output.put_slice(str.as_bytes());
-    //             output.commit_row();
-    //         }),
-    //     );
+    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
+        "to_uuid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
+            let uuid = Uuid::from_u128(arg as u128);
+            let str = uuid.as_simple().to_string();
+            output.put_str(str.as_str());
+            output.commit_row();
+        }),
+    );
 
     //     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
     //         "strcmp",
@@ -373,335 +374,313 @@ pub fn register(registry: &mut FunctionRegistry) {
     //         ),
     //     );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "reverse",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len(),
-    //             |val, output, _| {
-    //                 let start = output.data.len();
-    //                 output.put_slice(val);
-    //                 let buf = &mut output.data[start..];
-    //                 buf.reverse();
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "reverse",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len(),
+            |val, output, _| {
+                let start = output.data.len();
+                output.put_str(val);
+                let buf = &mut output.data[start..];
+                buf.reverse();
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
-    //         "ascii",
-    //         |_, domain| {
-    //             FunctionDomain::Domain(SimpleDomain {
-    //                 min: domain.min.first().cloned().unwrap_or(0),
-    //                 max: domain
-    //                     .max
-    //                     .as_ref()
-    //                     .map_or(u8::MAX, |v| v.first().cloned().unwrap_or_default()),
-    //             })
-    //         },
-    //         |val, _| val.first().cloned().unwrap_or_default(),
-    //     );
+    registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
+        "ascii",
+        |_, domain| {
+            FunctionDomain::Domain(SimpleDomain {
+                min: domain.min.chars().next().map_or(0, |v| v as u8),
+                max: domain
+                    .max
+                    .as_ref()
+                    .map_or(u8::MAX, |s| s.chars().next().map_or(u8::MAX, |v| v as u8)),
+            })
+        },
+        |val, _| val.chars().next().map_or(0, |v| v as u8),
+    );
 
-    //     // Trim functions
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "ltrim",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len(),
-    //             |val, output, _| {
-    //                 let pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
-    //                 if let Some(idx) = pos {
-    //                     output.put_slice(&val.as_bytes()[idx..]);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    // Trim functions
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "ltrim",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len(),
+            |val, output, _| {
+                output.put_str(val.trim_start());
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "rtrim",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len(),
-    //             |val, output, _| {
-    //                 let pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
-    //                 if let Some(idx) = pos {
-    //                     output.put_slice(&val.as_bytes()[..val.len() - idx]);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "rtrim",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len(),
+            |val, output, _| {
+                output.put_str(val.trim_end());
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "trim",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len(),
-    //             |val, output, _| {
-    //                 let start_pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
-    //                 let end_pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
-    //                 if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
-    //                     output.put_slice(&val.as_bytes()[start_idx..val.len() - end_idx]);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "trim",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len(),
+            |val, output, _| {
+                output.put_str(val.trim());
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
-    //         "trim_leading",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_string_to_string_2_arg(
-    //             |col, _| col.data().len(),
-    //             |val, trim_str, _, output| {
-    //                 let chunk_size = trim_str.len();
-    //                 if chunk_size == 0 {
-    //                     output.put_slice(val);
-    //                     output.commit_row();
-    //                     return;
-    //                 }
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_leading",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_string_to_string_2_arg(
+            |col, _| col.data().len(),
+            |val, trim_str, _, output| {
+                let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_str(val);
+                    output.commit_row();
+                    return;
+                }
 
-    //                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
-    //                 if let Some(idx) = pos {
-    //                     output.put_slice(&val.as_bytes()[idx * chunk_size..]);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+                output.put_str(val.trim_start_matches(trim_str));
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
-    //         "trim_trailing",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_string_to_string_2_arg(
-    //             |col, _| col.data().len(),
-    //             |val, trim_str, _, output| {
-    //                 let chunk_size = trim_str.len();
-    //                 if chunk_size == 0 {
-    //                     output.put_slice(val);
-    //                     output.commit_row();
-    //                     return;
-    //                 }
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_trailing",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_string_to_string_2_arg(
+            |col, _| col.data().len(),
+            |val, trim_str, _, output| {
+                let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_str(val);
+                    output.commit_row();
+                    return;
+                }
 
-    //                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
-    //                 if let Some(idx) = pos {
-    //                     output.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+                output.put_str(val.trim_end_matches(trim_str));
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
-    //         "trim_both",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_string_to_string_2_arg(
-    //             |col, _| col.data().len(),
-    //             |val, trim_str, _, output| {
-    //                 let chunk_size = trim_str.len();
-    //                 if chunk_size == 0 {
-    //                     output.put_slice(val);
-    //                     output.commit_row();
-    //                     return;
-    //                 }
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim_both",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_string_to_string_2_arg(
+            |col, _| col.data().len(),
+            |val, trim_str, _, output| {
+                let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_str(val);
+                    output.commit_row();
+                    return;
+                }
 
-    //                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
+                let mut res = val;
 
-    //                 // Trim all
-    //                 if start_pos.is_none() {
-    //                     output.commit_row();
-    //                     return;
-    //                 }
+                while res.starts_with(trim_str) {
+                    res = &res[trim_str.len()..];
+                }
+                while res.ends_with(trim_str) {
+                    res = &res[..res.len() - trim_str.len()];
+                }
 
-    //                 let end_pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
+                output.put_str(res);
+                output.commit_row();
+            },
+        ),
+    );
 
-    //                 if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
-    //                     output.put_slice(
-    //                         &val.as_bytes()[start_idx * chunk_size..val.len() - end_idx * chunk_size],
-    //                     );
-    //                 }
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "to_hex",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| col.data().len() * 2,
+            |val, output, _| {
+                let old_len = output.data.len();
+                let extra_len = val.len() * 2;
+                output.data.resize(old_len + extra_len, 0);
+                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
+                output.commit_row();
+            },
+        ),
+    );
 
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
+    // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
+        "bin",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
+            write!(output.data, "{val:b}").unwrap();
+            output.commit_row();
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
+        "oct",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
+            write!(output.data, "{val:o}").unwrap();
+            output.commit_row();
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
+        "to_hex",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
+            write!(output.data, "{val:x}").unwrap();
+            output.commit_row();
+        }),
+    );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "to_hex",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| col.data().len() * 2,
-    //             |val, output, _| {
-    //                 let old_len = output.data.len();
-    //                 let extra_len = val.len() * 2;
-    //                 output.data.resize(old_len + extra_len, 0);
-    //                 hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    const MAX_REPEAT_TIMES: u64 = 1000000;
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "repeat",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |a, times, output, ctx| {
+                if times > MAX_REPEAT_TIMES {
+                    ctx.set_error(
+                        output.len(),
+                        format!(
+                            "Too many times to repeat: ({}), maximum is: {}",
+                            times, MAX_REPEAT_TIMES
+                        ),
+                    );
+                } else {
+                    (0..times).for_each(|_| output.put_str(a));
+                }
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
-    //     // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
-    //     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-    //         "bin",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-    //             write!(output.data, "{val:b}").unwrap();
-    //             output.commit_row();
-    //         }),
-    //     );
-    //     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-    //         "oct",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-    //             write!(output.data, "{val:o}").unwrap();
-    //             output.commit_row();
-    //         }),
-    //     );
-    //     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-    //         "to_hex",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-    //             write!(output.data, "{val:x}").unwrap();
-    //             output.commit_row();
-    //         }),
-    //     );
+    registry.register_1_arg::<StringType, UInt64Type, _, _>(
+        "ord",
+        |_, _| FunctionDomain::Full,
+        |str: &str, _| {
+            let mut res: u64 = 0;
+            if !str.is_empty() {
+                let first = str.chars().next().unwrap();
+                if first.is_ascii() {
+                    res = first as u64;
+                } else {
+                    let bytes = first.to_string().into_bytes();
+                    for (i, b) in bytes.iter().enumerate() {
+                        res += (*b as u64) * 256_u64.pow(i as u32);
+                    }
+                }
+            }
+            res
+        },
+    );
 
-    //     const MAX_REPEAT_TIMES: u64 = 1000000;
-    //     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
-    //         "repeat",
-    //         |_, _, _| FunctionDomain::MayThrow,
-    //         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-    //             |a, times, output, ctx| {
-    //                 if times > MAX_REPEAT_TIMES {
-    //                     ctx.set_error(
-    //                         output.len(),
-    //                         format!(
-    //                             "Too many times to repeat: ({}), maximum is: {}",
-    //                             times, MAX_REPEAT_TIMES
-    //                         ),
-    //                     );
-    //                 } else {
-    //                     (0..times).for_each(|_| output.put_slice(a));
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
+        "soundex",
+        |_, _| FunctionDomain::Full,
+        vectorize_string_to_string(
+            |col| usize::max(col.data().len(), 4 * col.len()),
+            soundex::soundex,
+        ),
+    );
 
-    //     registry.register_1_arg::<StringType, UInt64Type, _, _>(
-    //         "ord",
-    //         |_, _| FunctionDomain::Full,
-    //         |str: &[u8], _| {
-    //             let mut res: u64 = 0;
-    //             if !str.is_empty() {
-    //                 if str[0].is_ascii() {
-    //                     res = str[0] as u64;
-    //                 } else {
-    //                     for (p, _) in str.iter().enumerate() {
-    //                         let s = &str[0..p + 1];
-    //                         if std::str::from_utf8(s).is_ok() {
-    //                             for (i, b) in s.iter().rev().enumerate() {
-    //                                 res += (*b as u64) * 256_u64.pow(i as u32);
-    //                             }
-    //                             break;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             res
-    //         },
-    //     );
+    const MAX_SPACE_LENGTH: u64 = 1000000;
+    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
+        "space",
+        |_, _| FunctionDomain::MayThrow,
+        |times, ctx| match times {
+            ValueRef::Scalar(times) => {
+                if times > MAX_SPACE_LENGTH {
+                    ctx.set_error(
+                        0,
+                        format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                    );
+                    Value::Scalar("".to_string())
+                } else {
+                    Value::Scalar(" ".repeat(times as usize))
+                }
+            }
+            ValueRef::Column(col) => {
+                let mut total_space: u64 = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
+                offsets.push(0);
+                for (i, times) in col.iter().enumerate() {
+                    if times > &MAX_SPACE_LENGTH {
+                        ctx.set_error(
+                            i,
+                            format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                        );
+                        break;
+                    }
+                    total_space += times;
+                    offsets.push(total_space);
+                }
+                if ctx.errors.is_some() {
+                    offsets.truncate(1);
+                    total_space = 0;
+                }
+                let col = StringColumnBuilder {
+                    data: " ".repeat(total_space as usize).into_bytes(),
+                    offsets,
+                    need_estimated: false,
+                }
+                .build();
+                Value::Column(col)
+            }
+        },
+    );
 
-    //     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-    //         "soundex",
-    //         |_, _| FunctionDomain::Full,
-    //         vectorize_string_to_string(
-    //             |col| usize::max(col.data().len(), 4 * col.len()),
-    //             soundex::soundex,
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "left",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |s, n, output, _| {
+                let n = n as usize;
+                if n < s.len() {
+                    output.put_str(s.char_indices().nth(n).map_or(s, |(idx, _)| &s[..idx]));
+                } else {
+                    output.put_str(s);
+                }
+                output.commit_row();
+            },
+        ),
+    );
 
-    //     const SPACE: u8 = 0x20;
-    //     const MAX_SPACE_LENGTH: u64 = 1000000;
-    //     registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
-    //         "space",
-    //         |_, _| FunctionDomain::MayThrow,
-    //         |times, ctx| match times {
-    //             ValueRef::Scalar(times) => {
-    //                 if times > MAX_SPACE_LENGTH {
-    //                     ctx.set_error(
-    //                         0,
-    //                         format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
-    //                     );
-    //                     Value::Scalar(vec![])
-    //                 } else {
-    //                     Value::Scalar(vec![SPACE; times as usize])
-    //                 }
-    //             }
-    //             ValueRef::Column(col) => {
-    //                 let mut total_space: u64 = 0;
-    //                 let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
-    //                 offsets.push(0);
-    //                 for (i, times) in col.iter().enumerate() {
-    //                     if times > &MAX_SPACE_LENGTH {
-    //                         ctx.set_error(
-    //                             i,
-    //                             format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
-    //                         );
-    //                         break;
-    //                     }
-    //                     total_space += times;
-    //                     offsets.push(total_space);
-    //                 }
-    //                 if ctx.errors.is_some() {
-    //                     offsets.truncate(1);
-    //                     total_space = 0;
-    //                 }
-    //                 let col = StringColumnBuilder {
-    //                     data: vec![SPACE; total_space as usize],
-    //                     offsets,
-    //                     need_estimated: false,
-    //                 }
-    //                 .build();
-    //                 Value::Column(col)
-    //             }
-    //         },
-    //     );
-
-    //     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
-    //         "left",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-    //             |s, n, output, _| {
-    //                 let n = n as usize;
-    //                 if n < s.len() {
-    //                     output.put_slice(&s[0..n]);
-    //                 } else {
-    //                     output.put_slice(s);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
-
-    //     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
-    //         "right",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-    //             |s, n, output, _| {
-    //                 let n = n as usize;
-    //                 if n < s.len() {
-    //                     output.put_slice(&s[s.len() - n..]);
-    //                 } else {
-    //                     output.put_slice(s);
-    //                 }
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "right",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |s, n, output, _| {
+                let n = n as usize;
+                if n < s.len() {
+                    output.put_str(
+                        s.char_indices()
+                            .rev()
+                            .nth(n)
+                            .map_or(s, |(idx, _)| &s[idx..]),
+                    );
+                } else {
+                    output.put_str(s);
+                }
+                output.commit_row();
+            },
+        ),
+    );
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
         "substr",
@@ -782,67 +761,67 @@ pub fn register(registry: &mut FunctionRegistry) {
         )
 }
 
-// pub(crate) mod soundex {
-//     use databend_common_expression::types::string::StringColumnBuilder;
-//     use databend_common_expression::EvalContext;
+pub(crate) mod soundex {
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::EvalContext;
 
-//     pub fn soundex(val: &[u8], output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
-//         let mut last = None;
-//         let mut count = 0;
+    pub fn soundex(val: &str, output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
+        let mut last = None;
+        let mut count = 0;
 
-//         for ch in String::from_utf8_lossy(val).chars() {
-//             let score = number_map(ch);
-//             if last.is_none() {
-//                 if !is_uni_alphabetic(ch) {
-//                     continue;
-//                 }
-//                 last = score;
-//                 output.put_char(ch.to_ascii_uppercase());
-//             } else {
-//                 if !ch.is_ascii_alphabetic() || is_drop(ch) || score.is_none() || score == last {
-//                     continue;
-//                 }
-//                 last = score;
-//                 output.put_char(score.unwrap() as char);
-//             }
+        for ch in val.chars() {
+            let score = number_map(ch);
+            if last.is_none() {
+                if !is_uni_alphabetic(ch) {
+                    continue;
+                }
+                last = score;
+                output.put_char(ch.to_ascii_uppercase());
+            } else {
+                if !ch.is_ascii_alphabetic() || is_drop(ch) || score.is_none() || score == last {
+                    continue;
+                }
+                last = score;
+                output.put_char(score.unwrap() as char);
+            }
 
-//             count += 1;
-//         }
-//         // add '0'
-//         for _ in count..4 {
-//             output.put_char('0');
-//         }
+            count += 1;
+        }
+        // add '0'
+        for _ in count..4 {
+            output.put_char('0');
+        }
 
-//         output.commit_row();
-//     }
+        output.commit_row();
+    }
 
-//     #[inline(always)]
-//     fn number_map(i: char) -> Option<u8> {
-//         match i.to_ascii_lowercase() {
-//             'b' | 'f' | 'p' | 'v' => Some(b'1'),
-//             'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
-//             'd' | 't' => Some(b'3'),
-//             'l' => Some(b'4'),
-//             'm' | 'n' => Some(b'5'),
-//             'r' => Some(b'6'),
-//             _ => Some(b'0'),
-//         }
-//     }
+    #[inline(always)]
+    fn number_map(i: char) -> Option<u8> {
+        match i.to_ascii_lowercase() {
+            'b' | 'f' | 'p' | 'v' => Some(b'1'),
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
+            'd' | 't' => Some(b'3'),
+            'l' => Some(b'4'),
+            'm' | 'n' => Some(b'5'),
+            'r' => Some(b'6'),
+            _ => Some(b'0'),
+        }
+    }
 
-//     #[inline(always)]
-//     fn is_drop(c: char) -> bool {
-//         matches!(
-//             c.to_ascii_lowercase(),
-//             'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
-//         )
-//     }
+    #[inline(always)]
+    fn is_drop(c: char) -> bool {
+        matches!(
+            c.to_ascii_lowercase(),
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
+        )
+    }
 
-//     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
-//     #[inline(always)]
-//     fn is_uni_alphabetic(c: char) -> bool {
-//         c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
-//     }
-// }
+    // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
+    #[inline(always)]
+    fn is_uni_alphabetic(c: char) -> bool {
+        c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
+    }
+}
 
 // #[inline]
 // fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
