@@ -21,7 +21,6 @@ use async_trait::unboxed_simple;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;

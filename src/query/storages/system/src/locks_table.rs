@@ -103,9 +103,9 @@ impl AsyncSystemTable for LocksTable {
                 lock_revision.push(info.revision);
                 lock_type.push(info.meta.lock_type.to_string().clone());
                 if info.meta.acquired_on.is_some() {
-                    lock_status.push("HOLDING".clone());
+                    lock_status.push("HOLDING");
                 } else {
-                    lock_status.push("WAITING".clone());
+                    lock_status.push("WAITING");
                 }
                 lock_user.push(info.meta.user.clone());
                 lock_node.push(info.meta.node.clone());

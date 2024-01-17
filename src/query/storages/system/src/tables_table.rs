@@ -274,8 +274,8 @@ where TablesTable<T>: HistoryAware
                         table_id,
                     ) && table.engine() != "STREAM"
                     {
-                        catalogs.push(ctl_name.clone());
-                        databases.push(name.clone());
+                        catalogs.push(ctl_name);
+                        databases.push(name);
                         database_tables.push(table);
                         owner.push(
                             user_api

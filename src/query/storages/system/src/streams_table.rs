@@ -162,8 +162,8 @@ impl AsyncSystemTable for StreamsTable {
                         t_id,
                     ) && table.engine() == STREAM_ENGINE
                     {
-                        catalogs.push(ctl_name.clone());
-                        databases.push(name.clone());
+                        catalogs.push(ctl_name);
+                        databases.push(name);
 
                         let stream_info = table.get_table_info();
                         names.push(table.name().to_string());
