@@ -309,9 +309,12 @@ impl DPhpy {
             let mut right_relation_set = HashSet::new();
             let left_used_tables = left_condition.used_tables()?;
             for table in left_used_tables.iter() {
-                left_relation_set.insert(self.table_index_map[table]);
+                if self.table_index_map.contains_key(table) {
+                    left_relation_set.insert(self.table_index_map[table]);
+                }
             }
-            if left_used_tables.is_empty() {
+            // If `left_relation_set` is empty, we use condition's used columns to find the corresponding join relations
+            if left_relation_set.is_empty() {
                 for (idx, relation) in self.join_relations.iter().enumerate() {
                     let left_used_column = left_condition.used_columns();
                     if find_column(relation, left_used_column)? {
@@ -322,10 +325,12 @@ impl DPhpy {
             }
             let right_used_tables = right_condition.used_tables()?;
             for table in right_used_tables.iter() {
-                right_relation_set.insert(self.table_index_map[table]);
+                if self.table_index_map.contains_key(table) {
+                    right_relation_set.insert(self.table_index_map[table]);
+                }
             }
 
-            if right_used_tables.is_empty() {
+            if right_relation_set.is_empty() {
                 for (idx, relation) in self.join_relations.iter().enumerate() {
                     let right_used_column = right_condition.used_columns();
                     if find_column(relation, right_used_column)? {

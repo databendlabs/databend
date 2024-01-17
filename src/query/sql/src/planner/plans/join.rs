@@ -457,15 +457,12 @@ impl Operator for Join {
         );
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
-        let mut inner_join_cardinality = self.inner_join_cardinality(
+        let inner_join_cardinality = self.inner_join_cardinality(
             &mut left_cardinality,
             &mut right_cardinality,
             &mut left_statistics,
             &mut right_statistics,
         )?;
-        if inner_join_cardinality - right_cardinality < 10.0 {
-            inner_join_cardinality += 100.0;
-        }
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
             JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),

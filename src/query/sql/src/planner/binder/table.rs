@@ -1084,7 +1084,7 @@ impl Binder {
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
                 name: format!(
-                    "{:?}-{:?}-{:?}",
+                    "{}_{}_{}",
                     table_name, cte_info.cte_idx, cte_info.used_count
                 ),
                 stat: cte_info.stat_info.clone().unwrap(),
@@ -1201,7 +1201,7 @@ impl Binder {
             for column in bound_ctx.columns.iter_mut() {
                 column.database_name = None;
                 column.table_name = Some(format!(
-                    "{:?}-{:?}-{:?}",
+                    "{}_{}_{}",
                     alias_table_name,
                     cte_info.cte_idx,
                     cte_info.used_count + 1
