@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_expression::converts::datavalues::from_scalar;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -22,8 +24,8 @@ use databend_common_expression::TableField;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: Scalar,
-    pub max: Scalar,
+    pub min: SimpleScalar,
+    pub max: SimpleScalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
@@ -33,12 +35,12 @@ pub struct ColumnStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
-    pub min: Vec<Scalar>,
-    pub max: Vec<Scalar>,
+    pub min: Vec<SimpleScalar>,
+    pub max: Vec<SimpleScalar>,
     pub level: i32,
 
     // currently it's only used in native engine
-    pub pages: Option<Vec<Scalar>>,
+    pub pages: Option<Vec<SimpleScalar>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -101,10 +103,10 @@ impl ColumnStatistics {
 impl ClusterStatistics {
     pub fn new(
         cluster_key_id: u32,
-        min: Vec<Scalar>,
-        max: Vec<Scalar>,
+        min: Vec<SimpleScalar>,
+        max: Vec<SimpleScalar>,
         level: i32,
-        pages: Option<Vec<Scalar>>,
+        pages: Option<Vec<SimpleScalar>>,
     ) -> Self {
         Self {
             cluster_key_id,
@@ -115,11 +117,11 @@ impl ClusterStatistics {
         }
     }
 
-    pub fn min(&self) -> Vec<Scalar> {
+    pub fn min(&self) -> Vec<SimpleScalar> {
         self.min.clone()
     }
 
-    pub fn max(&self) -> Vec<Scalar> {
+    pub fn max(&self) -> Vec<SimpleScalar> {
         self.max.clone()
     }
 
@@ -172,3 +174,14 @@ impl Statistics {
         }
     }
 }
+
+type SimpleScalar = Scalar;
+// #[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
+// pub enum SimpleScalar {
+//     Null,
+//     Number(NumberScalar),
+//     Decimal(DecimalScalar),
+//     Timestamp(i64),
+//     Date(i32),
+//     String(Vec<u8>),
+// }
