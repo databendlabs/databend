@@ -220,24 +220,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.commit_row();
                     return;
                 }
-                let mut skip = 0;
 
-                let chars = str.chars().collect::<Vec<_>>();
-                let from_len = from.chars().count();
-                for (p, w) in chars.windows(from_len).enumerate() {
-                    let w_str: String = w.iter().collect();
-                    let w_str = w_str.as_str();
-                    if w_str == from {
-                        output.put_str(to);
-                        skip = from_len;
-                    } else if p + w.len() == str.chars().count() {
-                        output.put_str(w_str);
-                    } else if skip > 1 {
-                        skip -= 1;
-                    } else {
-                        output.put_str(w_str.slice(..1));
-                    }
+                let mut last_end = 0;
+                while let Some((start, _)) = str.match_indices(from).next() {
+                    output.put_str(str.slice(last_end..start));
+                    output.put_str(to);
+                    let from_len = from.chars().count();
+                    last_end = start + from_len;
                 }
+                if last_end < str.chars().count() {
+                    output.put_str(str.slice(last_end..));
+                }
+
                 output.commit_row();
             }),
         );
