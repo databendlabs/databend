@@ -223,8 +223,8 @@ fn convert_page_index_byte_array(
 ) -> Option<ColumnStatistics> {
     match (&index.min, &index.max, index.null_count) {
         (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
-            Scalar::String(min.as_bytes().to_vec()).into(),
-            Scalar::String(max.as_bytes().to_vec()).into(),
+            Scalar::String(min.as_bytes().to_vec()),
+            Scalar::String(max.as_bytes().to_vec()),
             null_count as u64,
             0,
             None,
