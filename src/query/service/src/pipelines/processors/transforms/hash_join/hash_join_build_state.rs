@@ -898,6 +898,9 @@ impl HashJoinBuildState {
                     return Ok(());
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
+                if build_key_column.len() == 0 {
+                    return Ok(());
+                }
                 // Generate min max filter using build column
                 let min_max = build_key_column.remove_nullable().domain();
                 let min_max_filter = match min_max {
