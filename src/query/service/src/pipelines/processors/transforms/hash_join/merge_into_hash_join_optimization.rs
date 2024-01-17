@@ -78,11 +78,7 @@ impl MergeIntoState {
 }
 
 impl HashJoinBuildState {
-    pub(crate) fn merge_into_try_build_merge_into_block_info_index(
-        &self,
-        input: DataBlock,
-        old_size: usize,
-    ) {
+    pub(crate) fn merge_into_try_build_block_info_index(&self, input: DataBlock, old_size: usize) {
         // merge into target table as build side.
         if self
             .hash_join_state
