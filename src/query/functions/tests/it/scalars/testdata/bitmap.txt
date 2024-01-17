@@ -49,7 +49,7 @@ evaluation (internal):
 
 ast            : to_bitmap('0, 1, 2')
 raw expr       : to_bitmap('0, 1, 2')
-checked expr   : to_bitmap<Binary>(to_binary<String>("0, 1, 2"))
+checked expr   : to_bitmap<String>("0, 1, 2")
 optimized expr : RoaringTreemap<[0, 1, 2]>
 output type    : Bitmap
 output domain  : Undefined

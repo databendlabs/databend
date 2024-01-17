@@ -3203,8 +3203,8 @@ Functions overloads:
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(String) :: Binary
 1 to_binary(String NULL) :: Binary NULL
-0 to_bitmap(Binary) :: Bitmap
-1 to_bitmap(Binary NULL) :: Bitmap NULL
+0 to_bitmap(String) :: Bitmap
+1 to_bitmap(String NULL) :: Bitmap NULL
 2 to_bitmap(UInt64) :: Bitmap
 3 to_bitmap(UInt64 NULL) :: Bitmap NULL
 0 to_boolean(Variant) :: Boolean

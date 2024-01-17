@@ -2723,7 +2723,6 @@ dependencies = [
  "borsh 1.2.1",
  "bstr 1.6.2",
  "bumpalo",
- "bytes",
  "chrono",
  "chrono-tz",
  "comfy-table 6.1.4",
