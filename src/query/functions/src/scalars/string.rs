@@ -349,8 +349,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data().len(),
             |val, output, _| {
-                let res = val.chars().rev().collect::<String>();
-                output.put_str(res.as_str());
+                for char in val.chars.rev() {
+                    output.put_char(char);
+                }
                 output.commit_row();
             },
         ),
