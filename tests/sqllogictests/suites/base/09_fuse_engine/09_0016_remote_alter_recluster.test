@@ -8,6 +8,9 @@ statement ok
 USE db_09_0016
 
 statement ok
+set enable_table_lock = 0
+
+statement ok
 create table t1(a int, b int) cluster by(a+1)
 
 statement ok
@@ -125,3 +128,6 @@ DROP DATABASE db_09_0016
 
 statement ok
 set max_block_size = 65536
+
+statement ok
+set enable_table_lock = 1

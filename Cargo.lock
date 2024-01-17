@@ -947,6 +947,7 @@ dependencies = [
  "databend-common-license",
  "databend-common-meta-app",
  "databend-common-meta-embedded",
+ "databend-common-users",
  "databend-query",
  "pyo3",
  "pyo3-build-config 0.18.3",
@@ -2932,6 +2933,7 @@ dependencies = [
 name = "databend-common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "databend-common-arrow",
  "databend-common-base",

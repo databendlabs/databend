@@ -32,7 +32,7 @@ use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
-use crate::plans::RelOperator;
+use crate::plans::DummyTableScan;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -94,9 +94,7 @@ impl PhysicalPlanBuilder {
         });
 
         if agg.group_items.is_empty() && used.is_empty() {
-            let expr = SExpr::create_leaf(Arc::new(RelOperator::DummyTableScan(
-                crate::plans::DummyTableScan,
-            )));
+            let expr = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
             return self.build(&expr, required).await;
         }
 

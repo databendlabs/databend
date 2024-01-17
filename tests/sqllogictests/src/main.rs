@@ -167,12 +167,12 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                 .unwrap()
                 .to_string();
             if let Some(ref specific_file) = args.file {
-                if !file_name.eq(specific_file) {
+                if !specific_file.split(',').any(|f| f.eq(&file_name)) {
                     continue;
                 }
             }
             if let Some(ref skip_file) = args.skipped_file {
-                if file_name.eq(skip_file) {
+                if skip_file.split(',').any(|f| f.eq(&file_name)) {
                     continue;
                 }
             }

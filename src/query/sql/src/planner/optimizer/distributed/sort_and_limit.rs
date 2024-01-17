@@ -24,7 +24,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
 
-pub(super) struct SortAndLimitPushDownOptimizer {
+pub struct SortAndLimitPushDownOptimizer {
     sort_pattern: SExpr,
     limit_pattern: SExpr,
 }

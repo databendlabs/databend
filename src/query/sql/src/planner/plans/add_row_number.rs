@@ -32,6 +32,10 @@ impl Operator for AddRowNumber {
         RelOp::AddRowNumber
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,
@@ -58,14 +62,5 @@ impl Operator for AddRowNumber {
         required: &RequiredProperty,
     ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
-        rel_expr.compute_required_prop_children(ctx, required)
     }
 }

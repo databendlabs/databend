@@ -39,6 +39,10 @@ impl Operator for Limit {
         RelOp::Limit
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -53,6 +57,17 @@ impl Operator for Limit {
         let mut required = required.clone();
         required.distribution = Distribution::Serial;
         Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -72,16 +87,5 @@ impl Operator for Limit {
                 column_stats: Default::default(),
             },
         }))
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        required.distribution = Distribution::Serial;
-        Ok(vec![vec![required]])
     }
 }

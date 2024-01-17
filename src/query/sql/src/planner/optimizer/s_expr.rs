@@ -180,7 +180,7 @@ impl SExpr {
     pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
         Self {
             plan,
-            original_group: self.original_group,
+            original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
