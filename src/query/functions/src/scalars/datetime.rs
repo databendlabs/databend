@@ -1249,10 +1249,10 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             let rm = rhs.max;
             let rn = rhs.min;
 
-            Some(FunctionDomain::Domain(SimpleDomain::<F64> {
+            FunctionDomain::Domain(SimpleDomain::<F64> {
                 min: months_between(ln, rm).into(),
                 max: months_between(lm, rn).into(),
-            }))
+            })
         },
         vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
             months_between(a, b).into()
@@ -1268,10 +1268,10 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rm = rhs.max;
                 let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<F64> {
+                FunctionDomain::Domain(SimpleDomain::<F64> {
                     min: months_between_ts(ln, rm).into(),
                     max: months_between_ts(lm, rn).into(),
-                }))
+                })
             },
             vectorize_2_arg::<TimestampType, TimestampType, Float64Type>(|a, b, _ctx| {
                 months_between_ts(a, b).into()
@@ -1455,7 +1455,10 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
 // current we don't consider tz here
 #[inline]
 fn months_between_ts(ts_a: i64, ts_b: i64) -> f64 {
-    months_between((ts_a / 86400_000_000) as i32, (ts_b / 86400_000_000) as i32)
+    months_between(
+        (ts_a / 86_400_000_000) as i32,
+        (ts_b / 86_400_000_000) as i32,
+    )
 }
 
 #[inline]
