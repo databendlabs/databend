@@ -105,6 +105,54 @@ pub(crate) fn update_bitmap_with_bloom_filter(
     let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
     let mut idx = 0;
     match method {
+        HashMethodKind::Serializer(method) => {
+            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            match key_state {
+                KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
+                    let hash = key.fast_hash();
+                    if filter.contains(&hash) {
+                        bitmap.set(idx, true);
+                    }
+                    idx += 1;
+                }),
+                _ => unreachable!(),
+            }
+        }
+        HashMethodKind::DictionarySerializer(method) => {
+            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            match key_state {
+                KeysState::Dictionary { dictionaries, .. } => dictionaries.iter().for_each(|key| {
+                    let hash = key.fast_hash();
+                    if filter.contains(&hash) {
+                        bitmap.set(idx, true);
+                    }
+                    idx += 1;
+                }),
+                _ => unreachable!(),
+            }
+        }
+        HashMethodKind::SingleBinary(method) => {
+            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            match key_state {
+                KeysState::Column(Column::Binary(col))
+                | KeysState::Column(Column::Variant(col))
+                | KeysState::Column(Column::Bitmap(col)) => col.iter().for_each(|key| {
+                    let hash = key.fast_hash();
+                    if filter.contains(&hash) {
+                        bitmap.set(idx, true);
+                    }
+                    idx += 1;
+                }),
+                KeysState::Column(Column::String(col)) => col.iter_binary().for_each(|key| {
+                    let hash = key.fast_hash();
+                    if filter.contains(&hash) {
+                        bitmap.set(idx, true);
+                    }
+                    idx += 1;
+                }),
+                _ => unreachable!(),
+            }
+        }
         HashMethodKind::KeysU8(hash_method) => {
             let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
             match key_state {
@@ -191,7 +239,6 @@ pub(crate) fn update_bitmap_with_bloom_filter(
                 _ => unreachable!(),
             }
         }
-        _ => unreachable!(),
     }
     Ok(())
 }
