@@ -66,7 +66,6 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
-use crate::types::string::CheckUTF8;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
