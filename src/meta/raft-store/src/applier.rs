@@ -394,11 +394,7 @@ impl<'a> Applier<'a> {
 
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
-            prev_value: if put.prev_value {
-                prev.map(pb::SeqV::from)
-            } else {
-                None
-            },
+            prev_value: prev.map(pb::SeqV::from),
         };
 
         resp.responses.push(TxnOpResponse {
@@ -428,11 +424,7 @@ impl<'a> Applier<'a> {
         let del_resp = TxnDeleteResponse {
             key: delete.key.clone(),
             success: is_deleted,
-            prev_value: if delete.prev_value {
-                prev.map(pb::SeqV::from)
-            } else {
-                None
-            },
+            prev_value: prev.map(pb::SeqV::from),
         };
 
         resp.responses.push(TxnOpResponse {
