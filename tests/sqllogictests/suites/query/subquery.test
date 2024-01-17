@@ -683,3 +683,53 @@ drop table t2
 
 statement ok
 drop table t3
+
+# https://github.com/datafuselabs/databend/pull/14353
+statement ok
+CREATE TABLE property_records (
+  owner_id VARCHAR NULL,
+  property_id VARCHAR NULL
+) ;
+
+statement ok
+CREATE TABLE mortgage_records (
+  property_id VARCHAR NULL
+) ;
+
+statement ok
+CREATE TABLE transaction_history (
+  owner_id VARCHAR NULL,
+  property_id VARCHAR NULL
+) ;
+
+query I
+SELECT
+  (
+    SELECT
+      IF(COUNT(0) = 0, '0', '1')
+    FROM
+      property_records pr
+    WHERE
+      th.property_id = pr.property_id
+      AND th.owner_id = pr.owner_id
+  ) AS ownership_status,
+  (
+    SELECT
+      IF(COUNT(0) = 0, '0', '1')
+    FROM
+      mortgage_records mr
+    WHERE
+      th.property_id = mr.property_id
+  ) AS mortgage_status
+FROM
+  transaction_history th
+----
+
+statement ok
+drop table property_records;
+
+statement ok
+drop table mortgage_records;
+
+statement ok
+drop table transaction_history;
