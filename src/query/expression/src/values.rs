@@ -1615,6 +1615,10 @@ impl ColumnBuilder {
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => builder.push(value),
             (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => builder.push(value),
             (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => builder.push(value),
+            (ColumnBuilder::Binary(builder), ScalarRef::Binary(value)) => {
+                builder.put_slice(value);
+                builder.commit_row();
+            }
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
                 builder.put_slice(value);
                 builder.commit_row();

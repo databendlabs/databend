@@ -148,6 +148,16 @@ where V: TryInto<T>
     }
 }
 
+impl<T> From<(u64, T)> for SeqV<T> {
+    fn from((seq, data): (u64, T)) -> Self {
+        Self {
+            seq,
+            meta: None,
+            data,
+        }
+    }
+}
+
 impl<T> SeqV<Option<T>> {
     pub const fn empty() -> Self {
         Self {
@@ -160,6 +170,14 @@ impl<T> SeqV<Option<T>> {
 
 impl<T> SeqV<T> {
     pub fn new(seq: u64, data: T) -> Self {
+        Self {
+            seq,
+            meta: None,
+            data,
+        }
+    }
+
+    pub fn from_tuple((seq, data): (u64, T)) -> Self {
         Self {
             seq,
             meta: None,
