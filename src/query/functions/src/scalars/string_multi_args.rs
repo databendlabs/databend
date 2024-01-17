@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
+use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
@@ -247,227 +248,180 @@ pub fn register(registry: &mut FunctionRegistry) {
     //     }))
     // });
 
-    // registry.register_function_factory("char", |_, args_type| {
-    //     if args_type.is_empty() {
-    //         return None;
-    //     }
-    //     let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-    //     let f = Function {
-    //         signature: FunctionSignature {
-    //             name: "char".to_string(),
-    //             args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
-    //             return_type: DataType::String,
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::Full),
-    //             eval: Box::new(char_fn),
-    //         },
-    //     };
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+    registry.register_function_factory("regexp_instr", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
-    //     if has_null {
-    //         Some(Arc::new(f.passthrough_nullable()))
-    //     } else {
-    //         Some(Arc::new(f))
-    //     }
-    // });
+        let args_type = match args_type.len() {
+            2 => vec![DataType::String; 2],
+            3 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+            ],
+            4 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+            ],
+            5 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+            ],
+            6 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+                DataType::String,
+            ],
+            _ => return None,
+        };
 
-    // // nullable char
-    // registry.register_function_factory("char", |_, args_type| {
-    //     if args_type.is_empty() {
-    //         return None;
-    //     }
-    //     Some(Arc::new(Function {
-    //         signature: FunctionSignature {
-    //             name: "char".to_string(),
-    //             args_type: vec![
-    //                 DataType::Nullable(Box::new(DataType::Number(
-    //                     NumberDataType::UInt8
-    //                 )));
-    //                 args_type.len()
-    //             ],
-    //             return_type: DataType::Nullable(Box::new(DataType::String)),
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-    //             eval: Box::new(passthrough_nullable(char_fn)),
-    //         },
-    //     }))
-    // });
+        let f = Function {
+            signature: FunctionSignature {
+                name: "regexp_instr".to_string(),
+                args_type,
+                return_type: DataType::Number(NumberDataType::UInt64),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_instr_fn),
+            },
+        };
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
 
-    // // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
-    // registry.register_function_factory("regexp_instr", |_, args_type| {
-    //     let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+    registry.register_function_factory("regexp_like", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let args_type = match args_type.len() {
+            2 => vec![DataType::String; 2],
+            3 => vec![DataType::String; 3],
+            _ => return None,
+        };
 
-    //     let args_type = match args_type.len() {
-    //         2 => vec![DataType::String; 2],
-    //         3 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         4 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         5 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         6 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::String,
-    //         ],
-    //         _ => return None,
-    //     };
+        let f = Function {
+            signature: FunctionSignature {
+                name: "regexp_like".to_string(),
+                args_type,
+                return_type: DataType::Boolean,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_like_fn),
+            },
+        };
 
-    //     let f = Function {
-    //         signature: FunctionSignature {
-    //             name: "regexp_instr".to_string(),
-    //             args_type,
-    //             return_type: DataType::Number(NumberDataType::UInt64),
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-    //             eval: Box::new(regexp_instr_fn),
-    //         },
-    //     };
-    //     if has_null {
-    //         Some(Arc::new(f.passthrough_nullable()))
-    //     } else {
-    //         Some(Arc::new(f))
-    //     }
-    // });
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
 
-    // // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
-    // registry.register_function_factory("regexp_like", |_, args_type| {
-    //     let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-    //     let args_type = match args_type.len() {
-    //         2 => vec![DataType::String; 2],
-    //         3 => vec![DataType::String; 3],
-    //         _ => return None,
-    //     };
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+    registry.register_function_factory("regexp_replace", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
-    //     let f = Function {
-    //         signature: FunctionSignature {
-    //             name: "regexp_like".to_string(),
-    //             args_type,
-    //             return_type: DataType::Boolean,
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-    //             eval: Box::new(regexp_like_fn),
-    //         },
-    //     };
+        let args_type = match args_type.len() {
+            3 => vec![DataType::String; 3],
+            4 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+            ],
+            5 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+            ],
+            6 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+                DataType::String,
+            ],
+            _ => return None,
+        };
 
-    //     if has_null {
-    //         Some(Arc::new(f.passthrough_nullable()))
-    //     } else {
-    //         Some(Arc::new(f))
-    //     }
-    // });
+        let f = Function {
+            signature: FunctionSignature {
+                name: "regexp_replace".to_string(),
+                args_type,
+                return_type: DataType::String,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_replace_fn),
+            },
+        };
 
-    // // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
-    // registry.register_function_factory("regexp_replace", |_, args_type| {
-    //     let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
 
-    //     let args_type = match args_type.len() {
-    //         3 => vec![DataType::String; 3],
-    //         4 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         5 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         6 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::String,
-    //         ],
-    //         _ => return None,
-    //     };
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+    registry.register_function_factory("regexp_substr", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let args_type = match args_type.len() {
+            2 => vec![DataType::String; 2],
+            3 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+            ],
+            4 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+            ],
+            5 => vec![
+                DataType::String,
+                DataType::String,
+                DataType::Number(NumberDataType::Int64),
+                DataType::Number(NumberDataType::Int64),
+                DataType::String,
+            ],
+            _ => return None,
+        };
 
-    //     let f = Function {
-    //         signature: FunctionSignature {
-    //             name: "regexp_replace".to_string(),
-    //             args_type,
-    //             return_type: DataType::String,
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-    //             eval: Box::new(regexp_replace_fn),
-    //         },
-    //     };
+        let f = Function {
+            signature: FunctionSignature {
+                name: "regexp_substr".to_string(),
+                args_type,
+                return_type: DataType::Nullable(Box::new(DataType::String)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_substr_fn),
+            },
+        };
 
-    //     if has_null {
-    //         Some(Arc::new(f.passthrough_nullable()))
-    //     } else {
-    //         Some(Arc::new(f))
-    //     }
-    // });
-
-    // // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
-    // registry.register_function_factory("regexp_substr", |_, args_type| {
-    //     let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-    //     let args_type = match args_type.len() {
-    //         2 => vec![DataType::String; 2],
-    //         3 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         4 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //         ],
-    //         5 => vec![
-    //             DataType::String,
-    //             DataType::String,
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::Number(NumberDataType::Int64),
-    //             DataType::String,
-    //         ],
-    //         _ => return None,
-    //     };
-
-    //     let f = Function {
-    //         signature: FunctionSignature {
-    //             name: "regexp_substr".to_string(),
-    //             args_type,
-    //             return_type: DataType::Nullable(Box::new(DataType::String)),
-    //         },
-    //         eval: FunctionEval::Scalar {
-    //             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-    //             eval: Box::new(regexp_substr_fn),
-    //         },
-    //     };
-
-    //     if has_null {
-    //         Some(Arc::new(f.passthrough_nullable()))
-    //     } else {
-    //         Some(Arc::new(f))
-    //     }
-    // });
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
 }
 
 // fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
@@ -495,480 +449,434 @@ pub fn register(registry: &mut FunctionRegistry) {
 //     }
 // }
 
-// fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
-//     let args = args
-//         .iter()
-//         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
-//         .collect::<Vec<_>>();
+fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
 
-//     let len = args.iter().find_map(|arg| match arg {
-//         ValueRef::Column(col) => Some(col.len()),
-//         _ => None,
-//     });
-//     let input_rows = len.unwrap_or(1);
+    let source_arg = args[0].try_downcast::<StringType>().unwrap();
+    let pat_arg = args[1].try_downcast::<StringType>().unwrap();
+    let pos_arg = if args.len() >= 3 {
+        Some(args[2].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let occur_arg = if args.len() >= 4 {
+        Some(args[3].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let ro_arg = if args.len() >= 5 {
+        Some(args[4].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let mt_arg = if args.len() >= 6 {
+        Some(args[5].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
 
-//     let mut values: Vec<u8> = vec![0; input_rows * args.len()];
-//     let values_ptr = values.as_mut_ptr();
+    let size = len.unwrap_or(1);
+    let mut builder = Vec::with_capacity(size);
 
-//     for (i, arg) in args.iter().enumerate() {
-//         match arg {
-//             ValueRef::Scalar(v) => {
-//                 for j in 0..input_rows {
-//                     unsafe {
-//                         *values_ptr.add(args.len() * j + i) = *v;
-//                     }
-//                 }
-//             }
-//             ValueRef::Column(c) => {
-//                 for (j, ch) in UInt8Type::iter_column(c).enumerate() {
-//                     unsafe {
-//                         *values_ptr.add(args.len() * j + i) = ch;
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     let offsets = (0..(input_rows + 1) as u64 * args.len() as u64)
-//         .step_by(args.len())
-//         .collect::<Vec<_>>();
-//     let result = StringColumn::new(values.into(), offsets.into());
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_instr", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
 
-//     let col = Column::String(result);
-//     match len {
-//         Some(_) => Value::Column(col),
-//         _ => Value::Scalar(AnyType::index_column(&col, 0).unwrap().to_owned()),
-//     }
-// }
+    for idx in 0..size {
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let ro = ro_arg
+            .as_ref()
+            .map(|ro_arg| unsafe { ro_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-// fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-//     let len = args.iter().find_map(|arg| match arg {
-//         ValueRef::Column(col) => Some(col.len()),
-//         _ => None,
-//     });
+        if let Err(err) = regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro) {
+            ctx.set_error(builder.len(), err);
+            builder.push(0);
+            continue;
+        }
 
-//     let source_arg = args[0].try_downcast::<StringType>().unwrap();
-//     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
-//     let pos_arg = if args.len() >= 3 {
-//         Some(args[2].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let occur_arg = if args.len() >= 4 {
-//         Some(args[3].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let ro_arg = if args.len() >= 5 {
-//         Some(args[4].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let mt_arg = if args.len() >= 6 {
-//         Some(args[5].try_downcast::<StringType>().unwrap())
-//     } else {
-//         None
-//     };
+        if source.is_empty() || pat.is_empty() {
+            builder.push(0);
+            continue;
+        }
 
-//     let size = len.unwrap_or(1);
-//     let mut builder = Vec::with_capacity(size);
+        let mut local_re = None;
+        if cached_reg.is_none() {
+            match regexp::build_regexp_from_pattern("regexp_instr", pat, mt) {
+                Ok(re) => {
+                    local_re = Some(re);
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    builder.push(0);
+                    continue;
+                }
+            }
+        };
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
-//     let cached_reg = match (&pat_arg, &mt_arg) {
-//         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
-//             match regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         (ValueRef::Scalar(pat), None) => {
-//             match regexp::build_regexp_from_pattern("regexp_instr", pat, None) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         _ => None,
-//     };
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(1);
+        let ro = ro.unwrap_or(0);
 
-//     for idx in 0..size {
-//         let source = unsafe { source_arg.index_unchecked(idx) };
-//         let pat = unsafe { pat_arg.index_unchecked(idx) };
-//         let pos = pos_arg
-//             .as_ref()
-//             .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
-//         let occur = occur_arg
-//             .as_ref()
-//             .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
-//         let ro = ro_arg
-//             .as_ref()
-//             .map(|ro_arg| unsafe { ro_arg.index_unchecked(idx) });
-//         let mt = mt_arg
-//             .as_ref()
-//             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
+        let instr = regexp::regexp_instr(source, re, pos, occur, ro);
+        builder.push(instr);
+    }
 
-//         if let Err(err) = regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro) {
-//             ctx.set_error(builder.len(), err);
-//             builder.push(0);
-//             continue;
-//         }
+    match len {
+        Some(_) => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
+        _ => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
+    }
+}
 
-//         if source.is_empty() || pat.is_empty() {
-//             builder.push(0);
-//             continue;
-//         }
+fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let source_arg = args[0].try_downcast::<StringType>().unwrap();
+    let pat_arg = args[1].try_downcast::<StringType>().unwrap();
+    let mt_arg = if args.len() >= 3 {
+        Some(args[2].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
 
-//         let mut local_re = None;
-//         if cached_reg.is_none() {
-//             match regexp::build_regexp_from_pattern("regexp_instr", pat, mt) {
-//                 Ok(re) => {
-//                     local_re = Some(re);
-//                 }
-//                 Err(err) => {
-//                     ctx.set_error(builder.len(), err);
-//                     builder.push(0);
-//                     continue;
-//                 }
-//             }
-//         };
-//         let re = cached_reg
-//             .as_ref()
-//             .unwrap_or_else(|| local_re.as_ref().unwrap());
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_like", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
 
-//         let pos = pos.unwrap_or(1);
-//         let occur = occur.unwrap_or(1);
-//         let ro = ro.unwrap_or(0);
+    let size = len.unwrap_or(1);
+    let mut builder = MutableBitmap::with_capacity(size);
+    for idx in 0..size {
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-//         let instr = regexp::regexp_instr(source, re, pos, occur, ro);
-//         builder.push(instr);
-//     }
+        let mut local_re = None;
+        if cached_reg.is_none() {
+            match regexp::build_regexp_from_pattern("regexp_like", pat, mt) {
+                Ok(re) => {
+                    local_re = Some(re);
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    builder.push(false);
+                    continue;
+                }
+            }
+        };
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
+        builder.push(re.is_match(source));
+    }
+    match len {
+        Some(_) => Value::Column(Column::Boolean(builder.into())),
+        _ => Value::Scalar(Scalar::Boolean(builder.pop().unwrap())),
+    }
+}
 
-//     match len {
-//         Some(_) => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
-//         _ => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
-//     }
-// }
+fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
 
-// fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-//     let len = args.iter().find_map(|arg| match arg {
-//         ValueRef::Column(col) => Some(col.len()),
-//         _ => None,
-//     });
-//     let source_arg = args[0].try_downcast::<StringType>().unwrap();
-//     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
-//     let mt_arg = if args.len() >= 3 {
-//         Some(args[2].try_downcast::<StringType>().unwrap())
-//     } else {
-//         None
-//     };
+    let source_arg = args[0].try_downcast::<StringType>().unwrap();
+    let pat_arg = args[1].try_downcast::<StringType>().unwrap();
+    let repl_arg = args[2].try_downcast::<StringType>().unwrap();
+    let pos_arg = if args.len() >= 4 {
+        Some(args[3].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let occur_arg = if args.len() >= 5 {
+        Some(args[4].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let mt_arg = if args.len() >= 6 {
+        Some(args[5].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
 
-//     let cached_reg = match (&pat_arg, &mt_arg) {
-//         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
-//             match regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         (ValueRef::Scalar(pat), None) => {
-//             match regexp::build_regexp_from_pattern("regexp_like", pat, None) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         _ => None,
-//     };
+    let size = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(size, 0);
 
-//     let size = len.unwrap_or(1);
-//     let mut builder = MutableBitmap::with_capacity(size);
-//     for idx in 0..size {
-//         let source = unsafe { source_arg.index_unchecked(idx) };
-//         let pat = unsafe { pat_arg.index_unchecked(idx) };
-//         let mt = mt_arg
-//             .as_ref()
-//             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
 
-//         let mut local_re = None;
-//         if cached_reg.is_none() {
-//             match regexp::build_regexp_from_pattern("regexp_like", pat, mt) {
-//                 Ok(re) => {
-//                     local_re = Some(re);
-//                 }
-//                 Err(err) => {
-//                     ctx.set_error(builder.len(), err);
-//                     builder.push(false);
-//                     continue;
-//                 }
-//             }
-//         };
-//         let re = cached_reg
-//             .as_ref()
-//             .unwrap_or_else(|| local_re.as_ref().unwrap());
-//         builder.push(re.is_match(source));
-//     }
-//     match len {
-//         Some(_) => Value::Column(Column::Boolean(builder.into())),
-//         _ => Value::Scalar(Scalar::Boolean(builder.pop().unwrap())),
-//     }
-// }
+    for idx in 0..size {
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let repl = unsafe { repl_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-// fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-//     let len = args.iter().find_map(|arg| match arg {
-//         ValueRef::Column(col) => Some(col.len()),
-//         _ => None,
-//     });
+        if let Some(occur) = occur {
+            if occur < 0 {
+                ctx.set_error(builder.len(), format!(
+                    "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
+                    occur
+                ));
+                StringType::push_default(&mut builder);
+                continue;
+            }
+        }
 
-//     let source_arg = args[0].try_downcast::<StringType>().unwrap();
-//     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
-//     let repl_arg = args[2].try_downcast::<StringType>().unwrap();
-//     let pos_arg = if args.len() >= 4 {
-//         Some(args[3].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let occur_arg = if args.len() >= 5 {
-//         Some(args[4].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let mt_arg = if args.len() >= 6 {
-//         Some(args[5].try_downcast::<StringType>().unwrap())
-//     } else {
-//         None
-//     };
+        if let Err(err) = regexp::validate_regexp_arguments("regexp_replace", pos, None, None) {
+            ctx.set_error(builder.len(), err);
+            StringType::push_default(&mut builder);
+            continue;
+        }
 
-//     let size = len.unwrap_or(1);
-//     let mut builder = StringColumnBuilder::with_capacity(size, 0);
+        if source.is_empty() || pat.is_empty() {
+            builder.put_str(source);
+            builder.commit_row();
+            continue;
+        }
 
-//     let cached_reg = match (&pat_arg, &mt_arg) {
-//         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
-//             match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         (ValueRef::Scalar(pat), None) => {
-//             match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         _ => None,
-//     };
+        let mut local_re = None;
+        if cached_reg.is_none() {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, mt) {
+                Ok(re) => {
+                    local_re = Some(re);
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    StringType::push_default(&mut builder);
+                    continue;
+                }
+            }
+        };
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
-//     for idx in 0..size {
-//         let source = unsafe { source_arg.index_unchecked(idx) };
-//         let pat = unsafe { pat_arg.index_unchecked(idx) };
-//         let repl = unsafe { repl_arg.index_unchecked(idx) };
-//         let pos = pos_arg
-//             .as_ref()
-//             .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
-//         let occur = occur_arg
-//             .as_ref()
-//             .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
-//         let mt = mt_arg
-//             .as_ref()
-//             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(0);
 
-//         if let Some(occur) = occur {
-//             if occur < 0 {
-//                 ctx.set_error(builder.len(), format!(
-//                     "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
-//                     occur
-//                 ));
-//                 StringType::push_default(&mut builder);
-//                 continue;
-//             }
-//         }
+        regexp::regexp_replace(source, re, repl, pos, occur, &mut builder);
+        builder.commit_row();
+    }
+    match len {
+        Some(_) => Value::Column(Column::String(builder.build())),
+        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
+    }
+}
 
-//         if let Err(err) = regexp::validate_regexp_arguments("regexp_replace", pos, None, None) {
-//             ctx.set_error(builder.len(), err);
-//             StringType::push_default(&mut builder);
-//             continue;
-//         }
+fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
 
-//         if source.is_empty() || pat.is_empty() {
-//             builder.data.extend_from_slice(source);
-//             builder.commit_row();
-//             continue;
-//         }
+    let source_arg = args[0].try_downcast::<StringType>().unwrap();
+    let pat_arg = args[1].try_downcast::<StringType>().unwrap();
+    let pos_arg = if args.len() >= 3 {
+        Some(args[2].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let occur_arg = if args.len() >= 4 {
+        Some(args[3].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+    let mt_arg = if args.len() >= 5 {
+        Some(args[4].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
 
-//         let mut local_re = None;
-//         if cached_reg.is_none() {
-//             match regexp::build_regexp_from_pattern("regexp_replace", pat, mt) {
-//                 Ok(re) => {
-//                     local_re = Some(re);
-//                 }
-//                 Err(err) => {
-//                     ctx.set_error(builder.len(), err);
-//                     StringType::push_default(&mut builder);
-//                     continue;
-//                 }
-//             }
-//         };
-//         let re = cached_reg
-//             .as_ref()
-//             .unwrap_or_else(|| local_re.as_ref().unwrap());
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
 
-//         let pos = pos.unwrap_or(1);
-//         let occur = occur.unwrap_or(0);
+    let size = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut validity = MutableBitmap::with_capacity(size);
+    for idx in 0..size {
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-//         regexp::regexp_replace(source, re, repl, pos, occur, &mut builder.data);
-//         builder.commit_row();
-//     }
-//     match len {
-//         Some(_) => Value::Column(Column::String(builder.build())),
-//         _ => Value::Scalar(Scalar::String(builder.build_scalar())),
-//     }
-// }
+        if let Err(err) = regexp::validate_regexp_arguments("regexp_substr", pos, occur, None) {
+            ctx.set_error(builder.len(), err);
+            StringType::push_default(&mut builder);
+            validity.push(false);
+            continue;
+        }
 
-// fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-//     let len = args.iter().find_map(|arg| match arg {
-//         ValueRef::Column(col) => Some(col.len()),
-//         _ => None,
-//     });
+        if source.is_empty() || pat.is_empty() {
+            validity.push(false);
+            builder.commit_row();
+            continue;
+        }
 
-//     let source_arg = args[0].try_downcast::<StringType>().unwrap();
-//     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
-//     let pos_arg = if args.len() >= 3 {
-//         Some(args[2].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let occur_arg = if args.len() >= 4 {
-//         Some(args[3].try_downcast::<Int64Type>().unwrap())
-//     } else {
-//         None
-//     };
-//     let mt_arg = if args.len() >= 5 {
-//         Some(args[4].try_downcast::<StringType>().unwrap())
-//     } else {
-//         None
-//     };
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(1);
 
-//     let cached_reg = match (&pat_arg, &mt_arg) {
-//         (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
-//             match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         (ValueRef::Scalar(pat), None) => {
-//             match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
-//                 Ok(re) => Some(re),
-//                 _ => None,
-//             }
-//         }
-//         _ => None,
-//     };
+        let mut local_re = None;
+        if cached_reg.is_none() {
+            match regexp::build_regexp_from_pattern("regexp_substr", pat, mt) {
+                Ok(re) => {
+                    local_re = Some(re);
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    StringType::push_default(&mut builder);
+                    validity.push(false);
+                    continue;
+                }
+            }
+        };
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
-//     let size = len.unwrap_or(1);
-//     let mut builder = StringColumnBuilder::with_capacity(size, 0);
-//     let mut validity = MutableBitmap::with_capacity(size);
-//     for idx in 0..size {
-//         let source = unsafe { source_arg.index_unchecked(idx) };
-//         let pat = unsafe { pat_arg.index_unchecked(idx) };
-//         let pos = pos_arg
-//             .as_ref()
-//             .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
-//         let occur = occur_arg
-//             .as_ref()
-//             .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
-//         let mt = mt_arg
-//             .as_ref()
-//             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
-
-//         if let Err(err) = regexp::validate_regexp_arguments("regexp_substr", pos, occur, None) {
-//             ctx.set_error(builder.len(), err);
-//             StringType::push_default(&mut builder);
-//             validity.push(false);
-//             continue;
-//         }
-
-//         if source.is_empty() || pat.is_empty() {
-//             validity.push(false);
-//             builder.commit_row();
-//             continue;
-//         }
-
-//         let pos = pos.unwrap_or(1);
-//         let occur = occur.unwrap_or(1);
-
-//         let mut local_re = None;
-//         if cached_reg.is_none() {
-//             match regexp::build_regexp_from_pattern("regexp_substr", pat, mt) {
-//                 Ok(re) => {
-//                     local_re = Some(re);
-//                 }
-//                 Err(err) => {
-//                     ctx.set_error(builder.len(), err);
-//                     StringType::push_default(&mut builder);
-//                     validity.push(false);
-//                     continue;
-//                 }
-//             }
-//         };
-//         let re = cached_reg
-//             .as_ref()
-//             .unwrap_or_else(|| local_re.as_ref().unwrap());
-
-//         let substr = regexp::regexp_substr(source, re, pos, occur);
-//         match substr {
-//             Some(substr) => {
-//                 builder.put_slice(substr);
-//                 validity.push(true);
-//             }
-//             None => {
-//                 validity.push(false);
-//             }
-//         }
-//         builder.commit_row();
-//     }
-//     match len {
-//         Some(_) => {
-//             let col = Column::Nullable(Box::new(NullableColumn {
-//                 validity: validity.into(),
-//                 column: Column::String(builder.build()),
-//             }));
-//             Value::Column(col)
-//         }
-//         _ => match validity.pop() {
-//             Some(is_not_null) => {
-//                 if is_not_null {
-//                     Value::Scalar(Scalar::String(builder.build_scalar()))
-//                 } else {
-//                     Value::Scalar(Scalar::Null)
-//                 }
-//             }
-//             None => Value::Scalar(Scalar::Null),
-//         },
-//     }
-// }
+        let substr = regexp::regexp_substr(source, re, pos, occur);
+        match substr {
+            Some(substr) => {
+                builder.put_str(substr);
+                validity.push(true);
+            }
+            None => {
+                validity.push(false);
+            }
+        }
+        builder.commit_row();
+    }
+    match len {
+        Some(_) => {
+            let col = Column::Nullable(Box::new(NullableColumn {
+                validity: validity.into(),
+                column: Column::String(builder.build()),
+            }));
+            Value::Column(col)
+        }
+        _ => match validity.pop() {
+            Some(is_not_null) => {
+                if is_not_null {
+                    Value::Scalar(Scalar::String(builder.build_scalar()))
+                } else {
+                    Value::Scalar(Scalar::Null)
+                }
+            }
+            None => Value::Scalar(Scalar::Null),
+        },
+    }
+}
 
 pub mod regexp {
-    use bstr::ByteSlice;
-    use regex::bytes::Match;
-    use regex::bytes::Regex;
-    use regex::bytes::RegexBuilder;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use regex::Match;
+    use regex::Regex;
+    use regex::RegexBuilder;
 
     #[inline]
     pub fn build_regexp_from_pattern(
         fn_name: &str,
-        pat: &[u8],
-        mt: Option<&[u8]>,
+        pat: &str,
+        mt: Option<&str>,
     ) -> Result<Regex, String> {
         let pattern = match pat.is_empty() {
             true => "^$",
-            false => simdutf8::basic::from_utf8(pat).map_err(|e| {
-                format!("Unable to convert the {} pattern to string: {}", fn_name, e)
-            })?,
+            false => pat,
         };
+
         // the default match type value is 'i', if it is empty
         let mt = match mt {
             Some(mt) => {
                 if mt.is_empty() {
-                    "i".as_bytes()
+                    "i"
                 } else {
                     mt
                 }
             }
-            None => "i".as_bytes(),
+            None => "i",
         };
 
         let mut builder = RegexBuilder::new(pattern);
@@ -1040,115 +948,76 @@ pub mod regexp {
     }
 
     #[inline]
-    pub fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
-        let pos = (pos - 1) as usize; // set the index start from 0
+    pub fn regexp_instr(
+        expr: &str,
+        regex: &Regex,
+        pos: i64,
+        occurrence: i64,
+        return_option: i64,
+    ) -> u64 {
+        if let Some(m) = regex.find_iter(expr).nth((occurrence - 1) as usize) {
+            let find_pos = if return_option == 0 {
+                m.start()
+            } else {
+                m.end()
+            };
 
-        // the 'pos' position is the character index,
-        // so we should iterate the character to find the byte index.
-        let mut pos = match s.char_indices().nth(pos) {
-            Some((start, _, _)) => start,
-            None => return 0,
-        };
-
-        let m = regexp_match_result(s, re, &mut pos, &occur);
-        if m.is_none() {
-            return 0;
+            let count = expr[..find_pos].chars().count() as i64;
+            return (count + pos) as _;
         }
-
-        // the matched result is the byte index, but the 'regexp_instr' function returns the character index,
-        // so we should iterate the character to find the character index.
-        let mut instr = 0_usize;
-        for (p, (start, end, _)) in s.char_indices().enumerate() {
-            if ro == 0 {
-                if start == m.unwrap().start() {
-                    instr = p + 1;
-                    break;
-                }
-            } else if end == m.unwrap().end() {
-                instr = p + 2;
-                break;
-            }
-        }
-
-        instr as u64
+        0
     }
 
     #[inline]
     pub fn regexp_replace(
-        s: &[u8],
+        s: &str,
         re: &Regex,
-        repl: &[u8],
+        repl: &str,
         pos: i64,
         occur: i64,
-        buf: &mut Vec<u8>,
+        builder: &mut StringColumnBuilder,
     ) {
         let pos = (pos - 1) as usize; // set the index start from 0
-
         // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
-        let mut pos = match s.char_indices().nth(pos) {
-            Some((start, _, _)) => start,
+        let char_pos = match s.char_indices().nth(pos) {
+            Some((start, _)) => start,
             None => {
-                buf.extend_from_slice(s);
+                builder.put_str(s);
                 return;
             }
         };
 
-        let m = regexp_match_result(s, re, &mut pos, &occur);
-        if m.is_none() {
-            buf.extend_from_slice(s);
-            return;
-        }
+        let (before_trimmed, trimmed) = (&s[..char_pos], &s[char_pos..]);
+        builder.put_str(before_trimmed);
 
-        buf.extend_from_slice(&s[..m.unwrap().start()]);
-
+        // means we should replace all matched strings
         if occur == 0 {
-            let s = &s[m.unwrap().start()..];
-            buf.extend_from_slice(&re.replace_all(s, repl));
+            builder.put_str(&re.replace_all(trimmed, repl));
         } else {
-            buf.extend_from_slice(repl);
-            buf.extend_from_slice(&s[m.unwrap().end()..])
+            if let Some(capature) = re.captures_iter(trimmed).nth((occur - 1) as _) {
+                // unwrap on 0 is OK because captures only reports matches.
+                let m = capature.get(0).unwrap();
+                builder.put_str(&trimmed[0..m.start()]);
+                builder.put_str(repl);
+                builder.put_str(&trimmed[m.end()..]);
+            }
         }
     }
 
     #[inline]
-    pub fn regexp_substr<'a>(s: &'a [u8], re: &Regex, pos: i64, occur: i64) -> Option<&'a [u8]> {
+    pub fn regexp_substr<'a>(s: &'a str, re: &Regex, pos: i64, occur: i64) -> Option<&'a str> {
         let occur = if occur < 1 { 1 } else { occur };
         let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
 
         // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
-        let mut pos = match s.char_indices().nth(pos) {
-            Some((start, _, _)) => start,
+        let char_pos = match s.char_indices().nth(pos) {
+            Some((start, _)) => start,
             None => return None,
         };
 
-        let m = regexp_match_result(s, re, &mut pos, &occur);
-
-        m.map(|m| m.as_bytes())
-    }
-
-    #[inline]
-    fn regexp_match_result<'a>(
-        s: &'a [u8],
-        re: &Regex,
-        pos: &mut usize,
-        occur: &i64,
-    ) -> Option<Match<'a>> {
-        let mut i = 1_i64;
-        let m = loop {
-            let m = re.find_at(s, *pos);
-            if i >= *occur || m.is_none() {
-                break m;
-            }
-
-            i += 1;
-            if let Some(m) = m {
-                // set the start position of 'find_at' function to the position following the matched substring
-                *pos = m.end();
-            }
-        };
-
-        m
+        let m = re.find_iter(&s[char_pos..]).nth((occur - 1) as _);
+        m.map(|m| m.as_str())
     }
 }

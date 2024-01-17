@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use bstr::ByteSlice;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
@@ -117,7 +116,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "length",
         |_, _| FunctionDomain::Full,
-        |val, ctx| val.chars().count() as u64,
+        |val, _ctx| val.chars().count() as u64,
     );
 
     // const MAX_PADDING_LENGTH: usize = 1000000;
