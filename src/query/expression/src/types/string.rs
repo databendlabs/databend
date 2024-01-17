@@ -25,7 +25,6 @@ use serde::Serialize;
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
 use super::binary::BinaryIterator;
-use super::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;

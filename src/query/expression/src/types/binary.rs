@@ -219,7 +219,7 @@ impl BinaryColumn {
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
         let start = *self.offsets.get_unchecked(index) as usize;
         let end = *self.offsets.get_unchecked(index + 1) as usize;
-        &self.data.get_unchecked(start..end)
+        self.data.get_unchecked(start..end)
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

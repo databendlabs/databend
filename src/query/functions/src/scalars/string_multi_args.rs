@@ -988,14 +988,12 @@ pub mod regexp {
         // means we should replace all matched strings
         if occur == 0 {
             builder.put_str(&re.replace_all(trimmed, repl));
-        } else {
-            if let Some(capature) = re.captures_iter(trimmed).nth((occur - 1) as _) {
-                // unwrap on 0 is OK because captures only reports matches.
-                let m = capature.get(0).unwrap();
-                builder.put_str(&trimmed[0..m.start()]);
-                builder.put_str(repl);
-                builder.put_str(&trimmed[m.end()..]);
-            }
+        } else if let Some(capature) = re.captures_iter(trimmed).nth((occur - 1) as _) {
+            // unwrap on 0 is OK because captures only reports matches.
+            let m = capature.get(0).unwrap();
+            builder.put_str(&trimmed[0..m.start()]);
+            builder.put_str(repl);
+            builder.put_str(&trimmed[m.end()..]);
         }
     }
 

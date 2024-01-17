@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str;
-
 use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;

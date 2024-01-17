@@ -24,7 +24,6 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -34,8 +33,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use itertools::izip;
-use itertools::Itertools;
 use stringslice::StringSlice;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -164,15 +161,15 @@ pub fn register(registry: &mut FunctionRegistry) {
             |srcstr, pos, len, substr, output, _| {
                 let pos = pos as usize;
                 let len = len as usize;
-                let srcstr_char_len = srcstr.chars().count();
-                if pos < 1 || pos > srcstr_char_len {
+                let srcstr_len = srcstr.chars().count();
+                if pos < 1 || pos > srcstr_len {
                     output.put_str(srcstr);
                 } else {
                     let pos = pos - 1;
-                    output.put_str(&srcstr[0..(srcstr.char_indices().nth(pos).unwrap().0)]);
+                    output.put_str(srcstr.slice(0..pos));
                     output.put_str(substr);
-                    if pos + len < srcstr_char_len {
-                        output.put_str(&srcstr[(srcstr.char_indices().nth(pos + len).unwrap().0)..]);
+                    if pos + len < srcstr_len {
+                        output.put_str(srcstr.slice(pos + len .. ));
                     }
                 }
                 output.commit_row();
@@ -222,8 +219,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 let mut last_end = 0;
-                let mut iter = str.match_indices(from);
-                while let Some((start, _)) = iter.next() {
+                for (start, _) in str.match_indices(from) {
                     output.put_str(&str[last_end..start]);
                     output.put_str(to);
                     last_end = start + from.len();
@@ -272,28 +268,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
         |_, _, _| FunctionDomain::Full,
-        |s1, s2, _| {
-            let res = match s1.len().cmp(&s2.len()) {
-                Ordering::Equal => {
-                    let mut res = Ordering::Equal;
-                    for (s1i, s2i) in izip!(s1.chars(), s2.chars()) {
-                        match s1i.cmp(&s2i) {
-                            Ordering::Equal => continue,
-                            ord => {
-                                res = ord;
-                                break;
-                            }
-                        }
-                    }
-                    res
-                }
-                ord => ord,
-            };
-            match res {
-                Ordering::Equal => 0,
-                Ordering::Greater => 1,
-                Ordering::Less => -1,
-            }
+        |s1, s2, _| match s1.cmp(s2) {
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+            Ordering::Less => -1,
         },
     );
 
@@ -308,17 +286,15 @@ pub fn register(registry: &mut FunctionRegistry) {
             return 0_u64;
         }
         let p = pos - 1;
-        if p + substr.chars().count() <= s.chars().count() {
-            let sub_chars = substr.chars().collect::<Vec<_>>();
-            let chars = s.chars().collect::<Vec<_>>();
-            chars[p..]
-                .windows(sub_chars.len())
-                .position(|w| w == sub_chars)
-                .map_or(0, |i| i + 1 + p) as u64
+
+        let src = str.slice(p..);
+        if let Some(find_at) = src.find(substr) {
+            (src[..find_at].chars().count() + p + 1) as u64
         } else {
             0_u64
         }
     };
+
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "instr",
         |_, _, _| FunctionDomain::Full,
@@ -351,38 +327,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             |val, output, _| {
                 for ch in val.chars() {
                     match ch {
-                        '\0' => {
-                            output.put_char('\\');
-                            output.put_char('0');
-                        }
-                        '\'' => {
-                            output.put_char('\\');
-                            output.put_char('\'');
-                        }
-                        '\"' => {
-                            output.put_char('\\');
-                            output.put_char('\"');
-                        }
-                        '\u{8}' => {
-                            output.put_char('\\');
-                            output.put_char('b');
-                        }
-                        '\n' => {
-                            output.put_char('\\');
-                            output.put_char('n');
-                        }
-                        '\r' => {
-                            output.put_char('\\');
-                            output.put_char('r');
-                        }
-                        '\t' => {
-                            output.put_char('\\');
-                            output.put_char('t');
-                        }
-                        '\\' => {
-                            output.put_char('\\');
-                            output.put_char('\\');
-                        }
+                        '\0' => output.put_str("\\0"),
+                        '\'' => output.put_str("\\\'"),
+                        '\"' => output.put_str("\\\""),
+                        '\u{8}' => output.put_str("\\b"),
+                        '\n' => output.put_str("\\n"),
+                        '\r' => output.put_str("\\r"),
+                        '\t' => output.put_str("\\t"),
+                        '\\' => output.put_str("\\\\"),
                         c => output.put_char(c),
                     }
                 }
@@ -695,26 +647,26 @@ pub fn register(registry: &mut FunctionRegistry) {
         "substr",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-            |s, pos, output, _| {
-                substr_utf8(output, s, pos, s.len() as u64);
+            |s, pos, output, _ctx| {
+                substr(output, s, pos, s.len() as u64);
             },
         ),
     );
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
         "substr",
-        |_, _, _, _| FunctionDomain::Full,
-        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
-            substr_utf8(output, s, pos, len);
-        }),
-    );
+             |_, _, _, _| FunctionDomain::Full,
+             vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _ctx| {
+                substr(output, s, pos, len);
+             }),
+         );
 
     registry
         .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
             "split",
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
-                |s, sep, output, _| {
+                |s, sep, output, _ctx| {
                     if s == sep {
                         output.builder.commit_row();
                     } else if sep.is_empty() {
@@ -832,31 +784,8 @@ pub(crate) mod soundex {
     }
 }
 
-// #[inline]
-// fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
-//     if pos > 0 && pos <= str.len() as i64 {
-//         let l = str.len();
-//         let s = (pos - 1) as usize;
-//         let mut e = len as usize + s;
-//         if e > l {
-//             e = l;
-//         }
-//         return &str[s..e];
-//     }
-//     if pos < 0 && -(pos) <= str.len() as i64 {
-//         let l = str.len();
-//         let s = l - -pos as usize;
-//         let mut e = len as usize + s;
-//         if e > l {
-//             e = l;
-//         }
-//         return &str[s..e];
-//     }
-//     &str[0..0]
-// }
-
 #[inline]
-fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
+fn substr(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
     if pos == 0 || len == 0 {
         builder.commit_row();
         return;
