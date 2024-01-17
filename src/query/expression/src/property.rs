@@ -496,21 +496,21 @@ impl SimpleDomainCmp for StringDomain {
         match (&self.max, &other.max) {
             (None, None) => FunctionDomain::Full,
             (Some(self_max), Some(other_max)) => {
-                if self.min >= *other_max || *self_max <= other.min {
+                if self.min > *other_max || *self_max < other.min {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (Some(self_max), None) => {
-                if other.min >= *self_max {
+                if other.min > *self_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (None, Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
@@ -523,21 +523,21 @@ impl SimpleDomainCmp for StringDomain {
         match (&self.max, &other.max) {
             (None, None) => FunctionDomain::Full,
             (Some(self_max), Some(other_max)) => {
-                if self.min >= *other_max || *self_max <= other.min {
+                if self.min > *other_max || *self_max < other.min {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (Some(self_max), None) => {
-                if other.min >= *self_max {
+                if other.min > *self_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (None, Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
@@ -550,23 +550,23 @@ impl SimpleDomainCmp for StringDomain {
         match (&self.max, &other.max) {
             (None, None) => FunctionDomain::Full,
             (Some(self_max), Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if *self_max <= other.min {
+                } else if *self_max < other.min {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (Some(self_max), None) => {
-                if other.min >= *self_max {
+                if other.min > *self_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (None, Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
@@ -581,7 +581,7 @@ impl SimpleDomainCmp for StringDomain {
             (Some(self_max), Some(other_max)) => {
                 if self.min >= *other_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if *self_max <= other.min {
+                } else if *self_max < other.min {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
@@ -608,23 +608,23 @@ impl SimpleDomainCmp for StringDomain {
         match (&self.max, &other.max) {
             (None, None) => FunctionDomain::Full,
             (Some(self_max), Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else if *self_max <= other.min {
+                } else if *self_max < other.min {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (Some(self_max), None) => {
-                if other.min >= *self_max {
+                if other.min > *self_max {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::Full
                 }
             }
             (None, Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full
@@ -637,7 +637,7 @@ impl SimpleDomainCmp for StringDomain {
         match (&self.max, &other.max) {
             (None, None) => FunctionDomain::Full,
             (Some(self_max), Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else if *self_max <= other.min {
                     FunctionDomain::Domain(ALL_TRUE_DOMAIN)
@@ -653,7 +653,7 @@ impl SimpleDomainCmp for StringDomain {
                 }
             }
             (None, Some(other_max)) => {
-                if self.min >= *other_max {
+                if self.min > *other_max {
                     FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::Full

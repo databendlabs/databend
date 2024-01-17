@@ -156,7 +156,7 @@ evaluation (internal):
 
 ast            : octet_length('latin')
 raw expr       : octet_length('latin')
-checked expr   : length<String>("latin")
+checked expr   : octet_length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : {5..=5}
@@ -165,9 +165,9 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : length<Variant NULL>(CAST(NULL AS Variant NULL))
+checked expr   : octet_length<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : UInt32 NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -182,21 +182,21 @@ evaluation:
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
 | Row 0  | 'latin'                           | 5                          |
-| Row 1  | 'кириллица'                       | 18                         |
-| Row 2  | 'кириллица and latin'             | 28                         |
+| Row 1  | 'кириллица'                       | 9                          |
+| Row 2  | 'кириллица and latin'             | 19                         |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                     |
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6c6174696ed0bad0b8d180d0b8d0bbd0bbd0b8d186d0b0d0bad0b8d180d0b8d0bbd0bbd0b8d186d0b020616e64206c6174696e, offsets: [0, 5, 23, 51] } |
-| Output | UInt64([5, 18, 28])                                                                                                                                      |
+| Output | UInt64([5, 9, 19])                                                                                                                                       |
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : char_length('latin')
 raw expr       : char_length('latin')
-checked expr   : char_length<String>("latin")
+checked expr   : length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : {5..=5}
@@ -205,26 +205,26 @@ output         : 5
 
 ast            : char_length(NULL)
 raw expr       : char_length(NULL)
-checked expr   : char_length<String NULL>(CAST(NULL AS String NULL))
+checked expr   : length<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
-output type    : UInt64 NULL
+output type    : UInt32 NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : character_length(a)
 raw expr       : character_length(a::String)
-checked expr   : char_length<String>(a)
+checked expr   : length<String>(a)
 evaluation:
-+--------+-----------------------------------+---------+
-|        | a                                 | Output  |
-+--------+-----------------------------------+---------+
-| Type   | String                            | UInt64  |
-| Domain | {"latin"..="кириллица and latin"} | Unknown |
-| Row 0  | 'latin'                           | 5       |
-| Row 1  | 'кириллица'                       | 9       |
-| Row 2  | 'кириллица and latin'             | 19      |
-+--------+-----------------------------------+---------+
++--------+-----------------------------------+----------------------------+
+|        | a                                 | Output                     |
++--------+-----------------------------------+----------------------------+
+| Type   | String                            | UInt64                     |
+| Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
+| Row 0  | 'latin'                           | 5                          |
+| Row 1  | 'кириллица'                       | 9                          |
+| Row 2  | 'кириллица and latin'             | 19                         |
++--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                     |
@@ -395,28 +395,28 @@ output         : ''
 ast            : reverse('你好')
 raw expr       : reverse('你好')
 checked expr   : reverse<String>("你好")
-optimized expr : BDA5E5A0BDE4
+optimized expr : "好你"
 output type    : String
-output domain  : {"��堽�"..="��堽�"}
-output         : BDA5E5A0BDE4
+output domain  : {"好你"..="好你"}
+output         : '好你'
 
 
 ast            : reverse('ß😀山')
 raw expr       : reverse('ß😀山')
 checked expr   : reverse<String>("ß😀山")
-optimized expr : B1B1E580989FF09FC3
+optimized expr : "山😀ß"
 output type    : String
-output domain  : {"��倘���"..="��倘���"}
-output         : B1B1E580989FF09FC3
+output domain  : {"山😀ß"..="山😀ß"}
+output         : '山😀ß'
 
 
 ast            : reverse('Dobrý den')
 raw expr       : reverse('Dobrý den')
 checked expr   : reverse<String>("Dobrý den")
-optimized expr : 6E656420BDC372626F44
+optimized expr : "ned ýrboD"
 output type    : String
-output domain  : {"ned ��rboD"..="ned ��rboD"}
-output         : 6E656420BDC372626F44
+output domain  : {"ned ýrboD"..="ned ýrboD"}
+output         : 'ned ýrboD'
 
 
 ast            : reverse(Null)
@@ -489,19 +489,19 @@ output         : 0
 ast            : ascii('你好')
 raw expr       : ascii('你好')
 checked expr   : ascii<String>("你好")
-optimized expr : 228_u8
+optimized expr : 96_u8
 output type    : UInt8
-output domain  : {228..=228}
-output         : 228
+output domain  : {96..=96}
+output         : 96
 
 
 ast            : ascii('😀123')
 raw expr       : ascii('😀123')
 checked expr   : ascii<String>("😀123")
-optimized expr : 240_u8
+optimized expr : 0_u8
 output type    : UInt8
-output domain  : {240..=240}
-output         : 240
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : ascii(Null)
@@ -517,22 +517,22 @@ ast            : ascii(a)
 raw expr       : ascii(a::String)
 checked expr   : ascii<String>(a)
 evaluation:
-+--------+-----------------+------------+
-|        | a               | Output     |
-+--------+-----------------+------------+
-| Type   | String          | UInt8      |
-| Domain | {"-1"..="你好"} | {45..=228} |
-| Row 0  | '1'             | 49         |
-| Row 1  | '123'           | 49         |
-| Row 2  | '-1'            | 45         |
-| Row 3  | '你好'          | 228        |
-+--------+-----------------+------------+
++--------+-----------------+-----------+
+|        | a               | Output    |
++--------+-----------------+-----------+
+| Type   | String          | UInt8     |
+| Domain | {"-1"..="你好"} | {45..=96} |
+| Row 0  | '1'             | 49        |
+| Row 1  | '123'           | 49        |
+| Row 2  | '-1'            | 45        |
+| Row 3  | '你好'          | 96        |
++--------+-----------------+-----------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 | Column | Data                                                                         |
 +--------+------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x313132332d31e4bda0e5a5bd, offsets: [0, 1, 4, 6, 12] } |
-| Output | UInt8([49, 49, 45, 228])                                                     |
+| Output | UInt8([49, 49, 45, 96])                                                      |
 +--------+------------------------------------------------------------------------------+
 
 
@@ -2430,7 +2430,7 @@ evaluation:
 +--------+-----------------+------------------+--------------+
 | Type   | String          | String           | Int8         |
 | Domain | {"cc"..="test"} | {"ccb"..="test"} | {-128..=127} |
-| Row 0  | 'hi'            | 'i'              | 1            |
+| Row 0  | 'hi'            | 'i'              | -1           |
 | Row 1  | 'test'          | 'test'           | 0            |
 | Row 2  | 'cc'            | 'ccb'            | -1           |
 +--------+-----------------+------------------+--------------+
@@ -2440,7 +2440,7 @@ evaluation (internal):
 +--------+------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
 | b      | StringColumn { data: 0x6974657374636362, offsets: [0, 1, 5, 8] } |
-| Output | Int8([1, 0, -1])                                                 |
+| Output | Int8([-1, 0, -1])                                                |
 +--------+------------------------------------------------------------------+
 
 
@@ -2571,17 +2571,17 @@ evaluation (internal):
 ast            : char(65,66,67)
 raw expr       : char(65, 66, 67)
 checked expr   : char<UInt8, UInt8, UInt8>(65_u8, 66_u8, 67_u8)
-optimized expr : "ABC"
-output type    : String
-output domain  : {"ABC"..="ABC"}
-output         : 'ABC'
+optimized expr : 414243
+output type    : Binary
+output domain  : Undefined
+output         : 414243
 
 
 ast            : char(65, null)
 raw expr       : char(65, NULL)
 checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST(65_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
-output type    : String NULL
+output type    : Binary NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -2590,14 +2590,14 @@ ast            : char(a, b, c)
 raw expr       : char(a::UInt8, b::UInt8, c::UInt8)
 checked expr   : char<UInt8, UInt8, UInt8>(a, b, c)
 evaluation:
-+--------+-----------+-----------+-----------+--------+
-|        | a         | b         | c         | Output |
-+--------+-----------+-----------+-----------+--------+
-| Type   | UInt8     | UInt8     | UInt8     | String |
-| Domain | {66..=67} | {98..=99} | {68..=69} | {""..} |
-| Row 0  | 66        | 98        | 68        | 'BbD'  |
-| Row 1  | 67        | 99        | 69        | 'CcE'  |
-+--------+-----------+-----------+-----------+--------+
++--------+-----------+-----------+-----------+-----------+
+|        | a         | b         | c         | Output    |
++--------+-----------+-----------+-----------+-----------+
+| Type   | UInt8     | UInt8     | UInt8     | Binary    |
+| Domain | {66..=67} | {98..=99} | {68..=69} | Undefined |
+| Row 0  | 66        | 98        | 68        | 426244    |
+| Row 1  | 67        | 99        | 69        | 436345    |
++--------+-----------+-----------+-----------+-----------+
 evaluation (internal):
 +--------+-----------------------------------------------------------+
 | Column | Data                                                      |
@@ -2605,7 +2605,7 @@ evaluation (internal):
 | a      | UInt8([66, 67])                                           |
 | b      | UInt8([98, 99])                                           |
 | c      | UInt8([68, 69])                                           |
-| Output | StringColumn { data: 0x426244436345, offsets: [0, 3, 6] } |
+| Output | BinaryColumn { data: 0x426244436345, offsets: [0, 3, 6] } |
 +--------+-----------------------------------------------------------+
 
 
@@ -2613,14 +2613,14 @@ ast            : char(a2, b, c)
 raw expr       : char(a2::UInt8 NULL, b::UInt8, c::UInt8)
 checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(a2, CAST(b AS UInt8 NULL), CAST(c AS UInt8 NULL))
 evaluation:
-+--------+-----------+-----------+--------------------+-----------------+
-|        | b         | c         | a2                 | Output          |
-+--------+-----------+-----------+--------------------+-----------------+
-| Type   | UInt8     | UInt8     | UInt8 NULL         | String NULL     |
-| Domain | {98..=99} | {68..=69} | {66..=67} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 98        | 68        | 66                 | 'BbD'           |
-| Row 1  | 99        | 69        | NULL               | NULL            |
-+--------+-----------+-----------+--------------------+-----------------+
++--------+-----------+-----------+--------------------+--------------------+
+|        | b         | c         | a2                 | Output             |
++--------+-----------+-----------+--------------------+--------------------+
+| Type   | UInt8     | UInt8     | UInt8 NULL         | Binary NULL        |
+| Domain | {98..=99} | {68..=69} | {66..=67} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | 98        | 68        | 66                 | 426244             |
+| Row 1  | 99        | 69        | NULL               | NULL               |
++--------+-----------+-----------+--------------------+--------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                         |
@@ -2628,7 +2628,7 @@ evaluation (internal):
 | b      | UInt8([98, 99])                                                                                              |
 | c      | UInt8([68, 69])                                                                                              |
 | a2     | NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }                                           |
-| Output | NullableColumn { column: StringColumn { data: 0x426244436345, offsets: [0, 3, 6] }, validity: [0b______01] } |
+| Output | NullableColumn { column: BinaryColumn { data: 0x426244436345, offsets: [0, 3, 6] }, validity: [0b______01] } |
 +--------+--------------------------------------------------------------------------------------------------------------+
 
 
@@ -2639,8 +2639,8 @@ error:
   | ^^^^^^^^ no overload satisfies `char(UInt16)`
 
 has tried possible overloads:
-  char(UInt8) :: String            : unable to unify `UInt16` with `UInt8`
-  char(UInt8 NULL) :: String NULL  : unable to unify `UInt16` with `UInt8`
+  char(UInt8) :: Binary            : unable to unify `UInt16` with `UInt8`
+  char(UInt8 NULL) :: Binary NULL  : unable to unify `UInt16` with `UInt8`
 
 
 
@@ -2715,28 +2715,28 @@ output         : NULL
 ast            : ord('и')
 raw expr       : ord('и')
 checked expr   : ord<String>("и")
-optimized expr : 53432_u64
+optimized expr : 47312_u64
 output type    : UInt64
-output domain  : {53432..=53432}
-output         : 53432
+output domain  : {47312..=47312}
+output         : 47312
 
 
 ast            : ord('早ab')
 raw expr       : ord('早ab')
 checked expr   : ord<String>("早ab")
-optimized expr : 15112105_u64
+optimized expr : 11114470_u64
 output type    : UInt64
-output domain  : {15112105..=15112105}
-output         : 15112105
+output domain  : {11114470..=11114470}
+output         : 11114470
 
 
 ast            : ord('💖')
 raw expr       : ord('💖')
 checked expr   : ord<String>("💖")
-optimized expr : 4036989590_u64
+optimized expr : 2526191600_u64
 output type    : UInt64
-output domain  : {4036989590..=4036989590}
-output         : 4036989590
+output domain  : {2526191600..=2526191600}
+output         : 2526191600
 
 
 ast            : repeat('3', NULL)

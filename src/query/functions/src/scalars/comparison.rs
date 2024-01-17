@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
@@ -492,7 +493,35 @@ fn register_like(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
-        |_, _, _| FunctionDomain::Full,
+        |_, lhs, rhs| {
+            if rhs.max.as_ref() == Some(&rhs.min) {
+                let pattern_type = check_pattern_type(rhs.min.as_bytes(), false);
+
+                if pattern_type == PatternType::OrdinalStr {
+                    return lhs.domain_eq(rhs);
+                }
+
+                if pattern_type == PatternType::EndOfPercent {
+                    let mut pat_str = rhs.min.clone();
+                    // remove the last char '%'
+                    pat_str.pop();
+                    let pat_len = pat_str.chars().count();
+                    let other = StringDomain {
+                        min: pat_str.clone(),
+                        max: Some(pat_str),
+                    };
+                    let lhs = StringDomain {
+                        min: lhs.min.chars().take(pat_len).collect(),
+                        max: lhs
+                            .max
+                            .as_ref()
+                            .map(|max| max.chars().take(pat_len).collect()),
+                    };
+                    return lhs.domain_eq(&other);
+                }
+            }
+            FunctionDomain::Full
+        },
         vectorize_like(|str, pat, _, pattern_type| {
             match &pattern_type {
                 PatternType::OrdinalStr => str == pat,

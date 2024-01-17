@@ -7,7 +7,8 @@ array_slice -> slice
 bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
 ceiling -> ceil
-character_length -> char_length
+char_length -> length
+character_length -> length
 current_timestamp -> now
 date_format -> to_string
 hex -> to_hex
@@ -15,21 +16,21 @@ intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
 lcase -> lower
-length_utf8 -> char_length
+length_utf8 -> length
 mid -> substr
 mod -> modulo
 neg -> minus
 negate -> minus
 object_keys -> json_object_keys
-octet_length -> length
 remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
+substr_utf8 -> substr
 substring -> substr
-substring_utf8 -> substr_utf8
+substring_utf8 -> substr
 subtract -> minus
 to_datetime -> to_timestamp
 to_text -> to_string
@@ -784,8 +785,6 @@ Functions overloads:
 20 ceil(Float64 NULL) :: Float64 NULL
 0 char FACTORY
 1 char FACTORY
-0 char_length(String) :: UInt64
-1 char_length(String NULL) :: UInt64 NULL
 0 check_json(Variant) :: String NULL
 1 check_json(Variant NULL) :: String NULL
 2 check_json(String) :: String NULL
@@ -2775,6 +2774,8 @@ Functions overloads:
 0 now() :: Timestamp
 0 oct(Int64) :: String
 1 oct(Int64 NULL) :: String NULL
+0 octet_length(String) :: UInt64
+1 octet_length(String NULL) :: UInt64 NULL
 0 or(Boolean, Boolean) :: Boolean
 1 or(Boolean NULL, Boolean NULL) :: Boolean NULL
 0 ord(String) :: UInt64
@@ -3166,10 +3167,6 @@ Functions overloads:
 1 substr(String NULL, Int64 NULL) :: String NULL
 2 substr(String, Int64, UInt64) :: String
 3 substr(String NULL, Int64 NULL, UInt64 NULL) :: String NULL
-0 substr_utf8(String, Int64) :: String
-1 substr_utf8(String NULL, Int64 NULL) :: String NULL
-2 substr_utf8(String, Int64, UInt64) :: String
-3 substr_utf8(String NULL, Int64 NULL, UInt64 NULL) :: String NULL
 0 subtract_days(Date, Int64) :: Date
 1 subtract_days(Date NULL, Int64 NULL) :: Date NULL
 2 subtract_days(Timestamp, Int64) :: Timestamp
@@ -3206,8 +3203,8 @@ Functions overloads:
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(String) :: Binary
 1 to_binary(String NULL) :: Binary NULL
-0 to_bitmap(String) :: Bitmap
-1 to_bitmap(String NULL) :: Bitmap NULL
+0 to_bitmap(Binary) :: Bitmap
+1 to_bitmap(Binary NULL) :: Bitmap NULL
 2 to_bitmap(UInt64) :: Bitmap
 3 to_bitmap(UInt64 NULL) :: Bitmap NULL
 0 to_boolean(Variant) :: Boolean
