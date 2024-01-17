@@ -47,8 +47,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "character_length",
         "length_utf8",
     ]);
-    registry.register_aliases("substr", &["substring", "mid"]);
-    registry.register_aliases("substr_utf8", &["substring_utf8"]);
+    registry.register_aliases("substr", &[
+        "substring",
+        "mid",
+        "substr_utf8",
+        "substring_utf8",
+    ]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
@@ -699,144 +703,83 @@ pub fn register(registry: &mut FunctionRegistry) {
     //         ),
     //     );
 
-    //     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
-    //         "substr",
-    //         |_, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-    //             |s, pos, output, _| {
-    //                 output.put_slice(substr(s, pos, s.len() as u64));
-    //                 output.commit_row();
-    //             },
-    //         ),
-    //     );
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
+        "substr",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
+            |s, pos, output, ctx| {
+                substr_utf8(output, s, pos, s.len() as u64);
+            },
+        ),
+    );
 
-    //     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
-    //         "substr",
-    //         |_, _, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
-    //             output.put_slice(substr(s, pos, len));
-    //             output.commit_row();
-    //         }),
-    //     );
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
+        "substr",
+             |_, _, _, _| FunctionDomain::Full,
+             vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, ctx| {
+                substr_utf8(output, s, pos, len);
+             }),
+         );
 
-    //     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
-    //         "substr_utf8",
-    //         |_, _, _| FunctionDomain::MayThrow,
-    //         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-    //             |s, pos, output, ctx| match std::str::from_utf8(s) {
-    //                 Ok(s) => substr_utf8(output, s, pos, s.len() as u64),
-    //                 Err(e) => {
-    //                     ctx.set_error(output.len(), e.to_string());
-    //                     output.commit_row();
-    //                 }
-    //             },
-    //         ),
-    //     );
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "split",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
+                |s, sep, output, ctx| {
+                    if s == sep {
+                        output.builder.commit_row();
+                    } else if sep.is_empty() {
+                        output.builder.put_str(s);
+                        output.builder.commit_row();
+                    } else {
+                        for v in s.split(sep) {
+                            output.builder.put_str(v);
+                            output.builder.commit_row();
+                        }
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
 
-    //     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
-    //         "substr_utf8",
-    //         |_, _, _, _| FunctionDomain::MayThrow,
-    //         vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, ctx| {
-    //             match std::str::from_utf8(s)  {
-    //                 Ok(s) => substr_utf8(output, s, pos, len),
-    //                 Err(e) =>  {
-    //                     ctx.set_error(output.len(), e.to_string());
-    //                     output.commit_row();
-    //                 },
-    //             }
-    //         }),
-    //     );
-
-    //     registry
-    //         .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
-    //             "split",
-    //             |_, _, _| FunctionDomain::Full,
-    //             vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
-    //                 |str, sep, output, ctx| match std::str::from_utf8(str) {
-    //                     Ok(s) => match std::str::from_utf8(sep) {
-    //                         Ok(sep) => {
-    //                             if s == sep {
-    //                                 output.builder.put_slice(&[]);
-    //                                 output.builder.commit_row();
-    //                             } else if sep.is_empty() {
-    //                                 output.builder.put_slice(str);
-    //                                 output.builder.commit_row();
-    //                             } else {
-    //                                 let split = s.split(&sep);
-    //                                 for i in split {
-    //                                     output.builder.put_slice(i.as_bytes());
-    //                                     output.builder.commit_row();
-    //                                 }
-    //                             }
-    //                             output.commit_row()
-    //                         }
-    //                         Err(e) => {
-    //                             ctx.set_error(output.len(), e.to_string());
-    //                             output.commit_row();
-    //                         }
-    //                     },
-    //                     Err(e) => {
-    //                         ctx.set_error(output.len(), e.to_string());
-    //                         output.commit_row();
-    //                     }
-    //                 },
-    //             ),
-    //         );
-
-    //     registry
-    //         .register_passthrough_nullable_3_arg::<StringType, StringType, NumberType<i64>, StringType, _, _>(
-    //             "split_part",
-    //             |_, _, _, _| FunctionDomain::Full,
-    //             vectorize_with_builder_3_arg::<StringType, StringType, NumberType<i64>, StringType>(
-    //                 |str, sep, part, output, ctx| match std::str::from_utf8(str) {
-    //                     Ok(s) => match std::str::from_utf8(sep) {
-    //                         Ok(sep) => {
-    //                             if s == sep {
-    //                                 output.commit_row()
-    //                             } else if sep.is_empty() {
-    //                                 if part == 0 || part == 1 || part == -1 {
-    //                                     output.put_slice(str);
-    //                                 }
-    //                                 output.commit_row()
-    //                             } else {
-    //                                 if part < 0 {
-    //                                     let split = s.rsplit(&sep);
-    //                                     let idx = (-part-1) as usize;
-    //                                     for (count, i) in split.enumerate() {
-    //                                         if idx == count {
-    //                                             output.put_slice(i.as_bytes());
-    //                                             break
-    //                                         }
-    //                                     }
-    //                                 } else {
-    //                                     let split = s.split(&sep);
-    //                                     let idx = if part == 0 {
-    //                                         0usize
-    //                                     } else {
-    //                                         (part - 1) as usize
-    //                                     };
-    //                                     for (count, i) in split.enumerate() {
-    //                                         if idx == count {
-    //                                             output.put_slice(i.as_bytes());
-    //                                             break
-    //                                         }
-    //                                     }
-    //                                 }
-    //                                 output.commit_row();
-    //                             }
-    //                         }
-    //                         Err(e) => {
-    //                             ctx.set_error(output.len(), e.to_string());
-    //                             output.commit_row();
-    //                         }
-    //                     },
-    //                     Err(e) => {
-    //                         ctx.set_error(output.len(), e.to_string());
-    //                         output.commit_row();
-    //                     }
-    //                 },
-    //             ),
-    //         )
+    registry
+        .register_passthrough_nullable_3_arg::<StringType, StringType, NumberType<i64>, StringType, _, _>(
+            "split_part",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, NumberType<i64>, StringType>(
+                |s, sep, part, output, ctx| {
+                    if sep.is_empty() {
+                        if part == 0 || part == 1 || part == -1 {
+                            output.put_str(s);
+                        }
+                    } else if s != sep {
+                        if part < 0 {
+                            let idx = (-part-1) as usize;
+                            for (i, v) in s.rsplit(sep).enumerate() {
+                                if i == idx {
+                                    output.put_str(v);
+                                    break;
+                                }
+                            }
+                        } else {
+                            let idx = if part == 0 {
+                                0usize
+                            } else {
+                                (part - 1) as usize
+                            };
+                            for (i, v) in s.split(sep).enumerate() {
+                                if i == idx {
+                                    output.put_str(v);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    output.commit_row();
+                },
+            ),
+        )
 }
 
 // pub(crate) mod soundex {
@@ -924,25 +867,25 @@ pub fn register(registry: &mut FunctionRegistry) {
 //     &str[0..0]
 // }
 
-// #[inline]
-// fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
-//     if pos == 0 || len == 0 {
-//         builder.commit_row();
-//         return;
-//     }
+#[inline]
+fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
+    if pos == 0 || len == 0 {
+        builder.commit_row();
+        return;
+    }
 
-//     let char_len = str.chars().count();
-//     let start = if pos > 0 {
-//         (pos - 1).min(char_len as i64) as usize
-//     } else {
-//         char_len
-//             .checked_sub(pos.unsigned_abs() as usize)
-//             .unwrap_or(char_len)
-//     };
+    let char_len = str.chars().count();
+    let start = if pos > 0 {
+        (pos - 1).min(char_len as i64) as usize
+    } else {
+        char_len
+            .checked_sub(pos.unsigned_abs() as usize)
+            .unwrap_or(char_len)
+    };
 
-//     builder.put_char_iter(str.chars().skip(start).take(len as usize));
-//     builder.commit_row();
-// }
+    builder.put_char_iter(str.chars().skip(start).take(len as usize));
+    builder.commit_row();
+}
 
 /// String to String scalar function with estimated output column capacity.
 pub fn vectorize_string_to_string(
