@@ -2529,6 +2529,10 @@ Functions overloads:
 197 modulo(Float64 NULL, Float32 NULL) :: Float64 NULL
 198 modulo(Float64, Float64) :: Float64
 199 modulo(Float64 NULL, Float64 NULL) :: Float64 NULL
+0 months_between(Date, Date) :: Float64
+1 months_between(Date NULL, Date NULL) :: Float64 NULL
+2 months_between(Timestamp, Timestamp) :: Float64
+3 months_between(Timestamp NULL, Timestamp NULL) :: Float64 NULL
 0 multiply FACTORY
 1 multiply(UInt8, UInt8) :: UInt16
 2 multiply(UInt8 NULL, UInt8 NULL) :: UInt16 NULL

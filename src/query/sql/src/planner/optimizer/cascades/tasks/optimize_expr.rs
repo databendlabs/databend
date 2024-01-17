@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -73,50 +72,59 @@ pub struct OptimizeExprTask {
 
     pub group_index: IndexType,
     pub m_expr_index: IndexType,
+    pub last_optimized_child_index: Option<IndexType>,
 
-    pub ref_count: Rc<SharedCounter>,
-    pub parent: Option<Rc<SharedCounter>>,
+    /// Cost lower bound of the optimizing expression. Will be updated when optimizing
+    /// children. If the cost lower bound is greater than the current best cost, we can
+    /// prune the current expression.
+    pub cost_lower_bound: Cost,
+
+    pub ref_count: SharedCounter,
+    pub parent: Option<SharedCounter>,
 }
 
 impl OptimizeExprTask {
     pub fn new(
         ctx: Arc<dyn TableContext>,
+        optimizer: &CascadesOptimizer,
         group_index: IndexType,
         m_expr_index: IndexType,
         required_prop: RequiredProperty,
         children_required_props: Vec<RequiredProperty>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             ctx,
             state: OptimizeExprState::Init,
             group_index,
             m_expr_index,
-            ref_count: Rc::new(SharedCounter::new()),
+            ref_count: SharedCounter::new(),
             parent: None,
             required_prop,
             children_required_props,
             children_task_scheduled: false,
-        }
+            last_optimized_child_index: None,
+            cost_lower_bound: optimizer.cost_model.compute_cost(
+                &optimizer.memo,
+                optimizer.memo.group(group_index)?.m_expr(m_expr_index)?,
+            )?,
+        })
     }
 
-    pub fn with_parent(self, parent: &Rc<SharedCounter>) -> Self {
-        let mut task = self;
-        parent.inc();
-        task.parent = Some(parent.clone());
-        task
+    pub fn with_parent(mut self, parent: SharedCounter) -> Self {
+        self.parent = Some(parent);
+        self
     }
 
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
         scheduler: &mut Scheduler,
-    ) -> Result<()> {
+    ) -> Result<Option<Task>> {
         if matches!(self.state, OptimizeExprState::Finished) {
-            return Ok(());
+            return Ok(None);
         }
         self.transition(optimizer, scheduler)?;
-        scheduler.add_task(Task::OptimizeExpr(self));
-        Ok(())
+        Ok(Some(Task::OptimizeExpr(self)))
     }
 
     fn transition(
@@ -187,26 +195,70 @@ impl OptimizeExprTask {
             return Ok(OptimizeExprEvent::OptimizedSelf);
         }
 
-        if !self.children_task_scheduled {
-            for (child, required_prop) in m_expr
-                .children
-                .iter()
-                .zip(self.children_required_props.iter())
-            {
-                let group = optimizer.memo.group(*child)?;
-                if group.best_prop(required_prop).is_none() {
-                    let task = OptimizeGroupTask::new(
-                        self.ctx.clone(),
-                        Some((self.group_index, self.m_expr_index)),
-                        *child,
-                        required_prop.clone(),
-                    )
-                    .with_parent(&self.ref_count);
-                    scheduler.add_task(Task::OptimizeGroup(task));
+        if m_expr.children.is_empty() {
+            self.children_task_scheduled = true;
+            return Ok(OptimizeExprEvent::OptimizedChildren);
+        }
+
+        // Check if the cost lower bound is already greater than the current best cost,
+        // if so, we can prune the current expression.
+        if let Some(ccx) = optimizer
+            .memo
+            .group(self.group_index)?
+            .best_prop(&self.required_prop)
+        {
+            if let Some(last_optimized_child_index) = self.last_optimized_child_index {
+                let child_index = last_optimized_child_index - 1;
+                if let Some(c) = optimizer
+                    .memo
+                    .group(m_expr.children[child_index])?
+                    .best_prop(&self.children_required_props[child_index])
+                {
+                    self.cost_lower_bound += c.cost;
                 }
             }
 
-            self.children_task_scheduled = true;
+            if ccx.cost < self.cost_lower_bound {
+                scheduler.stat.optimize_group_expr_prune_count += 1;
+                self.children_task_scheduled = true;
+                return Ok(OptimizeExprEvent::OptimizedSelf);
+            }
+        }
+
+        if !self.children_task_scheduled {
+            let child_index = self.last_optimized_child_index.unwrap_or(0);
+            let required_prop = self
+                .children_required_props
+                .get(child_index)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Cannot find required property for child: {}",
+                        child_index
+                    ))
+                })?
+                .clone();
+
+            let group = optimizer.memo.group(m_expr.children[child_index])?;
+            if group.best_prop(&required_prop).is_none() {
+                let task = OptimizeGroupTask::new(
+                    self.ctx.clone(),
+                    Some((self.group_index, self.m_expr_index)),
+                    group.group_index,
+                    required_prop.clone(),
+                )
+                .with_parent(self.ref_count.clone());
+                scheduler.add_task(Task::OptimizeGroup(task));
+            }
+
+            self.last_optimized_child_index = Some(child_index + 1);
+
+            if self
+                .last_optimized_child_index
+                .map(|i| i == m_expr.children.len())
+                .unwrap_or(false)
+            {
+                self.children_task_scheduled = true;
+            }
 
             Ok(OptimizeExprEvent::OptimizingChildren)
         } else {
@@ -225,7 +277,7 @@ impl OptimizeExprTask {
             .m_expr(self.m_expr_index)?;
         let mut cost = Cost::from(0);
 
-        let mut children_best_props = Vec::new();
+        let mut children_best_props = Vec::with_capacity(self.children_required_props.len());
 
         for (child, required_prop) in m_expr
             .children
@@ -240,11 +292,11 @@ impl OptimizeExprTask {
                 ))
             })?;
             children_best_props.push(cost_context.physical_prop.clone());
-            cost = cost + cost_context.cost;
+            cost += cost_context.cost;
         }
 
         let op_cost = optimizer.cost_model.compute_cost(&optimizer.memo, m_expr)?;
-        cost = cost + op_cost;
+        cost += op_cost;
 
         let rel_expr = RelExpr::with_opt_context(m_expr, &optimizer.memo, &children_best_props);
 
@@ -378,9 +430,6 @@ impl OptimizeExprTask {
     }
 
     fn finish(&mut self, _optimizer: &mut CascadesOptimizer) -> Result<OptimizeExprEvent> {
-        if let Some(parent) = &self.parent {
-            parent.dec();
-        }
         Ok(OptimizeExprEvent::Finish)
     }
 }
