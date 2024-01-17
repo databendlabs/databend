@@ -158,9 +158,15 @@ impl PullUpFilterOptimizer {
     ) -> Result<()> {
         match predicate {
             ScalarExpr::BoundColumnRef(column) => {
-                for item in items.iter_mut() {
+                for item in items.iter() {
                     if item.index == column.column.index {
                         return Ok(());
+                    }
+                    if let ScalarExpr::BoundColumnRef(item_column) = &item.scalar {
+                        if item_column.column.index == column.column.index {
+                            column.column.index = item.index;
+                            return Ok(());
+                        }
                     }
                 }
 
