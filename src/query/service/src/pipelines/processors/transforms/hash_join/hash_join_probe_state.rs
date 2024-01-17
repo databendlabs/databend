@@ -57,6 +57,10 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
+// ({(Interval,prefix),(Interval,repfix),...},chunk_idx)
+// 1.The Interval is the partial unmodified interval offset in chunks.
+// 2.Prefix is segment_idx_block_id
+// 3.chunk_idx: the index of correlated chunk in chunks.
 pub type MergeIntoChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {

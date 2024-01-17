@@ -153,7 +153,7 @@ impl HashJoinBuildState {
 
 impl HashJoinProbeState {
     #[inline]
-    pub(crate) fn check_and_set_matched(
+    pub(crate) fn merge_into_check_and_set_matched(
         &self,
         build_indexes: &[RowPtr],
         matched_idx: usize,

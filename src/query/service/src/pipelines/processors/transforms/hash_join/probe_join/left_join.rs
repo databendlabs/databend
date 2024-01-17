@@ -454,7 +454,11 @@ impl HashJoinProbeState {
                     };
                 }
             }
-            self.check_and_set_matched(build_indexes, matched_idx, &probe_state.true_validity)?;
+            self.merge_into_check_and_set_matched(
+                build_indexes,
+                matched_idx,
+                &probe_state.true_validity,
+            )?;
             return Ok(());
         }
 
@@ -481,7 +485,11 @@ impl HashJoinProbeState {
                     };
                 }
             }
-            self.check_and_set_matched(build_indexes, matched_idx, &probe_state.true_validity)?;
+            self.merge_into_check_and_set_matched(
+                build_indexes,
+                matched_idx,
+                &probe_state.true_validity,
+            )?;
         } else if all_false {
             let mut idx = 0;
             while idx < matched_idx {
@@ -512,7 +520,7 @@ impl HashJoinProbeState {
                 }
             } else {
                 let mut idx = 0;
-                self.check_and_set_matched(build_indexes, matched_idx, &validity)?;
+                self.merge_into_check_and_set_matched(build_indexes, matched_idx, &validity)?;
                 while idx < matched_idx {
                     unsafe {
                         let valid = validity.get_bit_unchecked(idx);

@@ -191,7 +191,7 @@ impl HashJoinBuildState {
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
 
-        self.merge_into_try_build_block_info_index(input.clone(), old_size);
+        self.merge_into_try_build_block_info_index(input, old_size);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
