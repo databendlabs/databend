@@ -2765,6 +2765,7 @@ dependencies = [
  "siphasher",
  "streaming_algorithms",
  "strength_reduce",
+ "stringslice",
  "twox-hash",
 ]
 
@@ -12069,6 +12070,12 @@ name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
+
+[[package]]
+name = "stringslice"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dad614e9c8a0773603982e0c1d3192f2bce1c0ee193caf0526b8ae3c6c3e38c"
 
 [[package]]
 name = "strsim"

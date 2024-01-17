@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use stringslice::StringSlice;
 use std::cmp::Ordering;
 use std::io::Write;
 
@@ -119,36 +120,38 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _ctx| val.chars().count() as u64,
     );
 
-    // const MAX_PADDING_LENGTH: usize = 1000000;
-    // registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
-    //     "lpad",
-    //     |_, _, _, _| FunctionDomain::MayThrow,
-    //     vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-    //         |s, pad_len, pad, output, ctx| {
-    //             let pad_len = pad_len as usize;
-    //             if pad_len > MAX_PADDING_LENGTH {
-    //                 ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
-    //             } else if pad_len <= s.len() {
-    //                 output.put_slice(&s[..pad_len]);
-    //             } else if pad.is_empty() {
-    //                 ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
-    //             } else {
-    //                 let mut remain_pad_len = pad_len - s.len();
-    //                 while remain_pad_len > 0 {
-    //                     if remain_pad_len < pad.len() {
-    //                         output.put_slice(&pad[..remain_pad_len]);
-    //                         remain_pad_len = 0;
-    //                     } else {
-    //                         output.put_slice(pad);
-    //                         remain_pad_len -= pad.len();
-    //                     }
-    //                 }
-    //                 output.put_slice(s);
-    //             }
-    //             output.commit_row();
-    //         }
-    //     ),
-    // );
+    const MAX_PADDING_LENGTH: usize = 1000000;
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+        "lpad",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
+            |s, pad_len, pad, output, ctx| {
+                let pad_len = pad_len as usize;
+                let s_len = s.chars().count();
+                if pad_len > MAX_PADDING_LENGTH {
+                    ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
+                } else if pad_len <= s_len {
+                    output.put_str(s.slice(..pad_len));
+                } else if pad.is_empty() {
+                    ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", s, pad_len));
+                } else {
+                    let mut remain_pad_len = pad_len - s_len;
+                    let p_len = pad.chars().count();
+                    while remain_pad_len > 0 {
+                        if remain_pad_len < p_len {
+                            output.put_str(pad.slice(..remain_pad_len));
+                            remain_pad_len = 0;
+                        } else {
+                            output.put_str(pad);
+                            remain_pad_len -= p_len;
+                        }
+                    }
+                    output.put_str(s);
+                }
+                output.commit_row();
+            }
+        ),
+    );
 
     registry.register_passthrough_nullable_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
         "insert",
@@ -172,85 +175,92 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
     );
 
-    //     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
-    //         "rpad",
-    //         |_, _, _, _| FunctionDomain::MayThrow,
-    //         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-    //         |s: &[u8], pad_len: u64, pad: &[u8], output, ctx| {
-    //             let pad_len = pad_len as usize;
-    //             if pad_len > MAX_PADDING_LENGTH {
-    //                 ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
-    //             } else if pad_len <= s.len() {
-    //                 output.put_slice(&s[..pad_len])
-    //             } else if pad.is_empty() {
-    //                 ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
-    //             } else {
-    //                 output.put_slice(s);
-    //                 let mut remain_pad_len = pad_len - s.len();
-    //                 while remain_pad_len > 0 {
-    //                     if remain_pad_len < pad.len() {
-    //                         output.put_slice(&pad[..remain_pad_len]);
-    //                         remain_pad_len = 0;
-    //                     } else {
-    //                         output.put_slice(pad);
-    //                         remain_pad_len -= pad.len();
-    //                     }
-    //                 }
-    //             }
-    //             output.commit_row();
-    //         }),
-    //     );
+        registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+            "rpad",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
+                |s, pad_len, pad, output, ctx| {
+                let pad_len = pad_len as usize;
+                let s_len = s.chars().count();
+                if pad_len > MAX_PADDING_LENGTH {
+                    ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
+                } else if pad_len <= s_len {
+                    output.put_str(s.slice(..pad_len));
+                } else if pad.is_empty() {
+                    ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", s, pad_len));
+                } else {
+                    output.put_str(s);
+                    let mut remain_pad_len = pad_len - s_len;
+                    let p_len = pad.chars().count();
+                    while remain_pad_len > 0 {
+                        if remain_pad_len < p_len {
+                            output.put_str(pad.slice(..remain_pad_len));
+                            remain_pad_len = 0;
+                        } else {
+                            output.put_str(pad);
+                            remain_pad_len -= p_len;
+                        }
+                    }
+                }
+                output.commit_row();
+            }),
+        );
 
-    //     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
-    //         "replace",
-    //         |_, _, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
-    //             |str, from, to, output, _| {
-    //             if from.is_empty() || from == to {
-    //                 output.put_slice(str);
-    //                 output.commit_row();
-    //                 return;
-    //             }
-    //             let mut skip = 0;
-    //             for (p, w) in str.windows(from.len()).enumerate() {
-    //                 if w == from {
-    //                     output.put_slice(to);
-    //                     skip = from.len();
-    //                 } else if p + w.len() == str.len() {
-    //                     output.put_slice(w);
-    //                 } else if skip > 1 {
-    //                     skip -= 1;
-    //                 } else {
-    //                     output.put_slice(&w[0..1]);
-    //                 }
-    //             }
-    //             output.commit_row();
-    //         }),
-    //     );
+        registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+            "replace",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+                |str, from, to, output, _| {
+                if from.is_empty() || from == to {
+                    output.put_str(str);
+                    output.commit_row();
+                    return;
+                }
+                let mut skip = 0;
 
-    //     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
-    //         "translate",
-    //         |_, _, _, _| FunctionDomain::Full,
-    //         vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
-    //             |str, from, to, output, _| {
-    //             if from.is_empty() || from == to {
-    //                 output.put_slice(str);
-    //                 output.commit_row();
-    //                 return;
-    //             }
-    //             let to_len = to.len();
-    //             str.iter().for_each(|x| {
-    //                 if let Some(index) = from.find([*x]) {
-    //                     if index < to_len {
-    //                         output.put_u8(to[index]);
-    //                     }
-    //                 } else {
-    //                     output.put_u8(*x);
-    //                 }
-    //             });
-    //             output.commit_row();
-    //         }),
-    //     );
+                let chars = str.chars().collect::<Vec<_>>();
+                let from_len = from.chars().count();
+                for (p, w) in chars.windows(from_len).enumerate() {
+                    let w_str: String = w.iter().collect();
+                    let w_str = w_str.as_str();
+                    if w_str == from {
+                        output.put_str(to);
+                        skip = from_len;
+                    } else if p + w.len() == str.chars().count() {
+                        output.put_str(w_str);
+                    } else if skip > 1 {
+                        skip -= 1;
+                    } else {
+                        output.put_str(w_str.slice(..1));
+                    }
+                }
+                output.commit_row();
+            }),
+        );
+
+        registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+            "translate",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+                |str, from, to, output, _| {
+                if from.is_empty() || from == to {
+                    output.put_str(str);
+                    output.commit_row();
+                    return;
+                }
+                let to_len = to.chars().count();
+                str.chars().for_each(|x| {
+                    if let Some(index) = from.chars().position(|c| c == x) {
+                        if index < to_len {
+                            output.put_char(to.chars().nth(index).unwrap());
+                        }
+                    } else {
+                        output.put_char(x);
+                    }
+                });
+                output.commit_row();
+            }),
+        );
 
     //     registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
     //         "to_uuid",
