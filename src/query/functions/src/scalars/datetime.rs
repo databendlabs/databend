@@ -1244,18 +1244,15 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, DateType, Float64Type, _, _>(
         "months_between",
         |_, lhs, rhs| {
-            (|| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm = rhs.max;
-                let rn = rhs.min;
+            let lm = lhs.max;
+            let ln = lhs.min;
+            let rm = rhs.max;
+            let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<F64> {
-                    min: months_between(ln, rm).into(),
-                    max: months_between(lm, rn).into(),
-                }))
-            })()
-            .unwrap_or(FunctionDomain::Full)
+            Some(FunctionDomain::Domain(SimpleDomain::<F64> {
+                min: months_between(ln, rm).into(),
+                max: months_between(lm, rn).into(),
+            }))
         },
         vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
             months_between(a, b).into()
@@ -1266,18 +1263,15 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
         .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Float64Type, _, _>(
             "months_between",
             |_, lhs, rhs| {
-                (|| {
-                    let lm = lhs.max;
-                    let ln = lhs.min;
-                    let rm = rhs.max;
-                    let rn = rhs.min;
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
 
-                    Some(FunctionDomain::Domain(SimpleDomain::<F64> {
-                        min: months_between_ts(ln, rm).into(),
-                        max: months_between_ts(lm, rn).into(),
-                    }))
-                })()
-                .unwrap_or(FunctionDomain::Full)
+                Some(FunctionDomain::Domain(SimpleDomain::<F64> {
+                    min: months_between_ts(ln, rm).into(),
+                    max: months_between_ts(lm, rn).into(),
+                }))
             },
             vectorize_2_arg::<TimestampType, TimestampType, Float64Type>(|a, b, _ctx| {
                 months_between_ts(a, b).into()
