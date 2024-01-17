@@ -223,25 +223,25 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     max: Some(max.into_string().unwrap()),
                 }),
                 DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
-                    min: TimestampType::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                    max: TimestampType::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                    min: TimestampType::try_downcast_scalar(&min).unwrap(),
+                    max: TimestampType::try_downcast_scalar(&max).unwrap(),
                 }),
                 DataType::Date => DateType::upcast_domain(SimpleDomain {
-                    min: DateType::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                    max: DateType::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                    min: DateType::try_downcast_scalar(&min).unwrap(),
+                    max: DateType::try_downcast_scalar(&max).unwrap(),
                 }),
                 DataType::Decimal(dec) => match dec {
                     DecimalDataType::Decimal128(sz) => Domain::Decimal(DecimalDomain::Decimal128(
                         SimpleDomain {
-                            min: Decimal128Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                            max: Decimal128Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                            min: Decimal128Type::try_downcast_scalar(&min).unwrap(),
+                            max: Decimal128Type::try_downcast_scalar(&max).unwrap(),
                         },
                         *sz,
                     )),
                     DecimalDataType::Decimal256(sz) => Domain::Decimal(DecimalDomain::Decimal256(
                         SimpleDomain {
-                            min: Decimal256Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                            max: Decimal256Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                            min: Decimal256Type::try_downcast_scalar(&min).unwrap(),
+                            max: Decimal256Type::try_downcast_scalar(&max).unwrap(),
                         },
                         *sz,
                     )),
