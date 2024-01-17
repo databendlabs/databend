@@ -141,7 +141,7 @@ impl HashJoinBuildState {
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
-        if hash_join_state.hash_join_desc.join_type == JoinType::Inner
+        if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type)
             && ctx.get_settings().get_join_spilling_threshold()? == 0
         {
             let is_cluster = !ctx.get_cluster().is_empty();
@@ -800,7 +800,9 @@ impl HashJoinBuildState {
             .iter()
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
         {
-            if !build_key.data_type().remove_nullable().is_numeric() {
+            if !build_key.data_type().remove_nullable().is_numeric()
+                && !build_key.data_type().remove_nullable().is_string()
+            {
                 return Ok(());
             }
             if let Expr::ColumnRef { id, .. } = probe_key {
@@ -896,6 +898,9 @@ impl HashJoinBuildState {
                     return Ok(());
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
+                if build_key_column.len() == 0 {
+                    return Ok(());
+                }
                 // Generate min max filter using build column
                 let min_max = build_key_column.remove_nullable().domain();
                 let min_max_filter = match min_max {
@@ -950,4 +955,15 @@ impl HashJoinBuildState {
         }
         Ok(())
     }
+}
+
+pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
+    matches!(
+        join_type,
+        JoinType::Inner
+            | JoinType::Right
+            | JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::LeftMark
+    )
 }
