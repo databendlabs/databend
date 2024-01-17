@@ -278,6 +278,10 @@ impl Settings {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }
 
+    pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),

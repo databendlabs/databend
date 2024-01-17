@@ -288,6 +288,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enforce_broadcast_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce broadcast join.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",

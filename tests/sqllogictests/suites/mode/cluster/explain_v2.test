@@ -5,10 +5,10 @@ statement ok
 drop table if exists t2 all;
 
 statement ok
-create table t1(a int not null, b int not null);
+create table t1(a int not null, b int not null) as select number as a, number+1 as b from numbers(100);
 
 statement ok
-create table t2(a int not null, b int not null);
+create table t2(a int not null, b int not null) as select number as a, number+1 as b from numbers(100);
 
 query T
 explain select t1.a from t1 where a > 0;
@@ -19,16 +19,17 @@ Exchange
 └── Filter
     ├── output columns: [t1.a (#0)]
     ├── filters: [t1.a (#0) > 0]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 99.01
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
+        ├── read rows: 100
+        ├── read bytes: 266
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 100.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
@@ -39,46 +40,45 @@ Exchange
 └── Filter
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 99.69
     └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
         ├── filters: []
-        ├── estimated rows: 0.00
+        ├── estimated rows: 99.92
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
-        │   ├── exchange type: Hash(t2.a (#2))
+        │   ├── exchange type: Broadcast
         │   └── Filter
         │       ├── output columns: [t2.a (#2), t2.b (#3)]
         │       ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
-        │       ├── estimated rows: 0.00
+        │       ├── estimated rows: 99.92
         │       └── TableScan
         │           ├── table: default.default.t2
         │           ├── output columns: [a (#2), b (#3)]
-        │           ├── read rows: 0
-        │           ├── read bytes: 0
-        │           ├── partitions total: 0
-        │           ├── partitions scanned: 0
+        │           ├── read rows: 100
+        │           ├── read bytes: 534
+        │           ├── partitions total: 3
+        │           ├── partitions scanned: 3
+        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
         │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
-        │           └── estimated rows: 0.00
-        └── Exchange(Probe)
+        │           └── estimated rows: 100.00
+        └── Filter(Probe)
             ├── output columns: [t1.a (#0), t1.b (#1)]
-            ├── exchange type: Hash(t1.a (#0))
-            └── Filter
-                ├── output columns: [t1.a (#0), t1.b (#1)]
-                ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
+            ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
+            ├── estimated rows: 99.92
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 100
+                ├── read bytes: 534
+                ├── partitions total: 3
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
+                └── estimated rows: 100.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -92,31 +92,30 @@ Exchange
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── estimated rows: 0.00
+    ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
-    │   ├── exchange type: Hash(t2.a (#2))
+    │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
-    │       ├── read rows: 0
-    │       ├── read bytes: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
+    │       ├── read rows: 100
+    │       ├── read bytes: 534
+    │       ├── partitions total: 3
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Exchange(Probe)
-        ├── output columns: [t1.a (#0), t1.b (#1)]
-        ├── exchange type: Hash(t1.a (#0))
-        └── TableScan
-            ├── table: default.default.t1
-            ├── output columns: [a (#0), b (#1)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+    │       └── estimated rows: 100.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 100
+        ├── read bytes: 534
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 100.00
 
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -192,12 +191,13 @@ Limit
                     └── TableScan
                         ├── table: default.default.t1
                         ├── output columns: [a (#0)]
-                        ├── read rows: 0
-                        ├── read bytes: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
+                        ├── read rows: 100
+                        ├── read bytes: 266
+                        ├── partitions total: 3
+                        ├── partitions scanned: 3
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
                         ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 0.00
+                        └── estimated rows: 100.00
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
@@ -206,53 +206,52 @@ Limit
 ├── output columns: [c (#4), d (#5), e (#6)]
 ├── limit: 10
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 10.00
 └── Sort
     ├── output columns: [c (#4), d (#5), e (#6)]
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 100.00
     └── Exchange
         ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
         ├── exchange type: Merge
         └── Sort
             ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 100.00
             └── EvalScalar
                 ├── output columns: [c (#4), d (#5), e (#6)]
                 ├── expressions: [t1.a (#0) + 1, t1.b (#1) + 1, t2.a (#2) + 1]
-                ├── estimated rows: 0.00
+                ├── estimated rows: 100.00
                 └── HashJoin
                     ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2)]
                     ├── join type: INNER
                     ├── build keys: [t2.a (#2)]
                     ├── probe keys: [t1.a (#0)]
                     ├── filters: []
-                    ├── estimated rows: 0.00
+                    ├── estimated rows: 100.00
                     ├── Exchange(Build)
                     │   ├── output columns: [t2.a (#2)]
-                    │   ├── exchange type: Hash(t2.a (#2))
+                    │   ├── exchange type: Broadcast
                     │   └── TableScan
                     │       ├── table: default.default.t2
                     │       ├── output columns: [a (#2)]
-                    │       ├── read rows: 0
-                    │       ├── read bytes: 0
-                    │       ├── partitions total: 0
-                    │       ├── partitions scanned: 0
+                    │       ├── read rows: 100
+                    │       ├── read bytes: 266
+                    │       ├── partitions total: 3
+                    │       ├── partitions scanned: 3
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
                     │       ├── push downs: [filters: [], limit: NONE]
-                    │       └── estimated rows: 0.00
-                    └── Exchange(Probe)
-                        ├── output columns: [t1.a (#0), t1.b (#1)]
-                        ├── exchange type: Hash(t1.a (#0))
-                        └── TableScan
-                            ├── table: default.default.t1
-                            ├── output columns: [a (#0), b (#1)]
-                            ├── read rows: 0
-                            ├── read bytes: 0
-                            ├── partitions total: 0
-                            ├── partitions scanned: 0
-                            ├── push downs: [filters: [], limit: NONE]
-                            └── estimated rows: 0.00
+                    │       └── estimated rows: 100.00
+                    └── TableScan(Probe)
+                        ├── table: default.default.t1
+                        ├── output columns: [a (#0), b (#1)]
+                        ├── read rows: 100
+                        ├── read bytes: 534
+                        ├── partitions total: 3
+                        ├── partitions scanned: 3
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 100.00
 
 statement ok
 set prefer_broadcast_join = 1;
@@ -269,31 +268,30 @@ Exchange
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── estimated rows: 0.00
+    ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
-    │   ├── exchange type: Hash(t2.a (#2))
+    │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
-    │       ├── read rows: 0
-    │       ├── read bytes: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
+    │       ├── read rows: 100
+    │       ├── read bytes: 534
+    │       ├── partitions total: 3
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Exchange(Probe)
-        ├── output columns: [t1.a (#0), t1.b (#1)]
-        ├── exchange type: Hash(t1.a (#0))
-        └── TableScan
-            ├── table: default.default.t1
-            ├── output columns: [a (#0), b (#1)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+    │       └── estimated rows: 100.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 100
+        ├── read bytes: 534
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 100.00
 
 statement ok
 set prefer_broadcast_join = 0;
