@@ -37,7 +37,14 @@ pub fn convert_index_to_column_statistics(
 ) -> Vec<Option<ColumnStatistics>> {
     match index {
         Index::NONE => vec![None; num_pagas],
-        Index::BOOLEAN(_) => vec![None; num_pagas],
+        Index::BOOLEAN(index) => {
+            assert_eq!(num_pagas, index.indexes.len());
+            index
+                .indexes
+                .iter()
+                .map(|index| convert_page_index_bool(index, typ))
+                .collect()
+        }
         Index::INT32(index) => {
             assert_eq!(num_pagas, index.indexes.len());
             index
@@ -193,6 +200,22 @@ fn convert_page_index_float(
         (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
             Scalar::from(min),
             Scalar::from(max),
+            null_count as u64,
+            0,
+            None,
+        )),
+        _ => None,
+    }
+}
+
+fn convert_page_index_bool(
+    index: &PageIndex<bool>,
+    _typ: &TableDataType,
+) -> Option<ColumnStatistics> {
+    match (index.min, index.max, index.null_count) {
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::Boolean(min),
+            Scalar::Boolean(max),
             null_count as u64,
             0,
             None,

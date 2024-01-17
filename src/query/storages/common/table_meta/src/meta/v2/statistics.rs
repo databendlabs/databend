@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::SimpleScalar;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -87,18 +88,30 @@ impl ColumnStatistics {
     pub fn from_v0(
         v0: &crate::meta::v0::statistics::ColumnStatistics,
         data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
+    ) -> Option<Self> {
+        let data_type: DataType = data_type.into();
+
+        if !matches!(
+            data_type.remove_nullable(),
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        ) {
+            return None;
+        }
+
         let min = from_scalar(&v0.min, &data_type);
         let max = from_scalar(&v0.max, &data_type);
 
-        Self {
+        Some(Self {
             min: min.into(),
             max: max.into(),
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
-        }
+        })
     }
 }
 
@@ -138,8 +151,20 @@ impl ClusterStatistics {
     pub fn from_v0(
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
+    ) -> Option<Self> {
+        let data_type: DataType = data_type.into();
+
+        if !matches!(
+            data_type.remove_nullable(),
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        ) {
+            return None;
+        }
+
         let min = v0
             .min
             .into_iter()
@@ -152,13 +177,13 @@ impl ClusterStatistics {
             .map(|s| SimpleScalar::from(from_scalar(&s, &data_type)))
             .collect();
 
-        Self {
+        Some(Self {
             cluster_key_id: v0.cluster_key_id,
             min,
             max,
             level: v0.level,
             pages: None,
-        }
+        })
     }
 }
 
@@ -167,9 +192,10 @@ impl Statistics {
         let col_stats = v0
             .col_stats
             .into_iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
                 let t = fields[k as usize].data_type();
-                (k, ColumnStatistics::from_v0(&v, t))
+                let stats = ColumnStatistics::from_v0(&v, t);
+                stats.map(|s| (k, s))
             })
             .collect();
         Self {

@@ -32,6 +32,7 @@ pub enum SimpleScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
+    Boolean(bool),
     // For compat reason, we keep this attribute which treat string/binary into string
     #[serde(alias = "String", alias = "Binary")]
     String(Vec<u8>),
@@ -46,6 +47,7 @@ impl From<SimpleScalar> for Scalar {
             SimpleScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             SimpleScalar::Date(date) => Scalar::Date(date),
             SimpleScalar::String(s) => Scalar::String(s),
+            SimpleScalar::Boolean(v) => Scalar::Boolean(v),
         }
     }
 }
@@ -59,7 +61,11 @@ impl From<Scalar> for SimpleScalar {
             Scalar::Timestamp(ts) => SimpleScalar::Timestamp(ts),
             Scalar::Date(date) => SimpleScalar::Date(date),
             Scalar::String(string) => SimpleScalar::String(string),
-            _ => unreachable!("Cannot convert non-simple scalar to simple scalar"),
+            Scalar::Boolean(v) => SimpleScalar::Boolean(v),
+            other => unreachable!(
+                "Cannot convert non-simple scalar to simple scalar {:?}",
+                other
+            ),
         }
     }
 }
@@ -73,6 +79,7 @@ impl PartialOrd for SimpleScalar {
             (SimpleScalar::String(s1), SimpleScalar::String(s2)) => s1.partial_cmp(s2),
             (SimpleScalar::Timestamp(t1), SimpleScalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (SimpleScalar::Date(d1), SimpleScalar::Date(d2)) => d1.partial_cmp(d2),
+            (SimpleScalar::Boolean(d1), SimpleScalar::Boolean(d2)) => d1.partial_cmp(d2),
             _ => Some(Ordering::Equal),
         }
     }
