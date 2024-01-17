@@ -349,7 +349,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data().len(),
             |val, output, _| {
-                for char in val.chars.rev() {
+                for char in val.chars().rev() {
                     output.put_char(char);
                 }
                 output.commit_row();
