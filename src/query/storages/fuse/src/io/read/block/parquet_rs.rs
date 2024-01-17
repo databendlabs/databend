@@ -117,7 +117,9 @@ impl BlockReader {
         let mut new_deserialized_arrays = record.columns().iter();
         let mut all_arrays = Vec::with_capacity(projected_table_schema.fields().len());
         for field in projected_table_schema.fields().iter() {
-            let data_item = column_chunks.get(&field.column_id).unwrap();
+            let Some(data_item) = column_chunks.get(&field.column_id) else {
+                continue;
+            };
             match data_item {
                 DataItem::RawData(raw_data) => {
                     let array = new_deserialized_arrays.next().unwrap();
