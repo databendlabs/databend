@@ -462,7 +462,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(t1.a (#0) > 10, t1.a (#0) <= 100)], limit: NONE]
+├── push downs: [filters: [and_filters(t1.a (#0) <= 100, t1.a (#0) > 10)], limit: NONE]
 └── estimated rows: 0.00
 
 # t1.a > 10 and t2.a > 10
