@@ -1458,7 +1458,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
 }
 
-// current we don't conside tz here
+// current we don't consider tz here
 #[inline]
 fn months_between_ts(ts_a: i64, ts_b: i64) -> f64 {
     months_between((ts_a / 86400_000_000) as i32, (ts_b / 86400_000_000) as i32)
