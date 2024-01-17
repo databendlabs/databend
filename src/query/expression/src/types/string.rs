@@ -654,7 +654,7 @@ impl CheckUTF8 for &[u8] {
 
 impl CheckUTF8 for Vec<u8> {
     fn check_utf8(&self) -> Result<()> {
-        self.check_utf8()
+        self.as_slice().check_utf8()
     }
 }
 
