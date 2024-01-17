@@ -15,8 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::converts::datavalues::from_scalar;
-use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::converts::meta::SimpleScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -69,20 +68,20 @@ impl ColumnStatistics {
         distinct_of_values: Option<u64>,
     ) -> Self {
         Self {
-            min,
-            max,
+            min: min.into(),
+            max: max.into(),
             null_count,
             in_memory_size,
             distinct_of_values,
         }
     }
 
-    pub fn min(&self) -> &Scalar {
-        &self.min
+    pub fn min(&self) -> Scalar {
+        self.min.clone().into()
     }
 
-    pub fn max(&self) -> &Scalar {
-        &self.max
+    pub fn max(&self) -> Scalar {
+        self.max.clone().into()
     }
 
     pub fn from_v0(
@@ -90,9 +89,12 @@ impl ColumnStatistics {
         data_type: &TableDataType,
     ) -> Self {
         let data_type = data_type.into();
+        let min = from_scalar(&v0.min, &data_type);
+        let max = from_scalar(&v0.max, &data_type);
+
         Self {
-            min: from_scalar(&v0.min, &data_type),
-            max: from_scalar(&v0.max, &data_type),
+            min: min.into(),
+            max: max.into(),
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
@@ -103,11 +105,15 @@ impl ColumnStatistics {
 impl ClusterStatistics {
     pub fn new(
         cluster_key_id: u32,
-        min: Vec<SimpleScalar>,
-        max: Vec<SimpleScalar>,
+        min: Vec<Scalar>,
+        max: Vec<Scalar>,
         level: i32,
-        pages: Option<Vec<SimpleScalar>>,
+        pages: Option<Vec<Scalar>>,
     ) -> Self {
+        let min = min.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+        let max = max.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+        let pages = pages.map(|p| p.into_iter().map(|s| s.into()).collect::<Vec<_>>());
+
         Self {
             cluster_key_id,
             min,
@@ -117,12 +123,12 @@ impl ClusterStatistics {
         }
     }
 
-    pub fn min(&self) -> Vec<SimpleScalar> {
-        self.min.clone()
+    pub fn min(&self) -> Vec<Scalar> {
+        self.min.iter().map(|s| s.clone().into()).collect()
     }
 
-    pub fn max(&self) -> Vec<SimpleScalar> {
-        self.max.clone()
+    pub fn max(&self) -> Vec<Scalar> {
+        self.max.iter().map(|s| s.clone().into()).collect()
     }
 
     pub fn is_const(&self) -> bool {
@@ -134,18 +140,22 @@ impl ClusterStatistics {
         data_type: &TableDataType,
     ) -> Self {
         let data_type = data_type.into();
+        let min = v0
+            .min
+            .into_iter()
+            .map(|s| SimpleScalar::from(from_scalar(&s, &data_type)))
+            .collect();
+
+        let max = v0
+            .max
+            .into_iter()
+            .map(|s| SimpleScalar::from(from_scalar(&s, &data_type)))
+            .collect();
+
         Self {
             cluster_key_id: v0.cluster_key_id,
-            min: v0
-                .min
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
-            max: v0
-                .max
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
+            min,
+            max,
             level: v0.level,
             pages: None,
         }
@@ -174,14 +184,3 @@ impl Statistics {
         }
     }
 }
-
-type SimpleScalar = Scalar;
-// #[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
-// pub enum SimpleScalar {
-//     Null,
-//     Number(NumberScalar),
-//     Decimal(DecimalScalar),
-//     Timestamp(i64),
-//     Date(i32),
-//     String(Vec<u8>),
-// }

@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::meta::SimpleScalar;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
@@ -50,6 +51,25 @@ impl Datum {
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
             Scalar::Binary(v) => Some(Datum::Bytes(v)),
             Scalar::String(v) => Some(Datum::Bytes(v)),
+            _ => None,
+        }
+    }
+
+    pub fn from_simple_scalar(data_value: SimpleScalar) -> Option<Self> {
+        match data_value {
+            SimpleScalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(v as i64)),
+            SimpleScalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(v as i64)),
+            SimpleScalar::Number(NumberScalar::Int32(v)) | SimpleScalar::Date(v) => {
+                Some(Datum::Int(v as i64))
+            }
+            SimpleScalar::Number(NumberScalar::Int64(v)) | SimpleScalar::Timestamp(v) => {
+                Some(Datum::Int(v))
+            }
+            SimpleScalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
+            SimpleScalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
+            SimpleScalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
+            SimpleScalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
+            SimpleScalar::String(v) => Some(Datum::Bytes(v)),
             _ => None,
         }
     }

@@ -250,4 +250,10 @@ fn test_serde_alias() {
         Scalar3::String(vec![3, 4, 5]),
     ];
     assert_eq!(deserialized, e3);
+
+    // test v2-v3 with bincode and binary to string, this could cause error.
+    let mut writer = vec![];
+    bincode_serialize_into_buf(&mut writer, &value2).unwrap();
+    let deserialized: Result<Vec<Scalar3>, _> = bincode_deserialize_from_slice(&writer);
+    assert!(deserialized.is_err());
 }

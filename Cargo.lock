@@ -2672,6 +2672,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "rust_decimal",
  "serde",
