@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;

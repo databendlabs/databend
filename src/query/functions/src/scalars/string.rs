@@ -287,7 +287,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         let p = pos - 1;
 
-        let src = str.slice(p..);
+        let src = s.slice(p..);
         if let Some(find_at) = src.find(substr) {
             (src[..find_at].chars().count() + p + 1) as u64
         } else {
