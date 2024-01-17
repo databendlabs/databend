@@ -270,33 +270,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    //     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
-    //         "strcmp",
-    //         |_, _, _| FunctionDomain::Full,
-    //         |s1, s2, _| {
-    //             let res = match s1.len().cmp(&s2.len()) {
-    //                 Ordering::Equal => {
-    //                     let mut res = Ordering::Equal;
-    //                     for (s1i, s2i) in izip!(s1, s2) {
-    //                         match s1i.cmp(s2i) {
-    //                             Ordering::Equal => continue,
-    //                             ord => {
-    //                                 res = ord;
-    //                                 break;
-    //                             }
-    //                         }
-    //                     }
-    //                     res
-    //                 }
-    //                 ord => ord,
-    //             };
-    //             match res {
-    //                 Ordering::Equal => 0,
-    //                 Ordering::Greater => 1,
-    //                 Ordering::Less => -1,
-    //             }
-    //         },
-    //     );
+        registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
+            "strcmp",
+            |_, _, _| FunctionDomain::Full,
+            |s1, s2, _| {
+                let res = match s1.chars().count().cmp(&s2.chars().count()) {
+                    Ordering::Equal => {
+                        let mut res = Ordering::Equal;
+                        for (s1i, s2i) in izip!(s1.chars(), s2.chars()) {
+                            match s1i.cmp(&s2i) {
+                                Ordering::Equal => continue,
+                                ord => {
+                                    res = ord;
+                                    break;
+                                }
+                            }
+                        }
+                        res
+                    }
+                    ord => ord,
+                };
+                match res {
+                    Ordering::Equal => 0,
+                    Ordering::Greater => 1,
+                    Ordering::Less => -1,
+                }
+            },
+        );
 
     let find_at = |str: &str, substr: &str, pos: u64| {
         if substr.is_empty() {
