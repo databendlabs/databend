@@ -59,8 +59,8 @@ simdutf8 = "0.1.4"
 siphasher = "0.3"
 streaming_algorithms = { git = "https://github.com/ariesdevil/streaming_algorithms", rev = "2839d5d" }
 strength_reduce = "0.2.3"
-twox-hash = "1.6.3"
 stringslice = "0.2.0"
+twox-hash = "1.6.3"
 
 [dev-dependencies]
 comfy-table = "6"
