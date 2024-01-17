@@ -135,7 +135,7 @@ impl HashJoinState {
         probe_to_build: &[(usize, (bool, bool))],
         table_index: IndexType,
         merge_into_target_table_index: IndexType,
-        is_distributed_merge_into: bool,
+        merge_into_is_distributed: bool,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -173,7 +173,7 @@ impl HashJoinState {
             table_index,
             merge_into_state: MergeIntoState::try_create_merge_into_state(
                 merge_into_target_table_index,
-                is_distributed_merge_into,
+                merge_into_is_distributed,
             ),
         }))
     }

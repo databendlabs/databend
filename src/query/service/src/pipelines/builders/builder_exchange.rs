@@ -29,7 +29,7 @@ impl PipelineBuilder {
         )?;
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
-        self.probe_data_fields = build_res.builder_data.input_probe_schema;
+        self.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
 
         self.main_pipeline = build_res.main_pipeline;
         self.pipelines.extend(build_res.sources_pipelines);

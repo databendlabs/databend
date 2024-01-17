@@ -113,5 +113,5 @@ pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
 pub type BinaryHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
 pub use traits::HashJoinHashtableLike;
-pub use utils::BlockInfoIndex;
 pub use utils::Interval;
+pub use utils::MergeIntoBlockInfoIndex;

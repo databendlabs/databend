@@ -21,9 +21,9 @@ use databend_common_storages_fuse::operations::need_reserve_block_info;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn get_merge_into_optimization_flag(&self, join: &HashJoin) -> (IndexType, bool) {
+    pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (IndexType, bool) {
         // for merge into target table as build side.
-        let (build_table_index, is_distributed_merge_into) =
+        let (merge_into_build_table_index, merge_into_is_distributed) =
             if matches!(&*join.build, PhysicalPlan::TableScan(_)) {
                 let (need_block_info, is_distributed) =
                     need_reserve_block_info(self.ctx.clone(), join.build.get_table_index());
@@ -35,6 +35,6 @@ impl PipelineBuilder {
             } else {
                 (DUMMY_TABLE_INDEX, false)
             };
-        (build_table_index, is_distributed_merge_into)
+        (merge_into_build_table_index, merge_into_is_distributed)
     }
 }

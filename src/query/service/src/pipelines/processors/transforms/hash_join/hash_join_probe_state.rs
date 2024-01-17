@@ -83,7 +83,7 @@ pub struct HashJoinProbeState {
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
     /// for merge into target as build side.
-    pub(crate) final_merge_into_partial_unmodified_scan_tasks:
+    pub(crate) merge_into_final_partial_unmodified_scan_tasks:
         RwLock<VecDeque<MergeIntoChunkPartialUnmodified>>,
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
@@ -143,7 +143,7 @@ impl HashJoinProbeState {
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
-            final_merge_into_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
+            merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
@@ -384,7 +384,7 @@ impl HashJoinProbeState {
             || self.hash_join_state.need_mark_scan()
             || self
                 .hash_join_state
-                .need_merge_into_target_partial_modified_scan()
+                .merge_into_need_target_partial_modified_scan()
         {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }

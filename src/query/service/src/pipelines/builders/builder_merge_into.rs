@@ -142,7 +142,7 @@ impl PipelineBuilder {
                 return Ok(());
             }
             assert!(self.join_state.is_some());
-            assert!(self.probe_data_fields.is_some());
+            assert!(self.merge_into_probe_data_fields.is_some());
 
             let join_state = self.join_state.clone().unwrap();
             // split row_number and log
@@ -161,7 +161,7 @@ impl PipelineBuilder {
             let pipe_items = vec![
                 ExtractHashTableByRowNumber::create(
                     join_state,
-                    self.probe_data_fields.clone().unwrap(),
+                    self.merge_into_probe_data_fields.clone().unwrap(),
                     merge_type.clone(),
                 )?
                 .into_pipe_item(),

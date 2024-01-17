@@ -23,7 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_hashtable::BlockInfoIndex;
+use databend_common_hashtable::MergeIntoBlockInfoIndex;
 use databend_common_hashtable::RowPtr;
 use databend_common_sql::IndexType;
 use databend_common_sql::DUMMY_TABLE_INDEX;
@@ -44,11 +44,11 @@ unsafe impl Sync for MatchedPtr {}
 pub struct MergeIntoState {
     /// for now we don't support distributed, we will support in the next pr.
     #[allow(unused)]
-    pub(crate) is_distributed_merge_into: bool,
+    pub(crate) merge_into_is_distributed: bool,
 
     /// FOR MERGE INTO TARGET TABLE AS BUILD SIDE
     /// When merge into target table as build side, we should preserve block info index.
-    pub(crate) block_info_index: BlockInfoIndex,
+    pub(crate) block_info_index: MergeIntoBlockInfoIndex,
     /// we use matched to tag the matched offset in chunks.
     pub(crate) matched: Vec<u8>,
     /// the matched will be modified concurrently, so we use
@@ -61,11 +61,11 @@ pub struct MergeIntoState {
 impl MergeIntoState {
     pub(crate) fn try_create_merge_into_state(
         merge_into_target_table_index: IndexType,
-        is_distributed_merge_into: bool,
+        merge_into_is_distributed: bool,
     ) -> Option<SyncUnsafeCell<Self>> {
         if merge_into_target_table_index != DUMMY_TABLE_INDEX {
             Some(SyncUnsafeCell::new(MergeIntoState {
-                is_distributed_merge_into,
+                merge_into_is_distributed,
                 block_info_index: Default::default(),
                 matched: Vec::new(),
                 atomic_pointer: MatchedPtr(std::ptr::null_mut()),
@@ -82,7 +82,7 @@ impl HashJoinBuildState {
         // merge into target table as build side.
         if self
             .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
+            .merge_into_need_target_partial_modified_scan()
         {
             assert!(input.get_meta().is_some());
             let merge_into_state = unsafe {
@@ -111,7 +111,7 @@ impl HashJoinBuildState {
     pub(crate) fn merge_into_try_add_chunk_offset(&self, build_state: &mut BuildState) {
         if self
             .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
+            .merge_into_need_target_partial_modified_scan()
         {
             let merge_into_state = unsafe {
                 &mut *self
@@ -130,7 +130,7 @@ impl HashJoinBuildState {
         // generate macthed offsets memory.
         if self
             .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
+            .merge_into_need_target_partial_modified_scan()
         {
             let merge_into_state = unsafe {
                 &mut *self
@@ -162,7 +162,7 @@ impl HashJoinProbeState {
         // merge into target table as build side.
         if self
             .hash_join_state
-            .need_merge_into_target_partial_modified_scan()
+            .merge_into_need_target_partial_modified_scan()
         {
             let merge_into_state = unsafe {
                 &*self
@@ -262,20 +262,20 @@ impl HashJoinProbeState {
             // deleted block
             tasks.push((Vec::new(), prefix));
         }
-        *self.final_merge_into_partial_unmodified_scan_tasks.write() = tasks.into();
+        *self.merge_into_final_partial_unmodified_scan_tasks.write() = tasks.into();
         Ok(())
     }
 
     pub(crate) fn final_merge_into_partial_unmodified_scan_task(
         &self,
     ) -> Option<MergeIntoChunkPartialUnmodified> {
-        let mut tasks = self.final_merge_into_partial_unmodified_scan_tasks.write();
+        let mut tasks = self.merge_into_final_partial_unmodified_scan_tasks.write();
         tasks.pop_front()
     }
 }
 
 impl HashJoinState {
-    pub(crate) fn need_merge_into_target_partial_modified_scan(&self) -> bool {
+    pub(crate) fn merge_into_need_target_partial_modified_scan(&self) -> bool {
         self.merge_into_state.is_some()
     }
 }

@@ -198,9 +198,9 @@ pub mod sse {
 // for now we just support sql like below:
 // `merge into t using source on xxx when matched then update xxx when not macthed then insert xxx.
 // for merge into:
-// we use BlockInfoIndex to maintain an index for the block info in chunks.
+// we use MergeIntoBlockInfoIndex to maintain an index for the block info in chunks.
 
-pub struct BlockInfoIndex {
+pub struct MergeIntoBlockInfoIndex {
     // the intervals will be like below:
     // (0,10)(11,29),(30,38). it's ordered.
     pub intervals: Vec<Interval>,
@@ -221,9 +221,9 @@ pub type Interval = (u32, u32);
 /// segment2_block0 |
 ///
 /// .........
-impl BlockInfoIndex {
+impl MergeIntoBlockInfoIndex {
     pub fn new_with_capacity(capacity: usize) -> Self {
-        BlockInfoIndex {
+        MergeIntoBlockInfoIndex {
             intervals: Vec::with_capacity(capacity),
             prefixs: Vec::with_capacity(capacity),
             length: 0,
@@ -410,7 +410,7 @@ impl BlockInfoIndex {
 }
 
 /// we think the build blocks count is about 1024 at most time.
-impl Default for BlockInfoIndex {
+impl Default for MergeIntoBlockInfoIndex {
     fn default() -> Self {
         Self {
             intervals: Vec::with_capacity(1024),
@@ -426,7 +426,7 @@ fn test_block_info_index() {
     // we should get [10,10],[31,37]
     let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 39)];
     let find_interval: Interval = (10, 37);
-    let mut block_info_index = BlockInfoIndex::new_with_capacity(10);
+    let mut block_info_index = MergeIntoBlockInfoIndex::new_with_capacity(10);
     for (idx, interval) in intervals.iter().enumerate() {
         block_info_index.insert_block_offsets(*interval, idx as u64)
     }
@@ -599,7 +599,7 @@ fn test_chunk_offsets_skip_chunk() {
     let partial_unmodified = vec![((8, 10), 0), ((40, 46), 4), ((51, 55), 5)];
     let chunks_offsets = vec![21, 40, 61];
     let intervals: Vec<Interval> = vec![(0, 10), (11, 20), (21, 30), (31, 39), (40, 50), (51, 60)];
-    let mut block_info_index = BlockInfoIndex::new_with_capacity(10);
+    let mut block_info_index = MergeIntoBlockInfoIndex::new_with_capacity(10);
     for (idx, interval) in intervals.iter().enumerate() {
         block_info_index.insert_block_offsets(*interval, idx as u64)
     }

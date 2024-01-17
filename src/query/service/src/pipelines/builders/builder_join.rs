@@ -126,11 +126,15 @@ impl PipelineBuilder {
     pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
         let id = join.probe.get_table_index();
         // for merge into target table as build side.
-        let (build_table_index, is_distributed_merge_into) =
-            self.get_merge_into_optimization_flag(join);
+        let (merge_into_build_table_index, merge_into_is_distributed) =
+            self.merge_into_get_optimization_flag(join);
 
-        let state =
-            self.build_join_state(join, id, build_table_index, is_distributed_merge_into)?;
+        let state = self.build_join_state(
+            join,
+            id,
+            merge_into_build_table_index,
+            merge_into_is_distributed,
+        )?;
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
     }
@@ -140,7 +144,7 @@ impl PipelineBuilder {
         join: &HashJoin,
         id: IndexType,
         merge_into_target_table_index: IndexType,
-        is_distributed_merge_into: bool,
+        merge_into_is_distributed: bool,
     ) -> Result<Arc<HashJoinState>> {
         HashJoinState::try_create(
             self.ctx.clone(),
@@ -150,7 +154,7 @@ impl PipelineBuilder {
             &join.probe_to_build,
             id,
             merge_into_target_table_index,
-            is_distributed_merge_into,
+            merge_into_is_distributed,
         )
     }
 
@@ -297,7 +301,7 @@ impl PipelineBuilder {
                     projected_probe_fields.push(field.clone());
                 }
             }
-            self.probe_data_fields = Some(projected_probe_fields);
+            self.merge_into_probe_data_fields = Some(projected_probe_fields);
         }
 
         Ok(())

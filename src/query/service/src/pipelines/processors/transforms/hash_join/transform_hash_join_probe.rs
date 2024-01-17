@@ -206,7 +206,7 @@ impl TransformHashJoinProbe {
             } else if self
                 .join_probe_state
                 .hash_join_state
-                .need_merge_into_target_partial_modified_scan()
+                .merge_into_need_target_partial_modified_scan()
             {
                 assert!(matches!(
                     self.join_probe_state
@@ -387,7 +387,7 @@ impl Processor for TransformHashJoinProbe {
                 if self
                     .join_probe_state
                     .hash_join_state
-                    .need_merge_into_target_partial_modified_scan()
+                    .merge_into_need_target_partial_modified_scan()
                 {
                     if let Some(item) = self
                         .join_probe_state
