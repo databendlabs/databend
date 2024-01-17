@@ -133,6 +133,7 @@ impl SubqueryRewriter {
                 from_correlated_subquery: false,
                 need_hold_hash_table: false,
                 broadcast: false,
+                is_lateral: false,
             }
             .into();
 
@@ -461,6 +462,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
                     broadcast: false,
+                    is_lateral: false,
                 }
                 .into(),
             ),
