@@ -60,27 +60,26 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
-  # TODO(andylokandy/everpcpc): enable this after binary type is implemented for udf server
-  # standalone_udf_server:
-  #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Start UDF Server
-  #       run: |
-  #         pip install databend-udf
-  #         python3 tests/udf/udf_server.py &
-  #         sleep 2
-  #     - uses: ./.github/actions/test_sqllogic_standalone_linux
-  #       timeout-minutes: 15
-  #       with:
-  #         dirs: udf_server
-  #         handlers: mysql,http
-  #         storage-format: all
-  #     - name: Upload failure
-  #       if: failure() || cancelled()
-  #       uses: ./.github/actions/artifact_failure
-  #       with:
-  #         name: test-sqllogic-standalone-udf_server
+  standalone_udf_server:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Start UDF Server
+        run: |
+          pip install databend-udf
+          python3 tests/udf/udf_server.py &
+          sleep 2
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: udf_server
+          handlers: mysql,http
+          storage-format: all
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-udf_server
 
   standalone_cloud:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -102,6 +101,30 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-cloud
+
+  standalone_minio:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        dirs:
+          - "query"
+        handler:
+          - "mysql"
+          - "http"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handler }}
+          storage-format: all
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
   cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -154,27 +177,3 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-stage-${{ matrix.storage }}
-
-  standalone-minio:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    strategy:
-      fail-fast: false
-      matrix:
-        dirs:
-          - "query"
-        handler:
-          - "mysql"
-          - "http"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
-        timeout-minutes: 15
-        with:
-          dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handler }}
-          storage-format: all
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
