@@ -84,6 +84,7 @@ impl FuseTable {
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         query_row_id_col: bool,
+        select_from_subquery: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
@@ -230,6 +231,7 @@ impl FuseTable {
                     ops.clone(),
                     self.storage_format,
                     true,
+                    select_from_subquery,
                 )
             },
             max_threads,
