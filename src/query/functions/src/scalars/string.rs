@@ -222,15 +222,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 let mut last_end = 0;
-                while let Some((start, _)) = str.match_indices(from).next() {
-                    output.put_str(str.slice(last_end..start));
+                let mut iter = str.match_indices(from);
+                while let Some((start, _)) = iter.next() {
+                    output.put_str(&str[last_end..start]);
                     output.put_str(to);
-                    let from_len = from.chars().count();
-                    last_end = start + from_len;
+                    last_end = start + from.len();
                 }
-                if last_end < str.chars().count() {
-                    output.put_str(str.slice(last_end..));
-                }
+                output.put_str(&str[last_end..]);
 
                 output.commit_row();
             }),
