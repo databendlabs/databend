@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// DO NOT EDIT.
+// This crate keeps some Index codes for compatibility, it's locked by bincode of meta's v3 version
+
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -32,7 +35,6 @@ use crate::types::*;
 use crate::Column;
 use crate::Scalar;
 
-// IndexScalar is used as a metadata (store ranges of different type)
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, EnumAsInner)]
 pub enum IndexScalar {
     Null,
@@ -41,17 +43,17 @@ pub enum IndexScalar {
     Timestamp(i64),
     Date(i32),
     Boolean(bool),
-    // For compat reason, we keep this attribute which treat string/binary into string
-    #[serde(alias = "String", alias = "Binary")]
     String(Vec<u8>),
     Array(IndexColumn),
+    Map(IndexColumn),
+    Bitmap(Vec<u8>),
+    Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
 }
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum IndexColumn {
     Null { len: usize },
-    Nullable(Box<IndexNullableColumn>),
     Number(NumberColumn),
     Decimal(DecimalColumn),
     Boolean(Bitmap),
@@ -59,6 +61,10 @@ pub enum IndexColumn {
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<IndexArrayColumn>),
+    Map(Box<IndexArrayColumn>),
+    Bitmap(BinaryColumn),
+    Nullable(Box<IndexNullableColumn>),
+    Tuple(Vec<IndexColumn>),
     Variant(BinaryColumn),
 }
 
@@ -85,6 +91,9 @@ impl From<IndexScalar> for Scalar {
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
             IndexScalar::String(s) => Scalar::String(s),
             IndexScalar::Array(col) => Scalar::Array(col.into()),
+            IndexScalar::Map(col) => Scalar::Map(col.into()),
+            IndexScalar::Bitmap(bmp) => Scalar::Bitmap(bmp),
+            IndexScalar::Tuple(tuple) => Scalar::Tuple(tuple),
             IndexScalar::Variant(variant) => Scalar::Variant(variant),
         }
     }
@@ -104,11 +113,19 @@ impl From<IndexColumn> for Column {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,
             })),
+            IndexColumn::Map(map_col) => Column::Map(Box::new(ArrayColumn::<AnyType> {
+                values: map_col.values.into(),
+                offsets: map_col.offsets,
+            })),
+            IndexColumn::Bitmap(str_col) => Column::Bitmap(str_col),
             IndexColumn::Nullable(nullable_col) => {
                 Column::Nullable(Box::new(NullableColumn::<AnyType> {
                     column: nullable_col.column.into(),
                     validity: nullable_col.validity,
                 }))
+            }
+            IndexColumn::Tuple(tuple) => {
+                Column::Tuple(tuple.into_iter().map(|c| c.into()).collect())
             }
             IndexColumn::Variant(variant) => Column::Variant(variant),
         }
@@ -125,12 +142,13 @@ impl From<Scalar> for IndexScalar {
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string),
+            Scalar::Binary(s) => IndexScalar::String(s),
             Scalar::Array(column) => IndexScalar::Array(column.into()),
+            Scalar::Map(column) => IndexScalar::Map(column.into()),
+            Scalar::Bitmap(bitmap) => IndexScalar::Bitmap(bitmap),
+            Scalar::Tuple(tuple) => IndexScalar::Tuple(tuple),
             Scalar::Variant(variant) => IndexScalar::Variant(variant),
-
-            other => {
-                unreachable!("Unexpected Scalar {other:?} to index scalar")
-            }
+            Scalar::EmptyArray | Scalar::EmptyMap => unreachable!(),
         }
     }
 }
@@ -142,6 +160,7 @@ impl From<Column> for IndexColumn {
             Column::Number(num_col) => IndexColumn::Number(num_col),
             Column::Decimal(dec_col) => IndexColumn::Decimal(dec_col),
             Column::Boolean(bmp) => IndexColumn::Boolean(bmp),
+            Column::Binary(_) => unreachable!(),
             Column::String(str_col) => IndexColumn::String(str_col.into()),
             Column::Timestamp(buf) => IndexColumn::Timestamp(buf),
             Column::Date(buf) => IndexColumn::Date(buf),
@@ -149,15 +168,22 @@ impl From<Column> for IndexColumn {
                 values: arr_col.values.into(),
                 offsets: arr_col.offsets,
             })),
+            Column::Map(map_col) => IndexColumn::Map(Box::new(IndexArrayColumn {
+                values: map_col.values.into(),
+                offsets: map_col.offsets,
+            })),
+            Column::Bitmap(str_col) => IndexColumn::Bitmap(str_col),
             Column::Nullable(nullable_col) => {
                 IndexColumn::Nullable(Box::new(IndexNullableColumn {
                     column: nullable_col.column.into(),
                     validity: nullable_col.validity,
                 }))
             }
+            Column::Tuple(tuple) => {
+                IndexColumn::Tuple(tuple.into_iter().map(|c| c.into()).collect())
+            }
             Column::Variant(variant) => IndexColumn::Variant(variant),
-
-            other => unreachable!("Unexpected column {other:?} to index column"),
+            Column::EmptyArray { .. } | Column::EmptyMap { .. } => unreachable!(),
         }
     }
 }

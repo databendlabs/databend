@@ -2832,6 +2832,7 @@ dependencies = [
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "serde",
 ]
