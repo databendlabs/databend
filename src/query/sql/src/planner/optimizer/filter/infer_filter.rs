@@ -393,7 +393,8 @@ impl InferFilterOptimizer {
                 }
             }
         }
-        for (scalar, idx) in self.expr_index.iter() {
+        for expr in self.exprs.iter() {
+            let idx = self.expr_index.get(expr).unwrap();
             let parent_idx = Self::find(&mut parents, *idx);
             let parent_predicates = &self.predicates[parent_idx];
             for predicate in parent_predicates.iter() {
@@ -402,7 +403,7 @@ impl InferFilterOptimizer {
                     func_name: String::from(predicate.op.to_func_name()),
                     params: vec![],
                     arguments: vec![
-                        scalar.clone(),
+                        expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
                 }));
