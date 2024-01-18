@@ -1722,7 +1722,7 @@ impl ColumnBuilder {
                 builder.commit_row();
 
                 #[cfg(debug_assertions)]
-                (&builder.data[last..last + offset]).check_utf8().unwrap();
+                string::CheckUTF8::check_utf8(&(&builder.data[last..last + offset])).unwrap();
             }
             ColumnBuilder::Timestamp(builder) => {
                 let value: i64 = reader.read_scalar()?;
@@ -1815,7 +1815,7 @@ impl ColumnBuilder {
                     let bytes = &reader[step * row..];
 
                     #[cfg(debug_assertions)]
-                    bytes.check_utf8().unwrap();
+                    string::CheckUTF8::check_utf8(&bytes).unwrap();
 
                     let s = unsafe { std::str::from_utf8_unchecked(bytes) };
                     builder.put_str(s);

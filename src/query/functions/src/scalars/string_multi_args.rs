@@ -994,6 +994,8 @@ pub mod regexp {
             builder.put_str(&trimmed[0..m.start()]);
             builder.put_str(repl);
             builder.put_str(&trimmed[m.end()..]);
+        } else {
+            builder.put_str(trimmed);
         }
     }
 
