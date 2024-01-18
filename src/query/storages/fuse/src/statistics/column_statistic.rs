@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -130,8 +131,8 @@ pub fn gen_columns_statistics(
     Ok(statistics)
 }
 
-pub fn scalar_min_max(scalar: Scalar) -> Option<(Scalar, Scalar)> {
-    if RangeIndex::supported_type(&scalar.as_ref().infer_data_type()) {
+pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, Scalar)> {
+    if RangeIndex::supported_type(data_type) {
         if let Some((min, Some(max))) = scalar
             .clone()
             .trim_min(STATS_STRING_PREFIX_LEN)

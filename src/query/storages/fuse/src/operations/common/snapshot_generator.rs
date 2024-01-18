@@ -20,8 +20,10 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
@@ -32,6 +34,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
+use log::warn;
 use uuid::Uuid;
 
 use crate::statistics::merge_statistics;
@@ -384,29 +387,38 @@ impl SnapshotGenerator for AppendGenerator {
 
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
+
+                let column_data_types: HashMap<ColumnId, &TableDataType> =
+                    HashMap::from_iter(schema.fields.iter().map(|f| (f.column_id, &f.data_type)));
+
                 if self.check_fill_default(&summary)? {
                     self.leaf_default_values
                         .iter()
                         .for_each(|(col_id, default_value)| {
-                            if !summary.col_stats.contains_key(col_id) {
-                                if let Some((min, max)) =
-                                    crate::statistics::scalar_min_max(default_value.clone())
-                                {
-                                    let (null_count, distinct_of_values) =
-                                        if default_value.is_null() {
-                                            (summary.row_count, Some(0))
-                                        } else {
-                                            (0, Some(1))
-                                        };
-                                    let col_stat = ColumnStatistics::new(
-                                        min,
-                                        max,
-                                        null_count,
-                                        0,
-                                        distinct_of_values,
-                                    );
-                                    summary.col_stats.insert(*col_id, col_stat);
+                            if let Some(data_type) = column_data_types.get(col_id) {
+                                if !summary.col_stats.contains_key(col_id) {
+                                    if let Some((min, max)) = crate::statistics::scalar_min_max(
+                                        &DataType::from(*data_type),
+                                        default_value.clone(),
+                                    ) {
+                                        let (null_count, distinct_of_values) =
+                                            if default_value.is_null() {
+                                                (summary.row_count, Some(0))
+                                            } else {
+                                                (0, Some(1))
+                                            };
+                                        let col_stat = ColumnStatistics::new(
+                                            min,
+                                            max,
+                                            null_count,
+                                            0,
+                                            distinct_of_values,
+                                        );
+                                        summary.col_stats.insert(*col_id, col_stat);
+                                    }
                                 }
+                            } else {
+                                warn!("column id:{} not found in schema, while populating min/max values. the schema is {:?}", col_id, schema);
                             }
                         });
                 }
