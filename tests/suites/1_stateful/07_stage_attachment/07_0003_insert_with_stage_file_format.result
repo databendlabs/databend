@@ -1,0 +1,16 @@
+>>>> drop table if exists t1
+>>>> create table t1 (a string, b string)
+>>>> drop stage if exists s1
+>>>> create stage s1
+>>>> copy into @s1 from (select 'Null', 'NULL') file_format = (type = csv)
+1	14	14
+<<<<
+Succeeded
+14
+38
+null
+>>>> select a is null, b is null from t1
+true	false
+<<<<
+>>>> drop table if exists t1
+>>>> drop stage if exists s1
