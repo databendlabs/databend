@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
+use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::converts::meta::LegacyScalar;
-use databend_common_expression::converts::meta::SimpleScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use serde::Deserialize;
@@ -176,19 +176,19 @@ impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
         let min: Vec<_> = value
             .min
             .iter()
-            .map(|c| SimpleScalar::from(Scalar::from(c.clone())))
+            .map(|c| IndexScalar::from(Scalar::from(c.clone())))
             .collect();
 
         let max: Vec<_> = value
             .max
             .iter()
-            .map(|c| SimpleScalar::from(Scalar::from(c.clone())))
+            .map(|c| IndexScalar::from(Scalar::from(c.clone())))
             .collect();
 
         let pages = value.pages.map(|pages| {
             pages
                 .into_iter()
-                .map(|c| SimpleScalar::from(Scalar::from(c)))
+                .map(|c| IndexScalar::from(Scalar::from(c)))
                 .collect()
         });
 

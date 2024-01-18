@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod bincode;
-mod simple;
+mod index_scalar;
 
 pub use bincode::*;
-pub use simple::*;
+pub use index_scalar::*;

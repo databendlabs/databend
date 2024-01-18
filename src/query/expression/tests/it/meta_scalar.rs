@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::converts::meta::LegacyColumn;
 use databend_common_expression::converts::meta::LegacyScalar;
-use databend_common_expression::converts::meta::SimpleScalar;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
@@ -90,7 +90,7 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
 
             for row in 0..rows {
                 let scalar = entry.value.index(row).unwrap().to_owned();
-                let simple_scalar: SimpleScalar = scalar.clone().into();
+                let simple_scalar: IndexScalar = scalar.clone().into();
                 simple_scalars.push(simple_scalar.clone());
                 scalars.push(scalar.clone());
 
@@ -100,7 +100,7 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
 
             // TODO: comment these when we swith string in scalar
             let data = rmp_serde::to_vec(&scalars).unwrap();
-            let new_scalars: Vec<SimpleScalar> = rmp_serde::from_slice(&data).unwrap();
+            let new_scalars: Vec<IndexScalar> = rmp_serde::from_slice(&data).unwrap();
             assert_eq!(simple_scalars, new_scalars);
         }
     }

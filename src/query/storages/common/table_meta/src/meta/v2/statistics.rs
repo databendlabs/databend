@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::converts::datavalues::from_scalar;
-use databend_common_expression::converts::meta::SimpleScalar;
+use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
@@ -24,8 +24,8 @@ use databend_common_expression::TableField;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: SimpleScalar,
-    pub max: SimpleScalar,
+    pub min: IndexScalar,
+    pub max: IndexScalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
@@ -35,12 +35,12 @@ pub struct ColumnStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
-    pub min: Vec<SimpleScalar>,
-    pub max: Vec<SimpleScalar>,
+    pub min: Vec<IndexScalar>,
+    pub max: Vec<IndexScalar>,
     pub level: i32,
 
     // currently it's only used in native engine
-    pub pages: Option<Vec<SimpleScalar>>,
+    pub pages: Option<Vec<IndexScalar>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -168,13 +168,13 @@ impl ClusterStatistics {
         let min = v0
             .min
             .into_iter()
-            .map(|s| SimpleScalar::from(from_scalar(&s, &data_type)))
+            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
             .collect();
 
         let max = v0
             .max
             .into_iter()
-            .map(|s| SimpleScalar::from(from_scalar(&s, &data_type)))
+            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
             .collect();
 
         Some(Self {
