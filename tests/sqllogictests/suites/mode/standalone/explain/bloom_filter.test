@@ -320,7 +320,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_nullable_t.c2 (#1) > 1), is_true(bloom_test_nullable_t.c1 (#0) = 5)]
+    ├── filters: [is_true(bloom_test_nullable_t.c1 (#0) = 5), is_true(bloom_test_nullable_t.c2 (#1) > 1)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_nullable_t
@@ -330,7 +330,7 @@ EvalScalar
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-        ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c2 (#1) > 1, bloom_test_nullable_t.c1 (#0) = 5)], limit: NONE]
+        ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
         └── estimated rows: 6.00
 
 query T

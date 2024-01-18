@@ -60,7 +60,7 @@ explain select * from t_where_optimizer where a = 1 and b > 2
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [is_true(t_where_optimizer.a (#0) = 1), is_true(t_where_optimizer.b (#1) > 2)]
+├── filters: [is_true(t_where_optimizer.b (#1) > 2), is_true(t_where_optimizer.a (#0) = 1)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -69,7 +69,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
+    ├── push downs: [filters: [and_filters(t_where_optimizer.b (#1) > 2, t_where_optimizer.a (#0) = 1)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
