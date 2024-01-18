@@ -439,7 +439,7 @@ EvalScalar
                 ├── table: default.test_index.t
                 ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                 ├── read rows: 8
-                ├── read bytes: 181
+                ├── read bytes: 196
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -486,7 +486,7 @@ EvalScalar
                     ├── table: default.test_index.t
                     ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                     ├── read rows: 8
-                    ├── read bytes: 181
+                    ├── read bytes: 196
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

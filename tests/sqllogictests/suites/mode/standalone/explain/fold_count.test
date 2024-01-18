@@ -70,7 +70,7 @@ AggregateFinal
         ├── table: default.default.t
         ├── output columns: [number (#0)]
         ├── read rows: 1001
-        ├── read bytes: 1637
+        ├── read bytes: 1470
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
