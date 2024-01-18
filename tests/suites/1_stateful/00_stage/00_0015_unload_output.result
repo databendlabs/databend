@@ -16,17 +16,17 @@ a/bc/data_UUID_0000_00000009.csv	2	1
 >>>> unload csv with detailed_output=false
 10	20	20
 >>>> unload parquet with detailed_output=true
-a/bc/data_UUID_0000_00000000.parquet	255	1
-a/bc/data_UUID_0000_00000001.parquet	255	1
-a/bc/data_UUID_0000_00000002.parquet	255	1
-a/bc/data_UUID_0000_00000003.parquet	255	1
-a/bc/data_UUID_0000_00000004.parquet	255	1
-a/bc/data_UUID_0000_00000005.parquet	255	1
-a/bc/data_UUID_0000_00000006.parquet	255	1
-a/bc/data_UUID_0000_00000007.parquet	255	1
-a/bc/data_UUID_0000_00000008.parquet	255	1
-a/bc/data_UUID_0000_00000009.parquet	255	1
+a/bc/data_UUID_0000_00000000.parquet	374	1
+a/bc/data_UUID_0000_00000001.parquet	374	1
+a/bc/data_UUID_0000_00000002.parquet	374	1
+a/bc/data_UUID_0000_00000003.parquet	374	1
+a/bc/data_UUID_0000_00000004.parquet	374	1
+a/bc/data_UUID_0000_00000005.parquet	374	1
+a/bc/data_UUID_0000_00000006.parquet	374	1
+a/bc/data_UUID_0000_00000007.parquet	374	1
+a/bc/data_UUID_0000_00000008.parquet	374	1
+a/bc/data_UUID_0000_00000009.parquet	374	1
 >>>> unload parquet with detailed_output=false
-10	50	2550
+10	50	3740
 >>>> drop stage if exists s1
 >>>> drop table if exists t1
