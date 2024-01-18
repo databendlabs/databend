@@ -264,68 +264,39 @@ impl Payload {
             write_offset += self.group_sizes[idx];
         }
 
+        // write group hashes
+        debug_assert!(write_offset == self.hash_offset);
+        for idx in select_vector.iter().take(new_group_rows).copied() {
+            unsafe {
+                let dst = address[idx].add(write_offset);
+                store(group_hashes[idx], dst as *mut u8);
+            }
+        }
+
+        write_offset += 8;
+        debug_assert!(write_offset == self.state_offset);
         if let Some(layout) = self.state_layout {
-            let state_offset = self.state_offset;
-            debug_assert!(write_offset == self.hash_offset);
-            debug_assert!(write_offset+8 == state_offset);
+            // write states
             for idx in select_vector.iter().take(new_group_rows).copied() {
                 let place = self.arena.alloc_layout(layout);
                 unsafe {
-                    // write group hashes
                     let dst = address[idx].add(write_offset);
-                    store(group_hashes[idx], dst as *mut u8);
-
-                    //write states
-                    let dst = address[idx].add(state_offset);
                     store(place.as_ptr() as u64, dst as *mut u8);
                 }
+
                 let place = StateAddr::from(place);
                 for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
                     aggr.init_state(place.next(*offset));
                 }
             }
-        } else {
-            // write group hashes
-            debug_assert!(write_offset == self.hash_offset);
-            for idx in select_vector.iter().take(new_group_rows).copied() {
-                unsafe {
-                    let dst = address[idx].add(write_offset);
-                    store(group_hashes[idx], dst as *mut u8);
-                }
-            }
         }
-
-        // // write group hashes
-        // debug_assert!(write_offset == self.hash_offset);
-        // for idx in select_vector.iter().take(new_group_rows).copied() {
-        //     unsafe {
-        //         let dst = address[idx].add(write_offset);
-        //         store(group_hashes[idx], dst as *mut u8);
-        //     }
-        // }
-
-        // write_offset += 8;
-        // debug_assert!(write_offset == self.state_offset);
-        // if let Some(layout) = self.state_layout {
-        //     // write states
-        //     for idx in select_vector.iter().take(new_group_rows).copied() {
-        //         let place = self.arena.alloc_layout(layout);
-        //         unsafe {
-        //             let dst = address[idx].add(write_offset);
-        //             store(place.as_ptr() as u64, dst as *mut u8);
-        //         }
-
-        //         let place = StateAddr::from(place);
-        //         for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-        //             aggr.init_state(place.next(*offset));
-        //         }
-        //     }
-        // }
     }
 
     pub fn combine(&mut self, mut other: Payload) {
-        // self.total_rows += other.pages.iter().map(|x| x.rows).sum::<usize>();
-        debug_assert_eq!(other.total_rows, other.pages.iter().map(|x| x.rows).sum::<usize>());
+        debug_assert_eq!(
+            other.total_rows,
+            other.pages.iter().map(|x| x.rows).sum::<usize>()
+        );
         self.total_rows += other.total_rows;
         self.pages.append(other.pages.as_mut());
     }

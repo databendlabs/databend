@@ -137,7 +137,7 @@ fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
     }
 }
 
-trait AggHash {
+pub trait AggHash {
     fn agg_hash(&self) -> u64;
 }
 

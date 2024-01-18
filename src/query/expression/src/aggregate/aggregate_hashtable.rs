@@ -23,6 +23,7 @@ use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
+use crate::new_sel;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -30,13 +31,13 @@ use crate::ColumnBuilder;
 use crate::HashTableConfig;
 use crate::Payload;
 use crate::StateAddr;
+use crate::BATCH_SIZE;
 use crate::L2_MAX_ROWS_IN_HT;
 use crate::L3_MAX_ROWS_IN_HT;
 use crate::LOAD_FACTOR;
 
 // The high 16 bits are the salt, the low 48 bits are the pointer address
 pub type Entry = u64;
-
 
 pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
@@ -98,11 +99,7 @@ impl AggregateHashTable {
         } else {
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
-                let end = if start + BATCH_ADD_SIZE > row_count {
-                    row_count
-                } else {
-                    start + BATCH_ADD_SIZE
-                };
+                let end = (start + BATCH_ADD_SIZE).min(row_count);
                 let step_group_columns = group_columns
                     .iter()
                     .map(|c| c.slice(start..end))
@@ -152,12 +149,7 @@ impl AggregateHashTable {
                 .zip(params.iter())
                 .zip(self.payload.state_addr_offsets.iter())
             {
-                aggr.accumulate_keys(
-                    state_places,
-                    *addr_offset,
-                    params,
-                    row_count,
-                )?;
+                aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
             }
         }
 
@@ -195,47 +187,54 @@ impl AggregateHashTable {
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
 
-        let mut iter_times = 0;
-
         if self.len() == 0 {
             debug_assert_eq!(self.entries.iter().sum::<u64>(), 0);
         }
 
         let entries = &mut self.entries;
 
+        let mut group_hashes = new_sel();
+        let mut hash_salts = [0_u64; BATCH_SIZE];
+        let mask = self.capacity - 1;
+        for i in 0..row_count {
+            group_hashes[i] = state.group_hashes[i] as usize & mask;
+            hash_salts[i] = state.group_hashes[i].get_salt();
+            state.no_match_vector[i] = i;
+        }
+
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
             let mut no_match_count = 0;
 
-            let mask = self.capacity - 1;
-
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
             for i in 0..remaining_entries {
-                let index = if iter_times == 0 {
-                    i
-                } else {
-                    state.no_match_vector[i]
-                };
+                let index = state.no_match_vector[i];
 
-                let ht_offset =
-                    (state.group_hashes[index] as usize + iter_times) & mask;
+                let ht_offset = &mut group_hashes[index];
 
-                let salt = state.group_hashes[index].get_salt();
-                let entry = &mut entries[ht_offset];
+                let salt = hash_salts[index];
 
-                if entry.is_occupied() {
-                    if entry.get_salt() == salt {
-                        state.group_compare_vector[need_compare_count] = index;
-                        need_compare_count += 1;
+                loop {
+                    let entry = &mut entries[*ht_offset];
+                    if entry.is_occupied() {
+                        if entry.get_salt() == salt {
+                            state.group_compare_vector[need_compare_count] = index;
+                            need_compare_count += 1;
+                            break;
+                        } else {
+                            *ht_offset += 1;
+                            if *ht_offset >= self.capacity {
+                                *ht_offset = 0;
+                            }
+                            continue;
+                        }
                     } else {
-                        state.no_match_vector[no_match_count] = index;
-                        no_match_count += 1;
+                        entry.set_salt(salt);
+                        state.empty_vector[new_entry_count] = index;
+                        new_entry_count += 1;
+                        break;
                     }
-                } else {
-                    entry.set_salt(salt);
-                    state.empty_vector[new_entry_count] = index;
-                    new_entry_count += 1;
                 }
             }
 
@@ -247,8 +246,7 @@ impl AggregateHashTable {
 
                 for i in 0..new_entry_count {
                     let index = state.empty_vector[i];
-                    let ht_offset =
-                        (state.group_hashes[index] as usize + iter_times) & mask;
+                    let ht_offset = group_hashes[index];
                     let entry = &mut entries[ht_offset];
 
                     entry.set_pointer(state.addresses[index]);
@@ -261,13 +259,11 @@ impl AggregateHashTable {
             if need_compare_count > 0 {
                 for i in 0..need_compare_count {
                     let index = state.group_compare_vector[i];
-                    let ht_offset =
-                        (state.group_hashes[index] as usize + iter_times) & mask;
+                    let ht_offset = group_hashes[index];
                     let entry = &mut entries[ht_offset];
 
                     debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(entry.get_salt(), state.group_hashes[index].get_salt());
-
+                    debug_assert_eq!(entry.get_salt(), hash_salts[index]);
                     state.addresses[index] = entry.get_pointer();
                 }
 
@@ -288,7 +284,14 @@ impl AggregateHashTable {
             }
 
             // 5. Linear probing, just increase iter_times
-            iter_times += 1;
+            for i in 0..no_match_count {
+                let idx = state.no_match_vector[i];
+                let ht_offset = &mut group_hashes[idx];
+                *ht_offset += 1;
+                if *ht_offset >= self.capacity {
+                    *ht_offset = 0;
+                }
+            }
             remaining_entries = no_match_count;
         }
 
@@ -347,11 +350,7 @@ impl AggregateHashTable {
                 .iter()
                 .zip(self.payload.state_addr_offsets.iter())
             {
-                aggr.batch_merge_states(
-                    places,
-                    rhses,
-                    *addr_offset,
-                )?;
+                aggr.batch_merge_states(places, rhses, *addr_offset)?;
             }
         }
 
@@ -423,7 +422,6 @@ impl AggregateHashTable {
             break;
         }
 
-
         let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
 
         if current_max_radix_bits > self.current_radix_bits {
@@ -434,7 +432,6 @@ impl AggregateHashTable {
             );
             let payload = std::mem::replace(&mut self.payload, temp_payload);
             let mut state = PayloadFlushState::default();
-
 
             self.current_radix_bits = current_max_radix_bits;
             self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
@@ -525,7 +522,6 @@ impl AggregateHashTable {
 const SALT_MASK: u64 = 0xFFFF000000000000;
 /// Lower 48 bits are the pointer
 const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
-
 
 pub(crate) trait EntryLike {
     fn get_salt(&self) -> u64;

@@ -70,8 +70,7 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
                 for index in select_vector.iter().take(rows).copied() {
-                        store(buffer[index], address[index].add(offset) as *mut u8);
-
+                    store(buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
         }),
@@ -79,7 +78,7 @@ pub unsafe fn serialize_column_to_rowformat(
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
                     for index in select_vector.iter().take(rows).copied() {
-                            store(buffer[index], address[index].add(offset) as *mut u8);
+                        store(buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
@@ -88,43 +87,37 @@ pub unsafe fn serialize_column_to_rowformat(
             if v.unset_bits() == 0 {
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
-                        store(1, address[index].add(offset) as *mut u8);
-
+                    store(1, address[index].add(offset) as *mut u8);
                 }
             } else if v.unset_bits() != v.len() {
                 for index in select_vector.iter().take(rows).copied() {
                     if v.get_bit(index) {
-                            store(1, address[index].add(offset) as *mut u8);
-
+                        store(1, address[index].add(offset) as *mut u8);
                     }
                 }
             }
         }
         Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for index in select_vector.iter().take(rows).copied() {
-                    let data = arena.alloc_slice_copy(v.index_unchecked(index));
+                let data = arena.alloc_slice_copy(v.index_unchecked(index));
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
                 store(
                     data.as_ptr() as u64,
                     address[index].add(offset + 4) as *mut u8,
                 );
-
             }
         }
         Column::Timestamp(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                    store(buffer[index], address[index].add(offset) as *mut u8);
-
+                store(buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                    store(buffer[index], address[index].add(offset) as *mut u8);
-
+                store(buffer[index], address[index].add(offset) as *mut u8);
             }
         }
-        Column::Nullable(c) =>
-              serialize_column_to_rowformat(
+        Column::Nullable(c) => serialize_column_to_rowformat(
             arena,
             &c.column,
             select_vector,
@@ -133,7 +126,6 @@ pub unsafe fn serialize_column_to_rowformat(
             offset,
             _scratch,
         ),
-
 
         Column::Array(_array) | Column::Map(_array) => {
             todo!("nested tuple/array/map not supported yet")
@@ -280,18 +272,20 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Bitmap(v) | Column::String(v) | Column::Binary(v) | Column::Variant(v) => row_match_string_column(
-            v,
-            validity,
-            address,
-            select_vector,
-            temp_vector,
-            count,
-            validity_offset,
-            col_offset,
-            no_match,
-            no_match_count,
-        ),
+        Column::Bitmap(v) | Column::String(v) | Column::Binary(v) | Column::Variant(v) => {
+            row_match_string_column(
+                v,
+                validity,
+                address,
+                select_vector,
+                temp_vector,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
         Column::Nullable(_) => unreachable!(),
         Column::Array(_) => todo!(),
         Column::Map(_) => todo!(),
@@ -375,7 +369,6 @@ unsafe fn row_match_string_column(
         }
     }
 
-    // std::mem::swap(select_vector, temp_vector);
     select_vector.clone_from_slice(temp_vector);
 
     *count = match_count;
@@ -441,7 +434,6 @@ unsafe fn row_match_column_type<T: ArgType>(
         }
     }
 
-    // std::mem::swap(select_vector, temp_vector);
     select_vector.clone_from_slice(temp_vector);
     *count = match_count;
 }
