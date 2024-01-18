@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -239,6 +240,8 @@ where TablesTable<T>: HistoryAware
                     )
                 })
                 .collect::<Vec<_>>();
+
+            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
@@ -277,17 +280,19 @@ where TablesTable<T>: HistoryAware
                         catalogs.push(ctl_name);
                         databases.push(name);
                         database_tables.push(table);
-                        owner.push(
-                            user_api
-                                .get_ownership(&tenant, &OwnershipObject::Table {
-                                    catalog_name: ctl_name.to_string(),
-                                    db_id,
-                                    table_id,
-                                })
-                                .await
-                                .ok()
-                                .and_then(|ownership| ownership.map(|o| o.role.to_string())),
-                        );
+                        if ownership.is_empty() {
+                            owner.push(None);
+                        } else {
+                            owner.push(
+                                ownership
+                                    .get(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id,
+                                    })
+                                    .map(|role| role.to_string()),
+                            );
+                        }
                     }
                 }
             }
