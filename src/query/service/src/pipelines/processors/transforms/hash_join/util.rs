@@ -27,6 +27,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
@@ -232,8 +233,8 @@ where
 
 // Generate min max runtime filter
 pub(crate) fn min_max_filter(
-    min: RawExpr<String>,
-    max: RawExpr<String>,
+    min: Scalar,
+    max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Option<Expr<String>>> {
     if let Expr::ColumnRef {
@@ -248,6 +249,14 @@ pub(crate) fn min_max_filter(
             id: id.to_string(),
             data_type: data_type.clone(),
             display_name: display_name.clone(),
+        };
+        let min = RawExpr::Constant {
+            span: None,
+            scalar: min,
+        };
+        let max = RawExpr::Constant {
+            span: None,
+            scalar: max,
         };
         // Make gte and lte function
         let gte_func = RawExpr::FunctionCall {

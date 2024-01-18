@@ -43,7 +43,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
-use databend_common_expression::RawExpr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -914,137 +913,59 @@ impl HashJoinBuildState {
                 let min_max_filter = match min_max {
                     Domain::Number(domain) => match domain {
                         NumberDomain::UInt8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
-                            let min = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(min)),
-                            };
-                            let max = RawExpr::Constant {
-                                span: None,
-                                scalar: Scalar::Number(NumberScalar::from(max)),
-                            };
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                     },
                     Domain::String(domain) => {
-                        // FIXME: Because the length of `build_key_column` > 0, so `domain.max` must be `Some`.
-                        let (min, max) = (domain.min, domain.max.unwrap());
-                        let min = RawExpr::Constant {
-                            span: None,
-                            scalar: Scalar::String(min),
-                        };
-                        let max = RawExpr::Constant {
-                            span: None,
-                            scalar: Scalar::String(max),
-                        };
+                        let min = Scalar::String(domain.min);
+                        let max = Scalar::String(domain.max.unwrap());
                         min_max_filter(min, max, probe_key)?
                     }
                     _ => unreachable!(),
