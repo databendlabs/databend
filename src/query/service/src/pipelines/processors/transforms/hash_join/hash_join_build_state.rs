@@ -156,6 +156,7 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
+
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -181,13 +182,16 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
+
         let input_rows = input.num_rows();
-        buffer.push(input);
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
+
+        self.merge_into_try_build_block_info_index(input.clone(), old_size);
+        buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
@@ -227,8 +231,11 @@ impl HashJoinBuildState {
             if self.hash_join_state.need_mark_scan() {
                 build_state.mark_scan_map.push(block_mark_scan_map);
             }
+
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
+
+            self.merge_into_try_add_chunk_offset(build_state);
         }
         Ok(())
     }
@@ -386,6 +393,7 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
+            self.merge_into_try_generate_matched_memory();
         }
         Ok(())
     }

@@ -26,5 +26,6 @@ pub mod table_args;
 pub mod table_context;
 pub mod table_function;
 
+pub mod merge_into_join;
 pub mod runtime_filter_info;
 pub mod table;
