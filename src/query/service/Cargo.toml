@@ -119,7 +119,6 @@ dashmap = { workspace = true }
 ethnum = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-h2 = "0.3.17"
 headers = "0.3.8"
 highway = "1.1"
 http = "0.2.8"
