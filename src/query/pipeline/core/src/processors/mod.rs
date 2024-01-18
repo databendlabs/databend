@@ -18,6 +18,7 @@ mod processor;
 mod duplicate_processor;
 mod port_trigger;
 pub mod profile;
+mod profiles;
 mod resize_processor;
 mod shuffle_processor;
 
@@ -34,6 +35,9 @@ pub use processor::Processor;
 pub use processor::ProcessorPtr;
 pub use profile::PlanScope;
 pub use profile::PlanScopeGuard;
+pub use profile::Profile;
+pub use profiles::ProfileStatisticsName;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
 pub use shuffle_processor::ShuffleProcessor;
+pub use profile::ProfileLabel;

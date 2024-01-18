@@ -25,8 +25,6 @@ use minitrace::prelude::*;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
-use crate::processors::profile::Profile;
-
 #[derive(Debug)]
 pub enum Event {
     NeedData,
@@ -81,8 +79,6 @@ pub trait Processor: Send {
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::Unimplemented("Unimplemented async_process."))
     }
-
-    fn record_profile(&self, _profile: &Profile) {}
 
     fn details_status(&self) -> Option<String> {
         None
@@ -156,11 +152,6 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
         (*self.inner.get()).un_reacted(cause, self.id().index())
-    }
-
-    /// # Safety
-    pub unsafe fn record_profile(&self, profile: &Profile) {
-        (*self.inner.get()).record_profile(profile)
     }
 
     /// # Safety
@@ -245,9 +236,5 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     fn details_status(&self) -> Option<String> {
         (**self).details_status()
-    }
-
-    fn record_profile(&self, profile: &Profile) {
-        (**self).record_profile(profile)
     }
 }

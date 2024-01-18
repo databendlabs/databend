@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -30,6 +32,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -60,10 +63,7 @@ impl SyncSystemTable for ProcessorProfileTable {
         let mut plan_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut parent_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut plan_name: Vec<Option<Vec<u8>>> = Vec::with_capacity(total_size);
-        let mut cpu_time: Vec<u64> = Vec::with_capacity(total_size);
-        let mut wait_time: Vec<u64> = Vec::with_capacity(total_size);
-        let mut exchange_rows: Vec<u64> = Vec::with_capacity(total_size);
-        let mut exchange_bytes: Vec<u64> = Vec::with_capacity(total_size);
+        let mut profile_values = Vec::with_capacity(total_size);
 
         for (query_id, query_profiles) in queries_profiles {
             for query_profile in query_profiles {
@@ -75,10 +75,15 @@ impl SyncSystemTable for ProcessorProfileTable {
                 parent_id.push(query_profile.plan_parent_id);
                 plan_name.push(query_profile.plan_name.clone().map(String::into_bytes));
 
-                cpu_time.push(query_profile.cpu_time.load(Ordering::Relaxed));
-                wait_time.push(query_profile.wait_time.load(Ordering::Relaxed));
-                exchange_rows.push(query_profile.exchange_rows.load(Ordering::Relaxed) as u64);
-                exchange_bytes.push(query_profile.exchange_bytes.load(Ordering::Relaxed) as u64);
+                let mut values_map = HashMap::with_capacity(query_profile.statistics.len());
+                for (idx, item_value) in query_profile.statistics.iter().enumerate() {
+                    values_map.insert(
+                        ProfileStatisticsName::from(idx).to_string(),
+                        item_value.load(Ordering::SeqCst),
+                    );
+                }
+
+                profile_values.push(serde_json::to_vec(&values_map).unwrap());
             }
         }
 
@@ -90,10 +95,7 @@ impl SyncSystemTable for ProcessorProfileTable {
             UInt32Type::from_opt_data(plan_id),
             UInt32Type::from_opt_data(parent_id),
             StringType::from_opt_data(plan_name),
-            UInt64Type::from_data(cpu_time),
-            UInt64Type::from_data(wait_time),
-            UInt64Type::from_data(exchange_rows),
-            UInt64Type::from_data(exchange_bytes),
+            VariantType::from_data(profile_values),
         ]))
     }
 }
@@ -117,16 +119,7 @@ impl ProcessorProfileTable {
                 "plan_name",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
-            TableField::new("cpu_time", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("wait_time", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "exchange_rows",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "exchange_bytes",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
+            TableField::new("profile_values", TableDataType::Variant),
         ]);
 
         let table_info = TableInfo {

@@ -19,6 +19,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::processors::Profile;
+use crate::processors::ProfileStatisticsName;
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
 
@@ -222,6 +224,15 @@ impl OutputPort {
     pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
+
+            if let Ok(data_block) = &data {
+                // TODO: only last output need record
+                Profile::record_usize_profile(ProfileStatisticsName::OutputRows, data_block.num_rows());
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::OutputBytes,
+                    data_block.memory_size(),
+                );
+            }
 
             let data = Box::into_raw(Box::new(SharedData(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);

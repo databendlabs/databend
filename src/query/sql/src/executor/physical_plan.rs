@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
+use databend_common_ast::ast::TypeName::String;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -246,7 +250,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_)
             | PhysicalPlan::CteScan(_)
@@ -377,9 +381,9 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(_) |
             // Todo: support union and range join return valid table index by join probe keys
             PhysicalPlan::UnionAll(_) |
-            PhysicalPlan::RangeJoin(_)|
+            PhysicalPlan::RangeJoin(_) |
             PhysicalPlan::ConstantTableScan(_)
-            |PhysicalPlan::CteScan(_)
+            | PhysicalPlan::CteScan(_)
             | PhysicalPlan::Udf(_)
             | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CopyIntoTable(_)
@@ -396,5 +400,69 @@ impl PhysicalPlan {
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_) => usize::MAX,
         }
+    }
+
+    pub fn get_title(&self) -> Result<String> {
+        Ok(match self {
+            PhysicalPlan::TableScan(v) => format!("{}.{}", v.source.catalog_info.name_ident.catalog_name, v.source.source_info.desc()),
+            PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
+                true => String::new(),
+                false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display()
+            },
+            PhysicalPlan::AggregatePartial(v) => v.agg_funcs.iter().map(|x| {
+                format!(
+                    "{}({})",
+                    x.sig.name,
+                    x.arg_indices
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }).join(", "),
+            PhysicalPlan::AggregateFinal(v) => v.agg_funcs.iter().map(|x| {
+                format!(
+                    "{}({})",
+                    x.sig.name,
+                    x.arg_indices
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }).join(", "),
+            PhysicalPlan::Sort(v) => v.order_by.iter().map(|x| {
+                format!(
+                    "{}{}{}",
+                    x.order_by,
+                    if x.asc { "" } else { " DESC" },
+                    if x.nulls_first { " NULLS FIRST" } else { "" },
+                )
+            }).join(", "),
+            _ => String::new()
+        })
+    }
+
+    pub fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(match self {
+            PhysicalPlan::TableScan(v) => {
+                let output_schema = v.output_schema()?;
+                let source_schema = v.source.source_info.schema();
+                let columns_name = format!("Columns ({} / {})", output_schema.num_fields(), source_schema.num_fields());
+                HashMap::from([
+                    (String::from("Full table name"), vec![format!("{}.{}", v.source.catalog_info.name_ident.catalog_name, v.source.source_info.desc())]),
+                    (columns_name, v.name_mapping.keys().cloned().collect()),
+                ])
+            }
+            PhysicalPlan::Filter(v) => {
+                HashMap::from([
+                    (String::from("Filter condition"), v.predicates.iter().map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()).collect())
+                ])
+            }
+            PhysicalPlan::AggregatePartial(v) => {
+                // HashMap
+            }
+            _ => HashMap::new(),
+        })
     }
 }
