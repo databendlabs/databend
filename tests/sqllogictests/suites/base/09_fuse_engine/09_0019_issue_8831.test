@@ -8,6 +8,9 @@ statement ok
 USE issue_8130
 
 statement ok
+set enable_table_lock = 0
+
+statement ok
 create table t(a int)
 
 statement ok
@@ -43,6 +46,9 @@ query I
 select count(1) from t1
 ----
 7
+
+statement ok
+set enable_table_lock = 1
 
 statement ok
 DROP TABLE t;
