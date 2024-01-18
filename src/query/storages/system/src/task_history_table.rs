@@ -67,7 +67,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         owner.push(tr.owner);
         comment.push(tr.comment);
         schedule.push(tr.schedule_options);
-        warehouse.push(tr.warehouse_options.and_then(|s| s.warehouse.map(|v| v)));
+        warehouse.push(tr.warehouse_options.and_then(|s| s.warehouse));
         state.push(tr.state.to_string());
         exception_code.push(tr.error_code);
         exception_text.push(tr.error_message);

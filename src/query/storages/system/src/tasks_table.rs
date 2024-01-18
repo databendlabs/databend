@@ -63,7 +63,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         id.push(tsk.task_id);
         owner.push(tsk.owner);
         comment.push(tsk.comment);
-        warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse.map(|v| v)));
+        warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse));
         schedule.push(tsk.schedule_options);
         status.push(tsk.status.to_string());
         definition.push(tsk.query_text);

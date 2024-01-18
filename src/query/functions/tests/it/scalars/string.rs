@@ -498,8 +498,8 @@ fn test_strcmp(file: &mut impl Write) {
     run_ast(file, "strcmp('hii', 'hii')", &[]);
 
     let table = [
-        ("a", StringType::from_data(vec!["hi", "test", "cc"])),
-        ("b", StringType::from_data(vec!["i", "test", "ccb"])),
+        ("a", StringType::from_data(vec!["i", "h", "test", "cc"])),
+        ("b", StringType::from_data(vec!["hi", "hi", "test", "ccb"])),
     ];
     run_ast(file, "strcmp(a, b)", &table);
 }

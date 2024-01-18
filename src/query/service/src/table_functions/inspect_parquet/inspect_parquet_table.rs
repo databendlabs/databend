@@ -263,7 +263,7 @@ impl AsyncSource for InspectParquetSource {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(StringType::upcast_scalar(created.into())),
+                    Value::Scalar(StringType::upcast_scalar(created)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

@@ -101,7 +101,7 @@ impl AsyncSystemTable for StagesTable {
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
                 StageType::LegacyInternal | StageType::Internal | StageType::User => {
-                    number_of_files.push(Some(stage.number_of_files.clone()));
+                    number_of_files.push(Some(stage.number_of_files));
                 }
                 StageType::External => {
                     number_of_files.push(None);

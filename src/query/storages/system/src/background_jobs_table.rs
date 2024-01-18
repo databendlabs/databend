@@ -118,11 +118,7 @@ impl AsyncSystemTable for BackgroundJobTable {
             }
             task_types.push(job.task_type.to_string());
             job_states.push(job.job_status.as_ref().map(|x| x.job_state.to_string()));
-            last_task_ids.push(
-                job.job_status
-                    .as_ref()
-                    .and_then(|x| x.last_task_id.clone().map(|x| x)),
-            );
+            last_task_ids.push(job.job_status.as_ref().and_then(|x| x.last_task_id.clone()));
             last_task_run_at.push(
                 job.job_status
                     .as_ref()
