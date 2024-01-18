@@ -19,10 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_pipeline_core::PlanScopeGuard;
-use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_profile::SharedProcessorProfiles;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
@@ -114,7 +114,12 @@ impl PipelineBuilder {
                     profile_labels.push(ProfileLabel::create(name, value));
                 }
 
-                let scope = PlanScope::create(plan.get_id(), plan.name(), Arc::new(title), Arc::new(profile_labels));
+                let scope = PlanScope::create(
+                    plan.get_id(),
+                    plan.name(),
+                    Arc::new(title),
+                    Arc::new(profile_labels),
+                );
                 Ok(Some(self.main_pipeline.add_plan_scope(scope)))
             }
         }

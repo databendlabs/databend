@@ -36,7 +36,8 @@ pub struct PlanProfile {
     pub exchange_rows: usize,
     pub exchange_bytes: usize,
 
-    pub statistics: [(ProfileStatisticsName, usize); std::mem::variant_count::<ProfileStatisticsName>()],
+    pub statistics:
+        [(ProfileStatisticsName, usize); std::mem::variant_count::<ProfileStatisticsName>()],
 }
 
 impl PlanProfile {
@@ -52,7 +53,10 @@ impl PlanProfile {
             exchange_rows: profile.load_profile(ProfileStatisticsName::ExchangeRows),
             exchange_bytes: profile.load_profile(ProfileStatisticsName::ExchangeBytes),
             statistics: std::array::from_fn(|idx| {
-                (From::from(idx), profile.statistics[idx].load(Ordering::SeqCst))
+                (
+                    From::from(idx),
+                    profile.statistics[idx].load(Ordering::SeqCst),
+                )
             }),
         }
     }
@@ -111,7 +115,12 @@ pub struct PlanScope {
 }
 
 impl PlanScope {
-    pub fn create(id: u32, name: String, title: Arc<String>, labels: Arc<Vec<ProfileLabel>>) -> PlanScope {
+    pub fn create(
+        id: u32,
+        name: String,
+        title: Arc<String>,
+        labels: Arc<Vec<ProfileLabel>>,
+    ) -> PlanScope {
         PlanScope {
             id,
             labels,
@@ -130,10 +139,7 @@ pub struct ProfileLabel {
 
 impl ProfileLabel {
     pub fn create(name: String, value: Vec<String>) -> ProfileLabel {
-        ProfileLabel {
-            name,
-            value,
-        }
+        ProfileLabel { name, value }
     }
 }
 
@@ -168,8 +174,14 @@ impl Profile {
             plan_name: scope.as_ref().map(|x| x.name.clone()),
             plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
             statistics: Self::create_items(),
-            labels: scope.as_ref().map(|x| x.labels.clone()).unwrap_or(Arc::new(vec![])),
-            title: scope.as_ref().map(|x| x.title.clone()).unwrap_or(Arc::new(String::new())),
+            labels: scope
+                .as_ref()
+                .map(|x| x.labels.clone())
+                .unwrap_or(Arc::new(vec![])),
+            title: scope
+                .as_ref()
+                .map(|x| x.title.clone())
+                .unwrap_or(Arc::new(String::new())),
         }
     }
 

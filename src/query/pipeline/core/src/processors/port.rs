@@ -227,7 +227,10 @@ impl OutputPort {
 
             if let Ok(data_block) = &data {
                 // TODO: only last output need record
-                Profile::record_usize_profile(ProfileStatisticsName::OutputRows, data_block.num_rows());
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::OutputRows,
+                    data_block.num_rows(),
+                );
                 Profile::record_usize_profile(
                     ProfileStatisticsName::OutputBytes,
                     data_block.memory_size(),
