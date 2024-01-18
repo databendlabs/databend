@@ -58,6 +58,7 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
+
         self.deserialize_chunks(
             &part.location,
             part.nums_rows,
