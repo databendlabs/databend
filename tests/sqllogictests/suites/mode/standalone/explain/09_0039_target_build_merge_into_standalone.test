@@ -1,6 +1,12 @@
 statement ok
 set enable_experimental_merge_into = 1;
 
+statement ok
+drop table if exists target_build_optimization;
+
+statement ok
+drop table if exists source_optimization;
+
 ## Target Build Optimization Test
 statement ok
 create table target_build_optimization(a int,b string,c string);
@@ -150,7 +156,7 @@ select * from target_build_optimization order by a,b,c;
 11 b11 c_11
 12 b12 c_12
 
-### test with conjunct 
+### test with conjunct
 #### we need to make sure the blocks count and layout, so we should truncate and insert again.
 statement ok
 truncate table target_build_optimization;

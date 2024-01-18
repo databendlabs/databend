@@ -53,7 +53,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(t_where_optimizer.b (#1) > 2, t_where_optimizer.a (#0) = 1)], limit: NONE]
+├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
 └── estimated rows: 0.00
 
 query T

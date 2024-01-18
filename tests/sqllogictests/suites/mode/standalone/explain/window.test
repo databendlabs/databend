@@ -144,7 +144,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM (
 ----
 Filter
 ├── output columns: [test.k (#0), test.v (#1)]
-├── filters: [is_true(t2.k (#0) = 12), t2.rank (#4) = 1]
+├── filters: [t2.rank (#4) = 1, is_true(t2.k (#0) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [test.k (#0), test.v (#1), rank() OVER (ORDER BY v DESC) (#4)]

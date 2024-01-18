@@ -97,7 +97,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
-            ├── filters: [is_true(t_11831.uid (#0) = 11), is_true(t_11831.time (#3) >= 1686672000000), is_true(t_11831.time (#3) <= 1686758399000)]
+            ├── filters: [is_true(t_11831.time (#3) >= 1686672000000), is_true(t_11831.time (#3) <= 1686758399000), is_true(t_11831.uid (#0) = 11)]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_11831
@@ -106,7 +106,7 @@ RowFetch
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                ├── push downs: [filters: [and_filters(and_filters(t_11831.uid (#0) = 11, t_11831.time (#3) >= 1686672000000), t_11831.time (#3) <= 1686758399000)], limit: NONE]
+                ├── push downs: [filters: [and_filters(and_filters(t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000), t_11831.uid (#0) = 11)], limit: NONE]
                 └── estimated rows: 0.00
 
 statement ok
