@@ -32,4 +32,11 @@ statement ok
 DROP STAGE test_stage_internal
 
 statement ok
+CREATE STAGE if not exists test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+DROP STAGE test_stage_huggingface
+
+statement ok
 SHOW STAGES
+

@@ -339,7 +339,8 @@ impl SubqueryRewriter {
                 } else {
                     column_ref
                 };
-
+                // After finishing rewriting subquery, we should clear the derived columns.
+                self.derived_columns.clear();
                 Ok((scalar, s_expr))
             }
             ScalarExpr::UDFServerCall(udf) => {
@@ -501,6 +502,7 @@ impl SubqueryRewriter {
                             output_column.data_type,
                             Visibility::Visible,
                         )
+                        .table_index(output_column.table_index)
                         .build(),
                     }),
                     &subquery.data_type,

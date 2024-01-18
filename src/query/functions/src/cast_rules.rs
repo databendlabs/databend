@@ -68,6 +68,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 /// The cast rules for any situation, including comparison functions, joins, etc.
 pub const GENERAL_CAST_RULES: AutoCastRules = &[
+    (DataType::String, DataType::Binary),
     (DataType::String, DataType::Timestamp),
     (DataType::String, DataType::Date),
     (DataType::String, DataType::Boolean),

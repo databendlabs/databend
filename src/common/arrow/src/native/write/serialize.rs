@@ -178,7 +178,7 @@ pub fn write_nested<W: Write>(
         LargeUtf8 => {
             let binary_array: &Utf8Array<i64> = array.as_any().downcast_ref().unwrap();
             let binary_array = BinaryArray::new(
-                DataType::Binary,
+                DataType::LargeBinary,
                 binary_array.offsets().clone(),
                 binary_array.values().clone(),
                 binary_array.validity().cloned(),

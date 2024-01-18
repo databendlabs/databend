@@ -117,6 +117,7 @@ opendal = { version = "0.44", features = [
     "layers-prometheus-client",
     "services-ipfs",
     "services-moka",
+    "services-huggingface",
     "trust-dns",
 ] }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }

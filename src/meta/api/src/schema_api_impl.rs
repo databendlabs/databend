@@ -172,6 +172,7 @@ use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
@@ -185,8 +186,10 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
+use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use futures::TryStreamExt;
 use log::as_debug;
 use log::as_display;
@@ -221,6 +224,8 @@ use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
 use crate::util::db_id_has_to_exist;
+use crate::util::deserialize_id_get_response;
+use crate::util::deserialize_struct_get_response;
 use crate::util::deserialize_u64;
 use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
@@ -1588,13 +1593,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
+        // Make an error if table exists.
+        fn make_exists_err(req: &CreateTableReq) -> AppError {
+            let name = &req.name_ident.table_name;
+            let name_ident = &req.name_ident;
+
+            match req.table_meta.engine.as_str() {
+                "STREAM" => {
+                    let exist_err =
+                        StreamAlreadyExists::new(name, format!("create_table: {}", name_ident));
+                    AppError::from(exist_err)
+                }
+                "VIEW" => {
+                    let exist_err =
+                        ViewAlreadyExists::new(name, format!("create_table: {}", name_ident));
+                    AppError::from(exist_err)
+                }
+                _ => {
+                    let exist_err =
+                        TableAlreadyExists::new(name, format!("create_table: {}", name_ident));
+                    AppError::from(exist_err)
+                }
+            }
+        }
+
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
+        let tenant = req.name_ident.tenant();
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
-        let mut tbcount_found = false;
-        let mut tb_count = 0;
-        let mut tb_count_seq;
+
+        let mut key_table_id: Option<TableId> = None;
 
         if req.table_meta.drop_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
@@ -1602,153 +1631,191 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )));
         }
 
+        // fixed: does not change in every loop.
+        let db_id = {
+            let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
+            SeqV::from_tuple((seq, id))
+        };
+
+        // fixed
+        let key_dbid = DatabaseId { db_id: db_id.data };
+
+        // fixed
+        let key_dbid_tbname = DBIdTableName {
+            db_id: db_id.data,
+            table_name: req.name_ident.table_name.clone(),
+        };
+
+        // fixed
+        let key_table_id_list = TableIdListKey {
+            db_id: db_id.data,
+            table_name: req.name_ident.table_name.clone(),
+        };
+
+        // fixed
+        let key_table_count = CountTablesKey::new(tenant);
+
+        // The keys of values to re-fetch for every retry in this txn.
+        let keys = vec![
+            key_dbid.to_string_key(),
+            key_dbid_tbname.to_string_key(),
+            key_table_id_list.to_string_key(),
+            key_table_count.to_string_key(),
+        ];
+
+        // Initialize required key-values
+        let mut data = {
+            let values = self.mget_kv(&keys).await?;
+            keys.iter()
+                .zip(values.into_iter())
+                .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                .collect::<Vec<_>>()
+        };
+
+        // Initialize table count if needed
+        assert_eq!(data[3].key, key_table_count.to_string_key());
+        if data[3].value.is_none() {
+            init_table_count(self, &key_table_count).await?;
+
+            // Re-fetch
+            data = {
+                let values = self.mget_kv(&keys).await?;
+                keys.iter()
+                    .zip(values.into_iter())
+                    .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                    .collect::<Vec<_>>()
+            };
+        }
+
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            // Get db by name to ensure presence
+            // When retrying, data is cleared and re-fetched in one shot.
+            if data.is_empty() {
+                data = {
+                    let values = self.mget_kv(&keys).await?;
+                    keys.iter()
+                        .zip(values.into_iter())
+                        .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                        .collect::<Vec<_>>()
+                };
+            }
 
-            let (_, db_id, db_meta_seq, db_meta) =
-                get_db_or_err(self, &tenant_dbname, "create_table").await?;
+            let db_meta = {
+                let d = data.remove(0);
+                let (k, v) = deserialize_struct_get_response::<DatabaseId, DatabaseMeta>(d)?;
+                assert_eq!(key_dbid, k);
 
+                v.ok_or_else(|| {
+                    AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+                        db_id.data,
+                        format!("{}: {}", func_name!(), db_id.data),
+                    ))
+                })?
+            };
+
+            // db_meta will be refreshed on each loop
             // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
+            if let Some(from_share) = db_meta.data.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                     ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
                 )));
             }
 
-            // Get table by tenant,db_id, table_name to assert absence.
+            {
+                let d = data.remove(0);
+                let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
+                assert_eq!(key_dbid_tbname, k);
 
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-
-            let (tb_id_seq, tb_id) = get_u64_value(self, &dbid_tbname).await?;
-            if tb_id_seq > 0 {
-                return if req.if_not_exists {
-                    Ok(CreateTableReply {
-                        table_id: tb_id,
-                        new_table: false,
-                    })
-                } else {
-                    match req.table_meta.engine.as_str() {
-                        "STREAM" => {
-                            return Err(KVAppError::AppError(AppError::StreamAlreadyExists(
-                                StreamAlreadyExists::new(
-                                    &tenant_dbname_tbname.table_name,
-                                    format!("create_table: {}", tenant_dbname_tbname),
-                                ),
-                            )));
-                        }
-                        "VIEW" => {
-                            return Err(KVAppError::AppError(AppError::ViewAlreadyExists(
-                                ViewAlreadyExists::new(
-                                    &tenant_dbname_tbname.table_name,
-                                    format!("create_table: {}", tenant_dbname_tbname),
-                                ),
-                            )));
-                        }
-                        _ => Err(KVAppError::AppError(AppError::TableAlreadyExists(
-                            TableAlreadyExists::new(
-                                &tenant_dbname_tbname.table_name,
-                                format!("create_table: {}", tenant_dbname_tbname),
-                            ),
-                        ))),
-                    }
-                };
+                if let Some(id) = v {
+                    // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
+                    if req.if_not_exists {
+                        return Ok(CreateTableReply {
+                            table_id: *id.data,
+                            new_table: false,
+                        });
+                    } else {
+                        let app_err = make_exists_err(&req);
+                        return Err(KVAppError::AppError(app_err));
+                    };
+                }
             }
 
-            // get table id list from _fd_table_id_list/db_id/table_name
-            let dbid_tbname_idlist = TableIdListKey {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &dbid_tbname_idlist).await?;
+            let mut tb_id_list = {
+                let d = data.remove(0);
+                let (k, v) = deserialize_struct_get_response::<TableIdListKey, TableIdList>(d)?;
+                assert_eq!(key_table_id_list, k);
 
-            let mut tb_id_list = if tb_id_list_seq == 0 {
-                TableIdList::new()
-            } else {
-                tb_id_list_opt.unwrap_or(TableIdList::new())
+                v.unwrap_or_default()
             };
 
-            // get current table count from _fd_table_count/tenant
-            let tb_count_key = CountTablesKey {
-                tenant: tenant_dbname.tenant.clone(),
-            };
-            (tb_count_seq, tb_count) = {
-                let (seq, count) = get_u64_value(self, &tb_count_key).await?;
-                if seq > 0 {
-                    (seq, count)
-                } else if !tbcount_found {
-                    // only count_tables for the first time.
-                    tbcount_found = true;
-                    (0, count_tables(self, &tb_count_key).await?)
-                } else {
-                    (0, tb_count)
-                }
-            };
-            // Create table by inserting these record:
-            // (db_id, table_name) -> table_id
-            // (table_id) -> table_meta
-            // append table_id into _fd_table_id_list/db_id/table_name
-            // (table_id) -> table_name
+            let mut tb_count = {
+                let d = data.remove(0);
+                let (k, v) = deserialize_id_get_response::<CountTablesKey>(d)?;
+                assert_eq!(key_table_count, k);
 
-            let table_id = fetch_id(self, IdGenerator::table_id()).await?;
-
-            let tbid = TableId { table_id };
-
-            // get table id name
-            let table_id_to_name_key = TableIdToName { table_id };
-            let db_id_table_name = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
+                v.unwrap_or_default()
             };
+
+            // Table id is unique and does not need to re-generate in every loop.
+            if key_table_id.is_none() {
+                let id = fetch_id(self, IdGenerator::table_id()).await?;
+                key_table_id = Some(TableId { table_id: id });
+            }
+
+            let table_id = key_table_id.as_ref().map(|tid| tid.table_id).unwrap();
+
+            let key_table_id_to_name = TableIdToName { table_id };
 
             debug!(
-                table_id = table_id,
+                key_table_id = as_debug!(key_table_id),
                 name = as_debug!(tenant_dbname_tbname);
                 "new table id"
             );
 
             {
                 // append new table_id into list
-                tb_id_list.append(table_id);
+                tb_id_list.data.append(table_id);
+                tb_count.data.0 += 1;
 
                 let txn_req = TxnRequest {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                        txn_cond_seq(&key_dbid, Eq, db_meta.seq),
                         // no other table with the same name is inserted.
-                        txn_cond_seq(&dbid_tbname, Eq, 0),
+                        txn_cond_seq(&key_dbid_tbname, Eq, 0),
                         // no other table id with the same name is append.
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
+                        txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
                         // update table count atomically
-                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
-                        txn_cond_seq(&table_id_to_name_key, Eq, 0),
+                        txn_cond_seq(&key_table_count, Eq, tb_count.seq),
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                        txn_op_put(&tbid, serialize_struct(&req.table_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
-                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
-                        txn_op_put(&tb_count_key, serialize_u64(tb_count + 1)?), /* _fd_table_count/tenant -> tb_count */
-                        txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                        txn_op_put(&key_dbid, serialize_struct(&db_meta.data)?), /* (db_id) -> db_meta */
+                        txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                        txn_op_put(
+                            key_table_id.as_ref().unwrap(),
+                            serialize_struct(&req.table_meta)?,
+                        ), /* (tenant, db_id, tb_id) -> tb_meta */
+                        txn_op_put(&key_table_id_list, serialize_struct(&tb_id_list.data)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                        txn_op_put(&key_table_count, serialize_u64(tb_count.data)?), /* _fd_table_count/tenant -> tb_count */
+                        // This record does not need to assert `table_id_to_name_key == 0`,
+                        // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
+                        txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
                     else_then: vec![],
                 };
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+                let (succ, responses) = send_txn(self, txn_req).await?;
 
                 debug!(
                     name = as_debug!(tenant_dbname_tbname),
-                    id = as_debug!(&tbid),
-                    succ = succ;
+                    key_table_id = as_debug!(&key_table_id),
+                    succ = succ,
+                    responses = as_debug!(responses);
                     "create_table"
                 );
 
@@ -1757,6 +1824,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         table_id,
                         new_table: true,
                     });
+                } else {
+                    // re-run txn with re-fetched data
+                    data = vec![];
                 }
             }
         }
@@ -4036,6 +4106,20 @@ fn is_drop_time_out_of_retention_time(
     false
 }
 
+/// Get db id and its seq by name, returns (db_id_seq, db_id)
+///
+/// If the db does not exist, returns AppError::UnknownDatabase
+pub(crate) async fn get_db_id_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &DatabaseNameIdent,
+    msg: impl Display,
+) -> Result<(u64, u64), KVAppError> {
+    let (db_id_seq, db_id) = get_u64_value(kv_api, name_key).await?;
+    db_has_to_exist(db_id_seq, name_key, &msg)?;
+
+    Ok((db_id_seq, db_id))
+}
+
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
 pub(crate) async fn get_db_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -4113,6 +4197,20 @@ fn table_has_to_not_exist(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
     }
+}
+
+/// Initialize count of tables for one tenant.
+async fn init_table_count(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    key: &CountTablesKey,
+) -> Result<(), KVAppError> {
+    let n = count_tables(kv_api, key).await?;
+
+    kv_api
+        .upsert_kv(UpsertKV::insert(key.to_string_key(), &serialize_u64(n)?))
+        .await?;
+
+    Ok(())
 }
 
 /// Get the count of tables for one tenant by listing databases and table ids.

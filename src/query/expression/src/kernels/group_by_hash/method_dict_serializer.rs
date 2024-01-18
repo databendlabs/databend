@@ -48,9 +48,13 @@ impl HashMethod for HashMethodDictionarySerializer {
         let mut serialize_columns = Vec::new();
         for (group_column, _) in group_columns {
             match group_column {
-                Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
+                Column::Binary(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
+                }
+                Column::String(v) => {
+                    debug_assert_eq!(v.len(), num_rows);
+                    dictionary_columns.push(v.clone().into());
                 }
                 _ => serialize_columns.push(group_column.clone()),
             }

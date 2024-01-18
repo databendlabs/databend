@@ -262,6 +262,7 @@ impl HttpQuery {
                 for (k, v) in conf_settings {
                     settings
                         .set_setting(k.to_string(), v.to_string())
+                        .await
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
                                 warn!(
@@ -295,7 +296,9 @@ impl HttpQuery {
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
             unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
+                ctx.get_settings()
+                    .set_deduplicate_label(label.clone())
+                    .await?;
             }
         }
         if let Some(ua) = user_agent {
@@ -317,7 +320,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: attachment.file_format_options.clone(),
+                file_format_options: attachment.file_format_options.as_ref().map(|v| {
+                    v.iter()
+                        .map(|(k, v)| (k.to_lowercase(), v.to_owned()))
+                        .collect::<BTreeMap<_, _>>()
+                }),
                 copy_options: attachment.copy_options.clone(),
             }),
             None => {}

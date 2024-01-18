@@ -13,73 +13,80 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_compress::CompressAlgorithm;
-use databend_common_compress::CompressCodec;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_formats::output_format::OutputFormat;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
-use crate::row_based_file::buffers::FileOutputBuffers;
-use crate::stage_table::unload_path;
+use super::block_batch::BlockBatch;
+use crate::append::output::DataSummary;
+use crate::append::path::unload_path;
+use crate::append::UnloadOutput;
 
-pub struct RowBasedFileSink {
+pub struct ParquetFileWriter {
     input: Arc<InputPort>,
-    table_info: StageTableInfo,
+    output: Arc<OutputPort>,
 
-    // always blocks for a whole file if not empty
+    table_info: StageTableInfo,
+    output_format: Box<dyn OutputFormat>,
+
+    unload_output: UnloadOutput,
+    unload_output_blocks: Option<VecDeque<DataBlock>>,
     input_data: Option<DataBlock>,
-    // always the data for a whole file if not empty
-    output_data: Vec<u8>,
+    file_to_write: Option<(Vec<u8>, DataSummary)>,
 
     data_accessor: Operator,
-    prefix: Vec<u8>,
 
     uuid: String,
     group_id: usize,
     batch_id: usize,
-
-    compression: Option<CompressAlgorithm>,
 }
 
-impl RowBasedFileSink {
+impl ParquetFileWriter {
     pub fn try_create(
         input: Arc<InputPort>,
+        output: Arc<OutputPort>,
         table_info: StageTableInfo,
+        output_format: Box<dyn OutputFormat>,
         data_accessor: Operator,
-        prefix: Vec<u8>,
         uuid: String,
         group_id: usize,
-        compression: Option<CompressAlgorithm>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(RowBasedFileSink {
-            table_info,
+        let unload_output =
+            UnloadOutput::create(table_info.stage_info.copy_options.detailed_output);
+        Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {
             input,
+            output,
+            table_info,
+            output_format,
+            unload_output,
+            unload_output_blocks: None,
             input_data: None,
+            file_to_write: None,
             data_accessor,
-            prefix,
             uuid,
             group_id,
             batch_id: 0,
-            output_data: vec![],
-            compression,
         })))
     }
 }
 
 #[async_trait]
-impl Processor for RowBasedFileSink {
+impl Processor for ParquetFileWriter {
     fn name(&self) -> String {
-        "StageSink".to_string()
+        "ParquetFileSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -87,15 +94,34 @@ impl Processor for RowBasedFileSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if !self.output_data.is_empty() {
+        if self.output.is_finished() {
+            self.input.finish();
+            Ok(Event::Finished)
+        } else if self.file_to_write.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Async)
         } else if self.input_data.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else if self.input.is_finished() {
-            self.input.set_not_need_data();
-            Ok(Event::Finished)
+            if self.unload_output.is_empty() {
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+            if self.unload_output_blocks.is_none() {
+                self.unload_output_blocks = Some(self.unload_output.to_block_partial().into());
+            }
+            if self.output.can_push() {
+                if let Some(block) = self.unload_output_blocks.as_mut().unwrap().pop_front() {
+                    self.output.push_data(Ok(block));
+                    Ok(Event::NeedConsume)
+                } else {
+                    self.output.finish();
+                    Ok(Event::Finished)
+                }
+            } else {
+                Ok(Event::NeedConsume)
+            }
         } else if self.input.has_data() {
             self.input_data = Some(self.input.pull_data().unwrap()?);
             self.input.set_not_need_data();
@@ -109,30 +135,36 @@ impl Processor for RowBasedFileSink {
     fn process(&mut self) -> Result<()> {
         let block = self.input_data.take().unwrap();
         let block_meta = block.get_owned_meta().unwrap();
-        let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
-        let size = buffers.buffers.iter().map(|b| b.len()).sum::<usize>();
-        let mut output = Vec::with_capacity(self.prefix.len() + size);
-        output.extend_from_slice(self.prefix.as_slice());
-        for b in buffers.buffers {
-            output.extend_from_slice(b.as_slice());
+        let blocks = BlockBatch::downcast_from(block_meta).unwrap();
+        let mut input_bytes = 0;
+        let mut row_counts = 0;
+        for b in blocks.blocks {
+            input_bytes += b.memory_size();
+            row_counts += b.num_rows();
+            self.output_format.serialize_block(&b)?;
         }
-        if let Some(compression) = self.compression {
-            output = CompressCodec::from(compression).compress_all(&output)?;
-        }
-        self.output_data = output;
+        let data = self.output_format.finalize()?;
+        let output_bytes = data.len();
+        self.file_to_write = Some((data, DataSummary {
+            row_counts,
+            input_bytes,
+            output_bytes,
+        }));
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        assert!(self.file_to_write.is_some());
         let path = unload_path(
             &self.table_info,
             &self.uuid,
             self.group_id,
             self.batch_id,
-            self.compression,
+            None,
         );
-        let data = mem::take(&mut self.output_data);
+        let (data, summary) = mem::take(&mut self.file_to_write).unwrap();
+        self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;
         Ok(())

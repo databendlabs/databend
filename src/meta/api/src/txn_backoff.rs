@@ -114,6 +114,8 @@ const fn from_millis(millis: u64) -> f64 {
 const BACKOFF: &[f64] = &[
     from_millis(0),
     from_millis(0),
+    from_millis(2),
+    from_millis(5),
     from_millis(10),
     from_millis(14),
     from_millis(20),
@@ -145,15 +147,15 @@ mod tests {
     #[tokio::test]
     async fn test_backoff() {
         let now = std::time::Instant::now();
-        let mut trials = super::txn_backoff(Some(4), "test");
-        for _ in 0..4 {
+        let mut trials = super::txn_backoff(Some(6), "test");
+        for _ in 0..6 {
             let _ = trials.next().unwrap().unwrap().await;
         }
 
         let elapsed = now.elapsed().as_secs_f64();
         assert!(
-            (0.034..0.060).contains(&elapsed),
-            "{} is expected to be 10 + 14 + 20 milliseconds",
+            (0.041..0.070).contains(&elapsed),
+            "{} is expected to be 2 + 5 + 10 + 14 + 20 milliseconds",
             elapsed
         );
 

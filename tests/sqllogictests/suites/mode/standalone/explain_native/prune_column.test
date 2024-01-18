@@ -41,25 +41,25 @@ Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 1
 ├── offset: 0
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Sort
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
         ├── group by: [number, number, number, number]
         ├── aggregate functions: []
-        ├── estimated rows: 0.20
+        ├── estimated rows: 0.00
         └── AggregatePartial
             ├── output columns: [#_group_by_key]
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
-            ├── estimated rows: 0.20
+            ├── estimated rows: 0.00
             └── Filter
                 ├── output columns: [numbers.number (#0)]
                 ├── filters: [numbers.number (#0) > 1]
-                ├── estimated rows: 0.20
+                ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
@@ -117,90 +117,90 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 HashJoin
 ├── output columns: [a (#1)]
 ├── join type: INNER
-├── build keys: [_if_scalar_subquery (#15)]
-├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
+├── build keys: [CAST(t1.a (#1) AS UInt64 NULL)]
+├── probe keys: [_if_scalar_subquery (#15)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── EvalScalar(Build)
-│   ├── output columns: [_if_scalar_subquery (#15)]
-│   ├── expressions: [if(CAST(_count_scalar_subquery (#13) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#14))]
+│   ├── output columns: [a (#1)]
+│   ├── expressions: [numbers.number (#0) + 1]
 │   ├── estimated rows: 1.00
-│   └── Limit
-│       ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
-│       ├── limit: 1
-│       ├── offset: 0
-│       ├── estimated rows: 1.00
-│       └── AggregateFinal
-│           ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
-│           ├── group by: []
-│           ├── aggregate functions: [count(), any(COUNT(*))]
-│           ├── limit: 1
-│           ├── estimated rows: 1.00
-│           └── AggregatePartial
-│               ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
-│               ├── group by: []
-│               ├── aggregate functions: [count(), any(COUNT(*))]
-│               ├── estimated rows: 1.00
-│               └── AggregateFinal
-│                   ├── output columns: [COUNT(*) (#12)]
-│                   ├── group by: []
-│                   ├── aggregate functions: [count()]
-│                   ├── estimated rows: 1.00
-│                   └── AggregatePartial
-│                       ├── output columns: [COUNT(*) (#12)]
-│                       ├── group by: []
-│                       ├── aggregate functions: [count()]
-│                       ├── estimated rows: 1.00
-│                       └── HashJoin
-│                           ├── output columns: []
-│                           ├── join type: INNER
-│                           ├── build keys: [t2.b (#5)]
-│                           ├── probe keys: [t3.b (#10)]
-│                           ├── filters: []
-│                           ├── estimated rows: 0.20
-│                           ├── EvalScalar(Build)
-│                           │   ├── output columns: [b (#5)]
-│                           │   ├── expressions: [numbers.number (#3) + 1]
-│                           │   ├── estimated rows: 0.20
-│                           │   └── Filter
-│                           │       ├── output columns: [numbers.number (#3)]
-│                           │       ├── filters: [numbers.number (#3) + 1 = 1]
-│                           │       ├── estimated rows: 0.20
-│                           │       └── TableScan
-│                           │           ├── table: default.system.numbers
-│                           │           ├── output columns: [number (#3)]
-│                           │           ├── read rows: 1
-│                           │           ├── read bytes: 8
-│                           │           ├── partitions total: 1
-│                           │           ├── partitions scanned: 1
-│                           │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
-│                           │           └── estimated rows: 1.00
-│                           └── EvalScalar(Probe)
-│                               ├── output columns: [b (#10)]
-│                               ├── expressions: [numbers.number (#8) + 1]
-│                               ├── estimated rows: 1.00
-│                               └── TableScan
-│                                   ├── table: default.system.numbers
-│                                   ├── output columns: [number (#8)]
-│                                   ├── read rows: 1
-│                                   ├── read bytes: 8
-│                                   ├── partitions total: 1
-│                                   ├── partitions scanned: 1
-│                                   ├── push downs: [filters: [], limit: NONE]
-│                                   └── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#0)]
+│       ├── read rows: 1
+│       ├── read bytes: 8
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 1.00
 └── EvalScalar(Probe)
-    ├── output columns: [a (#1)]
-    ├── expressions: [numbers.number (#0) + 1]
+    ├── output columns: [_if_scalar_subquery (#15)]
+    ├── expressions: [if(CAST(_count_scalar_subquery (#13) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#14))]
     ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── output columns: [number (#0)]
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1.00
+    └── Limit
+        ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
+        ├── limit: 1
+        ├── offset: 0
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
+            ├── group by: []
+            ├── aggregate functions: [count(), any(COUNT(*))]
+            ├── limit: 1
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
+                ├── group by: []
+                ├── aggregate functions: [count(), any(COUNT(*))]
+                ├── estimated rows: 1.00
+                └── AggregateFinal
+                    ├── output columns: [COUNT(*) (#12)]
+                    ├── group by: []
+                    ├── aggregate functions: [count()]
+                    ├── estimated rows: 1.00
+                    └── AggregatePartial
+                        ├── output columns: [COUNT(*) (#12)]
+                        ├── group by: []
+                        ├── aggregate functions: [count()]
+                        ├── estimated rows: 1.00
+                        └── HashJoin
+                            ├── output columns: []
+                            ├── join type: INNER
+                            ├── build keys: [t2.b (#5)]
+                            ├── probe keys: [t3.b (#10)]
+                            ├── filters: []
+                            ├── estimated rows: 0.20
+                            ├── EvalScalar(Build)
+                            │   ├── output columns: [b (#5)]
+                            │   ├── expressions: [numbers.number (#3) + 1]
+                            │   ├── estimated rows: 0.20
+                            │   └── Filter
+                            │       ├── output columns: [numbers.number (#3)]
+                            │       ├── filters: [numbers.number (#3) + 1 = 1]
+                            │       ├── estimated rows: 0.20
+                            │       └── TableScan
+                            │           ├── table: default.system.numbers
+                            │           ├── output columns: [number (#3)]
+                            │           ├── read rows: 1
+                            │           ├── read bytes: 8
+                            │           ├── partitions total: 1
+                            │           ├── partitions scanned: 1
+                            │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
+                            │           └── estimated rows: 1.00
+                            └── EvalScalar(Probe)
+                                ├── output columns: [b (#10)]
+                                ├── expressions: [numbers.number (#8) + 1]
+                                ├── estimated rows: 1.00
+                                └── TableScan
+                                    ├── table: default.system.numbers
+                                    ├── output columns: [number (#8)]
+                                    ├── read rows: 1
+                                    ├── read bytes: 8
+                                    ├── partitions total: 1
+                                    ├── partitions scanned: 1
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    └── estimated rows: 1.00
 
 query T
 explain select name from system.functions order by example
@@ -228,11 +228,11 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.20
+│   ├── estimated rows: 0.00
 │   └── AggregateFinal
 │       ├── output columns: [count(*) (#2)]
 │       ├── group by: []

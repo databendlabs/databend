@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 use byteorder::BigEndian;
 use byteorder::WriteBytesExt;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::number::Number;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -60,25 +60,25 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
     }
 }
 
-pub struct StringKeysColumnBuilder<'a> {
-    pub inner_builder: StringColumnBuilder,
+pub struct BinaryKeysColumnBuilder<'a> {
+    pub inner_builder: BinaryColumnBuilder,
 
     _initial: usize,
 
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> StringKeysColumnBuilder<'a> {
+impl<'a> BinaryKeysColumnBuilder<'a> {
     pub fn create(capacity: usize, value_capacity: usize) -> Self {
-        StringKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
+        BinaryKeysColumnBuilder {
+            inner_builder: BinaryColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
             _initial: value_capacity,
         }
     }
 }
 
-impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
+impl<'a> KeysColumnBuilder for BinaryKeysColumnBuilder<'a> {
     type T = &'a [u8];
 
     fn bytes_size(&self) -> usize {
@@ -91,7 +91,7 @@ impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
     }
 
     fn finish(self) -> Column {
-        Column::String(self.inner_builder.build())
+        Column::Binary(self.inner_builder.build())
     }
 }
 
@@ -132,15 +132,15 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
     }
 }
 
-pub struct DictionaryStringKeysColumnBuilder<'a> {
+pub struct DictionaryBinaryKeysColumnBuilder<'a> {
     bytes_size: usize,
     data: Vec<DictionaryKeys>,
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> DictionaryStringKeysColumnBuilder<'a> {
+impl<'a> DictionaryBinaryKeysColumnBuilder<'a> {
     pub fn create(_: usize, _: usize) -> Self {
-        DictionaryStringKeysColumnBuilder {
+        DictionaryBinaryKeysColumnBuilder {
             bytes_size: 0,
             data: vec![],
             _phantom: PhantomData,
@@ -148,7 +148,7 @@ impl<'a> DictionaryStringKeysColumnBuilder<'a> {
     }
 }
 
-impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
+impl<'a> KeysColumnBuilder for DictionaryBinaryKeysColumnBuilder<'a> {
     type T = &'a DictionaryKeys;
 
     fn bytes_size(&self) -> usize {
@@ -168,7 +168,7 @@ impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
 
     #[inline(always)]
     fn finish(self) -> Column {
-        let mut builder = StringColumnBuilder::with_capacity(self.data.len(), self.bytes_size);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.data.len(), self.bytes_size);
 
         unsafe {
             for dictionary_keys in self.data {
@@ -182,6 +182,6 @@ impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
             }
         }
 
-        Column::String(builder.build())
+        Column::Binary(builder.build())
     }
 }

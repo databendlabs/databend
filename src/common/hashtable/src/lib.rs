@@ -111,5 +111,5 @@ pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
-pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub type BinaryHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
 pub use traits::HashJoinHashtableLike;

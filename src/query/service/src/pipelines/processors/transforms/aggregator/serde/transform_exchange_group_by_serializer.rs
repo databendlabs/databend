@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::flight::default_ipc_fields;
 use databend_common_arrow::arrow::io::flight::WriteOptions;
 use databend_common_arrow::arrow::io::ipc::write::Compression;
@@ -88,7 +89,7 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
         local_pos: usize,
         compression: Option<FlightCompression>,
     ) -> Box<dyn Processor> {
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,

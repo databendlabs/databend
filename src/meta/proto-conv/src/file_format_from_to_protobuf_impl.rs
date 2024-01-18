@@ -18,6 +18,7 @@
 use std::str::FromStr;
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
@@ -435,6 +436,16 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             })
             .transpose()?
             .unwrap_or_default();
+
+        let binary_format = p
+            .binary_format
+            .map(|s| BinaryFormat::from_str(&s))
+            .transpose()
+            .map_err(|e| Incompatible {
+                reason: format!("{:?}", e),
+            })?
+            .unwrap_or_default();
+
         Ok(Self {
             compression,
             headers: p.headers,
@@ -446,6 +457,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             null_display,
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
             empty_field_as,
+            binary_format,
+            output_header: p.output_header,
         })
     }
 
@@ -464,6 +477,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             null_display: self.null_display.clone(),
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
             empty_field_as: Some(self.empty_field_as.to_string()),
+            binary_format: Some(self.binary_format.to_string()),
+            output_header: self.output_header,
         })
     }
 }

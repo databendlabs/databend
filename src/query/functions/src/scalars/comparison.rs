@@ -661,7 +661,7 @@ fn variant_vectorize_like(
             Value::Column(builder.into())
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
-            let arg2_iter = VariantType::iter_column(&arg2);
+            let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
                 let pattern_type = check_pattern_type(arg2, false);
@@ -671,7 +671,7 @@ fn variant_vectorize_like(
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let arg1_iter = VariantType::iter_column(&arg1);
-            let arg2_iter = VariantType::iter_column(&arg2);
+            let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                 let pattern_type = check_pattern_type(arg2, false);

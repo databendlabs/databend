@@ -510,7 +510,7 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
-        r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"ALTER TASK MyTask1 RESUME"#,
@@ -547,9 +547,6 @@ fn test_statement() {
         "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON STAGE s1 FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON UDF f1 FROM ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
     ];
 
@@ -644,6 +641,7 @@ fn test_statement_error() {
         "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
         "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
         "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
+        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
         "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
     ];
 

@@ -34,6 +34,7 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::types::binary::BinaryColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
@@ -115,18 +116,16 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::Binary(s) => {
-                write!(f, "0x")?;
                 for c in *s {
-                    write!(f, "{:02x}", c)?;
+                    write!(f, "{:02X}", c)?;
                 }
                 Ok(())
             }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }
@@ -164,7 +163,13 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, ")")
             }
-            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
+            ScalarRef::Variant(s) => {
+                write!(f, "0x")?;
+                for c in *s {
+                    write!(f, "{c:02x}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -202,18 +207,16 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::Binary(s) => {
-                write!(f, "0x")?;
                 for c in *s {
-                    write!(f, "{:02x}", c)?;
+                    write!(f, "{c:02X}")?;
                 }
                 Ok(())
             }
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
-                    write!(f, "0x")?;
                     for c in *s {
-                        write!(f, "{:02x}", c)?;
+                        write!(f, "{c:02X}")?;
                     }
                     Ok(())
                 }
@@ -391,6 +394,18 @@ impl Debug for DecimalColumn {
                 ))
                 .finish(),
         }
+    }
+}
+
+impl Debug for BinaryColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinaryColumn")
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
+            .finish()
     }
 }
 

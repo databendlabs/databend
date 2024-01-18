@@ -22,6 +22,7 @@ use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
@@ -106,7 +107,7 @@ impl Column {
                 }
             }),
             Column::Boolean(bm) => Column::Boolean(Self::take_boolean_types(bm, indices)),
-            Column::Binary(column) => BinaryType::upcast_column(Self::take_string_types(
+            Column::Binary(column) => BinaryType::upcast_column(Self::take_binary_types(
                 column,
                 indices,
                 string_items_buf.as_mut(),
@@ -165,7 +166,7 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
-            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_string_types(
+            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_binary_types(
                 column,
                 indices,
                 string_items_buf.as_mut(),
@@ -185,7 +186,7 @@ impl Column {
                     .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => VariantType::upcast_column(Self::take_string_types(
+            Column::Variant(column) => VariantType::upcast_column(Self::take_binary_types(
                 column,
                 indices,
                 string_items_buf.as_mut(),
@@ -209,11 +210,11 @@ impl Column {
         builder
     }
 
-    pub fn take_string_types<I>(
-        col: &StringColumn,
+    pub fn take_binary_types<I>(
+        col: &BinaryColumn,
         indices: &[I],
         string_items_buf: Option<&mut Vec<(u64, usize)>>,
-    ) -> StringColumn
+    ) -> BinaryColumn
     where
         I: databend_common_arrow::arrow::types::Index,
     {
@@ -230,8 +231,8 @@ impl Column {
             false => string_items_buf.unwrap(),
         };
 
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let col_offset = col.offsets().as_slice();
         let col_data_ptr = col.data().as_slice().as_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -262,7 +263,24 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn take_string_types<I>(
+        col: &StringColumn,
+        indices: &[I],
+        string_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> StringColumn
+    where
+        I: databend_common_arrow::arrow::types::Index,
+    {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::take_binary_types(
+                &col.clone().into(),
+                indices,
+                string_items_buf,
+            ))
+        }
     }
 
     pub fn take_boolean_types<I>(col: &Bitmap, indices: &[I]) -> Bitmap

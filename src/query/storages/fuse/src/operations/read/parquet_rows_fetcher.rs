@@ -179,7 +179,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     async fn prepare_part_map(&mut self, row_ids: &[u64]) -> Result<()> {
         let snapshot = self.snapshot.as_ref().unwrap();
 
-        let arrow_schema = self.schema.to_arrow();
+        let arrow_schema = self.schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
         for row_id in row_ids {

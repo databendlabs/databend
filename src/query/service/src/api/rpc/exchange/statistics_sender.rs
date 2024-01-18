@@ -199,6 +199,16 @@ impl StatisticsSender {
         Ok(())
     }
 
+    #[async_backtrace::framed]
+    async fn send_scan_cache_metrics(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        let data_cache_metrics = ctx.get_data_cache_metrics();
+        let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
+        flight_sender.send(data_packet).await
+    }
+
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
         let mut progress_info = vec![];
 

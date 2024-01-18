@@ -226,7 +226,7 @@ impl FuseTable {
         partitions_total: usize,
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
         let partitions_scanned = block_metas.len();

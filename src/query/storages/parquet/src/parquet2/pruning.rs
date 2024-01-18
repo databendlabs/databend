@@ -33,7 +33,6 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
-use databend_common_catalog::plan::TopK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Expr;
@@ -75,8 +74,6 @@ pub struct PartitionPruner {
     pub column_nodes: ColumnNodes,
     /// Whether to skip pruning.
     pub skip_pruning: bool,
-    /// top k information from pushed down information. The usize is the offset of top k column in `schema`.
-    pub top_k: Option<(TopK, usize)>,
     // TODO: use limit information for pruning
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
@@ -120,7 +117,7 @@ impl PartitionPruner {
                 .any(|c| c.metadata().statistics.is_none())
         });
 
-        let row_group_stats = if no_stats {
+        let _row_group_stats = if no_stats {
             None
         } else if self.row_group_pruner.is_some() && !self.skip_pruning {
             let (pruner, _) = self.row_group_pruner.as_ref().unwrap();
@@ -140,8 +137,6 @@ impl PartitionPruner {
             } else {
                 None
             }
-        } else if self.top_k.is_some() {
-            collect_row_group_stats(&self.column_nodes, &file_meta.row_groups).ok()
         } else {
             None
         };
@@ -177,23 +172,13 @@ impl PartitionPruner {
                 let c = &rg.columns()[*index];
                 let (offset, length) = c.byte_range();
 
-                let min_max = self
-                    .top_k
-                    .as_ref()
-                    .filter(|(tk, _)| tk.leaf_id == *index)
-                    .zip(row_group_stats.as_ref())
-                    .map(|((_, offset), stats)| {
-                        let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
-                        (stat.min().clone(), stat.max().clone())
-                    });
-
                 column_metas.insert(*index, ColumnMeta {
                     offset,
                     length,
                     num_values: c.num_values(),
                     compression: c.compression(),
                     uncompressed_size: c.uncompressed_size() as u64,
-                    min_max,
+                    min_max: None,
                     has_dictionary: c.dictionary_page_offset().is_some(),
                 });
             }
@@ -248,7 +233,6 @@ impl PartitionPruner {
         let mut max_compression_ratio = self.compression_ratio;
         let mut max_compressed_size = 0u64;
 
-        // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
             let path = &large_files[file_id].0;
             if is_copy {
@@ -689,7 +673,7 @@ mod tests {
         let mut reader = Cursor::new(data);
         let metadata = read_metadata(&mut reader)?;
         let rgs = metadata.row_groups;
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, None);
 
         let row_group_stats = collect_row_group_stats(&column_nodes, &rgs)?;

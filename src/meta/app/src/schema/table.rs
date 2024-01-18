@@ -32,7 +32,6 @@ use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
-use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
@@ -84,6 +83,10 @@ impl TableNameIdent {
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
+    }
+
+    pub fn tenant(&self) -> &str {
+        &self.tenant
     }
 
     pub fn table_name(&self) -> String {
@@ -239,7 +242,6 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
-    pub owner: Option<Ownership>,
 }
 
 impl TableMeta {
@@ -354,7 +356,6 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
-            owner: None,
         }
     }
 }
@@ -783,6 +784,14 @@ pub struct CountTablesKey {
 impl Display for CountTablesKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'", self.tenant)
+    }
+}
+
+impl CountTablesKey {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+        }
     }
 }
 

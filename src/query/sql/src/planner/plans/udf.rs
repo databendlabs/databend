@@ -49,6 +49,10 @@ impl Operator for Udf {
         RelOp::Udf
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 

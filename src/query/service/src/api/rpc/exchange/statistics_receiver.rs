@@ -142,6 +142,10 @@ impl StatisticsReceiver {
                 ctx.get_merge_status().write().merge_status(status);
                 Ok(false)
             }
+            Ok(Some(DataPacket::DataCacheMetrics(metrics))) => {
+                ctx.get_data_cache_metrics().merge(metrics);
+                Ok(false)
+            }
         }
     }
 

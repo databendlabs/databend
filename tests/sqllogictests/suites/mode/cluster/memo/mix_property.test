@@ -1,0 +1,101 @@
+statement ok
+drop database if exists mix_property
+
+statement ok
+create database mix_property
+
+statement ok
+use mix_property
+
+statement ok
+create table t_10(a int) as select * from numbers(10)
+
+statement ok
+create table t_100(a int) as select * from numbers(100)
+
+statement ok
+create table t_1000(a int) as select * from numbers(1000)
+
+query T
+explain memo
+select sum(t_1000.a) from t_1000, t_100, t_10
+where t_1000.a = t_100.a and t_1000.a = t_10.a
+group by t_100.a, t_10.a
+order by t_100.a, t_10.a
+limit 10
+----
+Memo
+├── root group: #10
+├── estimated memory: 10672 bytes
+├── Group #0
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []
+│   │   ├── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: 5200.000, children: [{ dist: Any }]
+│   │   └── { dist: Serial }: expr: #2, cost: 35100.000, children: [{ dist: Any }]
+│   ├── #0 Scan []
+│   ├── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#0]
+│   └── #2 Exchange: (Merge) [#0]
+├── Group #1
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   │   ├── { dist: Hash(t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: 52000.000, children: [{ dist: Any }]
+│   │   └── { dist: Serial }: expr: #2, cost: 351000.000, children: [{ dist: Any }]
+│   ├── #0 Scan []
+│   ├── #1 Exchange: (Hash(t_1000.a (#0)::Int32 NULL)) [#1]
+│   └── #2 Exchange: (Merge) [#1]
+├── Group #2
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   │   ├── { dist: Broadcast }: expr: #1, cost: 1010.000, children: [{ dist: Any }]
+│   │   ├── { dist: Hash(t_10.a (#2)::Int32 NULL) }: expr: #2, cost: 520.000, children: [{ dist: Any }]
+│   │   └── { dist: Serial }: expr: #3, cost: 3510.000, children: [{ dist: Any }]
+│   ├── #0 Scan []
+│   ├── #1 Exchange: (Broadcast) [#2]
+│   ├── #2 Exchange: (Hash(t_10.a (#2)::Int32 NULL)) [#2]
+│   └── #3 Exchange: (Merge) [#2]
+├── Group #3
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 3110.000, children: [{ dist: Any }, { dist: Broadcast }]
+│   │   ├── { dist: Broadcast }: expr: #1, cost: 4110.000, children: [{ dist: Any }]
+│   │   ├── { dist: Hash(t_1000.a (#0)::Int32 NULL) }: expr: #0, cost: 54110.000, children: [{ dist: Hash(t_1000.a (#0)::Int32 NULL) }, { dist: Hash(t_10.a (#2)::Int32 NULL) }]
+│   │   └── { dist: Serial }: expr: #0, cost: 355610.000, children: [{ dist: Serial }, { dist: Serial }]
+│   ├── #0 Join [#1, #2]
+│   ├── #1 Exchange: (Broadcast) [#3]
+│   ├── #2 Exchange: (Merge) [#3]
+│   └── #3 Exchange: (Hash(t_1000.a (#0)::Int32 NULL)) [#3]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 4410.000, children: [{ dist: Any }, { dist: Broadcast }]
+│   └── #0 Join [#0, #3]
+├── Group #5
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 4419.000, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: 4878.000, children: [{ dist: Any }]
+│   ├── #0 EvalScalar [#4]
+│   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#5]
+├── Group #6
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 4923.000, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   └── #0 Aggregate [#5]
+├── Group #7
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: 4968.000, children: [{ dist: Any }]
+│   │   └── { dist: Serial }: expr: #1, cost: 8118.000, children: [{ dist: Any }]
+│   ├── #0 Aggregate [#6]
+│   └── #1 Exchange: (Merge) [#7]
+├── Group #8
+│   ├── Best properties
+│   │   └── { dist: Serial }: expr: #0, cost: 8127.000, children: [{ dist: Serial }]
+│   └── #0 Sort [#7]
+├── Group #9
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 8136.000, children: [{ dist: Serial }]
+│   └── #0 Limit [#8]
+└── Group #10
+    ├── Best properties
+    │   └── { dist: Serial }: expr: #0, cost: 8145.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#9]
+
+
+statement ok
+drop database mix_property
