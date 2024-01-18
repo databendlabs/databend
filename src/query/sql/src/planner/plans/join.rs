@@ -540,7 +540,9 @@ impl Operator for Join {
                 // Use a very large value to prevent broadcast join.
                 1000.0
             };
-            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
+            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality
+                || ctx.get_settings().get_enforce_broadcast_join()?
+            {
                 if child_index == 1 {
                     required.distribution = Distribution::Broadcast;
                 } else {
@@ -562,13 +564,13 @@ impl Operator for Join {
 
     fn compute_required_prop_children(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
 
-        if self.join_type != JoinType::Cross {
+        if self.join_type != JoinType::Cross && !ctx.get_settings().get_enforce_broadcast_join()? {
             // (Hash, Hash)
             children_required.extend(
                 self.left_conditions

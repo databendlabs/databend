@@ -8,6 +8,9 @@ statement ok
 USE db1
 
 statement ok
+set enable_table_lock = 0
+
+statement ok
 create table t(a int) cluster by(a) change_tracking = false
 
 statement ok
@@ -82,6 +85,9 @@ insert into t2 values(1)
 
 statement error 1002
 merge into t using t2 on t.a = t2.a when matched then delete
+
+statement ok
+set enable_table_lock = 1
 
 statement ok
 drop table t all

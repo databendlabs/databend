@@ -172,7 +172,6 @@ use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
@@ -189,7 +188,6 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::TryStreamExt;
@@ -1619,34 +1617,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         }
 
-        // Convert TxnOpResponse into TxnGetResponses.
-        fn into_get_responses(
-            responses: Vec<TxnOpResponse>,
-        ) -> Result<Vec<TxnGetResponse>, MetaNetworkError> {
-            let data = responses
-                .into_iter()
-                .map(|r| {
-                    if let Some(u) = r.response {
-                        let res: Result<TxnGetResponse, MetaNetworkError> =
-                            u.try_into().map_err(|s| {
-                                let invalid =
-                                    InvalidReply::new("expect TxnGetResponse", &AnyError::error(s));
-                                MetaNetworkError::from(invalid)
-                            });
-                        res
-                    } else {
-                        let invalid = InvalidReply::new(
-                            "unexpected: TxnOpResponse.response is None",
-                            &AnyError::error("TxnOpResponse.response is None"),
-                        );
-                        let net_err = MetaNetworkError::from(invalid);
-                        Err(net_err)
-                    }
-                })
-                .collect::<Result<Vec<_>, MetaNetworkError>>()?;
-            Ok(data)
-        }
-
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let tenant = req.name_ident.tenant();
@@ -1692,10 +1662,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             key_table_id_list.to_string_key(),
             key_table_count.to_string_key(),
         ];
-        let fetches = keys
-            .iter()
-            .map(|k| TxnOp::get(k.clone()))
-            .collect::<Vec<_>>();
 
         // Initialize required key-values
         let mut data = {
@@ -1723,9 +1689,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
-            // The latest state is fetched at once a txn conflict,
-            // Sleep just increases the chance of conflict.
-            let _do_not_sleep = trials.next().unwrap()?;
+            trials.next().unwrap()?.await;
+
+            // When retrying, data is cleared and re-fetched in one shot.
+            if data.is_empty() {
+                data = {
+                    let values = self.mget_kv(&keys).await?;
+                    keys.iter()
+                        .zip(values.into_iter())
+                        .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                        .collect::<Vec<_>>()
+                };
+            }
 
             let db_meta = {
                 let d = data.remove(0);
@@ -1831,7 +1806,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
-                    else_then: fetches.clone(),
+                    else_then: vec![],
                 };
 
                 let (succ, responses) = send_txn(self, txn_req).await?;
@@ -1851,7 +1826,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     });
                 } else {
                     // re-run txn with re-fetched data
-                    data = into_get_responses(responses)?;
+                    data = vec![];
                 }
             }
         }

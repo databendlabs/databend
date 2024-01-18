@@ -2234,3 +2234,7 @@ HashJoin: RIGHT ANTI
 │           └── Scan: default.tpch_test.customer (read rows: 15000)
 └── Probe
     └── Scan: default.tpch_test.orders (read rows: 150000)
+
+
+statement ok
+set enable_runtime_filter = 0;
