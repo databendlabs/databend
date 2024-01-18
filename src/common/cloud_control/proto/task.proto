@@ -199,7 +199,7 @@ message GetTaskDependentsResponse {
 
 message EnableTaskDependentsRequest {
   string tenant_id = 1;
-  string root_task_name = 2;
+  string task_name = 2;
 }
 
 message EnableTaskDependentsResponse {

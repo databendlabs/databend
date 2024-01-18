@@ -41,6 +41,8 @@ use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::others::TaskDependentsEnableTable;
+use crate::table_functions::others::TaskDependentsTable;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -206,6 +208,15 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(FuseEncodingTable::create)),
         );
 
+        creators.insert(
+            "task_dependents".to_string(),
+            (next_id(), Arc::new(TaskDependentsTable::create)),
+        );
+
+        creators.insert(
+            "task_dependents_enable".to_string(),
+            (next_id(), Arc::new(TaskDependentsEnableTable::create)),
+        );
 
         TableFunctionFactory {
             creators: RwLock::new(creators),

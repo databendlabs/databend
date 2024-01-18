@@ -16,12 +16,14 @@ mod execute_background_job;
 mod license_info;
 mod suggested_background_compaction_tasks;
 mod suggested_background_tasks;
-mod tenant_quota;
 mod task_dependents;
 mod task_dependents_enable;
+mod tenant_quota;
 
 pub use execute_background_job::ExecuteBackgroundJobTable;
 pub use license_info::LicenseInfoTable;
 pub use suggested_background_tasks::SuggestedBackgroundTasksSource;
 pub use suggested_background_tasks::SuggestedBackgroundTasksTable;
+pub use task_dependents::TaskDependentsTable;
+pub use task_dependents_enable::TaskDependentsEnableTable;
 pub use tenant_quota::TenantQuotaTable;
