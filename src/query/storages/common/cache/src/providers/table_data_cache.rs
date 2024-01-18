@@ -93,7 +93,7 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
             metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
-            // Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, process_values.bytes);
+            // Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, process_values.bytes);
             Some(item)
         } else {
             metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);

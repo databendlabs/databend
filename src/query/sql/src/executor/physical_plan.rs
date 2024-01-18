@@ -470,9 +470,24 @@ impl PhysicalPlan {
                 .iter()
                 .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                 .join(", "),
-            // PhysicalPlan::HashJoin(v) => {
-            //     v.
-            // }
+            PhysicalPlan::HashJoin(v) => {
+                format!(
+                    "{} AND {}",
+                    v.build_keys
+                        .iter()
+                        .zip(v.probe_keys.iter())
+                        .map(|(l, r)| format!(
+                            "({} = {})",
+                            l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                            r.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        ))
+                        .join(" AND "),
+                    v.non_equi_conditions
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(" AND ")
+                )
+            }
             // PhysicalPlan::ProjectSet(_) => {}
             // PhysicalPlan::AggregateExpand(_) => {}
             // PhysicalPlan::Window(_) => {}
@@ -547,7 +562,7 @@ impl PhysicalPlan {
             )]),
             PhysicalPlan::Project(v) => HashMap::from([(
                 String::from("List of Expressions"),
-                v.output_schema()?.fields.iter().map(|x| x.name()).collect(),
+                v.output_schema()?.fields.iter().map(|x| x.name()).cloned().collect(),
             )]),
             PhysicalPlan::AggregatePartial(v) => HashMap::from([
                 (
