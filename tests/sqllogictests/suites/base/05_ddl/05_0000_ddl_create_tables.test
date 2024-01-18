@@ -372,3 +372,6 @@ alter table t_row_per_block set options(row_per_block = 100000000000);
 
 statement ok
 alter table t_row_per_block set options(row_per_block = 100000);
+
+statement ok
+create table t_nested(a int, b array(int not null), c array(int null), d map(string, int null), e map(string, string not null), f tuple(int null, string not null, array(int null), array(string not null)));

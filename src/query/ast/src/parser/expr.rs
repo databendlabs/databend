@@ -1574,7 +1574,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
+    map_res(
         alt((
             rule! {
             ( #ty_boolean
@@ -1594,7 +1594,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NULL? : "type name"
+            ) ~ NOT? ~ NULL? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1603,14 +1603,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NULL? : "type name" },
+            ) ~ NOT? ~ NULL? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
+        |(ty, opt_not, opt_null)| match (opt_not.is_some(), opt_null.is_some()) {
+            (false, true) => Ok(ty.wrap_nullable()),
+            (false, false) => Ok(ty),
+            (true, true) => {
+                if matches!(ty, TypeName::Nullable(_)) {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "ambiguous NOT NULL constraint",
+                    )))
+                } else {
+                    Ok(ty.wrap_not_null())
+                }
             }
+            (true, false) => Err(nom::Err::Failure(ErrorKind::Other(
+                "unexpected `NOT`, expecting `NULL` or `NOT NULL`",
+            ))),
         },
     )(i)
 }

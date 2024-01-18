@@ -91,7 +91,7 @@ error:
   --> SQL:1:45
   |
 1 | select number + 5 as a, cast(number as float(255))
-  | ------                  ----                ^ unexpected `(`, expecting `)` or `NULL`
+  | ------                  ----                ^ unexpected `(`, expecting `)`, `NOT`, or `NULL`
   | |                       |                    
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression
