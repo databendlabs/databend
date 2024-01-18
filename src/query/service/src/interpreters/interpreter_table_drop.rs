@@ -111,11 +111,11 @@ impl Interpreter for DropTableInterpreter {
         // but the table still exists, in the interval maybe some unexpected things will happen.
         // drop the ownership
         let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
-        let owner_object = OwnershipObject::Table {
-            catalog_name: self.plan.catalog.clone(),
-            db_id: db.get_db_info().ident.db_id,
-            table_id: tbl.get_table_info().ident.table_id,
-        };
+        let owner_object = OwnershipObject::Table(
+            self.plan.catalog.clone(),
+            db.get_db_info().ident.db_id,
+            tbl.get_table_info().ident.table_id,
+        );
 
         role_api.revoke_ownership(&owner_object).await?;
         RoleCacheManager::instance().invalidate_cache(&tenant);

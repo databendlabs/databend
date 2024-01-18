@@ -281,11 +281,10 @@ where TablesTable<T>: HistoryAware
                         database_tables.push(table);
                         owner.push(
                             user_api
-                                .get_ownership(&tenant, &OwnershipObject::Table {
-                                    catalog_name: ctl_name.to_string(),
-                                    db_id,
-                                    table_id,
-                                })
+                                .get_ownership(
+                                    &tenant,
+                                    &OwnershipObject::Table(ctl_name.to_string(), db_id, table_id),
+                                )
                                 .await
                                 .ok()
                                 .and_then(|ownership| {

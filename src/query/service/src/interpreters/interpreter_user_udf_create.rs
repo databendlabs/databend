@@ -62,9 +62,7 @@ impl Interpreter for CreateUserUDFInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &OwnershipObject::UDF {
-                        name: self.plan.udf.name.clone(),
-                    },
+                    &OwnershipObject::UDF(self.plan.udf.name.clone()),
                     &current_role.name,
                 )
                 .await?;

@@ -92,10 +92,7 @@ impl PrivilegeAccess {
                     .get_db_info()
                     .ident
                     .db_id;
-                OwnershipObject::Database {
-                    catalog_name: catalog_name.clone(),
-                    db_id,
-                }
+                OwnershipObject::Database(catalog_name.clone(), db_id)
             }
             GrantObject::Table(catalog_name, db_name, table_name) => {
                 if db_name.to_lowercase() == "system" {
@@ -110,27 +107,16 @@ impl PrivilegeAccess {
                     .db_id;
                 let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
-                OwnershipObject::Table {
-                    catalog_name: catalog_name.clone(),
-                    db_id,
-                    table_id,
-                }
+                OwnershipObject::Table(catalog_name.clone(), db_id, table_id)
             }
-            GrantObject::DatabaseById(catalog_name, db_id) => OwnershipObject::Database {
-                catalog_name: catalog_name.clone(),
-                db_id: *db_id,
-            },
-            GrantObject::TableById(catalog_name, db_id, table_id) => OwnershipObject::Table {
-                catalog_name: catalog_name.clone(),
-                db_id: *db_id,
-                table_id: *table_id,
-            },
-            GrantObject::Stage(name) => OwnershipObject::Stage {
-                name: name.to_string(),
-            },
-            GrantObject::UDF(name) => OwnershipObject::UDF {
-                name: name.to_string(),
-            },
+            GrantObject::DatabaseById(catalog_name, db_id) => {
+                OwnershipObject::Database(catalog_name.clone(), *db_id)
+            }
+            GrantObject::TableById(catalog_name, db_id, table_id) => {
+                OwnershipObject::Table(catalog_name.clone(), *db_id, *table_id)
+            }
+            GrantObject::Stage(name) => OwnershipObject::Stage(name.to_string()),
+            GrantObject::UDF(name) => OwnershipObject::UDF(name.to_string()),
             GrantObject::Global => return Ok(None),
         };
 

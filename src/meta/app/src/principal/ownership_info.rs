@@ -38,20 +38,6 @@ impl Display for OwnershipInfoSerdeError {
     }
 }
 
-impl TryFrom<Vec<u8>> for OwnershipInfo {
-    type Error = OwnershipInfoSerdeError;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        match serde_json::from_slice(&value) {
-            Ok(role_info) => Ok(role_info),
-            Err(serialize_error) => Err(OwnershipInfoSerdeError {
-                message: "Cannot deserialize GrantOwnershipInfo from bytes".to_string(),
-                source: AnyError::new(&serialize_error),
-            }),
-        }
-    }
-}
-
 impl From<OwnershipInfoSerdeError> for ErrorCode {
     fn from(e: OwnershipInfoSerdeError) -> Self {
         ErrorCode::InvalidReply(e.to_string())

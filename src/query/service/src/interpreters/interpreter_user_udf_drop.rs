@@ -60,9 +60,7 @@ impl Interpreter for DropUserUDFInterpreter {
             .await?
         {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
-            let owner_object = OwnershipObject::UDF {
-                name: self.plan.udf.clone(),
-            };
+            let owner_object = OwnershipObject::UDF(self.plan.udf.clone());
 
             role_api.revoke_ownership(&owner_object).await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

@@ -27,25 +27,14 @@ use crate::principal::UserPrivilegeType;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum OwnershipObject {
     /// used on the fuse databases
-    Database {
-        catalog_name: String,
-        db_id: u64,
-    },
+    Database(String, u64),
 
     /// used on the fuse tables
-    Table {
-        catalog_name: String,
-        db_id: u64,
-        table_id: u64,
-    },
+    Table(String, u64, u64),
 
-    Stage {
-        name: String,
-    },
+    Stage(String),
 
-    UDF {
-        name: String,
-    },
+    UDF(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]

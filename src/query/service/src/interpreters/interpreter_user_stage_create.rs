@@ -93,9 +93,7 @@ impl Interpreter for CreateUserStageInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
-                    &OwnershipObject::Stage {
-                        name: self.plan.stage_info.stage_name.clone(),
-                    },
+                    &OwnershipObject::Stage(self.plan.stage_info.stage_name.clone()),
                     &current_role.name,
                 )
                 .await?;

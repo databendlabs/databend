@@ -74,9 +74,7 @@ impl Interpreter for DropUserStageInterpreter {
             // we should do `drop ownership` after actually drop stage,
             // drop the ownership
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
-            let owner_object = OwnershipObject::Stage {
-                name: self.plan.name.clone(),
-            };
+            let owner_object = OwnershipObject::Stage(self.plan.name.clone());
 
             role_api.revoke_ownership(&owner_object).await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

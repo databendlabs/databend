@@ -93,10 +93,10 @@ impl AsyncSystemTable for DatabasesTable {
                 db_id.push(id);
                 owners.push(
                     user_api
-                        .get_ownership(&tenant, &OwnershipObject::Database {
-                            catalog_name: ctl_name.to_string(),
-                            db_id: id,
-                        })
+                        .get_ownership(
+                            &tenant,
+                            &OwnershipObject::Database(ctl_name.to_string(), id),
+                        )
                         .await
                         .ok()
                         .and_then(|ownership| ownership.map(|o| o.role.as_bytes().to_vec())),

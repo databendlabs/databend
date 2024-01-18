@@ -183,11 +183,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id: table.get_id(),
-                    },
+                    &OwnershipObject::Table(self.plan.catalog.clone(), db_id, table.get_id()),
                     &current_role.name,
                 )
                 .await?;
@@ -264,11 +260,7 @@ impl CreateTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
             role_api
                 .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id: reply.table_id,
-                    },
+                    &OwnershipObject::Table(self.plan.catalog.clone(), db_id, reply.table_id),
                     &current_role.name,
                 )
                 .await?;

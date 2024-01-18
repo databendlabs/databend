@@ -61,10 +61,7 @@ impl GrantPrivilegeInterpreter {
                     .get_db_info()
                     .ident
                     .db_id;
-                Ok(OwnershipObject::Database {
-                    catalog_name,
-                    db_id,
-                })
+                Ok(OwnershipObject::Database(catalog_name, db_id))
             }
             GrantObject::Table(_, db_name, table_name) => {
                 let catalog_name = catalog_name.unwrap();
@@ -79,27 +76,18 @@ impl GrantPrivilegeInterpreter {
                     .get_table(tenant, db_name.as_str(), table_name)
                     .await?
                     .get_id();
-                Ok(OwnershipObject::Table {
-                    catalog_name,
-                    db_id,
-                    table_id,
-                })
+                Ok(OwnershipObject::Table(catalog_name, db_id, table_id))
             }
-            GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-                table_id: *table_id,
-            }),
-            GrantObject::DatabaseById(_, db_id) => Ok(OwnershipObject::Database {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-            }),
-            GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
-                name: name.to_string(),
-            }),
-            GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
-                name: name.to_string(),
-            }),
+            GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table(
+                catalog_name.unwrap(),
+                *db_id,
+                *table_id,
+            )),
+            GrantObject::DatabaseById(_, db_id) => {
+                Ok(OwnershipObject::Database(catalog_name.unwrap(), *db_id))
+            }
+            GrantObject::Stage(name) => Ok(OwnershipObject::Stage(name.to_string())),
+            GrantObject::UDF(name) => Ok(OwnershipObject::UDF(name.to_string())),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),

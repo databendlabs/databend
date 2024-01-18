@@ -2926,6 +2926,7 @@ dependencies = [
  "sha1",
  "sha2",
  "thiserror",
+ "tonic 0.10.2",
  "tonic-build",
 ]
 

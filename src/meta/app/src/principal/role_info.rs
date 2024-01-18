@@ -50,20 +50,6 @@ impl RoleInfo {
     }
 }
 
-impl TryFrom<Vec<u8>> for RoleInfo {
-    type Error = RoleInfoSerdeError;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        match serde_json::from_slice(&value) {
-            Ok(role_info) => Ok(role_info),
-            Err(serialize_error) => Err(RoleInfoSerdeError {
-                message: "Cannot deserialize RoleInfo from bytes".to_string(),
-                source: AnyError::new(&serialize_error),
-            }),
-        }
-    }
-}
-
 impl Display for RoleInfoSerdeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} cause: {}", self.message, self.source)
