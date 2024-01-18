@@ -320,7 +320,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: attachment.file_format_options.clone(),
+                file_format_options: attachment.file_format_options.as_ref().map(|v| {
+                    v.iter()
+                        .map(|(k, v)| (k.to_lowercase(), v.to_owned()))
+                        .collect::<BTreeMap<_, _>>()
+                }),
                 copy_options: attachment.copy_options.clone(),
             }),
             None => {}

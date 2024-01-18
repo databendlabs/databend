@@ -51,9 +51,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 use sysinfo::get_current_pid;
-use sysinfo::ProcessExt;
 use sysinfo::System;
-use sysinfo::SystemExt;
 use uuid::Uuid;
 
 // NOTE:
