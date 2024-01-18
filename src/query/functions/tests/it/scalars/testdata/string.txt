@@ -489,19 +489,19 @@ output         : 0
 ast            : ascii('你好')
 raw expr       : ascii('你好')
 checked expr   : ascii<String>("你好")
-optimized expr : 96_u8
+optimized expr : 228_u8
 output type    : UInt8
-output domain  : {96..=96}
-output         : 96
+output domain  : {228..=228}
+output         : 228
 
 
 ast            : ascii('😀123')
 raw expr       : ascii('😀123')
 checked expr   : ascii<String>("😀123")
-optimized expr : 0_u8
+optimized expr : 240_u8
 output type    : UInt8
-output domain  : {0..=0}
-output         : 0
+output domain  : {240..=240}
+output         : 240
 
 
 ast            : ascii(Null)
@@ -517,22 +517,22 @@ ast            : ascii(a)
 raw expr       : ascii(a::String)
 checked expr   : ascii<String>(a)
 evaluation:
-+--------+-----------------+-----------+
-|        | a               | Output    |
-+--------+-----------------+-----------+
-| Type   | String          | UInt8     |
-| Domain | {"-1"..="你好"} | {45..=96} |
-| Row 0  | '1'             | 49        |
-| Row 1  | '123'           | 49        |
-| Row 2  | '-1'            | 45        |
-| Row 3  | '你好'          | 96        |
-+--------+-----------------+-----------+
++--------+-----------------+------------+
+|        | a               | Output     |
++--------+-----------------+------------+
+| Type   | String          | UInt8      |
+| Domain | {"-1"..="你好"} | {45..=228} |
+| Row 0  | '1'             | 49         |
+| Row 1  | '123'           | 49         |
+| Row 2  | '-1'            | 45         |
+| Row 3  | '你好'          | 228        |
++--------+-----------------+------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 | Column | Data                                                                         |
 +--------+------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x313132332d31e4bda0e5a5bd, offsets: [0, 1, 4, 6, 12] } |
-| Output | UInt8([49, 49, 45, 96])                                                      |
+| Output | UInt8([49, 49, 45, 228])                                                     |
 +--------+------------------------------------------------------------------------------+
 
 

@@ -361,14 +361,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ascii",
         |_, domain| {
             FunctionDomain::Domain(SimpleDomain {
-                min: domain.min.chars().next().map_or(0, |v| v as u8),
+                min: domain.min.as_bytes().first().map_or(0, |v| *v),
                 max: domain
                     .max
                     .as_ref()
-                    .map_or(u8::MAX, |s| s.chars().next().map_or(u8::MAX, |v| v as u8)),
+                    .and_then(|x| x.as_bytes().first())
+                    .map_or(u8::MAX, |v| *v),
             })
         },
-        |val, _| val.chars().next().map_or(0, |v| v as u8),
+        |val, _| val.as_bytes().first().map_or(0, |v| *v),
     );
 
     // Trim functions
