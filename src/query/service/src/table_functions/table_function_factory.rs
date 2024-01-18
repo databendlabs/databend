@@ -206,6 +206,7 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(FuseEncodingTable::create)),
         );
 
+
         TableFunctionFactory {
             creators: RwLock::new(creators),
         }
