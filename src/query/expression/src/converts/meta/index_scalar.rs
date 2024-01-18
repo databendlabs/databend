@@ -43,6 +43,8 @@ pub enum IndexScalar {
     Timestamp(i64),
     Date(i32),
     Boolean(bool),
+    // For compat reason, we keep this attribute which treat string/binary into string
+    #[serde(alias = "String", alias = "Binary")]
     String(Vec<u8>),
     Array(IndexColumn),
     Map(IndexColumn),
