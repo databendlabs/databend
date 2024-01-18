@@ -385,13 +385,51 @@ fn rewrite_scalar_index(
 /// [`Range`] is to represent the value range of a column according to the predicates.
 ///
 /// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, Debug)]
 struct Range<'a> {
     min: Option<&'a Scalar>,
     min_close: bool,
     max: Option<&'a Scalar>,
     max_close: bool,
 }
+
+impl<'a> PartialEq for Range<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        fn check_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
+            match (left, right) {
+                (Some(left), Some(right)) => {
+                    if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                        match (left.is_integer(), right.is_integer()) {
+                            (true, true) => {
+                                left.integer_to_i128().unwrap() == right.integer_to_i128().unwrap()
+                            }
+                            (false, false) => {
+                                left.float_to_f64().unwrap() == right.float_to_f64().unwrap()
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        left == right
+                    }
+                }
+                (None, None) => true,
+                _ => false,
+            }
+        }
+
+        if self.min_close != other.min_close
+            || self.max_close != other.max_close
+            || !check_equal(self.min, other.min)
+            || !check_equal(self.max, other.max)
+        {
+            return false;
+        }
+
+        true
+    }
+}
+
+impl<'a> Eq for Range<'a> {}
 
 impl<'a> Range<'a> {
     fn new(val: &'a Scalar, op: &str) -> Self {
