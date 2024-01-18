@@ -195,7 +195,7 @@ SELECT SUBSTRING('12345', 0, 1)
 query TI
 select substr('城区主城区其他', 1, 6), length('我爱中国')
 ----
-城区	12
+城区主城区其 4
 
 
 statement ok
