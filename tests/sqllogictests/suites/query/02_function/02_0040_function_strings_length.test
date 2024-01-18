@@ -7,17 +7,17 @@ SELECT LENGTH('word')
 query I
 SELECT LENGTH('кириллица')
 ----
-18
+9
 
 query I
 SELECT LENGTH('кириллица and latin')
 ----
-28
+19
 
 query I
 SELECT LENGTH('你好')
 ----
-6
+2
 
 query T
 SELECT LENGTH(NULL)

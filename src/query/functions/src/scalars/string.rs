@@ -540,15 +540,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ord",
         |_, _| FunctionDomain::Full,
         |str: &str, _| {
+            let str = str.as_bytes();
             let mut res: u64 = 0;
             if !str.is_empty() {
-                let first = str.chars().next().unwrap();
-                if first.is_ascii() {
-                    res = first as u64;
+                if str[0].is_ascii() {
+                    res = str[0] as u64;
                 } else {
-                    let bytes = first.to_string().into_bytes();
-                    for (i, b) in bytes.iter().enumerate() {
-                        res += (*b as u64) * 256_u64.pow(i as u32);
+                    for (p, _) in str.iter().enumerate() {
+                        let s = &str[0..p + 1];
+                        if std::str::from_utf8(s).is_ok() {
+                            for (i, b) in s.iter().rev().enumerate() {
+                                res += (*b as u64) * 256_u64.pow(i as u32);
+                            }
+                            break;
+                        }
                     }
                 }
             }

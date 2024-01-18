@@ -9,30 +9,30 @@ SELECT CHAR(97, NULL)
 NULL
 
 query T
-SELECT CHAR(97)
+SELECT CHAR(97)::STRING
 ----
 a
 
 query TT
-select char(97,98) from numbers(2);
+select char(97,98)::STRING from numbers(2);
 ----
 ab
 ab
 
 query T
-SELECT CHAR(77,121,83,81,76)
+SELECT CHAR(77,121,83,81,76)::STRING
 ----
 MySQL
 
 
 query T
-SELECT char(0xD0, 0xBF, 0xD1, 0x80, 0xD0, 0xB8, 0xD0, 0xB2, 0xD0, 0xB5, 0xD1, 0x82) AS hello
+SELECT char(0xD0, 0xBF, 0xD1, 0x80, 0xD0, 0xB8, 0xD0, 0xB2, 0xD0, 0xB5, 0xD1, 0x82)::STRING AS hello
 ----
 привет
 
 
 query T
-SELECT char(0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd) AS hello
+SELECT char(0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd)::STRING AS hello
 ----
 你好
 
@@ -43,7 +43,7 @@ statement ok
 create database if not exists db1
 
 statement ok
-create table db1.t as SELECT CHAR(77,121,83,81,76) AS hello
+create table db1.t as SELECT CHAR(77,121,83,81,76)::STRING AS hello
 
 query T
 select * from db1.t

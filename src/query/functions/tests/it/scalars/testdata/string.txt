@@ -2716,28 +2716,28 @@ output         : NULL
 ast            : ord('и')
 raw expr       : ord('и')
 checked expr   : ord<String>("и")
-optimized expr : 47312_u64
+optimized expr : 53432_u64
 output type    : UInt64
-output domain  : {47312..=47312}
-output         : 47312
+output domain  : {53432..=53432}
+output         : 53432
 
 
 ast            : ord('早ab')
 raw expr       : ord('早ab')
 checked expr   : ord<String>("早ab")
-optimized expr : 11114470_u64
+optimized expr : 15112105_u64
 output type    : UInt64
-output domain  : {11114470..=11114470}
-output         : 11114470
+output domain  : {15112105..=15112105}
+output         : 15112105
 
 
 ast            : ord('💖')
 raw expr       : ord('💖')
 checked expr   : ord<String>("💖")
-optimized expr : 2526191600_u64
+optimized expr : 4036989590_u64
 output type    : UInt64
-output domain  : {2526191600..=2526191600}
-output         : 2526191600
+output domain  : {4036989590..=4036989590}
+output         : 4036989590
 
 
 ast            : repeat('3', NULL)
