@@ -380,6 +380,7 @@ impl Processor for MutationSource {
                         self.index = BlockMetaIndex {
                             segment_idx: part.index.segment_idx,
                             block_idx: part.index.block_idx,
+                            inner: None,
                         };
                         if matches!(self.action, MutationAction::Deletion) {
                             self.stats_type =

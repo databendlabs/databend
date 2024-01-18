@@ -43,6 +43,7 @@ use databend_common_storage::MergeStatus;
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
+use crate::operations::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;
@@ -122,6 +123,7 @@ pub struct MatchedSplitProcessor {
     output_data_row_id_data: Vec<DataBlock>,
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
+    target_build_optimization: bool,
 }
 
 impl MatchedSplitProcessor {
@@ -132,6 +134,7 @@ impl MatchedSplitProcessor {
         field_index_of_input_schema: HashMap<FieldIndex, usize>,
         input_schema: DataSchemaRef,
         target_table_schema: DataSchemaRef,
+        target_build_optimization: bool,
     ) -> Result<Self> {
         let mut ops = Vec::<MutationKind>::new();
         for item in matched.iter() {
@@ -144,6 +147,7 @@ impl MatchedSplitProcessor {
                         ctx.get_function_context()?,
                         row_id_idx,
                         input_schema.num_fields(),
+                        target_build_optimization,
                     ),
                 }))
             } else {
@@ -183,6 +187,7 @@ impl MatchedSplitProcessor {
             row_id_idx,
             update_projections,
             target_table_schema,
+            target_build_optimization,
         })
     }
 
@@ -263,6 +268,16 @@ impl Processor for MatchedSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            //  we receive a partial unmodified block data meta.
+            if data_block.get_meta().is_some() && data_block.is_empty() {
+                assert!(self.target_build_optimization);
+                let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+                if meta_index.is_some() {
+                    self.output_data_row_id_data.push(data_block);
+                    return Ok(());
+                }
+            }
+
             if data_block.is_empty() {
                 return Ok(());
             }
@@ -314,11 +329,16 @@ impl Processor for MatchedSplitProcessor {
                     update_rows: current_block.num_rows(),
                     deleted_rows: 0,
                 });
-                self.output_data_row_id_data.push(DataBlock::new_with_meta(
-                    vec![current_block.get_by_offset(self.row_id_idx).clone()],
-                    current_block.num_rows(),
-                    Some(Box::new(RowIdKind::Update)),
-                ));
+
+                // for target build optimization, there is only one matched clause without condition. we won't read rowid.
+                if !self.target_build_optimization {
+                    self.output_data_row_id_data.push(DataBlock::new_with_meta(
+                        vec![current_block.get_by_offset(self.row_id_idx).clone()],
+                        current_block.num_rows(),
+                        Some(Box::new(RowIdKind::Update)),
+                    ));
+                }
+
                 let op = BlockOperator::Project {
                     projection: self.update_projections.clone(),
                 };

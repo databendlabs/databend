@@ -435,17 +435,16 @@ pub enum NullAs {
     Error,
     /// only valid for nullable column
     Null,
-    /// defined when creating table
+    /// defined when creating table, fallback to type default if no schema there
     FieldDefault,
-    TypeDefault,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EmptyFieldAs {
     #[default]
-    FieldDefault,
     Null,
     String,
+    FieldDefault,
 }
 
 impl FromStr for EmptyFieldAs {
@@ -457,7 +456,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "invalid value ({s}) for empty_field_as, available values field_default|null|string."
+                "invalid value ({s}) for empty_field_as, available values NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
@@ -466,9 +465,9 @@ impl FromStr for EmptyFieldAs {
 impl Display for EmptyFieldAs {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FieldDefault => write!(f, "field_default"),
-            Self::Null => write!(f, "null"),
-            Self::String => write!(f, "string"),
+            Self::FieldDefault => write!(f, "FILED_DEFAULT"),
+            Self::Null => write!(f, "NULL"),
+            Self::String => write!(f, "STRING"),
         }
     }
 }
@@ -492,7 +491,6 @@ impl FromStr for NullAs {
             "error" => Ok(NullAs::Error),
             "null" => Ok(NullAs::Null),
             "field_default" => Ok(NullAs::FieldDefault),
-            "type_default" => Ok(NullAs::TypeDefault),
             _ => Err(()),
         }
     }
@@ -501,10 +499,9 @@ impl FromStr for NullAs {
 impl Display for NullAs {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NullAs::Error => write!(f, "error"),
-            NullAs::Null => write!(f, "null"),
-            NullAs::FieldDefault => write!(f, "field_default"),
-            NullAs::TypeDefault => write!(f, "type_default"),
+            NullAs::Error => write!(f, "ERROR"),
+            NullAs::Null => write!(f, "NULL"),
+            NullAs::FieldDefault => write!(f, "FIELD_DEFAULT"),
         }
     }
 }
@@ -575,11 +572,9 @@ impl NdJsonFileFormatParams {
         null_field_as: Option<&str>,
     ) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::FieldDefault)?;
+        let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::Null)?;
         if matches!(null_field_as, NullAs::Error) {
-            return Err(ErrorCode::InvalidArgument(
-                "NULL_FIELD_AS cannot be `error`",
-            ));
+            return Err(ErrorCode::InvalidArgument("NULL_FIELD_AS cannot be ERROR"));
         }
         Ok(Self {
             compression,
@@ -631,44 +626,64 @@ impl Display for FileFormatParams {
             FileFormatParams::Csv(params) => {
                 write!(
                     f,
-                    "TYPE = CSV COMPRESSION = {:?} HEADERS= {} FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' NAN_DISPLAY = '{}' ESCAPE = '{}' QUOTE = '{}'",
+                    "TYPE = CSV COMPRESSION = {:?} \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
+                     SKIP_HEADER= {} OUTPUT_HEADER= {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}'  EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
-                    params.headers,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
-                    escape_string(&params.nan_display),
+                    escape_string(&params.quote),
                     escape_string(&params.escape),
-                    escape_string(&params.quote)
+                    params.headers,
+                    params.output_header,
+                    escape_string(&params.null_display),
+                    escape_string(&params.nan_display),
+                    params.empty_field_as,
+                    params.binary_format,
+                    params.error_on_column_count_mismatch,
                 )
             }
             FileFormatParams::Tsv(params) => {
                 write!(
                     f,
-                    "TYPE = TSV COMPRESSION = {:?} HEADERS= {} FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' NAN_DISPLAY = '{}' ESCAPE = '{}' QUOTE = '{}'",
+                    "TYPE = TSV COMPRESSION = {:?} \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}'  QUOTE = '{}' \
+                     SKIP_HEADER = {} \
+                     NAN_DISPLAY = '{}'",
                     params.compression,
-                    params.headers,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
-                    escape_string(&params.nan_display),
                     escape_string(&params.escape),
-                    escape_string(&params.quote)
+                    escape_string(&params.quote),
+                    params.headers,
+                    escape_string(&params.nan_display),
                 )
             }
             FileFormatParams::Xml(params) => {
                 write!(
                     f,
-                    "TYPE = XML, COMPRESSION = {:?}, ROW_TAG = '{}'",
+                    "TYPE = XML COMPRESSION = {:?} ROW_TAG = '{}'",
                     params.compression, params.row_tag
                 )
             }
             FileFormatParams::Json(params) => {
-                write!(f, "TYPE = JSON, COMPRESSION = {:?}", params.compression)
+                write!(f, "TYPE = JSON COMPRESSION = {:?}", params.compression)
             }
             FileFormatParams::NdJson(params) => {
-                write!(f, "TYPE = NDJSON, COMPRESSION = {:?}", params.compression)
+                write!(
+                    f,
+                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AA = {}",
+                    params.compression, params.missing_field_as, params.null_field_as
+                )
             }
-            FileFormatParams::Parquet(_) => {
-                write!(f, "TYPE = PARQUET")
+            FileFormatParams::Parquet(params) => {
+                write!(
+                    f,
+                    "TYPE = PARQUET MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }

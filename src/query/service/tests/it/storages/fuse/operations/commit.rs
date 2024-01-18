@@ -24,6 +24,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -703,6 +704,15 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
+
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        todo!()
+    }
+
     fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
