@@ -395,7 +395,7 @@ struct Range<'a> {
 
 impl<'a> PartialEq for Range<'a> {
     fn eq(&self, other: &Self) -> bool {
-        fn check_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
+        fn scalar_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
             match (left, right) {
                 (Some(left), Some(right)) => {
                     if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
@@ -419,8 +419,8 @@ impl<'a> PartialEq for Range<'a> {
 
         if self.min_close != other.min_close
             || self.max_close != other.max_close
-            || !check_equal(self.min, other.min)
-            || !check_equal(self.max, other.max)
+            || !scalar_equal(self.min, other.min)
+            || !scalar_equal(self.max, other.max)
         {
             return false;
         }
@@ -501,8 +501,28 @@ impl<'a> Range<'a> {
         }
 
         match (self.min, other.min) {
-            (Some(m1), Some(m2)) => {
-                if m1 > m2 || (m1 == m2 && !self.min_close && other.min_close) {
+            (Some(left), Some(right)) => {
+                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                    match (left.is_integer(), right.is_integer()) {
+                        (true, true) => {
+                            let left = left.integer_to_i128().unwrap();
+                            let right = right.integer_to_i128().unwrap();
+                            if left > right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        (false, false) => {
+                            let left = left.float_to_f64().unwrap();
+                            let right = right.float_to_f64().unwrap();
+                            if left > right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        _ => return false,
+                    }
+                } else if left > right || (left == right && self.min_close && !other.min_close) {
                     return false;
                 }
             }
@@ -513,8 +533,28 @@ impl<'a> Range<'a> {
         }
 
         match (self.max, other.max) {
-            (Some(m1), Some(m2)) => {
-                if m1 < m2 || (m1 == m2 && !self.max_close && other.max_close) {
+            (Some(left), Some(right)) => {
+                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                    match (left.is_integer(), right.is_integer()) {
+                        (true, true) => {
+                            let left = left.integer_to_i128().unwrap();
+                            let right = right.integer_to_i128().unwrap();
+                            if left < right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        (false, false) => {
+                            let left = left.float_to_f64().unwrap();
+                            let right = right.float_to_f64().unwrap();
+                            if left < right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        _ => return false,
+                    }
+                } else if left < right || (left == right && self.min_close && !other.min_close) {
                     return false;
                 }
             }
