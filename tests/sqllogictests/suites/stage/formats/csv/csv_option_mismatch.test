@@ -18,7 +18,7 @@ statement ok
 truncate table it
 
 query ??
-copy into it from @data/csv/select.csv file_format = (type = CSV error_on_column_count_mismatch = false) ON_ERROR=continue force = true
+copy into it from @data/csv/select.csv file_format = (type = CSV error_on_column_count_mismatch = false  empty_field_as = FIELD_DEFAULT) ON_ERROR=continue force = true
 ----
 csv/select.csv 3 0 NULL NULL
 
