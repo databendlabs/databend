@@ -361,7 +361,7 @@ impl Binder {
                             if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
                             lpad(hex(_origin_block_row_num), 6, '0')), _change_append._base_row_id) as change$row_id \
                             from {} as _change_append where not(is_not_null(_origin_version) and \
-                            (contains(_change_append._base_block_ids, _origin_block_id) or _origin_version < {}))",
+                            (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
                             table_name, table_version
                         )
                     }
