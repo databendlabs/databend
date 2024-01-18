@@ -109,16 +109,13 @@ impl Operator for Aggregate {
 
         match self.mode {
             AggregateMode::Partial => {
-                if self.group_items.is_empty() {
-                    // Scalar aggregation
-                    Ok(PhysicalProperty {
-                        distribution: Distribution::Random,
-                    })
-                } else {
-                    Ok(PhysicalProperty {
-                        distribution: input_physical_prop.distribution,
-                    })
-                }
+                // TODO(leiysky): in current implementation we are using the `_group_by_key` produced
+                // by partial aggregation as the distribution key, which is not exactly the same with
+                // `Hash(group_items)`. Because of this we cannot leverage the distribution key to
+                // satisfy the required hash distribution from parent node. We should fix this in the future.
+                Ok(PhysicalProperty {
+                    distribution: Distribution::Random,
+                })
             }
 
             AggregateMode::Final => {
@@ -334,10 +331,6 @@ impl Operator for Aggregate {
                             )));
                         }
                     }
-
-                    children_required.push(vec![RequiredProperty {
-                        distribution: Distribution::Serial,
-                    }]);
                 }
             }
 
