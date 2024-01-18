@@ -139,6 +139,7 @@ impl HashJoinProbeState {
 }
 
 impl HashJoinState {
+    /// if all cols in the same row are all null, we mark this row as null.
     pub(crate) fn init_markers(
         &self,
         cols: &[(Column, DataType)],

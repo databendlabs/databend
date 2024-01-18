@@ -13,9 +13,8 @@
 // limitations under the License.
 
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
-#![allow(unused_imports)]
+
 use std::hash::BuildHasher;
-use std::hash::Hasher;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -515,12 +514,22 @@ pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    // same with `early_filtering_probe`, but we don't use early_filter
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    // 1. same with `early_filtering_probe_with_selection`, but we don't use selection to preserve the
+    // unfiltered indexes, we just set the filtered hashes as zero.
+    // 2. return the unfiltered counts.
     fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    // we use `early_filtering_probe_with_selection` to do the first round probe.
+    // 1. `hashes` is the hash value of probe block's rows. we will use this one to
+    // do early filtering. if we can't early filter one row(at idx), we will assign pointer in
+    // the bucket to hashes[idx] to reuse the memory.
+    // 2. `selection` is used to preserved the indexes which can't be early_filtered.
+    // 3. return the count of preserved the indexes in `selection`
     fn early_filtering_probe_with_selection(
         &self,
         hashes: &mut [u64],
@@ -528,8 +537,19 @@ pub trait HashJoinHashtableLike {
         selection: &mut [u32],
     ) -> usize;
 
+    // we use `next_contains` to see whether we can find a matched row in the link.
+    // the ptr is the link header.
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
+    /// 1. `key` is the serialize build key from one row
+    /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
+    /// we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
+    /// for key
+    /// 3. `vec_ptr` is RowPtr Array, we use this one to record the matched row in chunks
+    /// 4. `occupied` is the length for vec_ptr
+    /// 5. `capacity` is the capacity of vec_ptr
+    /// 6. return macthed rows count and next ptr which need to test in the future.
+    /// if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
     fn next_probe(
         &self,
         key: &Self::Key,

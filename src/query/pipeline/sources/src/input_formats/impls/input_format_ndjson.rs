@@ -106,9 +106,6 @@ impl InputFormatNDJson {
                                 column.push_default();
                             }
                         }
-                        NullAs::TypeDefault => {
-                            column.push_default();
-                        }
                     },
                     Some(serde_json::Value::Null) => match null_field_as {
                         NullAs::Error => unreachable!("null_field_as should be error"),
@@ -131,9 +128,6 @@ impl InputFormatNDJson {
                             } else {
                                 column.push_default();
                             }
-                        }
-                        NullAs::TypeDefault => {
-                            column.push_default();
                         }
                     },
                     Some(value) => {

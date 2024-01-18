@@ -5,7 +5,6 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-export MYSQL="mysql -uroot --host 127.0.0.1 --port 3307  -s"
 export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
 
 stmt "drop table if exists t1"
@@ -15,20 +14,24 @@ stmt "drop stage if exists s1"
 stmt "create stage s1"
 
 for i in `seq 0 9`;do
-		echo "insert into t1 values($i)" | $MYSQL
+		stmt "insert into t1 values($i)"
 done
 
-echo ">>>> unload csv with detailed_output=true"
-echo "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $RM_UUID | sort
 
-echo ">>>> unload csv with detailed_output=false"
-echo "copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=false" | $MYSQL
+query "copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=false"
 
-echo ">>>> unload parquet with detailed_output=true"
-echo "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $MYSQL | $RM_UUID | sort
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $RM_UUID | sort
 
-echo ">>>> unload parquet with detailed_output=false"
-echo "copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=false" | $MYSQL
+query "copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=false" | $MYSQL
+
+echo ">>>> unload path"
+query "copy /*+ set_var(max_threads=1) */ into @s1 from (select 1)  detailed_output=true" | $RM_UUID
+query "copy /*+ set_var(max_threads=1) */ into @s1/ from (select 1)  detailed_output=true" | $RM_UUID
+query "copy /*+ set_var(max_threads=1) */ into @s1/a from (select 1)  detailed_output=true" | $RM_UUID
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/ from (select 1)  detailed_output=true" | $RM_UUID
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select 1)  detailed_output=true" | $RM_UUID
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/data_ from (select 1)  detailed_output=true" | $RM_UUID
 
 stmt "drop stage if exists s1"
 stmt "drop table if exists t1"

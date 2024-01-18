@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnVec;
@@ -43,6 +44,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
@@ -156,6 +158,7 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
+
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -181,13 +184,16 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
+
         let input_rows = input.num_rows();
-        buffer.push(input);
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
+
+        self.merge_into_try_build_block_info_index(input.clone(), old_size);
+        buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
@@ -227,8 +233,11 @@ impl HashJoinBuildState {
             if self.hash_join_state.need_mark_scan() {
                 build_state.mark_scan_map.push(block_mark_scan_map);
             }
+
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
+
+            self.merge_into_try_add_chunk_offset(build_state);
         }
         Ok(())
     }
@@ -386,6 +395,7 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
+            self.merge_into_try_generate_matched_memory();
         }
         Ok(())
     }
@@ -882,7 +892,9 @@ impl HashJoinBuildState {
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
             .filter_map(|(b, p)| p.as_ref().map(|p| (b, p)))
         {
-            if !build_key.data_type().remove_nullable().is_numeric() {
+            if !build_key.data_type().remove_nullable().is_numeric()
+                && !build_key.data_type().remove_nullable().is_string()
+            {
                 return Ok(());
             }
             if let Expr::ColumnRef { .. } = probe_key {
@@ -909,46 +921,61 @@ impl HashJoinBuildState {
                 let min_max_filter = match min_max {
                     Domain::Number(domain) => match domain {
                         NumberDomain::UInt8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                     },
+                    Domain::String(domain) => {
+                        let min = Scalar::String(domain.min);
+                        let max = Scalar::String(domain.max.unwrap());
+                        min_max_filter(min, max, probe_key)?
+                    }
                     _ => unreachable!(),
                 };
                 if let Some(min_max_filter) = min_max_filter {

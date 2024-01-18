@@ -92,7 +92,7 @@ fn test_decode_v32_ndjson_file_format_params() -> anyhow::Result<()> {
         mt::principal::FileFormatParams::NdJson(NdJsonFileFormatParams {
             compression: StageFileCompression::Gzip,
             missing_field_as: NullAs::Error,
-            null_field_as: NullAs::FieldDefault,
+            null_field_as: NullAs::Null,
         })
     };
     common::test_pb_from_to(func_name!(), want())?;
