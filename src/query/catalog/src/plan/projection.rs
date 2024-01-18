@@ -144,6 +144,13 @@ impl Projection {
             }
         }
     }
+
+    pub fn path_indices(&self) -> Vec<Vec<usize>> {
+        match self {
+            Projection::Columns(indices) => indices.iter().map(|x| vec![*x]).collect(),
+            Projection::InnerColumns(path_indices) => path_indices.values().cloned().collect(),
+        }
+    }
 }
 
 impl core::fmt::Debug for Projection {

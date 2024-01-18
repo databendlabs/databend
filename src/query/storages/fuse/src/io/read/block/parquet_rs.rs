@@ -18,9 +18,13 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
@@ -39,6 +43,7 @@ use parquet_rs::file::serialized_reader::SerializedPageReader;
 
 use super::block_reader_merge_io::DataItem;
 use super::BlockReader;
+
 impl BlockReader {
     pub(crate) fn deserialize_column_chunks_1(
         &self,
@@ -51,60 +56,54 @@ impl BlockReader {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
         }
-        // 1. Filter fields that need to be deserialized, use these fields to create a parquet schema
-        let projected_table_schema = self.projected_schema.clone();
-        let mut need_deserialize_fields = Vec::new();
-        for field in projected_table_schema.fields().iter() {
-            if let Some(DataItem::RawData(_)) = column_chunks.get(&field.column_id) {
-                need_deserialize_fields.push(field.clone())
-            }
-        }
-        let need_deserialize_schema = TableSchema {
-            fields: need_deserialize_fields,
-            metadata: projected_table_schema.metadata.clone(),
-            next_column_id: projected_table_schema.next_column_id,
-        };
+
         let arrow_schema =
-            table_schema_to_arrow_schema_ignore_inside_nullable(&need_deserialize_schema);
+            table_schema_to_arrow_schema_ignore_inside_nullable(&self.original_schema);
         let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
-        // 2. Reorder the column chunks and column metas in dfs order according to the filtered schema
-        let column_ids = need_deserialize_schema.to_leaf_column_ids();
-        let reordered_column_chunks = column_ids
+
+        let column_id_to_dfs_id = self
+            .original_schema
+            .to_leaf_column_ids()
             .iter()
-            .map(|id| {
-                let data_item = column_chunks.get(id).unwrap();
-                match data_item {
-                    DataItem::RawData(data) => data.clone(),
-                    DataItem::ColumnArray(_) => unreachable!(),
-                }
-            })
-            .collect::<Vec<_>>();
-        let reordered_column_metas = column_ids
-            .iter()
-            .map(|id| column_metas.get(id).unwrap().as_parquet().unwrap().clone())
-            .collect::<Vec<_>>();
-        // 3. Create RowGroupImpl, which is an adapter between parquet-rs and Fuse engine
-        let mut column_chunk_metadatas = Vec::with_capacity(column_ids.len());
+            .enumerate()
+            .map(|(dfs_id, column_id)| (*column_id, dfs_id))
+            .collect::<HashMap<_, _>>();
+
+        let mut projection_mask = Vec::with_capacity(column_chunks.len());
         let compression = parquet_rs::basic::Compression::from(*compression);
-        for (column_meta, column_descr) in
-            reordered_column_metas.iter().zip(parquet_schema.columns())
-        {
-            let column_chunk_metadata = ColumnChunkMetaData::builder(column_descr.clone())
-                .set_compression(compression)
-                .set_data_page_offset(0)
-                .set_total_compressed_size(column_meta.len as i64)
-                .build()?;
-            column_chunk_metadatas.push(column_chunk_metadata);
+        let mut dfs_id_to_column_chunks = HashMap::with_capacity(column_chunks.len());
+        let mut dfs_id_to_column_chunk_metadatas = HashMap::with_capacity(column_chunks.len());
+
+        for (column_id, data_item) in column_chunks.iter() {
+            match data_item {
+                DataItem::RawData(bytes) => {
+                    let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
+                    projection_mask.push(dfs_id);
+                    dfs_id_to_column_chunks.insert(dfs_id, bytes.clone());
+                    let column_meta = column_metas.get(column_id).unwrap().as_parquet().unwrap();
+                    let column_chunk_metadata =
+                        ColumnChunkMetaData::builder(parquet_schema.column(dfs_id))
+                            .set_compression(compression)
+                            .set_data_page_offset(0)
+                            .set_total_compressed_size(column_meta.len as i64)
+                            .build()?;
+                    dfs_id_to_column_chunk_metadatas.insert(dfs_id, column_chunk_metadata);
+                }
+                DataItem::ColumnArray(_) => {}
+            }
         }
 
         let row_group = Box::new(RowGroupImpl {
             num_rows,
-            column_chunks: reordered_column_chunks,
-            column_chunk_metadatas,
+            column_chunks: dfs_id_to_column_chunks,
+            column_chunk_metadatas: dfs_id_to_column_chunk_metadatas,
         });
-        // 4. call parquet-rs API to deserialize
-        let field_levels =
-            parquet_to_arrow_field_levels(&parquet_schema, ProjectionMask::all(), None)?;
+
+        let field_levels = parquet_to_arrow_field_levels(
+            &parquet_schema,
+            ProjectionMask::leaves(&parquet_schema, projection_mask),
+            None,
+        )?;
         let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
             &field_levels,
             row_group.as_ref(),
@@ -113,56 +112,73 @@ impl BlockReader {
         )?;
         let record = record_reader.next().unwrap()?;
         assert!(record_reader.next().is_none());
-        // 5. convert to DataBlock, and put the deserialized array into the cache if necessary
-        let mut new_deserialized_arrays = record.columns().iter();
-        let mut all_arrays = Vec::with_capacity(projected_table_schema.fields().len());
-        for field in projected_table_schema.fields().iter() {
-            let Some(data_item) = column_chunks.get(&field.column_id) else {
-                continue;
-            };
-            match data_item {
-                DataItem::RawData(raw_data) => {
-                    let array = new_deserialized_arrays.next().unwrap();
-                    let arrow2_array =
-                        <Box<dyn databend_common_arrow::arrow::array::Array>>::from(array.clone());
-                    all_arrays.push(arrow2_array.clone());
-                    if self.put_cache {
-                        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-                            let meta = column_metas.get(&field.column_id).unwrap();
-                            let (offset, len) = meta.offset_length();
-                            let key =
-                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.put(key.into(), Arc::new((arrow2_array, raw_data.len())));
-                        }
-                    }
+
+        let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
+        for (i, field) in self.projected_schema.fields.iter().enumerate() {
+            let column_id = field.column_id;
+            let data_type = field.data_type().into();
+            let value = match column_chunks.get(&column_id) {
+                Some(DataItem::RawData(_)) => {
+                    todo!()
                 }
-                DataItem::ColumnArray(array) => all_arrays.push(array.0.clone()),
-            }
+                Some(DataItem::ColumnArray(cached)) => {
+                    Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
+                }
+                None => Value::Scalar(self.default_vals[i].clone()),
+            };
+            columns.push(BlockEntry::new(data_type, value));
         }
-        let chunk = Chunk::try_new(all_arrays)?;
-        let mut default_vals = Vec::with_capacity(self.default_vals.len());
-        for (i, field) in projected_table_schema.fields().iter().enumerate() {
-            let data_item = column_chunks.get(&field.column_id);
-            match data_item {
-                Some(_) => default_vals.push(None),
-                None => default_vals.push(Some(self.default_vals[i].clone())),
-            }
-        }
-        let data_block = DataBlock::create_with_default_value_and_chunk(
-            &self.data_schema(),
-            &chunk,
-            &default_vals,
-            num_rows,
-        )?;
-        Ok(data_block)
+
+        // let mut new_deserialized_arrays = record.columns().iter();
+        // let mut all_arrays = Vec::with_capacity(projected_table_schema.fields().len());
+        // for field in projected_table_schema.fields().iter() {
+        //     let Some(data_item) = column_chunks.get(&field.column_id) else {
+        //         continue;
+        //     };
+        //     match data_item {
+        //         DataItem::RawData(raw_data) => {
+        //             let array = new_deserialized_arrays.next().unwrap();
+        //             let arrow2_array =
+        //                 <Box<dyn databend_common_arrow::arrow::array::Array>>::from(array.clone());
+        //             all_arrays.push(arrow2_array.clone());
+        //             if self.put_cache {
+        //                 if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+        //                     let meta = column_metas.get(&field.column_id).unwrap();
+        //                     let (offset, len) = meta.offset_length();
+        //                     let key =
+        //                         TableDataCacheKey::new(block_path, field.column_id, offset, len);
+        //                     cache.put(key.into(), Arc::new((arrow2_array, raw_data.len())));
+        //                 }
+        //             }
+        //         }
+        //         DataItem::ColumnArray(array) => all_arrays.push(array.0.clone()),
+        //     }
+        // }
+        // let chunk = Chunk::try_new(all_arrays)?;
+        // let mut default_vals = Vec::with_capacity(self.default_vals.len());
+        // for (i, field) in projected_table_schema.fields().iter().enumerate() {
+        //     let data_item = column_chunks.get(&field.column_id);
+        //     match data_item {
+        //         Some(_) => default_vals.push(None),
+        //         None => default_vals.push(Some(self.default_vals[i].clone())),
+        //     }
+        // }
+        // let data_block = DataBlock::create_with_default_value_and_chunk(
+        //     &self.data_schema(),
+        //     &chunk,
+        //     &default_vals,
+        //     num_rows,
+        // )?;
+        // Ok(data_block)
+        todo!()
     }
 }
 
 // A single row group
 pub struct RowGroupImpl {
     pub num_rows: usize,
-    pub column_chunks: Vec<Bytes>,
-    pub column_chunk_metadatas: Vec<ColumnChunkMetaData>,
+    pub column_chunks: HashMap<usize, Bytes>,
+    pub column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
 }
 
 impl RowGroups for RowGroupImpl {
@@ -173,9 +189,11 @@ impl RowGroups for RowGroupImpl {
 
     /// Returns a [`PageIterator`] for the column chunk with the given leaf column index
     fn column_chunks(&self, i: usize) -> ParquetResult<Box<dyn PageIterator>> {
+        let column_chunk = Arc::new(self.column_chunks.get(&i).unwrap().clone());
+        let column_chunk_meta = self.column_chunk_metadatas.get(&i).unwrap();
         let page_reader = Box::new(SerializedPageReader::new(
-            Arc::new(self.column_chunks[i].clone()),
-            &self.column_chunk_metadatas[i],
+            column_chunk,
+            &column_chunk_meta,
             self.num_rows(),
             None,
         )?);
