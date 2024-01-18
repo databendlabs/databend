@@ -493,7 +493,7 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
     };
 
     for idx in 0..size {
-        let source = unsafe { source_arg.index_unchecked(idx) };
+        let mut source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
         let pos = pos_arg
             .as_ref()
@@ -540,6 +540,9 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
         let occur = occur.unwrap_or(1);
         let ro = ro.unwrap_or(0);
 
+        if let Some((idx, _)) = source.char_indices().nth((pos - 1) as usize) {
+            source = &source[idx..];
+        }
         let instr = regexp::regexp_instr(source, re, pos, occur, ro);
         builder.push(instr);
     }
