@@ -35,6 +35,9 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) join_type: JoinType,
+    /// when we have non-equal conditions for hash join,
+    /// for example `a = b and c = d and e > f`, we will use `and_filters`
+    /// to wrap `e > f` as a other_predicate to do next step's check.
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.

@@ -575,6 +575,7 @@ impl CompactTaskBuilder {
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
+                    inner: None,
                 }),
             ))));
         }

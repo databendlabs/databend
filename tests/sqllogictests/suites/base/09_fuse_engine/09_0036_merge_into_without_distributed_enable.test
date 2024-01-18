@@ -849,6 +849,8 @@ CREATE TABLE orders CLUSTER BY (to_yyyymmddhh(created_at), user_id) AS SELECT
     date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
 FROM numbers(5000);
 
+### for now, we disable target_table_optimization for native. Native will
+### spilt one block into multi pages. We should fix this one in the future.
 statement ok
 MERGE INTO orders USING
 (
