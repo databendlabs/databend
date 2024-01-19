@@ -87,7 +87,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 0.40
+├── estimated rows: 0.18
 ├── Filter(Build)
 │   ├── output columns: [t.number (#0)]
 │   ├── filters: [t.number (#0) > 1]
@@ -105,7 +105,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: []
     ├── filters: [1 < t1.number (#1)]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 0.91
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [number (#1)]

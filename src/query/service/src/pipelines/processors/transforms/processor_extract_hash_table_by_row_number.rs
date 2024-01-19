@@ -41,7 +41,7 @@ pub struct ExtractHashTableByRowNumber {
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data: Vec<DataBlock>,
-    probe_data_fields: Vec<DataField>,
+    merge_into_probe_data_fields: Vec<DataField>,
     hashstate: Arc<HashJoinBuildState>,
     // if insert only, we don't need to
     // fill null BlockEntries
@@ -51,14 +51,14 @@ pub struct ExtractHashTableByRowNumber {
 impl ExtractHashTableByRowNumber {
     pub fn create(
         hashstate: Arc<HashJoinBuildState>,
-        probe_data_fields: Vec<DataField>,
+        merge_into_probe_data_fields: Vec<DataField>,
         merge_type: MergeIntoType,
     ) -> Result<Self> {
         Ok(Self {
             input_port: InputPort::create(),
             output_port: OutputPort::create(),
             hashstate,
-            probe_data_fields,
+            merge_into_probe_data_fields,
             input_data: None,
             output_data: Vec::new(),
             merge_type,
@@ -151,7 +151,7 @@ impl Processor for ExtractHashTableByRowNumber {
                     } else {
                         // Create null chunk for unmatched rows in probe side
                         let mut null_block = DataBlock::new(
-                            self.probe_data_fields
+                            self.merge_into_probe_data_fields
                                 .iter()
                                 .map(|df| {
                                     BlockEntry::new(

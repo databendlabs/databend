@@ -37,7 +37,7 @@ impl HashJoinProbeState {
     ///    non-equi-condition is subquery's child expr with subquery's output column.
     ///    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
     ///    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
-    ///    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
+    ///    so equi-condition is t2.b = subquery_5, and non-equi-condition is t1.a = t2.a.
     /// 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
     ///    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike>(
