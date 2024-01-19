@@ -1470,6 +1470,13 @@ pub fn at_string(i: Input) -> IResult<String> {
     })(i)
 }
 
+pub fn nullable(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ))(i)
+}
+
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
@@ -1594,7 +1601,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NOT? ~ NULL? : "type name"
+            ) ~ #nullable? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1603,12 +1610,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NOT? ~ NULL? : "type name" },
+            ) ~ #nullable? : "type name" },
         )),
-        |(ty, opt_not, opt_null)| match (opt_not.is_some(), opt_null.is_some()) {
-            (false, true) => Ok(ty.wrap_nullable()),
-            (false, false) => Ok(ty),
-            (true, true) => {
+        |(ty, opt_nullable)| match opt_nullable {
+            Some(true) => Ok(ty.wrap_nullable()),
+            Some(false) => {
                 if matches!(ty, TypeName::Nullable(_)) {
                     Err(nom::Err::Failure(ErrorKind::Other(
                         "ambiguous NOT NULL constraint",
@@ -1617,9 +1623,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                     Ok(ty.wrap_not_null())
                 }
             }
-            (true, false) => Err(nom::Err::Failure(ErrorKind::Other(
-                "unexpected `NOT`, expecting `NULL` or `NOT NULL`",
-            ))),
+            None => Ok(ty),
         },
     )(i)
 }
