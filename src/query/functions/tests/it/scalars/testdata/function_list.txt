@@ -14,6 +14,7 @@ hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
+json_to_string -> to_string
 lcase -> lower
 length_utf8 -> char_length
 mid -> substr
@@ -1888,8 +1889,6 @@ Functions overloads:
 1 json_pretty(Variant NULL) :: String NULL
 0 json_strip_nulls(Variant) :: Variant
 1 json_strip_nulls(Variant NULL) :: Variant NULL
-0 json_to_string(Variant) :: String
-1 json_to_string(Variant NULL) :: String NULL
 0 json_typeof(Variant) :: String
 1 json_typeof(Variant NULL) :: String NULL
 0 l2_distance(Array(Float32), Array(Float32)) :: Float32
