@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ToErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -39,6 +38,7 @@ use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 
 use crate::role::role_api::RoleApi;
+use crate::serde::deserialize_struct;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
@@ -158,7 +158,24 @@ impl RoleApi for RoleMgr {
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => {
+                if <databend_common_meta_types::SeqV as IntoSeqV<RoleInfo>>::into_seqv(
+                    seq_value.clone(),
+                )
+                .is_err()
+                {
+                    Ok(SeqV::new(
+                        seq_value.seq,
+                        deserialize_struct(
+                            &seq_value.data,
+                            ErrorCode::IllegalUserInfoFormat,
+                            || "",
+                        )?,
+                    ))
+                } else {
+                    Ok(seq_value.into_seqv()?)
+                }
+            }
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "Role '{}' does not exist.",
                 role
@@ -175,8 +192,12 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = serde_json::from_slice::<RoleInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+            let serd_json_res = serde_json::from_slice::<RoleInfo>(&val.data);
+            let u = if serd_json_res.is_err() {
+                deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?
+            } else {
+                serd_json_res.unwrap()
+            };
 
             r.push(SeqV::new(val.seq, u));
         }
