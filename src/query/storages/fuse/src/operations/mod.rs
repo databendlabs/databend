@@ -41,6 +41,7 @@ pub use delete::MutationBlockPruningContext;
 pub use merge_into::*;
 pub use mutation::*;
 pub use read::build_row_fetcher_pipeline;
+pub use read::need_reserve_block_info;
 pub use replace_into::*;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;

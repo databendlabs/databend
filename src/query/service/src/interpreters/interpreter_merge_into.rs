@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::u64::MAX;
 
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,6 +51,8 @@ use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::DUMMY_COLUMN_INDEX;
+use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -138,8 +141,64 @@ impl MergeIntoInterpreter {
             merge_type,
             distributed,
             change_join_order,
+            split_idx,
+            row_id_index,
             ..
         } = &self.plan;
+        let mut columns_set = columns_set.clone();
+        let table = self.ctx.get_table(catalog, database, table_name).await?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support MERGE INTO",
+                table.name(),
+                table.get_table_info().engine(),
+            ))
+        })?;
+
+        // attentation!! for now we have some strategies:
+        // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
+        // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
+        // 2. merge into join strategies:
+        // Left,Right,Inner,Left Anti, Right Anti
+        // important flag:
+        //      I. change join order: if true, target table as build side, if false, source as build side.
+        //      II. distributed: this merge into is executed at a distributed stargety.
+        // 2.1 Left: there are macthed and not macthed, and change join order is true.
+        // 2.2 Left Anti: change join order is true, but it's insert-only.
+        // 2.3 Inner: this is matched only case.
+        //      2.3.1 change join order is true, target table as build side,it's matched-only.
+        //      2.3.2 change join order is false, source data as build side,it's matched-only.
+        // 2.4 Right: change join order is false, there are macthed and not macthed
+        // 2.5 Right Anti: change join order is false, but it's insert-only.
+        // distributed execution stargeties:
+        // I. change join order is true, we use the `optimize_distributed_query`'s result.
+        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
+        // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
+
+        // for `target_build_optimization` we don't need to read rowId column. for now, there are two cases we don't read rowid:
+        // I. InsertOnly, the MergeIntoType is InsertOnly
+        // II. target build optimization for this pr. the MergeIntoType is MergeIntoType
+        let mut target_build_optimization =
+            matches!(self.plan.merge_type, MergeIntoType::FullOperation)
+                && !self.plan.columns_set.contains(&self.plan.row_id_index);
+        if target_build_optimization {
+            assert!(*change_join_order && !*distributed);
+            // so if `target_build_optimization` is true, it means the optimizer enable this rule.
+            // but we need to check if it's parquet format or native format. for now,we just support
+            // parquet. (we will support native in the next pr).
+            if fuse_table.is_native() {
+                target_build_optimization = false;
+                // and we need to add row_id back and forbidden target_build_optimization
+                columns_set.insert(*row_id_index);
+                let merge_into_join = self.ctx.get_merge_into_join();
+                self.ctx.set_merge_into_join(MergeIntoJoin {
+                    target_tbl_idx: DUMMY_TABLE_INDEX,
+                    is_distributed: merge_into_join.is_distributed,
+                    merge_into_join_type: merge_into_join.merge_into_join_type,
+                });
+            }
+        }
 
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
@@ -174,7 +233,7 @@ impl MergeIntoInterpreter {
 
         let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
-        let mut row_id_idx = if !insert_only {
+        let mut row_id_idx = if !insert_only && !target_build_optimization {
             match meta_data
                 .read()
                 .row_id_index_by_table_index(*target_table_idx)
@@ -200,11 +259,24 @@ impl MergeIntoInterpreter {
             }
         }
 
+        // we use `merge_into_split_idx` to specify a column from target table to spilt a block
+        // from join into macthed part and unmacthed part.
+        let mut merge_into_split_idx = DUMMY_COLUMN_INDEX;
+        if matches!(merge_type, MergeIntoType::FullOperation) {
+            for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+                if *data_field.name() == split_idx.to_string() {
+                    merge_into_split_idx = idx;
+                    break;
+                }
+            }
+            assert!(merge_into_split_idx != DUMMY_COLUMN_INDEX);
+        }
+
         if *distributed && !*change_join_order {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
-        if !insert_only && !found_row_id {
+        if !target_build_optimization && !insert_only && !found_row_id {
             // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
@@ -216,15 +288,6 @@ impl MergeIntoInterpreter {
                 "can't get internal row_number_idx when running merge into",
             ));
         }
-
-        let table = self.ctx.get_table(catalog, database, &table_name).await?;
-        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support MERGE INTO",
-                table.name(),
-                table.get_table_info().engine(),
-            ))
-        })?;
 
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
@@ -245,12 +308,14 @@ impl MergeIntoInterpreter {
                 input: Box::new(rollback_join_input),
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
+                merge_into_split_idx: merge_into_split_idx as u32,
             })
         } else {
             PhysicalPlan::MergeIntoSource(MergeIntoSource {
                 input: Box::new(join_input),
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
+                merge_into_split_idx: merge_into_split_idx as u32,
             })
         };
 
@@ -390,6 +455,7 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::default(),
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
+                target_build_optimization,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -415,6 +481,7 @@ impl MergeIntoInterpreter {
                 },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
+                target_build_optimization: false, // we don't support for distributed mode for now..
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation

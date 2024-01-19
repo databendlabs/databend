@@ -52,6 +52,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
+use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
@@ -244,6 +245,10 @@ pub trait TableContext: Send + Sync {
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+
+    fn set_merge_into_join(&self, join: MergeIntoJoin);
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin;
 
     fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 

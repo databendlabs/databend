@@ -39,6 +39,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use log::info;
@@ -56,6 +57,11 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
+// ({(Interval,prefix),(Interval,repfix),...},chunk_idx)
+// 1.The Interval is the partial unmodified interval offset in chunks.
+// 2.Prefix is segment_idx_block_id
+// 3.chunk_idx: the index of correlated chunk in chunks.
+pub type MergeIntoChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -80,6 +86,9 @@ pub struct HashJoinProbeState {
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
+    /// for merge into target as build side.
+    pub(crate) merge_into_final_partial_unmodified_scan_tasks:
+        RwLock<VecDeque<MergeIntoChunkPartialUnmodified>>,
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
@@ -138,6 +147,7 @@ impl HashJoinProbeState {
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
+            merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
@@ -273,6 +283,7 @@ impl HashJoinProbeState {
         } else {
             input_num_rows as u64
         };
+        // We use the information from the probed data to predict the matching state of this probe.
         let prefer_early_filtering =
             (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
 
@@ -373,7 +384,12 @@ impl HashJoinProbeState {
 
     pub fn probe_attach(&self) -> Result<usize> {
         let mut worker_id = 0;
-        if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
+        if self.hash_join_state.need_outer_scan()
+            || self.hash_join_state.need_mark_scan()
+            || self
+                .hash_join_state
+                .merge_into_need_target_partial_modified_scan()
+        {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
         if self.hash_join_state.enable_spill {
