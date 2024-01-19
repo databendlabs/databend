@@ -562,7 +562,12 @@ impl PhysicalPlan {
             )]),
             PhysicalPlan::Project(v) => HashMap::from([(
                 String::from("List of Expressions"),
-                v.output_schema()?.fields.iter().map(|x| x.name()).cloned().collect(),
+                v.output_schema()?
+                    .fields
+                    .iter()
+                    .map(|x| x.name())
+                    .cloned()
+                    .collect(),
             )]),
             PhysicalPlan::AggregatePartial(v) => HashMap::from([
                 (

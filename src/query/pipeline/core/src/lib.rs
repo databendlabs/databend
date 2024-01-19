@@ -1,5 +1,3 @@
-#![feature(once_cell_try)]
-#![feature(variant_count)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![feature(once_cell_try)]
+#![feature(variant_count)]
 #![allow(clippy::arc_with_non_send_sync)]
 
 pub mod processors;
