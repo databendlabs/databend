@@ -3288,6 +3288,7 @@ dependencies = [
  "async-backtrace",
  "dashmap",
  "databend-common-ast",
+ "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-meta-app",

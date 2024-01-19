@@ -1493,6 +1493,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
 
+    /// Max retention time in days for data, default is 90 days.
+    #[clap(long, value_name = "VALUE", default_value = "90")]
+    pub(crate) data_retention_time_in_days_max: u64,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1657,6 +1661,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
             openai_api_chat_base_url: self.openai_api_chat_base_url,
             openai_api_embedding_base_url: self.openai_api_embedding_base_url,
@@ -1732,6 +1737,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
+            data_retention_time_in_days_max: 90,
+
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
@@ -1744,6 +1751,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            //
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_chat_base_url: inner.openai_api_chat_base_url,
             openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
