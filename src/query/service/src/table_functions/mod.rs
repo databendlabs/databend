@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod async_crash_me;
+mod cloud;
 mod infer_schema;
 mod inspect_parquet;
 mod list_stage;
