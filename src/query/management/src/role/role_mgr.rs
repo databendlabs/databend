@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ToErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -29,8 +28,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::IntoSeqV;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::{IntoSeqV, MatchSeq};
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
@@ -39,6 +37,8 @@ use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 
 use crate::role::role_api::RoleApi;
+use crate::serde::deserialize_struct;
+use crate::serde::serialize_struct;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
@@ -78,7 +78,7 @@ impl RoleMgr {
         seq: MatchSeq,
     ) -> Result<u64, ErrorCode> {
         let key = self.make_role_key(role_info.identity());
-        let value = serde_json::to_vec(&role_info)?;
+        let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
         let res = kv_api
@@ -99,26 +99,19 @@ impl RoleMgr {
 
     fn make_object_owner_key(&self, object: &OwnershipObject) -> String {
         match object {
-            OwnershipObject::Database {
-                catalog_name: _,
-                db_id: database_id,
-            } => {
+            OwnershipObject::Database(_, database_id) => {
                 format!(
                     "{}/database-by-id/{}",
                     self.object_owner_prefix, database_id
                 )
             }
-            OwnershipObject::Table {
-                catalog_name: _,
-                db_id: _,
-                table_id,
-            } => {
+            OwnershipObject::Table(_, _, table_id) => {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
-            OwnershipObject::Stage { name } => {
+            OwnershipObject::Stage(name) => {
                 format!("{}/stage-by-name/{}", self.object_owner_prefix, name)
             }
-            OwnershipObject::UDF { name } => {
+            OwnershipObject::UDF(name) => {
                 format!("{}/udf-by-name/{}", self.object_owner_prefix, name)
             }
         }
@@ -132,7 +125,7 @@ impl RoleApi for RoleMgr {
     async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_role_key(role_info.identity());
-        let value = serde_json::to_vec(&role_info)?;
+        let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
@@ -158,7 +151,17 @@ impl RoleApi for RoleMgr {
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => {
+                if let Err(err) = seq_value.into_seqv() {
+                    // TODO: need some warn log
+                    Ok(SeqV::new(
+                        seq_value.seq,
+                        deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
+                    ))
+                } else {
+                    seq_value.into_seqv()?
+                }
+            },
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "Role '{}' does not exist.",
                 role
@@ -175,8 +178,12 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = serde_json::from_slice::<RoleInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+            let serd_json_res = serde_json::from_slice::<RoleInfo>(&val.data);
+            let u = if serd_json_res.is_err() {
+                deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?
+            } else {
+                serd_json_res.unwrap()
+            };
 
             r.push(SeqV::new(val.seq, u));
         }
