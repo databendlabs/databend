@@ -100,12 +100,14 @@ impl FuseTable {
                 pos += 1;
             });
 
-            // add `_predicate` column into input schema
-            fields.push(TableField::new(
-                PREDICATE_COLUMN_NAME,
-                TableDataType::Boolean,
-            ));
-            pos += 1;
+            if query_row_id_col {
+                // add `_predicate` column into input schema
+                fields.push(TableField::new(
+                    PREDICATE_COLUMN_NAME,
+                    TableDataType::Boolean,
+                ));
+                pos += 1;
+            }
 
             let schema = TableSchema::new(fields);
 
