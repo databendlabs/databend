@@ -1775,11 +1775,11 @@ HashJoin: INNER
 │       │       │       └── Probe
 │       │       │           └── Scan: default.tpcds.date_dim (read rows: 73049)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.store (read rows: 1)
+│       │           └── Scan: default.tpcds.household_demographics (read rows: 7200)
 │       └── Probe
-│           └── Scan: default.tpcds.customer_demographics (read rows: 19208)
+│           └── Scan: default.tpcds.store (read rows: 1)
 └── Probe
-    └── Scan: default.tpcds.household_demographics (read rows: 7200)
+    └── Scan: default.tpcds.customer_demographics (read rows: 19208)
 
 
 # Q14
