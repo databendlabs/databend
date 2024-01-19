@@ -40,9 +40,16 @@ pub fn unload_path(
             path, uuid, group_id, batch_id, format_name, suffix
         )
     } else {
+        let (path, sep) = if path == "/" {
+            ("", "")
+        } else if path.ends_with('/') {
+            (path.as_str(), "")
+        } else {
+            (path.as_str(), "/")
+        };
         format!(
-            "{}/data_{}_{:0>4}_{:0>8}.{}{}",
-            path, uuid, group_id, batch_id, format_name, suffix
+            "{}{}data_{}_{:0>4}_{:0>8}.{}{}",
+            path, sep, uuid, group_id, batch_id, format_name, suffix
         )
     }
 }
