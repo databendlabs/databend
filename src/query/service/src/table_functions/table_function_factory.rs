@@ -37,6 +37,8 @@ use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::cloud::TaskDependentsEnableTable;
+use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -204,6 +206,16 @@ impl TableFunctionFactory {
         creators.insert(
             "fuse_encoding".to_string(),
             (next_id(), Arc::new(FuseEncodingTable::create)),
+        );
+
+        creators.insert(
+            "task_dependents".to_string(),
+            (next_id(), Arc::new(TaskDependentsTable::create)),
+        );
+
+        creators.insert(
+            "task_dependents_enable".to_string(),
+            (next_id(), Arc::new(TaskDependentsEnableTable::create)),
         );
 
         TableFunctionFactory {

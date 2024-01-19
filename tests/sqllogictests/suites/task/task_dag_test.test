@@ -63,6 +63,23 @@ select name, warehouse, schedule, definition, condition_text, after from system.
 ----
 mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
 
+query SS
+select name, predecessors from task_dependents(task_name => 'mytaskchild', recursive => true)
+----
+mytaskroot []
+mytaskchild ['mytaskroot']
+
+
+statement ok
+call TASK_DEPENDENTS_ENABLE('mytaskchild');
+
+
+query SS
+select name, state, predecessors from task_dependents(task_name => 'mytaskchild')
+----
+mytaskchild Started ['mytaskroot']
+
+
 statement ok
 EXECUTE TASK mytaskroot;
 

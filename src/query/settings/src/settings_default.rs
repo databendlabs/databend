@@ -110,6 +110,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let data_retention_time_in_days_max= Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
@@ -149,6 +150,13 @@ impl DefaultSettings {
                     desc: "Sets the retention period in hours.",
                     mode: SettingMode::Both,
                     range: None,
+                }),
+                ("data_retention_time_in_days", DefaultSettingValue {
+                    // unit of retention_period is day
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Sets the data retention time in days.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
@@ -639,6 +647,16 @@ impl DefaultSettings {
                 true => 48,
                 false => std::cmp::min(num_cpus, 64),
             },
+        }
+    }
+
+    /// The maximum number of days that data can be retained.
+    /// The max is read from the global config:data_retention_time_in_days_max
+    /// If the global config is not set, the default value is 90 days.
+    fn data_retention_time_in_days_max() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => 90,
+            Some(conf) => conf.query.data_retention_time_in_days_max,
         }
     }
 
