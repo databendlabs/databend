@@ -2865,6 +2865,7 @@ dependencies = [
  "databend-common-protos",
  "databend-common-storage",
  "enumflags2",
+ "log",
  "minitrace",
  "mockall",
  "serde_json",
