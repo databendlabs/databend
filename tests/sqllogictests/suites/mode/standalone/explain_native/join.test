@@ -87,7 +87,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 0.40
+├── estimated rows: 0.18
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
@@ -107,7 +107,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [1 < t1.number (#1)], limit: NONE]
-    └── estimated rows: 2.00
+    └── estimated rows: 0.91
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1
