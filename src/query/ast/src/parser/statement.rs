@@ -3337,16 +3337,12 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
-    let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         rule! {
-            #type_name ~ #nullable?
+            #type_name
         },
-        |(type_name, nullable)| match nullable {
-            Some(false) => type_name,
+        |type_name| match type_name {
+            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
             _ => type_name.wrap_nullable(),
         },
     )(i)
