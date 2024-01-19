@@ -94,7 +94,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             if i == 16 {
                 TypeName::String
             } else if self.rng.gen_bool(0.5) {
-                SIMPLE_COLUMN_TYPES[i].clone()
+                TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             } else {
                 TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             }
@@ -146,7 +146,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             None => self.rng.gen_range(0..38),
         };
         if i <= 17 {
-            SIMPLE_COLUMN_TYPES[i].clone()
+            TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
         } else if i <= 35 {
             TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 18].clone()))
         } else {
