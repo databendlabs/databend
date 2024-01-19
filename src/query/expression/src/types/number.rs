@@ -531,6 +531,28 @@ impl NumberScalar {
             NumberScalar::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
     }
+
+    pub fn is_integer(&self) -> bool {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(_) => true,
+            _ => false,
+        })
+    }
+
+    pub fn integer_to_i128(&self) -> Option<i128> {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(x) => Some(*x as i128),
+            _ => None,
+        })
+    }
+
+    pub fn float_to_f64(&self) -> Option<f64> {
+        match self {
+            NumberScalar::Float32(value) => Some(value.into_inner() as f64),
+            NumberScalar::Float64(value) => Some(value.into_inner()),
+            _ => None,
+        }
+    }
 }
 
 impl<T> From<T> for NumberScalar
