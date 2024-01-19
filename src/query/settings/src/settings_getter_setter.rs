@@ -183,6 +183,14 @@ impl Settings {
         self.try_get_u64("retention_period")
     }
 
+    pub fn set_data_retention_time_in_days(&self, days: u64) -> Result<()> {
+        self.try_set_u64("data_retention_time_in_days", days)
+    }
+
+    pub fn get_data_retention_time_in_days(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_time_in_days")
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }
