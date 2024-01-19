@@ -395,6 +395,11 @@ struct Range<'a> {
 
 impl<'a> PartialEq for Range<'a> {
     fn eq(&self, other: &Self) -> bool {
+        // We cannot compare Scalar directly because when the NumberScalar types
+        // are different but the internal values are the same, the comparison
+        // result is false.
+        // So we need to compare the internal values of the Scalar, for example,
+        // `NumberScalar(UInt8(1)) == NumberScalar(UInt32(1))` should return true.
         fn scalar_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
             match (left, right) {
                 (Some(left), Some(right)) => {
@@ -500,6 +505,8 @@ impl<'a> Range<'a> {
             return false;
         }
 
+        // We need to compare the internal values of the Scalar, for example,
+        // `NumberScalar(UInt8(2)) > NumberScalar(UInt32(1))` should return true.
         match (self.min, other.min) {
             (Some(left), Some(right)) => {
                 if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
