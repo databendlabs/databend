@@ -236,7 +236,6 @@ impl FuseTable {
                     ops.clone(),
                     self.storage_format,
                     query_row_id_col,
-                    false,
                 )
             },
             max_threads,

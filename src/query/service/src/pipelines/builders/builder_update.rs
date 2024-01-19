@@ -45,7 +45,6 @@ impl PipelineBuilder {
             update.update_list.clone(),
             update.computed_list.clone(),
             update.query_row_id_col,
-            update.select_from_subquery,
             &mut self.main_pipeline,
         )?;
 

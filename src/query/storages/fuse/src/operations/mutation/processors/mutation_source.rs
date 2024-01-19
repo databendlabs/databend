@@ -91,7 +91,6 @@ pub struct MutationSource {
 
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
-    select_from_subquery: bool,
 }
 
 impl MutationSource {
@@ -106,7 +105,6 @@ impl MutationSource {
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
         query_row_id_col: bool,
-        select_from_subquery: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -121,7 +119,6 @@ impl MutationSource {
             query_row_id_col,
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
-            select_from_subquery,
         })))
     }
 }
@@ -276,21 +273,10 @@ impl Processor for MutationSource {
                             }
 
                             MutationAction::Update => {
-                                if self.select_from_subquery {
-                                    // if update select from subquery, then only need predicates columns
-                                    data_block = DataBlock::new(
-                                        vec![BlockEntry::new(
-                                            DataType::Boolean,
-                                            Value::upcast(predicates),
-                                        )],
-                                        num_rows,
-                                    );
-                                } else {
-                                    data_block.add_column(BlockEntry::new(
-                                        DataType::Boolean,
-                                        Value::upcast(predicates),
-                                    ));
-                                }
+                                data_block.add_column(BlockEntry::new(
+                                    DataType::Boolean,
+                                    Value::upcast(predicates),
+                                ));
                                 if self.remain_reader.is_none() {
                                     self.state = State::PerformOperator(
                                         data_block,
