@@ -29,7 +29,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -195,9 +194,12 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both {
-                    left, right, op, ..
+                    left,
+                    right,
+                    is_equal_op,
+                    ..
                 } => {
-                    if op == ComparisonOp::Equal {
+                    if is_equal_op {
                         left_conditions.push(left.clone());
                         right_conditions.push(right.clone());
                     } else {

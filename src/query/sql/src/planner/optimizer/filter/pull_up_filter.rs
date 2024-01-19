@@ -16,7 +16,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::binder::split_conjunctions;
 use crate::optimizer::filter::InferFilterOptimizer;
+use crate::optimizer::filter::NormalizeDisjunctiveFilterOptimizer;
 use crate::optimizer::SExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
@@ -53,6 +55,7 @@ impl PullUpFilterOptimizer {
             Ok(s_expr)
         } else {
             let predicates = InferFilterOptimizer::new().run(self.predicates)?;
+            let predicates = NormalizeDisjunctiveFilterOptimizer::new().run(predicates)?;
             let filter = Filter { predicates };
             Ok(SExpr::create_unary(
                 Arc::new(filter.into()),
@@ -74,7 +77,7 @@ impl PullUpFilterOptimizer {
     fn pull_up_filter(&mut self, s_expr: &SExpr, filter: &Filter) -> Result<SExpr> {
         let child = self.pull_up(s_expr.child(0)?)?;
         for predicate in filter.predicates.iter() {
-            self.predicates.push(predicate.clone());
+            self.predicates.extend(split_conjunctions(predicate));
         }
         Ok(child)
     }
@@ -95,12 +98,16 @@ impl PullUpFilterOptimizer {
         let mut left = left_pull_up.pull_up(s_expr.child(0)?)?;
         let mut right = right_pull_up.pull_up(s_expr.child(1)?)?;
         if left_need_pull_up {
-            self.predicates.extend(left_pull_up.predicates);
+            for predicate in left_pull_up.predicates {
+                self.predicates.extend(split_conjunctions(&predicate));
+            }
         } else {
             left = left_pull_up.finish(left)?;
         }
         if right_need_pull_up {
-            self.predicates.extend(right_pull_up.predicates);
+            for predicate in right_pull_up.predicates {
+                self.predicates.extend(split_conjunctions(&predicate));
+            }
         } else {
             right = right_pull_up.finish(right)?;
         }
@@ -120,7 +127,7 @@ impl PullUpFilterOptimizer {
                 self.predicates.push(predicate);
             }
             for predicate in join.non_equi_conditions.iter() {
-                self.predicates.push(predicate.clone());
+                self.predicates.extend(split_conjunctions(predicate));
             }
             join.left_conditions.clear();
             join.right_conditions.clear();
@@ -144,8 +151,7 @@ impl PullUpFilterOptimizer {
     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.children().len());
         for child in s_expr.children() {
-            let pull_up = PullUpFilterOptimizer::new(self.metadata.clone());
-            let child = pull_up.run(child)?;
+            let child = PullUpFilterOptimizer::new(self.metadata.clone()).run(child)?;
             children.push(Arc::new(child));
         }
         Ok(s_expr.replace_children(children))

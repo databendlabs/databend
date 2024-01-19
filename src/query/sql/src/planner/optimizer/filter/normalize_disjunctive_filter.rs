@@ -12,23 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use itertools::Itertools;
 
 use crate::binder::split_conjunctions;
-use crate::optimizer::rule::Rule;
-use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::ConstantExpr;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::PatternPlan;
-use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+
+// The NormalizeDisjunctiveFilterOptimizer tries to apply the inverse OR distributive law to the predicate.
+// (A AND B) OR (A AND C) => A AND (B OR C)
+// It'll find all OR expressions and extract the common terms.
+#[derive(Default)]
+pub struct NormalizeDisjunctiveFilterOptimizer {}
+
+impl NormalizeDisjunctiveFilterOptimizer {
+    pub fn new() -> Self {
+        NormalizeDisjunctiveFilterOptimizer::default()
+    }
+}
+
+impl NormalizeDisjunctiveFilterOptimizer {
+    pub fn run(self, predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+        let mut rewritten_predicates = Vec::with_capacity(predicates.len());
+        for predicate in predicates.iter() {
+            let predicate_scalar = predicate_scalar(predicate);
+            let rewritten_predicate_scalar = rewrite_predicate_ors(predicate_scalar);
+            rewritten_predicates.push(normalize_predicate_scalar(rewritten_predicate_scalar));
+        }
+        let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
+        for predicate in rewritten_predicates.iter() {
+            split_predicates.extend_from_slice(&split_conjunctions(predicate));
+        }
+        Ok(split_predicates)
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum PredicateScalar {
@@ -37,51 +56,43 @@ enum PredicateScalar {
     Other(Box<ScalarExpr>),
 }
 
-fn predicate_scalar(scalar: &ScalarExpr) -> (bool, PredicateScalar) {
+fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     match scalar {
         ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
             let mut and_args = vec![];
-            let mut is_rewritten = false;
             for argument in func.arguments.iter() {
                 // Recursively flatten the AND expressions.
-                let (rewritten, predicate) = predicate_scalar(argument);
-                is_rewritten |= rewritten;
+                let predicate = predicate_scalar(argument);
                 if let PredicateScalar::And(args) = predicate {
                     and_args.extend(args);
                 } else {
                     and_args.push(predicate);
                 }
             }
-            let original_len = and_args.len();
             and_args = and_args
                 .into_iter()
                 .unique()
                 .collect::<Vec<PredicateScalar>>();
-            is_rewritten |= original_len != and_args.len();
-            (is_rewritten, PredicateScalar::And(and_args))
+            PredicateScalar::And(and_args)
         }
         ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
             let mut or_args = vec![];
-            let mut is_rewritten = false;
             for argument in func.arguments.iter() {
                 // Recursively flatten the OR expressions.
-                let (rewritten, predicate) = predicate_scalar(argument);
-                is_rewritten |= rewritten;
+                let predicate = predicate_scalar(argument);
                 if let PredicateScalar::Or(args) = predicate {
                     or_args.extend(args);
                 } else {
                     or_args.push(predicate);
                 }
             }
-            let original_len = or_args.len();
             or_args = or_args
                 .into_iter()
                 .unique()
                 .collect::<Vec<PredicateScalar>>();
-            is_rewritten |= original_len != or_args.len();
-            (is_rewritten, PredicateScalar::Or(or_args))
+            PredicateScalar::Or(or_args)
         }
-        _ => (false, PredicateScalar::Other(Box::from(scalar.clone()))),
+        _ => PredicateScalar::Other(Box::from(scalar.clone())),
     }
 }
 
@@ -119,112 +130,36 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     }
 }
 
-// The rule tries to apply the inverse OR distributive law to the predicate.
-// (A AND B) OR (A AND C) => A AND (B OR C)
-// It'll find all OR expressions and extract the common terms.
-pub struct RuleNormalizeDisjunctiveFilter {
-    id: RuleID,
-    patterns: Vec<SExpr>,
-}
-
-impl RuleNormalizeDisjunctiveFilter {
-    pub fn new() -> Self {
-        Self {
-            id: RuleID::NormalizeDisjunctiveFilter,
-            // Filter
-            //  \
-            //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
-        }
-    }
-}
-
-impl Rule for RuleNormalizeDisjunctiveFilter {
-    fn id(&self) -> RuleID {
-        self.id
-    }
-
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let predicates = filter.predicates;
-        let mut rewritten_predicates = Vec::with_capacity(predicates.len());
-        let mut is_rewritten = false;
-        for predicate in predicates.iter() {
-            let (rewritten, predicate_scalar) = predicate_scalar(predicate);
-            is_rewritten |= rewritten;
-            let (rewritten_predicate_scalar, rewritten) = rewrite_predicate_ors(predicate_scalar);
-            is_rewritten |= rewritten;
-            rewritten_predicates.push(normalize_predicate_scalar(rewritten_predicate_scalar));
-        }
-        let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
-        for predicate in rewritten_predicates.iter() {
-            split_predicates.extend_from_slice(&split_conjunctions(predicate));
-        }
-        if is_rewritten {
-            state.add_result(SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: split_predicates,
-                    }
-                    .into(),
-                ),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
-        }
-        Ok(())
-    }
-
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
-    }
-}
-
-fn rewrite_predicate_ors(predicate: PredicateScalar) -> (PredicateScalar, bool) {
+fn rewrite_predicate_ors(predicate: PredicateScalar) -> PredicateScalar {
     match predicate {
         PredicateScalar::Or(args) => {
             let mut or_args = Vec::with_capacity(args.len());
             for arg in args.iter() {
-                or_args.push(rewrite_predicate_ors(arg.clone()).0);
+                or_args.push(rewrite_predicate_ors(arg.clone()));
             }
             process_duplicate_or_exprs(or_args)
         }
         PredicateScalar::And(args) => {
             let mut and_args = Vec::with_capacity(args.len());
             for arg in args.iter() {
-                and_args.push(rewrite_predicate_ors(arg.clone()).0);
+                and_args.push(rewrite_predicate_ors(arg.clone()));
             }
-            (PredicateScalar::And(and_args), false)
+            PredicateScalar::And(and_args)
         }
-        PredicateScalar::Other(_) => (predicate, false),
+        PredicateScalar::Other(_) => predicate,
     }
 }
 
 // Apply the inverse OR distributive law.
-fn process_duplicate_or_exprs(mut or_args: Vec<PredicateScalar>) -> (PredicateScalar, bool) {
+fn process_duplicate_or_exprs(mut or_args: Vec<PredicateScalar>) -> PredicateScalar {
     if or_args.is_empty() {
-        return (
-            PredicateScalar::Other(Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: Scalar::Boolean(false),
-            }))),
-            false,
-        );
+        return PredicateScalar::Other(Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(false),
+        })));
     }
     if or_args.len() == 1 {
-        return (or_args[0].clone(), false);
+        return or_args[0].clone();
     }
     // choose the shortest AND expression
     let mut shortest_exprs: Vec<PredicateScalar> = vec![];
@@ -259,7 +194,7 @@ fn process_duplicate_or_exprs(mut or_args: Vec<PredicateScalar>) -> (PredicateSc
     }
 
     if exist_exprs.is_empty() {
-        return (PredicateScalar::Or(or_args), false);
+        return PredicateScalar::Or(or_args);
     }
 
     // Rebuild the OR predicate.
@@ -297,8 +232,8 @@ fn process_duplicate_or_exprs(mut or_args: Vec<PredicateScalar>) -> (PredicateSc
     }
 
     if exist_exprs.len() == 1 {
-        (exist_exprs[0].clone(), true)
+        exist_exprs[0].clone()
     } else {
-        (PredicateScalar::And(exist_exprs), true)
+        PredicateScalar::And(exist_exprs)
     }
 }
