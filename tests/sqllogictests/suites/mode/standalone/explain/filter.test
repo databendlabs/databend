@@ -43,3 +43,60 @@ Filter
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
     └── estimated rows: 0.00
+
+# Constant Folding
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t(a int);
+
+statement ok
+create table t1(a int);
+
+statement ok
+insert into t select number from numbers(50);
+
+statement ok
+insert into t1 select number from numbers(10) where number >4;
+
+query I
+explain select t1.a, t2.action as action from (select a,'INSERT' as action from t where a>1) t2 left join t1 on t2.a=t1.a where action != 'INSERT';
+----
+HashJoin
+├── output columns: [t1.a (#2), action (#1)]
+├── join type: RIGHT OUTER
+├── build keys: [t2.a (#0)]
+├── probe keys: [t1.a (#2)]
+├── filters: []
+├── estimated rows: 0.00
+├── EvalScalar(Build)
+│   ├── output columns: [t.a (#0), action (#1)]
+│   ├── expressions: ['INSERT']
+│   ├── estimated rows: 0.00
+│   └── Filter
+│       ├── output columns: [t.a (#0)]
+│       ├── filters: [false, is_true(t.a (#0) > 1)]
+│       ├── estimated rows: 0.00
+│       └── TableScan
+│           ├── table: default.default.t
+│           ├── output columns: [a (#0)]
+│           ├── read rows: 0
+│           ├── read bytes: 0
+│           ├── partitions total: 0
+│           ├── partitions scanned: 0
+│           ├── push downs: [filters: [false], limit: NONE]
+│           └── estimated rows: 50.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#2)]
+    ├── read rows: 5
+    ├── read bytes: 53
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 5.00
