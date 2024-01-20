@@ -499,7 +499,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1000),
+                    value: UserSettingValue::UInt64(50),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: None,
