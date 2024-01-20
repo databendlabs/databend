@@ -405,7 +405,7 @@ fn prune_and_generate_partitions(
                     .zip(row_group_level_stats.as_ref())
                     .map(|(t, stats)| {
                         let stat = &stats[rg][&(t.leaf_id as u32)];
-                        (stat.min.clone(), stat.max.clone())
+                        (stat.min.clone().into(), stat.max.clone().into())
                     });
 
             parts.push(ParquetRSRowGroupPart {

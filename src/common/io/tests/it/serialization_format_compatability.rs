@@ -185,3 +185,79 @@ fn test_msg_pack_enum_reorder() {
     assert_matches!(deserialized[0], ScalarReordered::Null);
     assert_matches!(&deserialized[1], ScalarReordered::String(x) if x == &vec![1, 2, 3]);
 }
+
+#[test]
+fn test_serde_other_alias() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar1 {
+        Null,
+        Int(i8),
+        String(Vec<u8>),
+        Float(f32),
+        Variant(Vec<u8>),
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar2 {
+        Null,
+        Int(i8),
+        Binary(Vec<u8>),
+        String(Vec<u8>),
+        Float(f32),
+        Variant(Vec<u8>),
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Scalar3 {
+        Null,
+        Int(i8),
+        #[serde(alias = "String", alias = "Binary")]
+        String(Vec<u8>),
+        #[serde(other)]
+        Other,
+    }
+
+    // test v1-v3 with rmp
+    let mut value1 = vec![
+        Scalar1::Null,
+        Scalar1::Int(42),
+        Scalar1::String(vec![3, 4, 5]),
+    ];
+    let bytes = rmp_serde::to_vec_named(&value1).unwrap();
+    let deserialized: Vec<Scalar3> = rmp_serde::from_slice(&bytes).unwrap();
+    let e3 = vec![
+        Scalar3::Null,
+        Scalar3::Int(42),
+        Scalar3::String(vec![3, 4, 5]),
+    ];
+    assert_eq!(deserialized, e3);
+
+    // test v1-v3 with bincode
+    let mut writer = vec![];
+    bincode_serialize_into_buf(&mut writer, &value1).unwrap();
+    let deserialized: Vec<Scalar3> = bincode_deserialize_from_slice(&writer).unwrap();
+    assert_eq!(deserialized, e3);
+
+    // test other
+    value1.push(Scalar1::Float(3.2));
+    let bytes = rmp_serde::to_vec_named(&value1).unwrap();
+    let deserialized: Result<Vec<Scalar3>, _> = rmp_serde::from_slice(&bytes);
+    assert!(deserialized.is_err());
+
+    // test v2-v3 with rpm and binary to string
+    let value2 = vec![
+        Scalar2::Null,
+        Scalar2::Binary(vec![1, 2, 3]),
+        Scalar2::Int(42),
+        Scalar2::String(vec![3, 4, 5]),
+    ];
+    let bytes = rmp_serde::to_vec_named(&value2).unwrap();
+    let deserialized: Vec<Scalar3> = rmp_serde::from_slice(&bytes).unwrap();
+    let e3 = vec![
+        Scalar3::Null,
+        Scalar3::String(vec![1, 2, 3]),
+        Scalar3::Int(42),
+        Scalar3::String(vec![3, 4, 5]),
+    ];
+    assert_eq!(deserialized, e3);
+}

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_settings::Settings;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -124,4 +126,95 @@ async fn test_set_global_settings() {
         .await;
     let expect = "UnknownVariable. Code: 2801, Text = Unknown variable: \"query_flight_compression_notfound\".";
     assert_eq!(expect, format!("{}", result.unwrap_err()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_set_data_retention_time_in_days() {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Init with default.
+    {
+        GlobalConfig::init(&InnerConfig::default()).unwrap();
+    }
+
+    let settings = Settings::create("test".to_string());
+
+    // Default.
+    {
+        let actual = settings.get_data_retention_time_in_days().unwrap();
+        assert_eq!(actual, 1);
+    }
+
+    // Ok, 90.
+    {
+        settings
+            .set_setting("data_retention_time_in_days".to_string(), "90".to_string())
+            .await
+            .unwrap();
+
+        let actual = settings.get_data_retention_time_in_days().unwrap();
+        assert_eq!(actual, 90);
+    }
+
+    // Ok, 0.
+    {
+        settings
+            .set_setting("data_retention_time_in_days".to_string(), "0".to_string())
+            .await
+            .unwrap();
+
+        let actual = settings.get_data_retention_time_in_days().unwrap();
+        assert_eq!(actual, 0);
+    }
+
+    // Out of range.
+    {
+        let result = settings
+            .set_setting("data_retention_time_in_days".to_string(), "91".to_string())
+            .await;
+        let expect =
+            "WrongValueForVariable. Code: 2803, Text = Value 91 is not within the range [0, 90].";
+
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_set_data_retention_time_in_days_from_config() {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Change default value.
+    {
+        let mut conf = InnerConfig::default();
+        conf.query.data_retention_time_in_days_max = 33;
+        GlobalConfig::init(&conf).unwrap();
+    }
+
+    let settings = Settings::create("test".to_string());
+
+    // Ok, 0.
+    {
+        settings
+            .set_setting("data_retention_time_in_days".to_string(), "33".to_string())
+            .await
+            .unwrap();
+
+        let actual = settings.get_data_retention_time_in_days().unwrap();
+        assert_eq!(actual, 33);
+    }
+
+    // Out of range.
+    {
+        let result = settings
+            .set_setting("data_retention_time_in_days".to_string(), "34".to_string())
+            .await;
+        let expect =
+            "WrongValueForVariable. Code: 2803, Text = Value 34 is not within the range [0, 33].";
+
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+    }
 }

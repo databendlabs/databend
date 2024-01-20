@@ -723,7 +723,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -772,7 +771,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -823,7 +821,9 @@ CreateTable(
                                 32..33,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: Some(
                             Default(
                                 Literal {
@@ -837,9 +837,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -852,7 +849,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -903,7 +899,9 @@ CreateTable(
                                 32..33,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: Some(
                             Default(
                                 Literal {
@@ -917,9 +915,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -932,7 +927,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1054,7 +1048,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1073,7 +1066,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1127,7 +1119,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1140,7 +1131,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1214,7 +1204,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1268,7 +1257,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1281,7 +1269,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1335,7 +1322,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1487,7 +1473,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1558,7 +1543,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1918,7 +1902,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1931,7 +1914,6 @@ CreateTable(
                         data_type: Timestamp,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2825,7 +2807,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2840,7 +2821,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2855,7 +2835,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2898,12 +2877,11 @@ CreateTable(
                                 15..17,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2913,12 +2891,11 @@ CreateTable(
                                 32..34,
                             ),
                         },
-                        data_type: Int64,
+                        data_type: NotNull(
+                            Int64,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2928,12 +2905,11 @@ CreateTable(
                                 52..54,
                             ),
                         },
-                        data_type: String,
+                        data_type: NotNull(
+                            String,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                 ],
             ),
@@ -2979,7 +2955,6 @@ CreateTable(
                         data_type: Binary,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2992,7 +2967,6 @@ CreateTable(
                         data_type: Binary,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -3049,7 +3023,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8003,7 +7976,6 @@ AlterTable(
                 ),
                 expr: None,
                 comment: None,
-                nullable_constraint: None,
             },
             option: End,
         },
@@ -8064,7 +8036,6 @@ AlterTable(
                 comment: Some(
                     "hello",
                 ),
-                nullable_constraint: None,
             },
             option: First,
         },
@@ -8121,7 +8092,6 @@ AlterTable(
                     ),
                 ),
                 comment: None,
-                nullable_constraint: None,
             },
             option: After(
                 Identifier {
@@ -8356,7 +8326,6 @@ AlterTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -8369,7 +8338,6 @@ AlterTable(
                         data_type: Float32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8381,7 +8349,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 COMMENT column b
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 NOT NULL COMMENT column b
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -8431,7 +8399,6 @@ AlterTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -8441,13 +8408,12 @@ AlterTable(
                                 57..58,
                             ),
                         },
-                        data_type: Float32,
+                        data_type: NotNull(
+                            Float32,
+                        ),
                         expr: None,
                         comment: Some(
                             "column b",
-                        ),
-                        nullable_constraint: Some(
-                            NotNull,
                         ),
                     },
                 ],
@@ -8497,7 +8463,6 @@ AlterTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8939,7 +8904,6 @@ CreateTable(
                         comment: Some(
                             "col comment",
                         ),
-                        nullable_constraint: None,
                     },
                 ],
             ),
