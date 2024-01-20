@@ -38,6 +38,7 @@ pub const CURRENT_BLOCK_ROW_NUM_COL_NAME: &str = "_current_block_row_num";
 pub fn gen_mutation_stream_operator(
     schema: Arc<TableSchema>,
     table_version: u64,
+    is_delete: bool,
 ) -> Result<(Vec<StreamColumn>, Vec<BlockOperator>)> {
     let input_schema = schema.remove_virtual_computed_fields();
     let fields_num = input_schema.fields().len();
@@ -106,7 +107,7 @@ pub fn gen_mutation_stream_operator(
         span: None,
         column: ColumnBindingBuilder::new(
             CURRENT_BLOCK_ID_COL_NAME.to_string(),
-            fields_num,
+            fields_num + 1,
             block_id_type,
             Visibility::Visible,
         )
@@ -157,7 +158,7 @@ pub fn gen_mutation_stream_operator(
         span: None,
         column: ColumnBindingBuilder::new(
             CURRENT_BLOCK_ROW_NUM_COL_NAME.to_string(),
-            fields_num + 1,
+            fields_num,
             row_num_type,
             Visibility::Visible,
         )
@@ -208,6 +209,10 @@ pub fn gen_mutation_stream_operator(
             projection: projections,
         },
     ];
-    let stream_columns = vec![origin_block_id_col, origin_row_num_col];
+    let stream_columns = if is_delete {
+        vec![origin_block_id_col]
+    } else {
+        vec![origin_row_num_col, origin_block_id_col]
+    };
     Ok((stream_columns, operators))
 }

@@ -335,6 +335,11 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
                 RcDoc::nil()
             },
         )
+        .append(if !stmt.append_only {
+            RcDoc::space().append(RcDoc::text("APPEND_ONLY = false"))
+        } else {
+            RcDoc::nil()
+        })
         .append(if let Some(comment) = stmt.comment {
             RcDoc::space().append(RcDoc::text(format!("COMMENT = '{comment}'")))
         } else {

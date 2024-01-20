@@ -17,6 +17,7 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
@@ -27,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -254,6 +256,16 @@ impl Processor for MutationSource {
                                         DataBlock::empty_with_meta(meta),
                                     );
                                 } else {
+                                    if self.block_reader.update_stream_columns {
+                                        let row_num = BlockEntry::new(
+                                            DataType::Nullable(Box::new(DataType::Number(
+                                                NumberDataType::UInt64,
+                                            ))),
+                                            build_origin_block_row_num(num_rows),
+                                        );
+                                        data_block.add_column(row_num);
+                                    }
+
                                     let predicate_col = predicates.into_column().unwrap();
                                     let filter = predicate_col.not();
                                     data_block = data_block.filter_with_bitmap(&filter)?;

@@ -215,7 +215,7 @@ impl UpdateInterpreter {
 
         let update_list = self.plan.generate_update_list(
             self.ctx.clone(),
-            tbl.schema().into(),
+            tbl.schema_with_stream().into(),
             col_indices.clone(),
             None,
             false,

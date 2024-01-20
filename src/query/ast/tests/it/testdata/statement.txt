@@ -2428,6 +2428,54 @@ AlterView(
 
 
 ---------- Input ----------
+create stream test2.s1 on table test.t append_only = false;
+---------- Output ---------
+CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    14..19,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s1",
+            quote: None,
+            span: Some(
+                20..22,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    32..36,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                37..38,
+            ),
+        },
+        stream_point: None,
+        append_only: false,
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
 create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';
 ---------- Output ---------
 CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COMMENT = 'this is a stream'
@@ -2488,6 +2536,7 @@ CreateStream(
                 },
             },
         ),
+        append_only: true,
         comment: Some(
             "this is a stream",
         ),
