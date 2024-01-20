@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::converts::bincode::LegacyColumn;
-use databend_common_expression::converts::bincode::LegacyScalar;
+use databend_common_expression::converts::meta::IndexScalar;
+use databend_common_expression::converts::meta::LegacyColumn;
+use databend_common_expression::converts::meta::LegacyScalar;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
 use crate::rand_block_for_all_types;
+use crate::rand_block_for_simple_types;
 
-/// This test covers scatter.rs.
 #[test]
 pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
     use rand::Rng;
@@ -64,6 +65,43 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
 
                 assert_eq!(a, b);
             }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+pub fn test_simple_converts() -> databend_common_exception::Result<()> {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let test_times = rng.gen_range(5..30);
+
+    for _ in 0..test_times {
+        let rows = rng.gen_range(100..1024);
+        let random_block = rand_block_for_simple_types(rows);
+        for entry in random_block
+            .columns()
+            .iter()
+            .filter(|c| !c.data_type.remove_nullable().is_binary())
+        {
+            let mut scalars = vec![];
+            let mut simple_scalars = vec![];
+
+            for row in 0..rows {
+                let scalar = entry.value.index(row).unwrap().to_owned();
+                let simple_scalar: IndexScalar = scalar.clone().into();
+                simple_scalars.push(simple_scalar.clone());
+                scalars.push(scalar.clone());
+
+                let convert_back_scalar: Scalar = simple_scalar.into();
+                assert_eq!(scalar, convert_back_scalar);
+            }
+
+            // TODO: comment these when we swith string in scalar
+            let data = rmp_serde::to_vec(&scalars).unwrap();
+            let new_scalars: Vec<IndexScalar> = rmp_serde::from_slice(&data).unwrap();
+            assert_eq!(simple_scalars, new_scalars);
         }
     }
 
