@@ -69,6 +69,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'clickhouse_http_handler_port'             | '8124'                                                         | ''       |
 | 'query'   | 'cloud_control_grpc_server_address'        | 'null'                                                         | ''       |
 | 'query'   | 'cluster_id'                               | ''                                                             | ''       |
+| 'query'   | 'data_retention_time_in_days_max'          | '90'                                                           | ''       |
 | 'query'   | 'databend_enterprise_license'              | 'null'                                                         | ''       |
 | 'query'   | 'default_compression'                      | 'auto'                                                         | ''       |
 | 'query'   | 'default_storage_format'                   | 'auto'                                                         | ''       |

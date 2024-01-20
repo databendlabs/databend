@@ -32,3 +32,4 @@ serde = { workspace = true }
 [dev-dependencies]
 aho-corasick = { version = "1.0.1" }
 rand = { workspace = true }
+rmp-serde = "1.1.1"
