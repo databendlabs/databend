@@ -503,7 +503,7 @@ impl Settings {
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
-        Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
+        Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
 
     pub fn get_enable_query_profiling(&self) -> Result<bool> {

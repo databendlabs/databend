@@ -26,7 +26,7 @@ AggregateFinal
     └── ProjectSet
         ├── output columns: [unnest (#2)]
         ├── estimated rows: 1.00
-        ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL) NULL))
+        ├── set returning functions: unnest(fold_count.id (#0))
         └── TableScan
             ├── table: default.default.fold_count
             ├── output columns: [id (#0)]

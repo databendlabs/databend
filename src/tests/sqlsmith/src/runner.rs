@@ -19,7 +19,6 @@ use databend_client::error::Error as ClientError;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
-use databend_common_ast::ast::NullableConstraint;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableField;
@@ -120,12 +119,7 @@ impl Runner {
             let mut fields = Vec::new();
             if let CreateTableSource::Columns(columns) = create_table_stmt.source.unwrap() {
                 for column in columns {
-                    let not_null = match column.nullable_constraint {
-                        Some(NullableConstraint::NotNull) => true,
-                        Some(NullableConstraint::Null) => false,
-                        None => true,
-                    };
-                    let data_type = resolve_type_name(&column.data_type, not_null).unwrap();
+                    let data_type = resolve_type_name(&column.data_type, true).unwrap();
                     let field = TableField::new(&column.name.name, data_type);
                     fields.push(field);
                 }

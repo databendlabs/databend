@@ -82,11 +82,12 @@ error:
 CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
 ---------- Output ---------
 error: 
-  --> SQL:1:41
+  --> SQL:1:19
   |
 1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
-  | ------                                  ^ ambiguous NOT NULL constraint
-  | |                                        
+  | ------         -- ^^^^^^^^ ambiguous NOT NULL constraint
+  | |              |   
+  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 

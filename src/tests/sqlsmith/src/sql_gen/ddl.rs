@@ -20,7 +20,6 @@ use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::NullableConstraint;
 use databend_common_ast::ast::TypeName;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -94,8 +93,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             // replace bitmap with string, as generated bitmap value can't display
             if i == 16 {
                 TypeName::String
+            } else if self.rng.gen_bool(0.5) {
+                TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             } else {
-                SIMPLE_COLUMN_TYPES[i].clone()
+                TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             }
         } else {
             match self.rng.gen_range(0..=2) {
@@ -139,27 +140,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_data_type_name(
-        &mut self,
-        idx: Option<usize>,
-    ) -> (TypeName, Option<NullableConstraint>) {
+    pub(crate) fn gen_data_type_name(&mut self, idx: Option<usize>) -> TypeName {
         let i = match idx {
             Some(i) => i,
             None => self.rng.gen_range(0..38),
         };
         if i <= 17 {
-            (
-                SIMPLE_COLUMN_TYPES[i].clone(),
-                Some(NullableConstraint::NotNull),
-            )
+            TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
         } else if i <= 35 {
-            (
-                SIMPLE_COLUMN_TYPES[i - 18].clone(),
-                Some(NullableConstraint::Null),
-            )
+            TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 18].clone()))
         } else {
             let depth = self.rng.gen_range(1..=3);
-            (self.gen_nested_type(depth), None)
+            self.gen_nested_type(depth)
         }
     }
 
@@ -173,13 +165,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_new_column(&mut self) -> ColumnDefinition {
         let name = self.gen_random_name();
         let new_column_name = Identifier::from_name(format!("cc{}", name));
-        let (data_type, nullable_constraint) = self.gen_data_type_name(None);
+        let data_type = self.gen_data_type_name(None);
         ColumnDefinition {
             name: new_column_name,
             data_type,
             expr: None,
             comment: None,
-            nullable_constraint,
         }
     }
 
@@ -188,7 +179,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         for i in 0..38 {
             let name = format!("c{}", i);
-            let (data_type, nullable_constraint) = self.gen_data_type_name(Some(i));
+            let data_type = self.gen_data_type_name(Some(i));
 
             let column_def = ColumnDefinition {
                 name: Identifier::from_name(name),
@@ -196,7 +187,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 // TODO
                 expr: None,
                 comment: None,
-                nullable_constraint,
             };
             column_defs.push(column_def);
         }
