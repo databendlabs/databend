@@ -27,6 +27,7 @@ pub struct CreateStreamPlan {
     pub table_database: String,
     pub table_name: String,
     pub navigation: Option<StreamNavigation>,
+    pub append_only: bool,
     pub comment: Option<String>,
 }
 
