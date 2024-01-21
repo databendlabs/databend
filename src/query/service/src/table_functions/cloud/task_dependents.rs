@@ -194,38 +194,30 @@ impl TaskDependentsSource {
     }
     fn to_block(&self, tasks: &Vec<Task>) -> databend_common_exception::Result<DataBlock> {
         let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
-        let mut name: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-        let mut owner: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-        let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-        let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-        let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-        let mut predecessors: Vec<Vec<Vec<u8>>> = Vec::with_capacity(tasks.len());
+        let mut name: Vec<String> = Vec::with_capacity(tasks.len());
+        let mut owner: Vec<String> = Vec::with_capacity(tasks.len());
+        let mut comment: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+        let mut warehouse: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+        let mut schedule: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+        let mut predecessors: Vec<Vec<String>> = Vec::with_capacity(tasks.len());
 
-        let mut state: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-        let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-        let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+        let mut state: Vec<String> = Vec::with_capacity(tasks.len());
+        let mut definition: Vec<String> = Vec::with_capacity(tasks.len());
+        let mut condition_text: Vec<String> = Vec::with_capacity(tasks.len());
 
         for task in tasks {
             let task = task.clone();
             let tsk: task_utils::Task = task.try_into()?;
             created_on.push(tsk.created_at.timestamp_micros());
-            name.push(tsk.task_name.into_bytes());
-            owner.push(tsk.owner.into_bytes());
-            comment.push(tsk.comment.map(|s| s.into_bytes()));
-            warehouse.push(
-                tsk.warehouse_options
-                    .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
-            );
-            schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
-            predecessors.push(
-                tsk.after
-                    .into_iter()
-                    .map(|s| s.into_bytes())
-                    .collect::<Vec<_>>(),
-            );
-            state.push(tsk.status.to_string().into_bytes());
-            definition.push(tsk.query_text.into_bytes());
-            condition_text.push(tsk.condition_text.into_bytes());
+            name.push(tsk.task_name.clone());
+            owner.push(tsk.owner.clone());
+            comment.push(tsk.comment.clone());
+            warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse.clone()));
+            schedule.push(tsk.schedule_options.clone());
+            predecessors.push(tsk.after.clone());
+            state.push(tsk.status.to_string());
+            definition.push(tsk.query_text.clone());
+            condition_text.push(tsk.condition_text.clone());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -307,8 +299,7 @@ impl TaskDependentsParsed {
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
                 "task_name" => {
-                    task_name =
-                        String::from_utf8_lossy(v.as_string().unwrap().as_slice()).to_string();
+                    task_name = v.to_string();
                 }
                 "recursive" => {
                     recursive = *v.as_boolean().unwrap();
