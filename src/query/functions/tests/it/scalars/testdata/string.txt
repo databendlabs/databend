@@ -123,6 +123,42 @@ output domain  : {40..=40}
 output         : 40
 
 
+ast            : bit_length('CAFÉ')
+raw expr       : bit_length('CAFÉ')
+checked expr   : bit_length<String>("CAFÉ")
+optimized expr : 40_u64
+output type    : UInt64
+output domain  : {40..=40}
+output         : 40
+
+
+ast            : bit_length('数据库')
+raw expr       : bit_length('数据库')
+checked expr   : bit_length<String>("数据库")
+optimized expr : 72_u64
+output type    : UInt64
+output domain  : {72..=72}
+output         : 72
+
+
+ast            : bit_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+raw expr       : bit_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+checked expr   : bit_length<String>("НОЧЬ НА ОКРАИНЕ МОСКВЫ")
+optimized expr : 328_u64
+output type    : UInt64
+output domain  : {328..=328}
+output         : 328
+
+
+ast            : bit_length('قاعدة البيانات')
+raw expr       : bit_length('قاعدة البيانات')
+checked expr   : bit_length<String>("قاعدة البيانات")
+optimized expr : 216_u64
+output type    : UInt64
+output domain  : {216..=216}
+output         : 216
+
+
 ast            : bit_length(NULL)
 raw expr       : bit_length(NULL)
 checked expr   : bit_length<String NULL>(CAST(NULL AS String NULL))
@@ -163,6 +199,42 @@ output domain  : {5..=5}
 output         : 5
 
 
+ast            : octet_length('CAFÉ')
+raw expr       : octet_length('CAFÉ')
+checked expr   : octet_length<String>("CAFÉ")
+optimized expr : 5_u64
+output type    : UInt64
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : octet_length('数据库')
+raw expr       : octet_length('数据库')
+checked expr   : octet_length<String>("数据库")
+optimized expr : 9_u64
+output type    : UInt64
+output domain  : {9..=9}
+output         : 9
+
+
+ast            : octet_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+raw expr       : octet_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+checked expr   : octet_length<String>("НОЧЬ НА ОКРАИНЕ МОСКВЫ")
+optimized expr : 41_u64
+output type    : UInt64
+output domain  : {41..=41}
+output         : 41
+
+
+ast            : octet_length('قاعدة البيانات')
+raw expr       : octet_length('قاعدة البيانات')
+checked expr   : octet_length<String>("قاعدة البيانات")
+optimized expr : 27_u64
+output type    : UInt64
+output domain  : {27..=27}
+output         : 27
+
+
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
 checked expr   : octet_length<String NULL>(CAST(NULL AS String NULL))
@@ -172,9 +244,9 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : length(a)
-raw expr       : length(a::String)
-checked expr   : length<String>(a)
+ast            : octet_length(a)
+raw expr       : octet_length(a::String)
+checked expr   : octet_length<String>(a)
 evaluation:
 +--------+-----------------------------------+----------------------------+
 |        | a                                 | Output                     |
@@ -182,15 +254,15 @@ evaluation:
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
 | Row 0  | 'latin'                           | 5                          |
-| Row 1  | 'кириллица'                       | 9                          |
-| Row 2  | 'кириллица and latin'             | 19                         |
+| Row 1  | 'кириллица'                       | 18                         |
+| Row 2  | 'кириллица and latin'             | 28                         |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                     |
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6c6174696ed0bad0b8d180d0b8d0bbd0bbd0b8d186d0b0d0bad0b8d180d0b8d0bbd0bbd0b8d186d0b020616e64206c6174696e, offsets: [0, 5, 23, 51] } |
-| Output | UInt64([5, 9, 19])                                                                                                                                       |
+| Output | UInt64([5, 18, 28])                                                                                                                                      |
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -201,6 +273,42 @@ optimized expr : 5_u64
 output type    : UInt64
 output domain  : {5..=5}
 output         : 5
+
+
+ast            : char_length('CAFÉ')
+raw expr       : char_length('CAFÉ')
+checked expr   : length<String>("CAFÉ")
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : char_length('数据库')
+raw expr       : char_length('数据库')
+checked expr   : length<String>("数据库")
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : char_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+raw expr       : char_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+checked expr   : length<String>("НОЧЬ НА ОКРАИНЕ МОСКВЫ")
+optimized expr : 22_u64
+output type    : UInt64
+output domain  : {22..=22}
+output         : 22
+
+
+ast            : char_length('قاعدة البيانات')
+raw expr       : char_length('قاعدة البيانات')
+checked expr   : length<String>("قاعدة البيانات")
+optimized expr : 14_u64
+output type    : UInt64
+output domain  : {14..=14}
+output         : 14
 
 
 ast            : char_length(NULL)
@@ -575,6 +683,33 @@ output domain  : {""..=""}
 output         : ''
 
 
+ast            : ltrim('  你  好  ')
+raw expr       : ltrim('  你  好  ')
+checked expr   : ltrim<String>("  你  好  ")
+optimized expr : "你  好  "
+output type    : String
+output domain  : {"你  好  "..="你  好  "}
+output         : '你  好  '
+
+
+ast            : ltrim('  분산 데이터베이스    ')
+raw expr       : ltrim('  분산 데이터베이스    ')
+checked expr   : ltrim<String>("  분산 데이터베이스    ")
+optimized expr : "분산 데이터베이스    "
+output type    : String
+output domain  : {"분산 데이터베이스    "..="분산 데이터베이스    "}
+output         : '분산 데이터베이스    '
+
+
+ast            : ltrim('   あなたのことが好きです   ')
+raw expr       : ltrim('   あなたのことが好きです   ')
+checked expr   : ltrim<String>("   あなたのことが好きです   ")
+optimized expr : "あなたのことが好きです   "
+output type    : String
+output domain  : {"あなたのことが好きです   "..="あなたのことが好きです   "}
+output         : 'あなたのことが好きです   '
+
+
 ast            : ltrim(NULL)
 raw expr       : ltrim(NULL)
 checked expr   : ltrim<String NULL>(CAST(NULL AS String NULL))
@@ -623,6 +758,33 @@ optimized expr : ""
 output type    : String
 output domain  : {""..=""}
 output         : ''
+
+
+ast            : rtrim('  你  好  ')
+raw expr       : rtrim('  你  好  ')
+checked expr   : rtrim<String>("  你  好  ")
+optimized expr : "  你  好"
+output type    : String
+output domain  : {"  你  好"..="  你  好"}
+output         : '  你  好'
+
+
+ast            : rtrim('  분산 데이터베이스    ')
+raw expr       : rtrim('  분산 데이터베이스    ')
+checked expr   : rtrim<String>("  분산 데이터베이스    ")
+optimized expr : "  분산 데이터베이스"
+output type    : String
+output domain  : {"  분산 데이터베이스"..="  분산 데이터베이스"}
+output         : '  분산 데이터베이스'
+
+
+ast            : rtrim('   あなたのことが好きです   ')
+raw expr       : rtrim('   あなたのことが好きです   ')
+checked expr   : rtrim<String>("   あなたのことが好きです   ")
+optimized expr : "   あなたのことが好きです"
+output type    : String
+output domain  : {"   あなたのことが好きです"..="   あなたのことが好きです"}
+output         : '   あなたのことが好きです'
 
 
 ast            : rtrim(NULL)
@@ -718,6 +880,24 @@ optimized expr : "aaaaaaaa"
 output type    : String
 output domain  : {"aaaaaaaa"..="aaaaaaaa"}
 output         : 'aaaaaaaa'
+
+
+ast            : trim_leading('분산 데이터베이스', '분산 ')
+raw expr       : trim_leading('분산 데이터베이스', '분산 ')
+checked expr   : trim_leading<String, String>("분산 데이터베이스", "분산 ")
+optimized expr : "데이터베이스"
+output type    : String
+output domain  : {"데이터베이스"..="데이터베이스"}
+output         : '데이터베이스'
+
+
+ast            : trim_leading('あなたのことが好きです', 'あなたの')
+raw expr       : trim_leading('あなたのことが好きです', 'あなたの')
+checked expr   : trim_leading<String, String>("あなたのことが好きです", "あなたの")
+optimized expr : "ことが好きです"
+output type    : String
+output domain  : {"ことが好きです"..="ことが好きです"}
+output         : 'ことが好きです'
 
 
 ast            : trim_leading(a, 'a')
@@ -853,6 +1033,24 @@ output domain  : {"aaaaaaaa"..="aaaaaaaa"}
 output         : 'aaaaaaaa'
 
 
+ast            : trim_trailing('분산 데이터베이스', '베이스')
+raw expr       : trim_trailing('분산 데이터베이스', '베이스')
+checked expr   : trim_trailing<String, String>("분산 데이터베이스", "베이스")
+optimized expr : "분산 데이터"
+output type    : String
+output domain  : {"분산 데이터"..="분산 데이터"}
+output         : '분산 데이터'
+
+
+ast            : trim_trailing('あなたのことが好きです', '好きです')
+raw expr       : trim_trailing('あなたのことが好きです', '好きです')
+checked expr   : trim_trailing<String, String>("あなたのことが好きです", "好きです")
+optimized expr : "あなたのことが"
+output type    : String
+output domain  : {"あなたのことが"..="あなたのことが"}
+output         : 'あなたのことが'
+
+
 ast            : trim_trailing(a, 'b')
 raw expr       : trim_trailing(a::String, 'b')
 checked expr   : trim_trailing<String, String>(a, "b")
@@ -986,6 +1184,33 @@ output domain  : {"aaaaaaaa"..="aaaaaaaa"}
 output         : 'aaaaaaaa'
 
 
+ast            : trim_both('  你  好  ', ' ')
+raw expr       : trim_both('  你  好  ', ' ')
+checked expr   : trim_both<String, String>("  你  好  ", " ")
+optimized expr : "你  好"
+output type    : String
+output domain  : {"你  好"..="你  好"}
+output         : '你  好'
+
+
+ast            : trim_both('  분산 데이터베이스    ', ' ')
+raw expr       : trim_both('  분산 데이터베이스    ', ' ')
+checked expr   : trim_both<String, String>("  분산 데이터베이스    ", " ")
+optimized expr : "분산 데이터베이스"
+output type    : String
+output domain  : {"분산 데이터베이스"..="분산 데이터베이스"}
+output         : '분산 데이터베이스'
+
+
+ast            : trim_both('   あなたのことが好きです   ', ' ')
+raw expr       : trim_both('   あなたのことが好きです   ', ' ')
+checked expr   : trim_both<String, String>("   あなたのことが好きです   ", " ")
+optimized expr : "あなたのことが好きです"
+output type    : String
+output domain  : {"あなたのことが好きです"..="あなたのことが好きです"}
+output         : 'あなたのことが好きです'
+
+
 ast            : trim_both(a, 'a')
 raw expr       : trim_both(a::String, 'a')
 checked expr   : trim_both<String, String>(a, "a")
@@ -1072,6 +1297,33 @@ optimized expr : ""
 output type    : String
 output domain  : {""..=""}
 output         : ''
+
+
+ast            : trim('  你  好  ')
+raw expr       : trim('  你  好  ')
+checked expr   : trim<String>("  你  好  ")
+optimized expr : "你  好"
+output type    : String
+output domain  : {"你  好"..="你  好"}
+output         : '你  好'
+
+
+ast            : trim('  분산 데이터베이스    ')
+raw expr       : trim('  분산 데이터베이스    ')
+checked expr   : trim<String>("  분산 데이터베이스    ")
+optimized expr : "분산 데이터베이스"
+output type    : String
+output domain  : {"분산 데이터베이스"..="분산 데이터베이스"}
+output         : '분산 데이터베이스'
+
+
+ast            : trim('   あなたのことが好きです   ')
+raw expr       : trim('   あなたのことが好きです   ')
+checked expr   : trim<String>("   あなたのことが好きです   ")
+optimized expr : "あなたのことが好きです"
+output type    : String
+output domain  : {"あなたのことが好きです"..="あなたのことが好きです"}
+output         : 'あなたのことが好きです'
 
 
 ast            : trim(NULL)
@@ -1553,6 +1805,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : concat('忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+raw expr       : concat('忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+checked expr   : concat<String, String, String, String, String>("忠犬ハチ公", "CAFÉ", "数据库", "قاعدة البيانات", "НОЧЬ НА ОКРАИНЕ МОСКВЫ")
+optimized expr : "忠犬ハチ公CAFÉ数据库قاعدة البياناتНОЧЬ НА ОКРАИНЕ МОСКВЫ"
+output type    : String
+output domain  : {"忠犬ハチ公CAFÉ数据库قاعدة البياناتНОЧЬ НА ОКРАИНЕ МОСКВЫ"..="忠犬ハチ公CAFÉ数据库قاعدة البياناتНОЧЬ НА ОКРАИНЕ МОСКВЫ"}
+output         : '忠犬ハチ公CAFÉ数据库قاعدة البياناتНОЧЬ НА ОКРАИНЕ МОСКВЫ'
+
+
 ast            : concat(a, '3', '4', '5')
 raw expr       : concat(a::String, '3', '4', '5')
 checked expr   : concat<String, String, String, String>(a, "3", "4", "5")
@@ -1616,6 +1877,15 @@ optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : concat_ws(',', '忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+raw expr       : concat_ws(',', '忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')
+checked expr   : concat_ws<String, String, String, String, String, String>(",", "忠犬ハチ公", "CAFÉ", "数据库", "قاعدة البيانات", "НОЧЬ НА ОКРАИНЕ МОСКВЫ")
+optimized expr : "忠犬ハチ公,CAFÉ,数据库,قاعدة البيانات,НОЧЬ НА ОКРАИНЕ МОСКВЫ"
+output type    : String
+output domain  : {"忠犬ハチ公,CAFÉ,数据库,قاعدة البيانات,НОЧЬ НА ОКРАИНЕ МОСКВЫ"..="忠犬ハチ公,CAFÉ,数据库,قاعدة البيانات,НОЧЬ НА ОКРАИНЕ МОСКВЫ"}
+output         : '忠犬ハチ公,CAFÉ,数据库,قاعدة البيانات,НОЧЬ НА ОКРАИНЕ МОСКВЫ'
 
 
 ast            : concat_ws(a, '3', '4', '5')
@@ -2472,6 +2742,15 @@ output domain  : {1..=1}
 output         : 1
 
 
+ast            : locate('好世', '你好世界')
+raw expr       : locate('好世', '你好世界')
+checked expr   : locate<String, String>("好世", "你好世界")
+optimized expr : 2_u64
+output type    : UInt64
+output domain  : {2..=2}
+output         : 2
+
+
 ast            : instr('foobarbar', 'bar')
 raw expr       : instr('foobarbar', 'bar')
 checked expr   : instr<String, String>("foobarbar", "bar")
@@ -2542,6 +2821,15 @@ optimized expr : 7_u64
 output type    : UInt64
 output domain  : {7..=7}
 output         : 7
+
+
+ast            : locate('好世', '你好世界', 1)
+raw expr       : locate('好世', '你好世界', 1)
+checked expr   : locate<String, String, UInt64>("好世", "你好世界", to_uint64<UInt8>(1_u8))
+optimized expr : 2_u64
+output type    : UInt64
+output domain  : {2..=2}
+output         : 2
 
 
 ast            : locate(a, b, c)
@@ -2758,6 +3046,24 @@ output domain  : {"33333"..="33333"}
 output         : '33333'
 
 
+ast            : repeat('你好世界', 3)
+raw expr       : repeat('你好世界', 3)
+checked expr   : repeat<String, UInt64>("你好世界", to_uint64<UInt8>(3_u8))
+optimized expr : "你好世界你好世界你好世界"
+output type    : String
+output domain  : {"你好世界你好世界你好世界"..="你好世界你好世界你好世界"}
+output         : '你好世界你好世界你好世界'
+
+
+ast            : repeat('こんにちは', 2)
+raw expr       : repeat('こんにちは', 2)
+checked expr   : repeat<String, UInt64>("こんにちは", to_uint64<UInt8>(2_u8))
+optimized expr : "こんにちはこんにちは"
+output type    : String
+output domain  : {"こんにちはこんにちは"..="こんにちはこんにちは"}
+output         : 'こんにちはこんにちは'
+
+
 error: 
   --> SQL:1:1
   |
@@ -2857,6 +3163,15 @@ optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : insert('你好世界', 1, 2, 'こんにちは')
+raw expr       : insert('你好世界', 1, 2, 'こんにちは')
+checked expr   : insert<String, Int64, Int64, String>("你好世界", to_int64<UInt8>(1_u8), to_int64<UInt8>(2_u8), "こんにちは")
+optimized expr : "こんにちは世界"
+output type    : String
+output domain  : {"こんにちは世界"..="こんにちは世界"}
+output         : 'こんにちは世界'
 
 
 ast            : insert(NULL, 2, 100, 'NULL')
@@ -3125,6 +3440,24 @@ output domain  : {"bc"..="bc"}
 output         : 'bc'
 
 
+ast            : substr('你好世界', 3)
+raw expr       : substr('你好世界', 3)
+checked expr   : substr<String, Int64>("你好世界", to_int64<UInt8>(3_u8))
+optimized expr : "世界"
+output type    : String
+output domain  : {"世界"..="世界"}
+output         : '世界'
+
+
+ast            : substr('こんにちは', 2)
+raw expr       : substr('こんにちは', 2)
+checked expr   : substr<String, Int64>("こんにちは", to_int64<UInt8>(2_u8))
+optimized expr : "んにちは"
+output type    : String
+output domain  : {"んにちは"..="んにちは"}
+output         : 'んにちは'
+
+
 ast            : substr('abc', pos, len)
 raw expr       : substr('abc', pos::Int8, len::UInt8)
 checked expr   : substr<String, Int64, UInt64>("abc", to_int64<Int8>(pos), to_uint64<UInt8>(len))
@@ -3215,6 +3548,24 @@ optimized expr : ['a', 'c']
 output type    : Array(String)
 output domain  : [{"a"..="c"}]
 output         : ['a', 'c']
+
+
+ast            : split('你好世界', '好')
+raw expr       : split('你好世界', '好')
+checked expr   : split<String, String>("你好世界", "好")
+optimized expr : ['你', '世界']
+output type    : Array(String)
+output domain  : [{"世界"..="你"}]
+output         : ['你', '世界']
+
+
+ast            : split('こんにちは', 'に')
+raw expr       : split('こんにちは', 'に')
+checked expr   : split<String, String>("こんにちは", "に")
+optimized expr : ['こん', 'ちは']
+output type    : Array(String)
+output domain  : [{"こん"..="ちは"}]
+output         : ['こん', 'ちは']
 
 
 ast            : split(str, sep)
