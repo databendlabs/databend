@@ -70,6 +70,8 @@ use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::concat;
 use jsonb::contains;
+use jsonb::delete_by_index;
+use jsonb::delete_by_name;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
 use jsonb::get_by_index;
@@ -1041,6 +1043,44 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 if let Err(err) = concat(left, right, &mut output.data) {
+                    ctx.set_error(output.len(), err.to_string());
+                };
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, Int32Type, VariantType>(
+            |val, index, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                if let Err(err) = delete_by_index(val, index, &mut output.data) {
+                    ctx.set_error(output.len(), err.to_string());
+                };
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, StringType, VariantType>(
+            |val, name, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                if let Err(err) = delete_by_name(val, name, &mut output.data) {
                     ctx.set_error(output.len(), err.to_string());
                 };
                 output.commit_row();
