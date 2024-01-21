@@ -31,6 +31,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
+use log::debug;
 
 use super::native_data_source::NativeDataSource;
 use crate::io::AggIndexReader;
@@ -308,6 +309,7 @@ impl Processor for ReadNativeDataSource<false> {
                 });
             }
 
+            debug!("ReadNativeDataSource parts: {}", chunks.len());
             self.output_data = Some((
                 native_part_infos,
                 futures::future::try_join_all(chunks).await?,
