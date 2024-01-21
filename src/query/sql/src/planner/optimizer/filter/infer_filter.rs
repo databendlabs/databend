@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -43,6 +44,10 @@ enum MergeResult {
     None,
 }
 
+// The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
+// 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
+// 2. [A = 10 and A = B] => [B = 10]
+// 3. [A = B and A = C] => [B = C]
 pub struct InferFilterOptimizer {
     exprs: Vec<ScalarExpr>,
     expr_index: HashMap<ScalarExpr, usize>,
@@ -91,8 +96,9 @@ impl InferFilterOptimizer {
                         (true, true) => {
                             if op == ComparisonOp::Equal {
                                 self.add_equal(&func.arguments[0], &func.arguments[1]);
+                            } else {
+                                new_predicates.push(predicate);
                             }
-                            new_predicates.push(predicate);
                         }
                         (true, false) => {
                             if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
@@ -173,21 +179,20 @@ impl InferFilterOptimizer {
 
     fn add_equal(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
         match self.expr_index.get(left) {
-            Some(idx) => {
-                let expr_equal_to = &mut self.expr_equal_to[*idx];
-                expr_equal_to.push(right.clone());
-            }
+            Some(index) => self.expr_equal_to[*index].push(right.clone()),
             None => self.add_expr(left, vec![], vec![right.clone()]),
         };
-        if self.expr_index.get(right).is_none() {
-            self.add_expr(right, vec![], vec![]);
-        }
+
+        match self.expr_index.get(right) {
+            Some(index) => self.expr_equal_to[*index].push(left.clone()),
+            None => self.add_expr(right, vec![], vec![left.clone()]),
+        };
     }
 
     fn add_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
         match self.expr_index.get(left) {
-            Some(idx) => {
-                let predicates = &mut self.predicates[*idx];
+            Some(index) => {
+                let predicates = &mut self.predicates[*index];
                 for predicate in predicates.iter_mut() {
                     match Self::merge(predicate, &right) {
                         MergeResult::None => {
@@ -206,7 +211,9 @@ impl InferFilterOptimizer {
                 }
                 predicates.push(right);
             }
-            None => self.add_expr(left, vec![right], vec![]),
+            None => {
+                self.add_expr(left, vec![right], vec![]);
+            }
         };
     }
 
@@ -373,30 +380,42 @@ impl InferFilterOptimizer {
     fn derive_predicates(&mut self) -> Vec<ScalarExpr> {
         let mut result = vec![];
         let num_exprs = self.exprs.len();
+
         let mut parents = vec![0; num_exprs];
         for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
             *parent = i;
         }
-        for (left_idx, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
+        for (left_index, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
             for expr in expr_equal_to.iter() {
-                let right_idx = self.expr_index.get(expr).unwrap();
-                Self::union(&mut parents, left_idx, *right_idx);
+                let right_index = self.expr_index.get(expr).unwrap();
+                Self::union(&mut parents, left_index, *right_index);
             }
         }
-        for idx in 0..num_exprs {
-            let parent_idx = Self::find(&mut parents, idx);
-            if idx != parent_idx {
-                let expr = self.exprs[parent_idx].clone();
-                let predicates = self.predicates[idx].clone();
+
+        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
+        for index in 0..num_exprs {
+            let parent_index = Self::find(&mut parents, index);
+            match equal_index_sets.get_mut(&parent_index) {
+                Some(equal_index_set) => {
+                    equal_index_set.insert(index);
+                }
+                None => {
+                    equal_index_sets.insert(parent_index, HashSet::from([index]));
+                }
+            }
+            if index != parent_index {
+                let expr = self.exprs[parent_index].clone();
+                let predicates = self.predicates[index].clone();
                 for predicate in predicates {
                     self.add_predicate(&expr, predicate);
                 }
             }
         }
+
         for expr in self.exprs.iter() {
-            let idx = self.expr_index.get(expr).unwrap();
-            let parent_idx = Self::find(&mut parents, *idx);
-            let parent_predicates = &self.predicates[parent_idx];
+            let index = self.expr_index.get(expr).unwrap();
+            let parent_index = Self::find(&mut parents, *index);
+            let parent_predicates = &self.predicates[parent_index];
             for predicate in parent_predicates.iter() {
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
@@ -409,6 +428,25 @@ impl InferFilterOptimizer {
                 }));
             }
         }
+
+        for equal_index_set in equal_index_sets.into_values() {
+            let equal_index_set = equal_index_set.into_iter().collect::<Vec<_>>();
+            let equal_index_set_len = equal_index_set.len();
+            for i in 0..equal_index_set_len {
+                for j in i + 1..equal_index_set_len {
+                    result.push(ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: String::from(ComparisonOp::Equal.to_func_name()),
+                        params: vec![],
+                        arguments: vec![
+                            self.exprs[equal_index_set[i]].clone(),
+                            self.exprs[equal_index_set[j]].clone(),
+                        ],
+                    }));
+                }
+            }
+        }
+
         result
     }
 }
