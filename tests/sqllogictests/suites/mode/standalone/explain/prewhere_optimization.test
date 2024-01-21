@@ -26,7 +26,7 @@ explain select * from t_where_optimizer where a = b
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))]
+├── filters: [is_true(t_where_optimizer.b (#1) = t_where_optimizer.a (#0))]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -35,7 +35,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = t_where_optimizer.a (#0))], limit: NONE]
     └── estimated rows: 0.00
 
 query T

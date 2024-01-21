@@ -1239,7 +1239,7 @@ explain select * from a where a.id = (select id from b where a.id = b.id);
 ----
 Filter
 ├── output columns: [a.id (#0), a.c1 (#1)]
-├── filters: [is_true(a.id (#0) = scalar_subquery_2 (#2))]
+├── filters: [is_true(scalar_subquery_2 (#2) = a.id (#0))]
 ├── estimated rows: 0.60
 └── HashJoin
     ├── output columns: [a.id (#0), a.c1 (#1), b.id (#2)]
