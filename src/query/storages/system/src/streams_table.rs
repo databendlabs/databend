@@ -39,7 +39,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -160,7 +159,7 @@ impl AsyncSystemTable for StreamsTable {
                         table.name(),
                         db_id,
                         t_id,
-                    ) && table.engine() == STREAM_ENGINE
+                    ) && table.engine() == "STREAM"
                     {
                         catalogs.push(ctl_name);
                         databases.push(name);

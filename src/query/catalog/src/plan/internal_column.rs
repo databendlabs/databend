@@ -35,9 +35,6 @@ use databend_common_expression::Value;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::BLOCK_NAME_COLUMN_ID;
-use databend_common_expression::CHANGE_ACTION_COLUMN_ID;
-use databend_common_expression::CHANGE_IS_UPDATE_COLUMN_ID;
-use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
@@ -132,9 +129,6 @@ pub enum InternalColumnType {
     // stream columns
     BaseRowId,
     BaseBlockIds,
-    ChangeAction,
-    ChangeIsUpdate,
-    ChangeRowId,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -168,9 +162,6 @@ impl InternalColumn {
                     scale: 0,
                 })),
             )),
-            InternalColumnType::ChangeAction => TableDataType::String,
-            InternalColumnType::ChangeIsUpdate => TableDataType::Boolean,
-            InternalColumnType::ChangeRowId => TableDataType::String,
         }
     }
 
@@ -191,19 +182,6 @@ impl InternalColumn {
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
             InternalColumnType::BaseRowId => BASE_ROW_ID_COLUMN_ID,
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
-            InternalColumnType::ChangeAction => CHANGE_ACTION_COLUMN_ID,
-            InternalColumnType::ChangeIsUpdate => CHANGE_IS_UPDATE_COLUMN_ID,
-            InternalColumnType::ChangeRowId => CHANGE_ROW_ID_COLUMN_ID,
-        }
-    }
-
-    pub fn virtual_computed_expr(&self) -> Option<String> {
-        match &self.column_type {
-            InternalColumnType::ChangeRowId => Some(
-                "if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), _base_row_id)"
-                .to_string(),
-            ),
-            _ => None,
         }
     }
 
@@ -302,14 +280,6 @@ impl InternalColumn {
                     Value::Scalar(meta.base_block_ids.clone().unwrap()),
                 )
             }
-            InternalColumnType::ChangeAction => BlockEntry::new(
-                DataType::String,
-                Value::Scalar(Scalar::String("INSERT".to_string())),
-            ),
-            InternalColumnType::ChangeIsUpdate => {
-                BlockEntry::new(DataType::Boolean, Value::Scalar(Scalar::Boolean(false)))
-            }
-            InternalColumnType::ChangeRowId => unreachable!(),
         }
     }
 }

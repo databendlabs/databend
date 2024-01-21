@@ -34,7 +34,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
-use databend_common_ast::ast::NullableConstraint;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::RenameTableStmt;
@@ -1264,7 +1263,7 @@ impl Binder {
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-        let not_null = self.is_column_not_null(column)?;
+        let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
@@ -1303,9 +1302,9 @@ impl Binder {
         let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
+        let not_null = self.is_column_not_null();
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let not_null = self.is_column_not_null(column)?;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
@@ -1529,13 +1528,11 @@ impl Binder {
         )
     }
 
-    fn is_column_not_null(&self, column: &ColumnDefinition) -> Result<bool> {
-        let column_not_null = !self.ctx.get_settings().get_ddl_column_type_nullable()?;
-        let not_null = match column.nullable_constraint {
-            Some(NullableConstraint::NotNull) => true,
-            Some(NullableConstraint::Null) => false,
-            None => column_not_null,
-        };
-        Ok(not_null)
+    fn is_column_not_null(&self) -> bool {
+        !self
+            .ctx
+            .get_settings()
+            .get_ddl_column_type_nullable()
+            .unwrap_or(true)
     }
 }

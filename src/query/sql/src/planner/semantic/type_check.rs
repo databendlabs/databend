@@ -3782,22 +3782,6 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
 }
 
 pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
-    let data_type = resolve_type_name_inner(type_name)?;
-    let data_type = match &data_type {
-        TableDataType::Nullable(_) => data_type,
-        _ => {
-            if not_null {
-                data_type
-            } else {
-                data_type.wrap_nullable()
-            }
-        }
-    };
-
-    Ok(data_type)
-}
-
-pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
     let data_type = match type_name {
         TypeName::Boolean => TableDataType::Boolean,
         TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
@@ -3821,10 +3805,10 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,
         TypeName::Array(item_type) => {
-            TableDataType::Array(Box::new(resolve_type_name_inner(item_type)?))
+            TableDataType::Array(Box::new(resolve_type_name(item_type, not_null)?))
         }
         TypeName::Map { key_type, val_type } => {
-            let key_type = resolve_type_name_inner(key_type)?;
+            let key_type = resolve_type_name(key_type, true)?;
             match key_type {
                 TableDataType::Boolean
                 | TableDataType::String
@@ -3832,7 +3816,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::Date => {
-                    let val_type = resolve_type_name_inner(val_type)?;
+                    let val_type = resolve_type_name(val_type, not_null)?;
                     let inner_type = TableDataType::Tuple {
                         fields_name: vec!["key".to_string(), "value".to_string()],
                         fields_type: vec![key_type, val_type],
@@ -3860,18 +3844,22 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
             },
             fields_type: fields_type
                 .iter()
-                .map(resolve_type_name_inner)
+                .map(|item_type| resolve_type_name(item_type, not_null))
                 .collect::<Result<Vec<_>>>()?,
         },
-        TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
-            resolve_type_name_inner(inner_type)?
-        }
         TypeName::Nullable(inner_type) => {
-            TableDataType::Nullable(Box::new(resolve_type_name_inner(inner_type)?))
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.wrap_nullable()
         }
         TypeName::Variant => TableDataType::Variant,
+        TypeName::NotNull(inner_type) => {
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.remove_nullable()
+        }
     };
-
+    if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
+        return Ok(data_type.wrap_nullable());
+    }
     Ok(data_type)
 }
 

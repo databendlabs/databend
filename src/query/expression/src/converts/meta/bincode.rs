@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // DO NOT EDIT.
-// This crate keeps some legacy codes for compatibility
+// This crate keeps some legacy codes for compatibility, it's locked by bincode of meta's v3 version
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;

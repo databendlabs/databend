@@ -2153,7 +2153,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             (def, constraints)
         },
@@ -2162,16 +2161,18 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     for constraint in constraints {
         match constraint {
             ColumnConstraint::Nullable(nullable) => {
-                if nullable {
-                    def.data_type = def.data_type.wrap_nullable();
-                    def.nullable_constraint = Some(NullableConstraint::Null);
-                } else if def.data_type.is_nullable() {
+                if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                    || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other("ambiguous NOT NULL constraint"),
                     )));
+                }
+                if nullable {
+                    def.data_type = def.data_type.wrap_nullable();
                 } else {
-                    def.nullable_constraint = Some(NullableConstraint::NotNull);
+                    def.data_type = def.data_type.wrap_not_null();
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2557,7 +2558,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
-    map(
+    map_res(
         rule! {
             #ident
             ~ #type_name
@@ -2571,16 +2572,21 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => {
+                        if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                            || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                        {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "ambiguous NOT NULL constraint",
+                            )));
+                        }
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
-                            def.nullable_constraint = Some(NullableConstraint::Null);
                         } else {
-                            def.nullable_constraint = Some(NullableConstraint::NotNull);
+                            def.data_type = def.data_type.wrap_not_null();
                         }
                     }
                     ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2588,7 +2594,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                     }
                 }
             }
-            def
+            Ok(def)
         },
     )(i)
 }
@@ -3331,16 +3337,12 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
-    let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         rule! {
-            #type_name ~ #nullable?
+            #type_name
         },
-        |(type_name, nullable)| match nullable {
-            Some(false) => type_name,
+        |type_name| match type_name {
+            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
             _ => type_name.wrap_nullable(),
         },
     )(i)

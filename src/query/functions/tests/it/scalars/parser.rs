@@ -552,6 +552,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
+        databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }
 

@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -44,7 +43,6 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
@@ -64,9 +62,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
-use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -85,11 +80,13 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::ChangeAction;
+use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_MODE;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 use parking_lot::RwLock;
 
-use super::InternalColumnBinding;
-use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
@@ -102,11 +99,8 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::BoundColumnRef;
-use crate::plans::ConstantExpr;
 use crate::plans::CteScan;
 use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -157,7 +151,7 @@ impl Binder {
             false,
         );
 
-        self.bind_base_table(bind_context, database, table_index)
+        self.bind_base_table(bind_context, database, table_index, None)
             .await
     }
 
@@ -317,6 +311,125 @@ impl Binder {
                     )
                 }
             }
+            "STREAM" => {
+                let change_action = match table_alias_name.as_deref() {
+                    Some("_change_append") => Some(ChangeAction::Append),
+                    Some("_change_insert") => Some(ChangeAction::Insert),
+                    Some("_change_delete") => Some(ChangeAction::Delete),
+                    _ => None,
+                };
+                if change_action.is_some() {
+                    let table_index = self.metadata.write().add_table(
+                        catalog,
+                        database.clone(),
+                        table_meta,
+                        table_alias_name,
+                        bind_context.view_info.is_some(),
+                        bind_context.planning_agg_index,
+                        false,
+                    );
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(
+                            bind_context,
+                            database.as_str(),
+                            table_index,
+                            change_action,
+                        )
+                        .await?;
+
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    return Ok((s_expr, bind_context));
+                }
+
+                let mode = table_meta
+                    .options()
+                    .get(OPT_KEY_MODE)
+                    .and_then(|s| s.parse::<StreamMode>().ok())
+                    .unwrap_or(StreamMode::AppendOnly);
+                let table_version = table_meta
+                    .options()
+                    .get(OPT_KEY_TABLE_VER)
+                    .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
+                    .parse::<u64>()?;
+
+                let query = match mode {
+                    StreamMode::AppendOnly => {
+                        format!(
+                            "select *, 'INSERT' as change$action, false as change$is_update, \
+                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_append._base_row_id) as change$row_id \
+                            from {} as _change_append where not(is_not_null(_origin_version) and \
+                            (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
+                            table_name, table_version
+                        )
+                    }
+                    StreamMode::Standard => {
+                        let schema = table_meta.schema_with_stream();
+                        let mut cols = Vec::with_capacity(schema.fields().len());
+                        for field in schema.fields() {
+                            let name = field.name();
+                            if is_stream_column(name) {
+                                continue;
+                            }
+                            cols.push(name.clone());
+                        }
+
+                        let a_cols = cols.join(", ");
+                        let d_cols = cols
+                            .iter()
+                            .map(|s| format!("d_{}", s))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let d_col_alias = cols
+                            .iter()
+                            .map(|s| format!("{} as d_{}", s, s))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        format!(
+                            "with _change as (select * from \
+                            (select {}, _row_version, 'INSERT' as change$action, \
+                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_insert._base_row_id) as change$row_id \
+                            from {} as _change_insert) as A \
+                            FULL OUTER JOIN \
+                            (select {}, _row_version, 'DELETE' as d_change$action, \
+                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
+                            lpad(hex(_origin_block_row_num), 6, '0')), _change_delete._base_row_id) as d_change$row_id \
+                            from {} as _change_delete) as D \
+                            ON A.change$row_id = D.d_change$row_id \
+                            where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version) \
+                            select {}, change$action, change$row_id, d_change$action is not null as change$is_update \
+                            from _change where change$action is not null \
+                            union all \
+                            select {}, d_change$action, d_change$row_id, change$action is not null as change$is_update \
+                            from _change where d_change$action is not null",
+                            a_cols, table_name, d_col_alias, table_name, a_cols, d_cols
+                        )
+                    }
+                };
+                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let tokens = tokenize_sql(query.as_str())?;
+                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                if let Statement::Query(query) = &stmt {
+                    let (s_expr, mut new_bind_context) =
+                        self.bind_query(&mut new_bind_context, query).await?;
+                    if let Some(alias) = alias {
+                        new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    } else {
+                        for column in new_bind_context.columns.iter_mut() {
+                            column.database_name = None;
+                            column.table_name = Some(table_name.clone());
+                        }
+                    }
+                    new_bind_context.parent = Some(Box::new(bind_context.clone()));
+                    Ok((s_expr, new_bind_context))
+                } else {
+                    unreachable!()
+                }
+            }
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog,
@@ -329,7 +442,7 @@ impl Binder {
                 );
 
                 let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index)
+                    .bind_base_table(bind_context, database.as_str(), table_index, None)
                     .await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -657,7 +770,7 @@ impl Binder {
             );
 
             let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
+                .bind_base_table(bind_context, "system", table_index, None)
                 .await?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -686,7 +799,7 @@ impl Binder {
             );
 
             let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
+                .bind_base_table(bind_context, "system", table_index, None)
                 .await?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -967,7 +1080,7 @@ impl Binder {
         );
 
         let (s_expr, mut bind_context) = self
-            .bind_base_table(bind_context, "system", table_index)
+            .bind_base_table(bind_context, "system", table_index, None)
             .await?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -1211,6 +1324,7 @@ impl Binder {
         bind_context: &BindContext,
         database_name: &str,
         table_index: IndexType,
+        change_action: Option<ChangeAction>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
@@ -1218,21 +1332,9 @@ impl Binder {
         let table_name = table.name();
         let table = table.table();
         let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
-        let table_version = if table.engine() == "STREAM" {
-            let options = table.options();
-            let table_version = options
-                .get("table_version")
-                .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
-                .parse::<u64>()?;
-            Some(table_version)
-        } else {
-            None
-        };
 
-        let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
-        let mut predicates = Vec::new();
+        let mut col_stats = HashMap::new();
         let columns = self.metadata.read().columns_by_table_index(table_index);
-        let mut origin_block_id = None;
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -1263,46 +1365,6 @@ impl Binder {
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
 
-                    // For select stream.
-                    if let Some(table_version) = table_version {
-                        match column_name.to_lowercase().as_str() {
-                            ORIGIN_VERSION_COL_NAME => {
-                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "is_not_null".to_string(),
-                                    params: vec![],
-                                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                        span: None,
-                                        column: column_binding.clone(),
-                                    })],
-                                });
-                                predicates.push(predicate);
-
-                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "lt".to_string(),
-                                    params: vec![],
-                                    arguments: vec![
-                                        ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                            span: None,
-                                            column: column_binding.clone(),
-                                        }),
-                                        ScalarExpr::ConstantExpr(ConstantExpr {
-                                            span: None,
-                                            value: Scalar::Number(NumberScalar::UInt64(
-                                                table_version,
-                                            )),
-                                        }),
-                                    ],
-                                });
-                                predicates.push(predicate);
-                            }
-                            ORIGIN_BLOCK_ID_COL_NAME => {
-                                origin_block_id = Some(column_binding.clone());
-                            }
-                            _ => {}
-                        }
-                    }
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
@@ -1322,88 +1384,24 @@ impl Binder {
             }
         }
 
-        let mut columns = columns
-            .into_iter()
-            .map(|col| col.index())
-            .collect::<HashSet<_>>();
-        if let Some(origin_block_id) = origin_block_id {
-            let base_block_ids = bind_context.add_internal_column_binding(
-                &InternalColumnBinding {
-                    database_name: Some(database_name.to_string()),
-                    table_name: Some(table_name.to_string()),
-                    internal_column: INTERNAL_COLUMN_FACTORY
-                        .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
-                        .unwrap(),
-                },
-                self.metadata.clone(),
-                false,
-            )?;
-            columns.insert(base_block_ids.index);
-
-            let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "contains".to_string(),
-                params: vec![],
-                arguments: vec![
-                    ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: base_block_ids,
-                    }),
-                    ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: origin_block_id,
-                    }),
-                ],
-            });
-            predicates.push(predicate);
-        }
-
         let stat = table.table_statistics(self.ctx.clone()).await?;
-        let scan = SExpr::create_leaf(Arc::new(
-            Scan {
-                table_index,
-                columns,
-                statistics: Statistics {
-                    statistics: stat,
-                    col_stats,
-                },
-                ..Default::default()
-            }
-            .into(),
-        ));
 
-        // not(is_not_null(_origin_version) and (contains(_base_block_ids, _origin_block_id)
-        //  or _origin_version<base_table_version))
-        let s_expr = if !predicates.is_empty() {
-            assert!(predicates.len() == 3);
-            let filter_plan = Filter {
-                predicates: vec![ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "not".to_string(),
-                    params: vec![],
-                    arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "and".to_string(),
-                        params: vec![],
-                        arguments: vec![
-                            predicates[0].clone(),
-                            ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "or".to_string(),
-                                params: vec![],
-                                arguments: vec![predicates[1].clone(), predicates[2].clone()],
-                            }),
-                        ],
-                    })],
-                })],
-            };
-
-            SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(scan))
-        } else {
-            scan
-        };
-
-        Ok((s_expr, bind_context))
+        Ok((
+            SExpr::create_leaf(Arc::new(
+                Scan {
+                    table_index,
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
+                    statistics: Statistics {
+                        statistics: stat,
+                        col_stats,
+                    },
+                    change_action,
+                    ..Default::default()
+                }
+                .into(),
+            )),
+            bind_context,
+        ))
     }
 
     #[async_backtrace::framed]

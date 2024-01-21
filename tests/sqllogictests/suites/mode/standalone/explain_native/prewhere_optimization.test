@@ -86,7 +86,7 @@ statement ok
 drop table t_where_optimizer
 
 statement ok
-create table t_where_optimizer(id int, s tuple(a int, b int))
+create table t_where_optimizer(id int, s tuple(a int not null, b int not null))
 
 query T
 explain select * from t_where_optimizer where s:a > 0

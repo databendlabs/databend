@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::table::ChangeAction;
 use itertools::Itertools;
 
 use super::ScalarItem;
@@ -95,6 +96,7 @@ pub struct Scan {
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
     pub agg_index: Option<AggIndexInfo>,
+    pub change_action: Option<ChangeAction>,
 
     pub statistics: Statistics,
 }
@@ -121,6 +123,7 @@ impl Scan {
             },
             prewhere,
             agg_index: self.agg_index.clone(),
+            change_action: self.change_action.clone(),
         }
     }
 

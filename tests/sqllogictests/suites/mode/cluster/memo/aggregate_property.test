@@ -23,7 +23,7 @@ where t_10.a = t_1000.a and t_100.a = t_1000.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 9744 bytes
+├── estimated memory: 9912 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []
@@ -92,7 +92,7 @@ group by t_10.a, t_100.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 22736 bytes
+├── estimated memory: 23128 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []

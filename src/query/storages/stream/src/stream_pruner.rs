@@ -21,22 +21,20 @@ use std::time::Instant;
 use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
-use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::BloomPruner;
 use databend_common_storages_fuse::pruning::PruningContext;
+use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use futures_util::future;
 use log::warn;
-use opendal::Operator;
 
 pub struct StreamPruner {
     max_concurrency: usize,
@@ -48,12 +46,9 @@ pub struct StreamPruner {
 impl StreamPruner {
     pub fn create(
         ctx: &Arc<dyn TableContext>,
-        dal: Operator,
         table_schema: TableSchemaRef,
         push_down: Option<PushDownInfo>,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_keys: Vec<RemoteExpr<String>>,
-        bloom_index_cols: BloomIndexColumns,
+        fuse_table: &FuseTable,
     ) -> Result<Arc<Self>> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -68,14 +63,24 @@ impl StreamPruner {
             v
         };
 
+        let (cluster_keys, cluster_key_meta) =
+            if !fuse_table.is_native() || fuse_table.cluster_key_meta().is_none() {
+                (vec![], None)
+            } else {
+                (
+                    fuse_table.cluster_keys(ctx.clone()),
+                    fuse_table.cluster_key_meta(),
+                )
+            };
+
         let pruning_ctx = PruningContext::try_create(
             ctx,
-            dal,
+            fuse_table.get_operator(),
             table_schema.clone(),
             &push_down,
             cluster_key_meta,
             cluster_keys,
-            bloom_index_cols,
+            fuse_table.bloom_index_cols(),
             max_concurrency,
         )?;
 

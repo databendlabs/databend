@@ -34,17 +34,18 @@ use databend_common_sql::plans::StreamNavigation;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_storages_stream::stream_table::MODE_APPEND_ONLY;
-use databend_common_storages_stream::stream_table::OPT_KEY_DATABASE_NAME;
-use databend_common_storages_stream::stream_table::OPT_KEY_MODE;
-use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_ID;
-use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_NAME;
-use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
+use databend_storages_common_table_meta::table::MODE_APPEND_ONLY;
+use databend_storages_common_table_meta::table::MODE_STANDARD;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 pub struct RealStreamHandler {}
 
@@ -108,8 +109,20 @@ impl StreamHandler for RealStreamHandler {
                     )));
                 }
                 options = stream.get_table_info().options().clone();
+                let stream_mode = if plan.append_only {
+                    MODE_APPEND_ONLY
+                } else {
+                    MODE_STANDARD
+                };
+                options.insert(OPT_KEY_MODE.to_string(), stream_mode.to_string());
             }
             None => {
+                let stream_mode = if plan.append_only {
+                    MODE_APPEND_ONLY
+                } else {
+                    MODE_STANDARD
+                };
+                options.insert(OPT_KEY_MODE.to_string(), stream_mode.to_string());
                 options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
                 options.insert(
                     OPT_KEY_DATABASE_NAME.to_string(),
@@ -117,7 +130,6 @@ impl StreamHandler for RealStreamHandler {
                 );
                 options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-                options.insert(OPT_KEY_MODE.to_string(), MODE_APPEND_ONLY.to_string());
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                 if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
                     options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);

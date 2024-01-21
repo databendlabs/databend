@@ -2524,6 +2524,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "dyn-clone",
  "goldenfile",
+ "log",
  "parking_lot 0.12.1",
  "parquet",
  "rand 0.8.5",
@@ -2672,6 +2673,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "rust_decimal",
  "serde",
@@ -2831,6 +2833,7 @@ dependencies = [
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "serde",
 ]
@@ -2865,6 +2868,7 @@ dependencies = [
  "databend-common-protos",
  "databend-common-storage",
  "enumflags2",
+ "log",
  "minitrace",
  "mockall",
  "serde_json",
@@ -3288,6 +3292,7 @@ dependencies = [
  "async-backtrace",
  "dashmap",
  "databend-common-ast",
+ "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-meta-app",
@@ -3801,7 +3806,6 @@ dependencies = [
  "futures-util",
  "log",
  "minitrace",
- "opendal",
 ]
 
 [[package]]

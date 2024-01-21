@@ -99,6 +99,7 @@ use jsonb::type_of;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("json_object_keys", &["object_keys"]);
+    registry.register_aliases("to_string", &["json_to_string"]);
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
@@ -359,7 +360,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, StringType, _, _>(
         "get_string",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -370,7 +371,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match get_by_name(val, name, false) {
                     Some(v) => {
-                        output.push(&to_string(&v));
+                        let json_str = cast_to_string(&v);
+                        output.push(&json_str);
                     }
                     None => output.push_null(),
                 }
@@ -394,7 +396,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 } else {
                     match get_by_index(val, idx as usize) {
                         Some(v) => {
-                            output.push(&to_string(&v));
+                            let json_str = cast_to_string(&v);
+                            output.push(&json_str);
                         }
                         None => {
                             output.push_null();
@@ -578,10 +581,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 if out_offsets.is_empty() {
                                     output.push_null();
                                 } else {
-                                    let json_str = to_string(&out_buf);
-                                    output.builder.put_str(&json_str);
-                                    output.builder.commit_row();
-                                    output.validity.push(true);
+                                    let json_str = cast_to_string(&out_buf);
+                                    output.push(&json_str);
                                 }
                             }
                             Err(_) => {
@@ -786,7 +787,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
         "to_string",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -794,12 +795,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match to_str(val) {
-                Ok(value) => output.put_str(&value),
-                Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
-                }
-            }
+            let json_str = cast_to_string(val);
+            output.put_str(&json_str);
             output.commit_row();
         }),
     );
@@ -815,14 +812,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match to_str(val) {
-                    Ok(value) => {
-                        output.validity.push(true);
-                        output.builder.put_str(&value);
-                        output.builder.commit_row();
-                    }
-                    Err(_) => output.push_null(),
-                }
+                let json_str = cast_to_string(val);
+                output.push(&json_str);
             },
         ),
     );
@@ -1004,22 +995,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
-
-    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
-        "json_to_string",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
-            }
-            let s = to_string(val);
-            output.put_str(&s);
-            output.commit_row();
-        }),
-    );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
         "json_pretty",
@@ -1418,7 +1393,8 @@ fn get_by_keypath_fn(
                             Some(res) => {
                                 match &mut builder {
                                     ColumnBuilder::String(builder) => {
-                                        builder.put_str(&to_string(&res));
+                                        let json_str = cast_to_string(&res);
+                                        builder.put_str(&json_str);
                                     }
                                     ColumnBuilder::Variant(builder) => {
                                         builder.put_slice(&res);
@@ -1548,5 +1524,13 @@ where
                 Value::Scalar(Scalar::Boolean(output.get(0)))
             }
         }
+    }
+}
+
+// Extract string for string type, other types convert to JSON string.
+fn cast_to_string(v: &[u8]) -> String {
+    match to_str(v) {
+        Ok(v) => v,
+        Err(_) => to_string(v),
     }
 }
