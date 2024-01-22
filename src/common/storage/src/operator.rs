@@ -301,6 +301,13 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
 
+        // Enable TCP keepalive if set.
+        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
+            if let Ok(v) = v.parse::<u64>() {
+                builder = builder.tcp_keepalive(Duration::from_secs(v));
+            }
+        }
+
         builder
     };
 
