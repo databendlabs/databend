@@ -1,5 +1,3 @@
--- NVL2 returns expr2 if expr1 is NOT NULL; otherwise, it returns expr3.
-
 query I
 SELECT NVL2(1, 2, 3)
 ----

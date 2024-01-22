@@ -1,5 +1,3 @@
--- NVL is essentially an alias for ifnull.
-
 query I
 SELECT NVL(1, 1)
 ----
