@@ -239,4 +239,11 @@ select * from t;
 101
 
 statement ok
+delete from t where 200 > (select avg(a) from t);
+
+query I
+select * from t;
+----
+
+statement ok
 DROP DATABASE db1
