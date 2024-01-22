@@ -60,7 +60,7 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
 
-        mycursor.execute("vacuum table gc_test retain 0 hours dry run;")
+        mycursor.execute("set data_retention_time_in_days=0; vacuum table gc_test dry run;")
         datas = mycursor.fetchall()
         print(datas)
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         if old_datas != datas:
             print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
 
-        client1.send("vacuum table gc_test retain 0 hours;")
+        client1.send("set data_retention_time_in_days=0; vacuum table gc_test;")
         client1.expect(prompt)
 
         mycursor.execute("select a from gc_test order by a;")
