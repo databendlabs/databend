@@ -23,8 +23,10 @@ use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::geo::coord::CoordColumn;
+use crate::types::geo::coord::CoordColumnBuilder;
 use crate::types::geo::geo_trait::AsArrow;
 use crate::types::geo::geo_trait::GeometryColumnAccessor;
+use crate::types::geo::point::PointColumn;
 use crate::types::geo::point::PointScalar;
 use crate::types::geo::utils::coord_type_to_arrow2_type;
 use crate::types::geo::utils::offset_buffer_eq;
@@ -60,7 +62,7 @@ impl LineStringColumn {
         todo!()
     }
 
-    pub fn iter(&self) -> LineStringIterator {
+    pub fn iter(&self) -> LineStringColumnIterator {
         todo!()
     }
 }
@@ -210,7 +212,10 @@ impl<'a> Iterator for LineStringIterator<'a> {
     }
 }
 
-pub struct LineStringColumnBuilder;
+pub struct LineStringColumnBuilder {
+    pub coords: CoordColumnBuilder,
+    pub offsets: Buffer<u64>,
+}
 
 impl LineStringColumnBuilder {
     pub fn from_column(col: LineStringColumn) -> Self {
@@ -258,5 +263,25 @@ impl LineStringColumnBuilder {
 
     pub fn build_scalar(self) -> LineStringScalar {
         todo!()
+    }
+}
+
+pub struct LineStringColumnIterator<'a> {
+    pub column: &'a LineStringColumn,
+    pub current: usize,
+    pub current_end: usize,
+}
+
+impl<'a> Iterator for LineStringColumnIterator<'a> {
+    type Item = LineStringScalar;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == self.current_end {
+            None
+        } else {
+            let index = self.current;
+            self.current += 1;
+            self.column.get(index)
+        }
     }
 }

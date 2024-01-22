@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::array::Array;
@@ -50,6 +51,14 @@ impl PointColumn {
     pub fn memory_size(&self) -> usize {
         self.len() * 8 * 2
     }
+
+    pub fn iter(&self) -> PointColumnIterator {
+        PointColumnIterator {
+            column: &self,
+            current: 0,
+            current_end: self.len(),
+        }
+    }
 }
 
 impl AsArrow for PointColumn {
@@ -81,7 +90,7 @@ impl PartialEq for PointColumn {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct PointScalar(CoordScalar);
 
 pub struct PointColumnBuilder(CoordColumnBuilder);
@@ -136,5 +145,25 @@ impl PointColumnBuilder {
 
     pub fn build_scalar(self) -> PointScalar {
         PointScalar(self.0.build_scalar())
+    }
+}
+
+pub struct PointColumnIterator<'a> {
+    pub column: &'a PointColumn,
+    pub current: usize,
+    pub current_end: usize,
+}
+
+impl<'a> Iterator for PointColumnIterator<'a> {
+    type Item = PointScalar;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == self.current_end {
+            None
+        } else {
+            let index = self.current;
+            self.current += 1;
+            self.column.get(index)
+        }
     }
 }

@@ -24,7 +24,17 @@ use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::geo::geo_trait::AsArrow;
+use crate::types::string::StringIterator;
+use crate::types::ValueType;
 use crate::types::F64;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::Domain;
+use crate::Scalar;
+use crate::ScalarRef;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoordType;
 
 // Coord
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -69,6 +79,14 @@ impl CoordColumn {
             y: *self.coords.get_unchecked(index * 2 + 1),
         }
     }
+
+    pub fn iter(&self) -> CoordColumnIterator {
+        CoordColumnIterator {
+            col: &self,
+            current: 0,
+            current_end: self.len(),
+        }
+    }
 }
 
 impl AsArrow for CoordColumn {
@@ -92,6 +110,26 @@ impl CoordScalar {
         Self {
             x: x.into(),
             y: y.into(),
+        }
+    }
+}
+
+pub struct CoordColumnIterator<'a> {
+    pub col: &'a CoordColumn,
+    pub current: usize,
+    pub current_end: usize,
+}
+
+impl<'a> Iterator for CoordColumnIterator<'a> {
+    type Item = CoordScalar;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current = self.current_end {
+            None
+        } else {
+            let index = self.current;
+            self.current += 1;
+            self.col.get(index)
         }
     }
 }

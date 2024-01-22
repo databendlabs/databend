@@ -29,20 +29,147 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::types::geo::coord::CoordColumn;
-use crate::types::geo::coord::CoordScalar;
+use crate::types::decimal::Decimal;
 use crate::types::geo::geo_trait::AsArrow;
 use crate::types::geo::geo_trait::GeometryColumnAccessor;
 use crate::types::geo::linestring::LineStringColumn;
 use crate::types::geo::linestring::LineStringColumnBuilder;
+use crate::types::geo::linestring::LineStringColumnIterator;
 use crate::types::geo::linestring::LineStringScalar;
 use crate::types::geo::point::PointColumn;
 use crate::types::geo::point::PointColumnBuilder;
+use crate::types::geo::point::PointColumnIterator;
 use crate::types::geo::point::PointScalar;
 use crate::types::geo::utils::line_string_data_type;
 use crate::types::geo::utils::point_data_type;
 use crate::types::GeometryDataType::LineString;
 use crate::types::GeometryDataType::Point;
+use crate::types::ValueType;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::Domain;
+use crate::Scalar;
+use crate::ScalarRef;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeometryType;
+
+impl ValueType for GeometryType {
+    type Scalar = GeometryScalar;
+    type ScalarRef<'a> = GeometryScalar;
+    type Column = GeometryColumn;
+    type Domain = ();
+    type ColumnIterator<'a> = GeometryColumnIterator<'a>;
+    type ColumnBuilder = GeometryColumnBuilder;
+
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
+        long
+    }
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+        match scalar {
+            ScalarRef::Geometry(scalar) => Some(*scalar),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        match col {
+            Column::Geometry(column) => Some(column.clone()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        todo!()
+    }
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Geometry(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Geometry(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Geometry(builder))
+    }
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Geometry(scalar)
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Geometry(col)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        todo!()
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.index(index)
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        col.index_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter()
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        GeometryColumnBuilder::from_column(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.push(item)
+    }
+
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.push_default()
+    }
+
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        builder.append_column(other)
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum GeometryDataType {
@@ -118,6 +245,12 @@ impl GeometryColumn {
     pub fn serialize_size(&self) -> usize {
         crate::with_geometry_type!(|GEO_TYPE| match self {
             GeometryColumn::GEO_TYPE(g) => g.memroy_size(),
+        })
+    }
+
+    pub fn iter(&self) -> GeometryColumnIterator {
+        crate::with_geometry_type!(|GEO_TYPE| match self {
+            GeometryColumn::GEO_TYPE(g) => GeometryColumnIterator::GEO_TYPE(g.iter()),
         })
     }
 }
@@ -253,4 +386,9 @@ impl GeometryColumnBuilder {
                 GeometryScalar::GEO_TYPE(builder.build_scalar()),
         })
     }
+}
+
+pub enum GeometryColumnIterator<'a> {
+    Point(PointColumnIterator<'a>),
+    LineString(LineStringColumnIterator<'a>),
 }
