@@ -14,60 +14,18 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use databend_common_base::base::tokio;
 use databend_common_management::*;
 use databend_common_meta_embedded::MetaEmbedded;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
-use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
 use mockall::predicate::*;
-use mockall::*;
-
-// and mock!
-mock! {
-    pub KV {}
-    #[async_trait]
-    impl kvapi::KVApi for KV {
-        type Error = MetaError;
-
-        async fn upsert_kv(
-            &self,
-            act: UpsertKVReq,
-        ) -> Result<UpsertKVReply, MetaError>;
-
-        async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
-
-        async fn mget_kv(
-            &self,
-            key: &[String],
-        ) -> Result<MGetKVReply,MetaError>;
-
-        async fn get_kv_stream(&self, key: &[String]) -> Result<KVStream<MetaError>, MetaError>;
-
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
-
-        async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;
-
-        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
-
-        }
-}
 
 fn make_role_key(role: &str) -> String {
     format!("__fd_roles/admin/{}", role)
 }
 
 mod add {
-    use databend_common_exception::ErrorCode;
     use databend_common_meta_app::principal::RoleInfo;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_types::Operation;
@@ -84,15 +42,14 @@ mod add {
 
         let v = serde_json::to_vec(&role_info)?;
         let kv_api = kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
-            &role_key,
-            MatchSeq::Exact(0),
-            Operation::Update(v),
-            None,
-        ));
-        upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
-        })?;
+        let _upsert_kv = kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &role_key,
+                MatchSeq::Exact(0),
+                Operation::Update(v),
+                None,
+            ))
+            .await?;
 
         let get = role_api
             .get_role(&role_name.to_owned(), MatchSeq::GE(1))
