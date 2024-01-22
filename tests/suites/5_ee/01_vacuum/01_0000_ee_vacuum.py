@@ -49,6 +49,10 @@ if __name__ == "__main__":
         client1.expect(prompt)
         client1.send("set global enterprise_license='{}';".format(get_license()))
         client1.expect(prompt)
+
+        client1.send("set data_retention_time_in_days=0;")
+        client1.expect(prompt)
+
         client1.send("call admin$license_info();")
         client1.expect(prompt)
 
@@ -60,7 +64,7 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
 
-        mycursor.execute("set data_retention_time_in_days=0; vacuum table gc_test dry run;")
+        mycursor.execute("vacuum table gc_test dry run;")
         datas = mycursor.fetchall()
         print(datas)
 
@@ -70,7 +74,7 @@ if __name__ == "__main__":
         if old_datas != datas:
             print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
 
-        client1.send("set data_retention_time_in_days=0; vacuum table gc_test;")
+        client1.send("vacuum table gc_test;")
         client1.expect(prompt)
 
         mycursor.execute("select a from gc_test order by a;")
