@@ -354,7 +354,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_expr(*expr, columns),
                     RawExpr::Constant {
                         span,
-                        scalar: Scalar::String(key.name.into_bytes()),
+                        scalar: Scalar::String(key.name),
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
@@ -567,7 +567,7 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
             precision,
             scale,
         })),
-        ASTLiteral::String(s) => Scalar::String(s.as_bytes().to_vec()),
+        ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
         ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),

@@ -209,7 +209,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
         "crc32",
         |_, _| FunctionDomain::Full,
-        |val, _| crc32fast::hash(val),
+        |val, _| crc32fast::hash(val.as_bytes()),
     );
 
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(

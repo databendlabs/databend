@@ -58,8 +58,7 @@ impl TaskDependentsEnableTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let task_name =
-            String::from_utf8_lossy(args[0].as_string().unwrap().as_slice()).to_string();
+        let task_name = args[0].as_string().unwrap();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -81,7 +80,7 @@ impl TaskDependentsEnableTable {
 
         Ok(Arc::new(TaskDependentsEnableTable {
             table_info,
-            task_name,
+            task_name: task_name.to_string(),
         }))
     }
 }
@@ -113,7 +112,7 @@ impl Table for TaskDependentsEnableTable {
 
     fn table_args(&self) -> Option<TableArgs> {
         Some(TableArgs::new_positioned(vec![Scalar::String(
-            self.task_name.as_bytes().to_vec(),
+            self.task_name.clone(),
         )]))
     }
 

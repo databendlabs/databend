@@ -79,7 +79,7 @@ impl TableArgs {
                     .into_string()
                     .map_err(|_| ErrorCode::BadArguments("Expected string argument"))?;
 
-                Ok(String::from_utf8(arg)?)
+                Ok(arg)
             })
             .collect::<Result<Vec<_>>>()
     }

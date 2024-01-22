@@ -55,8 +55,8 @@ impl AsyncSystemTable for EnginesTable {
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {
-            engine_name.push(descriptor.engine_name.as_bytes().to_vec());
-            engine_comment.push(descriptor.comment.as_bytes().to_vec());
+            engine_name.push(descriptor.engine_name.clone());
+            engine_comment.push(descriptor.comment.clone());
         }
 
         Ok(DataBlock::new_from_columns(vec![

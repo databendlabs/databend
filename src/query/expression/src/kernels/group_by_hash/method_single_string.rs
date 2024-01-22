@@ -93,6 +93,8 @@ impl KeyAccessor for BinaryKeyAccessor {
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+        debug_assert!(index + 1 < self.offsets.len());
+
         &self.data[*self.offsets.get_unchecked(index) as usize
             ..*self.offsets.get_unchecked(index + 1) as usize]
     }

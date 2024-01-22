@@ -117,7 +117,7 @@ impl SessionExecutor {
                             .convert_to_full_column(&DataType::String, num_rows);
                         let value = StringType::try_downcast_column(&col).unwrap();
                         for r in value.iter() {
-                            keywords.push(unsafe { String::from_utf8_unchecked(r.to_vec()) });
+                            keywords.push(r.to_string());
                         }
                     }
                 }

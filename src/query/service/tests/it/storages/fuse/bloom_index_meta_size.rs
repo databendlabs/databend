@@ -294,8 +294,8 @@ fn build_test_segment_info(
     });
 
     let col_stat = ColumnStatistics::new(
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
         0,
         0,
         None,

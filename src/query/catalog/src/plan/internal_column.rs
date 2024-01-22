@@ -254,12 +254,12 @@ impl InternalColumn {
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
                     for i in offsets {
-                        let row_id = format!("{}{:06x}", uuid, *i).as_bytes().to_vec();
+                        let row_id = format!("{}{:06x}", uuid, *i);
                         row_ids.push(row_id);
                     }
                 } else {
                     for i in 0..num_rows {
-                        let row_id = format!("{}{:06x}", uuid, i).as_bytes().to_vec();
+                        let row_id = format!("{}{:06x}", uuid, i);
                         row_ids.push(row_id);
                     }
                 }

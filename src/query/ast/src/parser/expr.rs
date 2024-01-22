@@ -1574,7 +1574,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_binary = value(
         TypeName::Binary,
-        rule! { ( BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_string = value(
         TypeName::String,

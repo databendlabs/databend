@@ -351,6 +351,13 @@ impl FastHash for [u8] {
     }
 }
 
+impl FastHash for str {
+    #[inline(always)]
+    fn fast_hash(&self) -> u64 {
+        self.as_bytes().fast_hash()
+    }
+}
+
 // trick for unsized_hashtable
 impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
     #[inline(always)]

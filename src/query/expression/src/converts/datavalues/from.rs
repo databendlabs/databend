@@ -126,7 +126,9 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataType) -> Scalar {
         )),
         DataType::Timestamp => Scalar::Timestamp(*datavalue.as_int64().unwrap()),
         DataType::Date => Scalar::Date(*datavalue.as_int64().unwrap() as i32),
-        DataType::String => Scalar::String(datavalue.as_string().unwrap().to_vec()),
+        DataType::String => {
+            Scalar::String(String::from_utf8_lossy(datavalue.as_string().unwrap()).into_owned())
+        }
         DataType::Variant => match datavalue {
             DataValue::String(x) => Scalar::Variant(x.clone()),
             DataValue::Variant(x) => {

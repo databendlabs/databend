@@ -75,8 +75,8 @@ fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
     assert_eq!(col_stats.max(), Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min(), Scalar::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max(), Scalar::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min(), Scalar::String("aa".to_string()));
+    assert_eq!(col_stats.max(), Scalar::String("bb".to_string()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -102,8 +102,8 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exc
     assert_eq!(col_stats.max(), Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min(), Scalar::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max(), Scalar::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min(), Scalar::String("aa".to_string()));
+    assert_eq!(col_stats.max(), Scalar::String("bb".to_string()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -447,8 +447,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_except
         let min_expr = rand_strings.iter().min().unwrap();
         let max_expr = rand_strings.iter().max().unwrap();
 
-        let data_value_min = Scalar::String(min_expr.clone().into_bytes());
-        let data_value_max = Scalar::String(max_expr.clone().into_bytes());
+        let data_value_min = Scalar::String(min_expr.clone());
+        let data_value_max = Scalar::String(max_expr.clone());
 
         let trimmed_min = data_value_min.clone().trim_min(STATS_STRING_PREFIX_LEN);
         let trimmed_max = data_value_max.clone().trim_max(STATS_STRING_PREFIX_LEN);
@@ -534,7 +534,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
         // - the length of string value is larger or equal than STRING_PREFIX_LEN
         // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
         //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
-        let string_max_expr = String::from_utf8(max_expr.as_string().unwrap().to_vec()).unwrap();
+        let string_max_expr = max_expr.as_string().unwrap().to_string();
         let meaningless_to_collect_max = is_degenerated_case(string_max_expr.as_str());
 
         if meaningless_to_collect_max {
@@ -584,12 +584,8 @@ fn is_degenerated_case(value: &str) -> bool {
     larger_than_prefix_len && prefixed_with_irreplaceable_chars
 }
 
-fn char_len(value: &[u8]) -> usize {
-    String::from_utf8(value.to_vec())
-        .unwrap()
-        .as_str()
-        .chars()
-        .count()
+fn char_len(value: &str) -> usize {
+    value.chars().count()
 }
 
 #[test]

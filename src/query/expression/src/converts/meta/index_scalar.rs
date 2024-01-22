@@ -49,7 +49,7 @@ pub enum IndexScalar {
     Array(IndexColumn),
     Map(IndexColumn),
     Bitmap(Vec<u8>),
-    Tuple(Vec<Scalar>),
+    Tuple(Vec<IndexScalar>),
     Variant(Vec<u8>),
 }
 
@@ -91,11 +91,13 @@ impl From<IndexScalar> for Scalar {
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
-            IndexScalar::String(s) => Scalar::String(s),
+            IndexScalar::String(s) => Scalar::String(unsafe { String::from_utf8_unchecked(s) }),
             IndexScalar::Array(col) => Scalar::Array(col.into()),
             IndexScalar::Map(col) => Scalar::Map(col.into()),
             IndexScalar::Bitmap(bmp) => Scalar::Bitmap(bmp),
-            IndexScalar::Tuple(tuple) => Scalar::Tuple(tuple),
+            IndexScalar::Tuple(tuple) => {
+                Scalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
+            }
             IndexScalar::Variant(variant) => Scalar::Variant(variant),
         }
     }
@@ -143,12 +145,14 @@ impl From<Scalar> for IndexScalar {
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
-            Scalar::String(string) => IndexScalar::String(string),
+            Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
             Scalar::Binary(s) => IndexScalar::String(s),
             Scalar::Array(column) => IndexScalar::Array(column.into()),
             Scalar::Map(column) => IndexScalar::Map(column.into()),
             Scalar::Bitmap(bitmap) => IndexScalar::Bitmap(bitmap),
-            Scalar::Tuple(tuple) => IndexScalar::Tuple(tuple),
+            Scalar::Tuple(tuple) => {
+                IndexScalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
+            }
             Scalar::Variant(variant) => IndexScalar::Variant(variant),
             Scalar::EmptyArray | Scalar::EmptyMap => unreachable!(),
         }

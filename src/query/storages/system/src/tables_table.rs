@@ -183,22 +183,20 @@ where TablesTable<T>: HistoryAware
         let mut databases = vec![];
 
         let mut database_tables = vec![];
-        let mut owner: Vec<Option<Vec<u8>>> = Vec::new();
+        let mut owner: Vec<Option<String>> = Vec::new();
         let user_api = UserApiProvider::instance();
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
-                let mut db_name = Vec::new();
+                let mut db_name: Vec<String> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
                         if col_name == "database" {
-                            if let Scalar::String(s) = scalar {
-                                if let Ok(database) = String::from_utf8(s.clone()) {
-                                    if !db_name.contains(&database) {
-                                        db_name.push(database);
-                                    }
+                            if let Scalar::String(database) = scalar {
+                                if !db_name.contains(database) {
+                                    db_name.push(database.clone());
                                 }
                             }
                         }
@@ -276,8 +274,8 @@ where TablesTable<T>: HistoryAware
                         table_id,
                     ) && table.engine() != "STREAM"
                     {
-                        catalogs.push(ctl_name.as_bytes().to_vec());
-                        databases.push(name.as_bytes().to_vec());
+                        catalogs.push(ctl_name);
+                        databases.push(name);
                         database_tables.push(table);
                         owner.push(
                             user_api
@@ -288,9 +286,7 @@ where TablesTable<T>: HistoryAware
                                 })
                                 .await
                                 .ok()
-                                .and_then(|ownership| {
-                                    ownership.map(|o| o.role.as_bytes().to_vec())
-                                }),
+                                .and_then(|ownership| ownership.map(|o| o.role.to_string())),
                         );
                     }
                 }
@@ -298,7 +294,6 @@ where TablesTable<T>: HistoryAware
         }
 
         let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
-
         let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
@@ -328,19 +323,19 @@ where TablesTable<T>: HistoryAware
             index_size.push(stats.as_ref().and_then(|v| v.index_size));
         }
 
-        let names: Vec<Vec<u8>> = database_tables
+        let names: Vec<String> = database_tables
             .iter()
-            .map(|v| v.name().as_bytes().to_vec())
+            .map(|v| v.name().to_string())
             .collect();
         let table_id: Vec<u64> = database_tables
             .iter()
             .map(|v| v.get_table_info().ident.table_id)
             .collect();
-        let engines: Vec<Vec<u8>> = database_tables
+        let engines: Vec<String> = database_tables
             .iter()
-            .map(|v| v.engine().as_bytes().to_vec())
+            .map(|v| v.engine().to_string())
             .collect();
-        let engines_full: Vec<Vec<u8>> = engines.clone();
+        let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.created_on.timestamp_micros())
@@ -369,14 +364,13 @@ where TablesTable<T>: HistoryAware
                     .unwrap_or_else(|| "".to_owned())
             })
             .collect();
-        let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
-        let is_transient: Vec<Vec<u8>> = database_tables
+        let is_transient: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 if v.options().contains_key("TRANSIENT") {
-                    "TRANSIENT".as_bytes().to_vec()
+                    "TRANSIENT".to_string()
                 } else {
-                    vec![]
+                    "".to_string()
                 }
             })
             .collect();

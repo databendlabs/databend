@@ -55,7 +55,7 @@ impl SyncSystemTable for ProcessesTable {
 
         let local_node = ctx.get_cluster().local_id.clone();
 
-        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(processes_info.len());
+        let mut nodes = Vec::with_capacity(processes_info.len());
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
@@ -81,21 +81,17 @@ impl SyncSystemTable for ProcessesTable {
                 .unwrap_or(Duration::from_secs(0))
                 .as_secs();
 
-            nodes.push(local_node.clone().into_bytes());
-            processes_id.push(process_info.id.clone().into_bytes());
-            processes_type.push(process_info.typ.clone().into_bytes());
-            processes_state.push(process_info.state.to_string().into_bytes());
-            processes_database.push(process_info.database.clone().into_bytes());
+            nodes.push(local_node.clone());
+            processes_id.push(process_info.id.clone());
+            processes_type.push(process_info.typ.clone());
+            processes_state.push(process_info.state.to_string());
+            processes_database.push(process_info.database.clone());
             processes_host.push(ProcessesTable::process_host(&process_info.client_address));
-            processes_user.push(
-                ProcessesTable::process_option_value(process_info.user.clone())
-                    .name
-                    .into_bytes(),
-            );
-            processes_extra_info.push(
-                ProcessesTable::process_option_value(process_info.session_extra_info.clone())
-                    .into_bytes(),
-            );
+            processes_user
+                .push(ProcessesTable::process_option_value(process_info.user.clone()).name);
+            processes_extra_info.push(ProcessesTable::process_option_value(
+                process_info.session_extra_info.clone(),
+            ));
             processes_memory_usage.push(process_info.memory_usage);
             processes_scan_progress_read_rows.push(scan_progress.rows as u64);
             processes_scan_progress_read_bytes.push(scan_progress.bytes as u64);
@@ -111,13 +107,7 @@ impl SyncSystemTable for ProcessesTable {
             }
 
             // Status info.
-            processes_status.push(
-                process_info
-                    .status_info
-                    .clone()
-                    .unwrap_or("".to_owned())
-                    .into_bytes(),
-            );
+            processes_status.push(process_info.status_info.clone().unwrap_or("".to_owned()));
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -196,8 +186,8 @@ impl ProcessesTable {
         SyncOneBlockSystemTable::create(ProcessesTable { table_info })
     }
 
-    fn process_host(client_address: &Option<SocketAddr>) -> Option<Vec<u8>> {
-        client_address.as_ref().map(|s| s.to_string().into_bytes())
+    fn process_host(client_address: &Option<SocketAddr>) -> Option<String> {
+        client_address.as_ref().map(|s| s.to_string())
     }
 
     fn process_option_value<T>(opt: Option<T>) -> T
