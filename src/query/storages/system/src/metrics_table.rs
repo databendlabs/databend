@@ -59,17 +59,17 @@ impl SyncSystemTable for MetricsTable {
         };
         samples.extend(self.custom_metric_samples()?);
 
-        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut nodes: Vec<String> = Vec::with_capacity(samples.len());
+        let mut metrics: Vec<String> = Vec::with_capacity(samples.len());
+        let mut labels: Vec<String> = Vec::with_capacity(samples.len());
+        let mut kinds: Vec<String> = Vec::with_capacity(samples.len());
+        let mut values: Vec<String> = Vec::with_capacity(samples.len());
         for sample in samples.into_iter() {
-            nodes.push(local_id.clone().into_bytes());
-            metrics.push(sample.name.clone().into_bytes());
-            kinds.push(sample.value.kind().into_bytes());
-            labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
-            values.push(self.display_sample_value(&sample.value)?.into_bytes());
+            nodes.push(local_id.clone());
+            metrics.push(sample.name.clone());
+            kinds.push(sample.value.kind());
+            labels.push(self.display_sample_labels(&sample.labels)?);
+            values.push(self.display_sample_value(&sample.value)?);
         }
 
         Ok(DataBlock::new_from_columns(vec![

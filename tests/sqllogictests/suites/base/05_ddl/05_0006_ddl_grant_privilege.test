@@ -118,6 +118,23 @@ SHOW GRANTS FOR ROLE `test-grant-role`
 GRANT SELECT ON 'default'.'default'.* TO ROLE `test-grant-role`
 
 statement ok
+drop role if exists all_role;
+
+statement ok
+create role all_role;
+
+statement ok
+grant all on *.* to role all_role;
+
+query T
+show grants for role all_role;
+----
+GRANT ALL ON *.* TO ROLE `all_role`
+
+statement ok
+drop role if exists all_role;
+
+statement ok
 DROP ROLE `test-grant-role`
 
 statement ok

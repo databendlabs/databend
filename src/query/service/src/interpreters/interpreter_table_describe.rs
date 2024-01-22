@@ -71,30 +71,30 @@ impl Interpreter for DescribeTableInterpreter {
             Ok(table.schema())
         }?;
 
-        let mut names: Vec<Vec<u8>> = vec![];
-        let mut types: Vec<Vec<u8>> = vec![];
-        let mut nulls: Vec<Vec<u8>> = vec![];
-        let mut default_exprs: Vec<Vec<u8>> = vec![];
-        let mut extras: Vec<Vec<u8>> = vec![];
+        let mut names: Vec<String> = vec![];
+        let mut types: Vec<String> = vec![];
+        let mut nulls: Vec<String> = vec![];
+        let mut default_exprs: Vec<String> = vec![];
+        let mut extras: Vec<String> = vec![];
 
         for field in schema.fields().iter() {
-            names.push(field.name().to_string().as_bytes().to_vec());
+            names.push(field.name().to_string());
 
             let non_null_type = field.data_type().remove_recursive_nullable();
-            types.push(non_null_type.sql_name().as_bytes().to_vec());
+            types.push(non_null_type.sql_name());
             nulls.push(if field.is_nullable() {
-                "YES".to_string().as_bytes().to_vec()
+                "YES".to_string()
             } else {
-                "NO".to_string().as_bytes().to_vec()
+                "NO".to_string()
             });
             match field.default_expr() {
                 Some(expr) => {
-                    default_exprs.push(expr.as_bytes().to_vec());
+                    default_exprs.push(expr.clone());
                 }
 
                 None => {
                     let value = Scalar::default_value(&field.data_type().into());
-                    default_exprs.push(value.to_string().as_bytes().to_vec());
+                    default_exprs.push(value.to_string());
                 }
             }
             let extra = match field.computed_expr() {
@@ -102,7 +102,7 @@ impl Interpreter for DescribeTableInterpreter {
                 Some(ComputedExpr::Stored(expr)) => format!("STORED COMPUTED COLUMN `{}`", expr),
                 _ => "".to_string(),
             };
-            extras.push(extra.as_bytes().to_vec());
+            extras.push(extra);
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

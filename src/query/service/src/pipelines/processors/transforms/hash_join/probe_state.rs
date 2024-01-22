@@ -138,8 +138,17 @@ impl MutableIndexes {
 }
 
 pub struct ProbeBlockGenerationState {
+    /// in fact, it means whether we need to output some probe blocks's columns,
+    /// we use probe_projections to check whether we can get a non-empty result
+    /// block.
     pub(crate) is_probe_projected: bool,
+    /// for Right/Full/RightSingle we use true_validity to reduce memory, because
+    /// we need to wrap probe block's all column type as nullable(if they are not).
+    /// But when we need to wrap this way, the validity is all true, so we use this
+    /// one to share the memory.
     pub(crate) true_validity: Bitmap,
+    /// we use `string_items_buf` for Binary/String/Bitmap/Variant Column
+    /// to store the (pointer,length). So we can reuse the memory for all take.
     pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
 }
 

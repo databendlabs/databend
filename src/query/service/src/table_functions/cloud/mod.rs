@@ -12,32 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
+mod task_dependents;
+mod task_dependents_enable;
 
-/// The identifier of a internal record used in an application upon kvapi::KVApi.
-///
-/// E.g. TableId, DatabaseId.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Id(pub u64);
-
-impl Id {
-    pub fn new(i: u64) -> Self {
-        Id(i)
-    }
-}
-
-/// Convert primitive u64 to Id.
-impl From<u64> for Id {
-    fn from(i: u64) -> Self {
-        Id(i)
-    }
-}
-
-/// Use `Id` as if using a `u64`
-impl Deref for Id {
-    type Target = u64;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+pub use task_dependents::TaskDependentsTable;
+pub use task_dependents_enable::TaskDependentsEnableTable;

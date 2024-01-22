@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import datetime
 from decimal import Decimal
 import time
@@ -19,6 +20,9 @@ from typing import List, Dict, Any, Tuple, Optional
 
 # https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
+
+
+logging.basicConfig(level=logging.INFO)
 
 
 @udf(input_types=["TINYINT", "SMALLINT", "INT", "BIGINT"], result_type="BIGINT")
@@ -56,6 +60,11 @@ def gcd(x: int, y: int) -> int:
 @udf(input_types=["VARCHAR", "VARCHAR", "VARCHAR"], result_type="VARCHAR")
 def split_and_join(s: str, split_s: str, join_s: str) -> str:
     return join_s.join(s.split(split_s))
+
+
+@udf(input_types=["BINARY"], result_type="BINARY")
+def binary_reverse(s: bytes) -> bytes:
+    return s[::-1]
 
 
 @udf(input_types="VARCHAR", result_type="DECIMAL(36, 18)")
@@ -116,8 +125,8 @@ def map_access(map: Dict[str, str], key: str) -> str:
 
 
 @udf(input_types=["VARIANT", "VARCHAR"], result_type="VARIANT")
-def json_access(json: Any, key: str) -> Any:
-    return json[key]
+def json_access(data: Any, key: str) -> Any:
+    return data[key]
 
 
 @udf(input_types=["ARRAY(VARIANT)"], result_type="VARIANT")
@@ -293,6 +302,7 @@ if __name__ == "__main__":
     udf_server.add_function(add_signed)
     udf_server.add_function(add_unsigned)
     udf_server.add_function(add_float)
+    udf_server.add_function(binary_reverse)
     udf_server.add_function(bool_select)
     udf_server.add_function(gcd)
     udf_server.add_function(split_and_join)

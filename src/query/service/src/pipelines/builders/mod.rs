@@ -37,6 +37,7 @@ mod builder_udf;
 mod builder_union_all;
 mod builder_update;
 mod builder_window;
+mod merge_into_join_optimizations;
 
 pub use builder_replace_into::ValueSource;
 pub use builder_sort::SortPipelineBuilder;

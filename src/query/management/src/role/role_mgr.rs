@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ToErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -29,7 +28,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -39,14 +37,14 @@ use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 
 use crate::role::role_api::RoleApi;
+use crate::serde::deserialize_struct;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
-static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
-static BUILTIN_ROLE_PUBLIC: &str = "public";
-
 static TXN_MAX_RETRY_TIMES: u32 = 5;
+
+static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
@@ -144,7 +142,7 @@ impl RoleApi for RoleMgr {
         ));
 
         let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::UserAlreadyExists(format!("Role '{}' already exists.", role_info.name))
+            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
         })?;
 
         Ok(res_seq)
@@ -159,7 +157,13 @@ impl RoleApi for RoleMgr {
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => {
+                let data = serde_json::from_slice::<RoleInfo>(&seq_value.data).or_else(|err| {
+                    log::debug!("serde json err when get role. cause : {}", err);
+                    deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")
+                })?;
+                Ok(SeqV::new(seq_value.seq, data))
+            }
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "Role '{}' does not exist.",
                 role
@@ -176,8 +180,10 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = serde_json::from_slice::<RoleInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+            let u = serde_json::from_slice::<RoleInfo>(&val.data).or_else(|err| {
+                log::debug!("serde json err when get roles. cause : {}", err);
+                deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")
+            })?;
 
             r.push(SeqV::new(val.seq, u));
         }
@@ -249,7 +255,8 @@ impl RoleApi for RoleMgr {
             }
         }
 
-        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN && new_role != BUILTIN_ROLE_PUBLIC {
+        // account_admin has all privilege, no need to grant ownership.
+        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
             let new_key = self.make_role_key(new_role);
             let SeqV {
                 seq: new_seq,
@@ -299,8 +306,11 @@ impl RoleApi for RoleMgr {
             Some(value) => value,
             None => return Ok(None),
         };
-        let ownership: SeqV<OwnershipInfo> = res_value.into_seqv()?;
-        Ok(Some(ownership.data))
+        let data = serde_json::from_slice::<OwnershipInfo>(&res_value.data).or_else(|err| {
+            log::debug!("serde json err when get ownership. cause : {}", err);
+            deserialize_struct(&res_value.data, ErrorCode::IllegalUserInfoFormat, || "")
+        })?;
+        Ok(Some(data))
     }
 
     #[async_backtrace::framed]

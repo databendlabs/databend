@@ -37,13 +37,13 @@ use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct StringAggState {
-    values: Vec<u8>,
+    values: String,
 }
 
 #[derive(Clone)]
 pub struct AggregateStringAggFunction {
     display_name: String,
-    delimiter: Vec<u8>,
+    delimiter: String,
 }
 
 impl AggregateFunction for AggregateStringAggFunction {
@@ -56,7 +56,9 @@ impl AggregateFunction for AggregateStringAggFunction {
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| StringAggState { values: Vec::new() });
+        place.write(|| StringAggState {
+            values: String::new(),
+        });
     }
 
     fn state_layout(&self) -> Layout {
@@ -76,15 +78,15 @@ impl AggregateFunction for AggregateStringAggFunction {
             Some(validity) => {
                 column.iter().zip(validity.iter()).for_each(|(v, b)| {
                     if b {
-                        state.values.extend_from_slice(v);
-                        state.values.extend_from_slice(self.delimiter.as_slice());
+                        state.values.push_str(v);
+                        state.values.push_str(&self.delimiter);
                     }
                 });
             }
             None => {
                 column.iter().for_each(|v| {
-                    state.values.extend_from_slice(v);
-                    state.values.extend_from_slice(self.delimiter.as_slice());
+                    state.values.push_str(v);
+                    state.values.push_str(&self.delimiter);
                 });
             }
         }
@@ -103,8 +105,8 @@ impl AggregateFunction for AggregateStringAggFunction {
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
             let state = addr.get::<StringAggState>();
-            state.values.extend_from_slice(v);
-            state.values.extend_from_slice(self.delimiter.as_slice());
+            state.values.push_str(v);
+            state.values.push_str(&self.delimiter);
         });
         Ok(())
     }
@@ -114,8 +116,8 @@ impl AggregateFunction for AggregateStringAggFunction {
         let v = StringType::index_column(&column, row);
         if let Some(v) = v {
             let state = place.get::<StringAggState>();
-            state.values.extend_from_slice(v);
-            state.values.extend_from_slice(self.delimiter.as_slice());
+            state.values.push_str(v);
+            state.values.push_str(&self.delimiter);
         }
         Ok(())
     }
@@ -129,14 +131,14 @@ impl AggregateFunction for AggregateStringAggFunction {
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
         let rhs: StringAggState = borsh_deserialize_state(reader)?;
-        state.values.extend_from_slice(rhs.values.as_slice());
+        state.values.push_str(&rhs.values);
         Ok(())
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<StringAggState>();
         let other = rhs.get::<StringAggState>();
-        state.values.extend_from_slice(other.values.as_slice());
+        state.values.push_str(&other.values);
         Ok(())
     }
 
@@ -145,7 +147,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         let builder = StringType::try_downcast_builder(builder).unwrap();
         if !state.values.is_empty() {
             let len = state.values.len() - self.delimiter.len();
-            builder.put_slice(&state.values.as_slice()[..len]);
+            builder.put_str(&state.values[..len]);
         }
         builder.commit_row();
         Ok(())
@@ -168,7 +170,7 @@ impl fmt::Display for AggregateStringAggFunction {
 }
 
 impl AggregateStringAggFunction {
-    fn try_create(display_name: &str, delimiter: Vec<u8>) -> Result<Arc<dyn AggregateFunction>> {
+    fn try_create(display_name: &str, delimiter: String) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateStringAggFunction {
             display_name: display_name.to_string(),
             delimiter,
@@ -193,7 +195,7 @@ pub fn try_create_aggregate_string_agg_function(
     let delimiter = if params.len() == 1 {
         params[0].as_string().unwrap().clone()
     } else {
-        vec![]
+        String::new()
     };
     AggregateStringAggFunction::try_create(display_name, delimiter)
 }

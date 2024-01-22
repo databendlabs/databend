@@ -220,11 +220,11 @@ impl SuggestedBackgroundTasksSource {
                     table_stats,
                     ..
                 } => {
-                    suggestion_type.push("compaction".to_string().into_bytes().to_vec());
+                    suggestion_type.push("compaction".to_string());
                     should_do_segment_compact.push(Some(need_compact_segment));
                     should_do_compact.push(Some(need_compact_block));
-                    database_name.push(db_name.into_bytes().to_vec());
-                    table_names.push(table_name.into_bytes().to_vec());
+                    database_name.push(db_name);
+                    table_names.push(table_name);
                     table_statistics.push(serde_json::to_vec(&table_stats).unwrap());
                 }
             }

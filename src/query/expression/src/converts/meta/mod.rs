@@ -12,15 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod segment;
-mod snapshot;
-mod statistics;
+mod bincode;
+mod index_scalar;
 
-pub use segment::CompactSegmentInfo;
-pub use segment::InternalSegmentInfo;
-pub use segment::LeafSegmentInfo;
-pub use segment::SegmentInfo;
-pub use snapshot::TableSnapshot;
-pub use statistics::ClusterStatistics;
-pub use statistics::ColumnStatistics;
-pub use statistics::Statistics;
+pub use bincode::*;
+pub use index_scalar::*;

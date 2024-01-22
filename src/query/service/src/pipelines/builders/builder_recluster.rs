@@ -97,7 +97,7 @@ impl PipelineBuilder {
                 if table.change_tracking_enabled() {
                     let func_ctx = self.ctx.get_function_context()?;
                     let (stream, operators) =
-                        gen_mutation_stream_operator(schema, table_info.ident.seq)?;
+                        gen_mutation_stream_operator(schema, table_info.ident.seq, false)?;
                     self.main_pipeline.add_transform(
                         |transform_input_port, transform_output_port| {
                             TransformAddStreamColumns::try_create(
@@ -155,7 +155,7 @@ impl PipelineBuilder {
                 // construct output fields
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
+                let sort_descs = cluster_stats_gen
                     .cluster_key_index
                     .iter()
                     .map(|offset| SortColumnDescription {

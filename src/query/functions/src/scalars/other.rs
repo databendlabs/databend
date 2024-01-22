@@ -164,7 +164,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg_core::<GenericType<0>, StringType, _, _>(
         "typeof",
         |_, _| FunctionDomain::Full,
-        |_, ctx| Value::Scalar(ctx.generics[0].sql_name().into_bytes()),
+        |_, ctx| Value::Scalar(ctx.generics[0].sql_name()),
     );
 
     registry.register_function_factory("ignore", |_, args_type| {
@@ -249,8 +249,7 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
     );
 
     fn eval_inet_aton(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<UInt32Type> {
-        vectorize_with_builder_1_arg::<StringType, UInt32Type>(|v, output, ctx| {
-            let addr_str = String::from_utf8_lossy(v);
+        vectorize_with_builder_1_arg::<StringType, UInt32Type>(|addr_str, output, ctx| {
             match addr_str.parse::<Ipv4Addr>() {
                 Ok(addr) => {
                     let addr_binary = u32::from(addr);

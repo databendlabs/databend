@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod decorrelate;
-#[allow(clippy::module_inception)]
-mod heuristic;
-mod subquery_rewriter;
+syntax = "proto3";
+package databend_proto;
 
-pub use decorrelate::decorrelate_subquery;
-pub use heuristic::HeuristicOptimizer;
-pub use heuristic::DEFAULT_REWRITE_RULES;
-pub use heuristic::RESIDUAL_RULES;
-pub use subquery_rewriter::FlattenInfo;
-pub use subquery_rewriter::SubqueryRewriter;
+import "user.proto";
+
+message RoleInfo {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string name = 1;
+  UserGrantSet grants = 2;
+}

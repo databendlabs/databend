@@ -55,6 +55,7 @@ impl HttpService {
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
+            .at("/v1/system", get(super::http::v1::system::system_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
             .at(
                 "/v1/status",

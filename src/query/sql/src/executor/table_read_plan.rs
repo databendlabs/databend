@@ -196,7 +196,10 @@ impl ToReadDataSourcePlan for dyn Table {
                     let mut mask_policy_map = BTreeMap::new();
                     let meta_api = UserApiProvider::instance().get_meta_store_client();
                     let handler = get_datamask_handler();
-                    let column_not_null = !ctx.get_settings().get_ddl_column_type_nullable()?;
+                    let column_not_null = !ctx
+                        .get_settings()
+                        .get_ddl_column_type_nullable()
+                        .unwrap_or(true);
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
                             ctx.set_status_info(&format!(

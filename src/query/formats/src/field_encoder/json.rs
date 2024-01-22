@@ -42,6 +42,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
+                    binary_format: Default::default(),
                 },
                 quote_char: 0,
             },
@@ -62,7 +63,7 @@ impl FieldEncoderJSON {
             }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.write_string(buf, out_buf);
+                self.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {

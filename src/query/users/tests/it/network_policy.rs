@@ -28,9 +28,9 @@ use databend_common_users::UserApiProvider;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_network_policy() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "test";
+
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";

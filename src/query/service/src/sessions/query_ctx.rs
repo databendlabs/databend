@@ -36,6 +36,7 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -43,6 +44,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -397,6 +399,10 @@ impl TableContext for QueryContext {
         info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
+    }
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {
@@ -914,6 +920,11 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
+        let mut merge_into_join = self.shared.merge_into_join.write();
+        *merge_into_join = join;
+    }
+
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
@@ -931,6 +942,15 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let merge_into_join = self.shared.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
+            is_distributed: merge_into_join.is_distributed,
+            target_tbl_idx: merge_into_join.target_tbl_idx,
         }
     }
 

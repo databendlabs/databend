@@ -194,7 +194,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
     fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let data = unsafe { column.index_unchecked(row) };
-        let _ = self.set.set_insert(data);
+        let _ = self.set.set_insert(data.as_bytes());
         Ok(())
     }
 
@@ -211,14 +211,14 @@ impl DistinctStateFunc for AggregateDistinctStringState {
                 for row in 0..input_rows {
                     if v.get_bit(row) {
                         let data = unsafe { column.index_unchecked(row) };
-                        let _ = self.set.set_insert(data);
+                        let _ = self.set.set_insert(data.as_bytes());
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
                     let data = unsafe { column.index_unchecked(row) };
-                    let _ = self.set.set_insert(data);
+                    let _ = self.set.set_insert(data.as_bytes());
                 }
             }
         }
@@ -233,7 +233,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
         let mut builder = StringColumnBuilder::with_capacity(self.set.len(), self.set.len() * 2);
         for key in self.set.iter() {
-            builder.put_slice(key.key());
+            builder.put_str(unsafe { std::str::from_utf8_unchecked(key.key()) });
             builder.commit_row();
         }
         Ok(vec![Column::String(builder.build())])
@@ -360,7 +360,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         let column = columns[0].as_string().unwrap();
         let data = unsafe { column.index_unchecked(row) };
         let mut hasher = SipHasher24::new();
-        hasher.write(data);
+        hasher.write(data.as_bytes());
         let hash128 = hasher.finish128();
         let _ = self.set.set_insert(hash128.into()).is_ok();
         Ok(())
@@ -378,7 +378,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
                 for (t, v) in column.iter().zip(v.iter()) {
                     if v {
                         let mut hasher = SipHasher24::new();
-                        hasher.write(t);
+                        hasher.write(t.as_bytes());
                         let hash128 = hasher.finish128();
                         let _ = self.set.set_insert(hash128.into()).is_ok();
                     }
@@ -388,7 +388,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
                 for row in 0..input_rows {
                     let data = unsafe { column.index_unchecked(row) };
                     let mut hasher = SipHasher24::new();
-                    hasher.write(data);
+                    hasher.write(data.as_bytes());
                     let hash128 = hasher.finish128();
                     let _ = self.set.set_insert(hash128.into()).is_ok();
                 }

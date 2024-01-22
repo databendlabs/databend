@@ -15,6 +15,10 @@
                         {
                             "tag": "text",
                             "text": $link
+                        },
+                        {
+                            "tag": "text",
+                            "text": $page
                         }
                     ]
                 ]

@@ -20,6 +20,7 @@ use crate::ast::DropStreamStmt;
 use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
 use crate::ast::StreamPoint;
+use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
@@ -45,6 +46,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
             ~ ( #stream_point )?
+            ~ ( APPEND_ONLY ~ "=" ~ #literal_bool )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
         |(
@@ -56,6 +58,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
             _,
             (table_database, table),
             stream_point,
+            opt_append_only,
             opt_comment,
         )| {
             Statement::CreateStream(CreateStreamStmt {
@@ -66,6 +69,9 @@ fn create_stream(i: Input) -> IResult<Statement> {
                 table_database,
                 table,
                 stream_point,
+                append_only: opt_append_only
+                    .map(|(_, _, append_only)| append_only)
+                    .unwrap_or(true),
                 comment: opt_comment.map(|(_, _, comment)| comment),
             })
         },

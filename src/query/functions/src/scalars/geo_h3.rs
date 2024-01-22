@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str;
-
 use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
@@ -288,13 +286,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         "string_to_h3",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, UInt64Type>(|h3_str, builder, ctx| {
-            match str::from_utf8(h3_str)
-                .map_err(|e| e.to_string())
-                .and_then(|h3_str| str::parse::<CellIndex>(h3_str).map_err(|e| e.to_string()))
-            {
+            match h3_str.parse::<CellIndex>() {
                 Ok(index) => builder.push(index.into()),
                 Err(err) => {
-                    ctx.set_error(builder.len(), err);
+                    ctx.set_error(builder.len(), err.to_string());
                     builder.push(0);
                 }
             }

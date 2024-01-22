@@ -70,7 +70,7 @@ pub fn row_hash_of_columns(
                 NumberScalar::Float64(v) => sip.write_u64(v.to_bits()),
             },
             ScalarRef::Timestamp(v) => sip.write_i64(v),
-            ScalarRef::String(v) => sip.write(v),
+            ScalarRef::String(v) => sip.write(v.as_bytes()),
             ScalarRef::Bitmap(v) => sip.write(v),
             ScalarRef::Decimal(v) => match v {
                 DecimalScalar::Decimal128(i, DecimalSize { precision, scale }) => {

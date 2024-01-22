@@ -101,21 +101,21 @@ impl AsyncSystemTable for LocksTable {
             for info in lock_infos {
                 lock_table_id.push(info.key.get_table_id());
                 lock_revision.push(info.revision);
-                lock_type.push(info.meta.lock_type.to_string().as_bytes().to_vec());
+                lock_type.push(info.meta.lock_type.to_string().clone());
                 if info.meta.acquired_on.is_some() {
-                    lock_status.push("HOLDING".as_bytes().to_vec());
+                    lock_status.push("HOLDING");
                 } else {
-                    lock_status.push("WAITING".as_bytes().to_vec());
+                    lock_status.push("WAITING");
                 }
-                lock_user.push(info.meta.user.as_bytes().to_vec());
-                lock_node.push(info.meta.node.as_bytes().to_vec());
-                lock_query_id.push(info.meta.query_id.as_bytes().to_vec());
+                lock_user.push(info.meta.user.clone());
+                lock_node.push(info.meta.node.clone());
+                lock_query_id.push(info.meta.query_id.clone());
                 lock_created_on.push(info.meta.created_on.timestamp_micros());
                 lock_acquired_on.push(info.meta.acquired_on.map(|v| v.timestamp_micros()));
                 if info.meta.extra_info.is_empty() {
-                    lock_extra_info.push(vec![]);
+                    lock_extra_info.push("".to_string());
                 } else {
-                    lock_extra_info.push(format!("{:?}", info.meta.extra_info).as_bytes().to_vec());
+                    lock_extra_info.push(format!("{:?}", info.meta.extra_info));
                 }
             }
         }

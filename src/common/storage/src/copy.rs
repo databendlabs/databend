@@ -125,7 +125,7 @@ pub enum FileParseError {
         column_type: String,
     },
     #[error(
-        "Empty value for column {column_index} ({column_name} {column_type}), when option empty_field_as='{empty_field_as}'"
+        "Empty value for column {column_index} ({column_name} {column_type}), when option empty_field_as = {empty_field_as}"
     )]
     ColumnEmptyError {
         column_index: usize,

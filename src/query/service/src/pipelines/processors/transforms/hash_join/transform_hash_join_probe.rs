@@ -54,13 +54,13 @@ pub struct TransformHashJoinProbe {
     output_port: Arc<OutputPort>,
 
     input_data: VecDeque<DataBlock>,
-    output_data_blocks: VecDeque<DataBlock>,
+    pub(crate) output_data_blocks: VecDeque<DataBlock>,
     projections: ColumnSet,
     step: HashJoinProbeStep,
     step_logs: Vec<HashJoinProbeStep>,
-    join_probe_state: Arc<HashJoinProbeState>,
-    probe_state: ProbeState,
-    max_block_size: usize,
+    pub(crate) join_probe_state: Arc<HashJoinProbeState>,
+    pub(crate) probe_state: ProbeState,
+    pub(crate) max_block_size: usize,
     outer_scan_finished: bool,
     processor_id: usize,
 
@@ -202,6 +202,21 @@ impl TransformHashJoinProbe {
                 || self.join_probe_state.hash_join_state.need_mark_scan()
             {
                 self.join_probe_state.probe_done()?;
+                Ok(Event::Async)
+            } else if self
+                .join_probe_state
+                .hash_join_state
+                .merge_into_need_target_partial_modified_scan()
+            {
+                assert!(matches!(
+                    self.join_probe_state
+                        .hash_join_state
+                        .hash_join_desc
+                        .join_type,
+                    JoinType::Left
+                ));
+                self.join_probe_state
+                    .probe_merge_into_partial_modified_done()?;
                 Ok(Event::Async)
             } else {
                 if !self.join_probe_state.spill_partitions.read().is_empty() {
@@ -369,11 +384,23 @@ impl Processor for TransformHashJoinProbe {
                 Ok(())
             }
             HashJoinProbeStep::FinalScan => {
-                if let Some(task) = self.join_probe_state.final_scan_task() {
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .merge_into_need_target_partial_modified_scan()
+                {
+                    if let Some(item) = self
+                        .join_probe_state
+                        .final_merge_into_partial_unmodified_scan_task()
+                    {
+                        self.final_merge_into_partial_unmodified_scan(item)?;
+                        return Ok(());
+                    }
+                } else if let Some(task) = self.join_probe_state.final_scan_task() {
                     self.final_scan(task)?;
-                } else {
-                    self.outer_scan_finished = true;
+                    return Ok(());
                 }
+                self.outer_scan_finished = true;
                 Ok(())
             }
             HashJoinProbeStep::FastReturn

@@ -19,6 +19,7 @@ mod desc;
 mod hash_join_build_state;
 mod hash_join_probe_state;
 mod hash_join_state;
+mod merge_into_hash_join_optimization;
 mod probe_join;
 mod probe_spill;
 mod probe_state;

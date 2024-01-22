@@ -85,6 +85,10 @@ impl TableNameIdent {
         }
     }
 
+    pub fn tenant(&self) -> &str {
+        &self.tenant
+    }
+
     pub fn table_name(&self) -> String {
         self.table_name.clone()
     }
@@ -780,6 +784,14 @@ pub struct CountTablesKey {
 impl Display for CountTablesKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'", self.tenant)
+    }
+}
+
+impl CountTablesKey {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+        }
     }
 }
 

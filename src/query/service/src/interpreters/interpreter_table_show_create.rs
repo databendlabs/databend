@@ -171,15 +171,19 @@ impl ShowCreateTableInterpreter {
             });
         }
 
+        if !table_info.meta.comment.is_empty() {
+            table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
+        }
+
         let block = DataBlock::new(
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                    Value::Scalar(Scalar::String(table_create_sql)),
                 ),
             ],
             1,
@@ -200,11 +204,11 @@ impl ShowCreateTableInterpreter {
                 vec![
                     BlockEntry::new(
                         DataType::String,
-                        Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                        Value::Scalar(Scalar::String(name.to_string())),
                     ),
                     BlockEntry::new(
                         DataType::String,
-                        Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                        Value::Scalar(Scalar::String(view_create_sql)),
                     ),
                 ],
                 1,
@@ -236,12 +240,9 @@ impl ShowCreateTableInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(stream_table.name().as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(stream_table.name().to_string())),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(create_sql.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(create_sql))),
             ],
             1,
         );
@@ -273,12 +274,9 @@ impl ShowCreateTableInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(ddl.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(ddl))),
             ],
             1,
         );

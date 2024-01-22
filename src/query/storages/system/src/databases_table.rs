@@ -68,7 +68,7 @@ impl AsyncSystemTable for DatabasesTable {
         let mut catalog_names = vec![];
         let mut db_names = vec![];
         let mut db_id = vec![];
-        let mut owners: Vec<Option<Vec<u8>>> = vec![];
+        let mut owners: Vec<Option<String>> = vec![];
 
         let visibility_checker = ctx.get_visibility_checker().await?;
 
@@ -86,8 +86,8 @@ impl AsyncSystemTable for DatabasesTable {
                 .collect::<Vec<_>>();
 
             for db in final_dbs {
-                catalog_names.push(ctl_name.clone().into_bytes());
-                let db_name = db.name().to_string().into_bytes();
+                catalog_names.push(ctl_name.clone());
+                let db_name = db.name().to_string();
                 db_names.push(db_name);
                 let id = db.get_db_info().ident.db_id;
                 db_id.push(id);
@@ -99,7 +99,7 @@ impl AsyncSystemTable for DatabasesTable {
                         })
                         .await
                         .ok()
-                        .and_then(|ownership| ownership.map(|o| o.role.as_bytes().to_vec())),
+                        .and_then(|ownership| ownership.map(|o| o.role.clone())),
                 );
             }
         }

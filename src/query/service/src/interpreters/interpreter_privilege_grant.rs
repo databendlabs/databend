@@ -190,7 +190,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                if plan.priv_types.has_privilege(Ownership) {
+                if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
                     let owner_object = self
                         .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;

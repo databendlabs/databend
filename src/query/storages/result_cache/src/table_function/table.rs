@@ -115,7 +115,7 @@ impl Table for ResultScan {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        let args = vec![Scalar::String(self.query_id.as_bytes().to_vec())];
+        let args = vec![Scalar::String(self.query_id.clone())];
 
         Some(TableArgs::new_positioned(args))
     }

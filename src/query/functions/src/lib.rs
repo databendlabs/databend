@@ -20,6 +20,7 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(lazy_cell)]
+#![feature(str_internals)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;
