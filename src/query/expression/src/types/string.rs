@@ -682,22 +682,12 @@ fn check_utf8_column(offsets: &[u64], data: &[u8]) -> Result<()> {
 
         simdutf8::basic::from_utf8(data).ok()?;
 
-        // offsets can be == data.len()
-        // find first offset from the end that is smaller
-        // Example:
-        // data.len() = 10
-        // offsets = [0, 5, 10, 10]
-        let offsets = offsets;
-        let last = offsets
-            .iter()
-            .enumerate()
-            .skip(1)
-            .rev()
-            .find_map(|(i, offset)| ((*offset as usize) < data.len()).then_some(i));
-
-        let last = if let Some(last) = last {
-            // following the example: last = 1 (offset = 5)
-            last
+        let last = if let Some(last) = offsets.last() {
+            if *last as usize == data.len() {
+                return Ok(());
+            } else {
+                *last
+            }
         } else {
             // given `l = data.len()`, this branch is hit iff either:
             // * `offsets = [0, l, l, ...]`, which was covered by `from_utf8(data)` above
