@@ -49,7 +49,7 @@ pub enum IndexScalar {
     Array(IndexColumn),
     Map(IndexColumn),
     Bitmap(Vec<u8>),
-    Tuple(Vec<Scalar>),
+    Tuple(Vec<IndexScalar>),
     Variant(Vec<u8>),
 }
 
@@ -95,7 +95,9 @@ impl From<IndexScalar> for Scalar {
             IndexScalar::Array(col) => Scalar::Array(col.into()),
             IndexScalar::Map(col) => Scalar::Map(col.into()),
             IndexScalar::Bitmap(bmp) => Scalar::Bitmap(bmp),
-            IndexScalar::Tuple(tuple) => Scalar::Tuple(tuple),
+            IndexScalar::Tuple(tuple) => {
+                Scalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
+            }
             IndexScalar::Variant(variant) => Scalar::Variant(variant),
         }
     }
@@ -148,7 +150,9 @@ impl From<Scalar> for IndexScalar {
             Scalar::Array(column) => IndexScalar::Array(column.into()),
             Scalar::Map(column) => IndexScalar::Map(column.into()),
             Scalar::Bitmap(bitmap) => IndexScalar::Bitmap(bitmap),
-            Scalar::Tuple(tuple) => IndexScalar::Tuple(tuple),
+            Scalar::Tuple(tuple) => {
+                IndexScalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
+            }
             Scalar::Variant(variant) => IndexScalar::Variant(variant),
             Scalar::EmptyArray | Scalar::EmptyMap => unreachable!(),
         }
