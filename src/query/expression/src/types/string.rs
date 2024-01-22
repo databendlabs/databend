@@ -686,7 +686,7 @@ fn check_utf8_column(offsets: &[u64], data: &[u8]) -> Result<()> {
             if *last as usize == data.len() {
                 return Ok(());
             } else {
-                *last
+                *last as usize
             }
         } else {
             // given `l = data.len()`, this branch is hit iff either:
