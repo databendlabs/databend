@@ -279,10 +279,10 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("collation", DefaultSettingValue {
-                    value: UserSettingValue::String("binary".to_owned()),
-                    desc: "Sets the character collation. Available values include \"binary\" and \"utf8\".",
+                    value: UserSettingValue::String("utf8".to_owned()),
+                    desc: "Sets the character collation. Available values include \"utf8\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["binary", "utf8"])),
+                    range: Some(SettingRange::String(vec!["utf8"])),
                 }),
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

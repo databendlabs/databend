@@ -1994,15 +1994,6 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        // rewrite_collation
-        let func_name = if self.function_need_collation(func_name, &args)?
-            && self.ctx.get_settings().get_collation()? == "utf8"
-        {
-            format!("{func_name}_utf8")
-        } else {
-            func_name.to_owned()
-        };
-
         self.resolve_scalar_function_call(span, &func_name, params, args)
     }
 
@@ -3734,15 +3725,6 @@ impl<'a> TypeChecker<'a> {
                 _ => Ok(original_expr.clone()),
             },
         }
-    }
-
-    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = ["substr", "substring", "length"];
-        let result = !args.is_empty()
-            && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
-            && self.ctx.get_settings().get_collation().unwrap() != "binary"
-            && names.contains(&name);
-        Ok(result)
     }
 
     fn try_fold_constant<Index: ColumnIndex>(

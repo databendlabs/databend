@@ -659,18 +659,80 @@ impl CheckUTF8 for Vec<u8> {
 
 impl CheckUTF8 for BinaryColumn {
     fn check_utf8(&self) -> Result<()> {
-        for val in self.iter() {
-            val.check_utf8()?;
-        }
-        Ok(())
+        check_utf8_column(&self.offsets, &self.data)
     }
 }
 
 impl CheckUTF8 for BinaryColumnBuilder {
     fn check_utf8(&self) -> Result<()> {
-        for row in 0..self.len() {
-            unsafe { self.index_unchecked(row) }.check_utf8()?;
-        }
-        Ok(())
+        check_utf8_column(&self.offsets, &self.data)
     }
+}
+
+/// # Check if any slice of `values` between two consecutive pairs from `offsets` is invalid `utf8`
+fn check_utf8_column(offsets: &[u64], data: &[u8]) -> Result<()> {
+    let res: Option<()> = try {
+        if offsets.len() == 1 {
+            return Ok(());
+        }
+
+        if data.is_ascii() {
+            return Ok(());
+        }
+
+        simdutf8::basic::from_utf8(data).ok()?;
+
+        // offsets can be == data.len()
+        // find first offset from the end that is smaller
+        // Example:
+        // data.len() = 10
+        // offsets = [0, 5, 10, 10]
+        let offsets = offsets;
+        let last = offsets
+            .iter()
+            .enumerate()
+            .skip(1)
+            .rev()
+            .find_map(|(i, offset)| ((*offset as usize) < data.len()).then_some(i));
+
+        let last = if let Some(last) = last {
+            // following the example: last = 1 (offset = 5)
+            last
+        } else {
+            // given `l = data.len()`, this branch is hit iff either:
+            // * `offsets = [0, l, l, ...]`, which was covered by `from_utf8(data)` above
+            // * `offsets = [0]`, which never happens because offsets.len() == 1 is short-circuited above
+            return Ok(());
+        };
+
+        // truncate to relevant offsets. Note: `=last` because last was computed skipping the first item
+        // following the example: starts = [0, 5]
+        let starts = unsafe { offsets.get_unchecked(..=last) };
+
+        let mut any_invalid = false;
+        for start in starts {
+            let start = *start as usize;
+
+            // Safety: `try_check_offsets_bounds` just checked for bounds
+            let b = *unsafe { data.get_unchecked(start) };
+
+            // A valid code-point iff it does not start with 0b10xxxxxx
+            // Bit-magic taken from `std::str::is_char_boundary`
+            if (b as i8) < -0x40 {
+                any_invalid = true
+            }
+        }
+        if any_invalid {
+            None?;
+        }
+    };
+    res.ok_or_else(|| {
+        ErrorCode::InvalidUtf8String(
+            "Encountered invalid utf8 data for string type, \
+                if you were reading column with string type from a table, \
+                it's recommended to alter the column type to `BINARY`.\n\
+                Example: `ALTER TABLE <table> MODIFY COLUMN <column> BINARY;`"
+                .to_string(),
+        )
+    })
 }
