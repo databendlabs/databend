@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use chrono::Duration;
 
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
@@ -66,11 +67,12 @@ impl Interpreter for VacuumTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let hours = match self.plan.option.retain_hours {
-            Some(hours) => hours as i64,
-            None => ctx.get_settings().get_retention_period()? as i64,
+        let duration = match self.plan.option.retain_hours {
+            Some(hours) => Duration::hours(hours as i64),
+            None => Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64),
         };
-        let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
+
+        let retention_time = chrono::Utc::now() - duration;
         let ctx = self.ctx.clone();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
