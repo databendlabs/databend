@@ -1264,7 +1264,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(id (#2) = b.id (#2))], limit: NONE]
+    │       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
     │       └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.default.a
@@ -1642,7 +1642,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -1697,7 +1697,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
