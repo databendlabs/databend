@@ -685,9 +685,25 @@ fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::String => TypeName::String,
         DataType::Bitmap => TypeName::Bitmap,
         DataType::Variant => TypeName::Variant,
+        DataType::Binary => TypeName::Binary,
         DataType::Nullable(box inner_ty) => {
             TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
         }
-        _ => unreachable!(),
+        DataType::Array(box inner_ty) => TypeName::Array(Box::new(convert_to_type_name(inner_ty))),
+        DataType::Map(box inner_ty) => match inner_ty {
+            DataType::Tuple(inner_tys) => TypeName::Map {
+                key_type: Box::new(convert_to_type_name(&inner_tys[0])),
+                val_type: Box::new(convert_to_type_name(&inner_tys[1])),
+            },
+            _ => unreachable!(),
+        },
+        DataType::Tuple(inner_tys) => TypeName::Tuple {
+            fields_name: None,
+            fields_type: inner_tys
+                .iter()
+                .map(convert_to_type_name)
+                .collect::<Vec<_>>(),
+        },
+        _ => TypeName::String,
     }
 }
