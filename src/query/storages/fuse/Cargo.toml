@@ -42,7 +42,6 @@ databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
 arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

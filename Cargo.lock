@@ -3477,7 +3477,6 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
- "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
  "backoff",
