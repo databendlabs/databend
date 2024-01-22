@@ -144,13 +144,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("retention_period", DefaultSettingValue {
-                    // unit of retention_period is hour
-                    value: UserSettingValue::UInt64(12),
-                    desc: "Sets the retention period in hours.",
-                    mode: SettingMode::Both,
-                    range: None,
-                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
