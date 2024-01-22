@@ -31,7 +31,7 @@ pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<S
                 str_field_to_scalar(value, c.as_ref())
             }
         }
-        DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
+        DataType::String => Ok(Scalar::String(value.to_string())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {
                 let num = value.parse::<u8>().unwrap();

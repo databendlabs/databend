@@ -295,6 +295,8 @@ fn test_gt(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) > parse_json(rhs)", &table);
     run_ast(file, "lhs > rhs", &table);
+    let table = [("col", StringType::from_data(vec![r#"bcd"#, r#"efg"#]))];
+    run_ast(file, "col > 'efg'", &table);
 }
 
 fn test_gte(file: &mut impl Write) {

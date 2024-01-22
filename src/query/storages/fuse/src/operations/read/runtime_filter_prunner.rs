@@ -67,7 +67,7 @@ pub fn runtime_filter_pruner(
                 if stat.min.is_null() {
                     return false;
                 }
-                debug_assert_eq!(stat.min.as_ref().infer_data_type(), ty.remove_nullable());
+                debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
                 let mut input_domains = HashMap::new();

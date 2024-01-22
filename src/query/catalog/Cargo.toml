@@ -31,6 +31,7 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 dyn-clone = "1.0.9"
+log = "0.4.19"
 parking_lot = { workspace = true }
 parquet_rs = { workspace = true }
 rand = { workspace = true }

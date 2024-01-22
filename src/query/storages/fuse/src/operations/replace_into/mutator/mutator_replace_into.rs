@@ -270,11 +270,10 @@ impl ReplaceIntoMutator {
             ScalarRef::Tuple(_) => "[TUPLE]".to_owned(),
             ScalarRef::Variant(_) => "[VARIANT]".to_owned(),
             // for string, return the first 5 chars
-            ScalarRef::String(s) => {
-                let val = String::from_utf8_lossy(s).to_string();
+            ScalarRef::String(val) => {
                 // take the first 5 chars
-                match val.as_str().char_indices().nth(5) {
-                    None => val,
+                match val.char_indices().nth(5) {
+                    None => val.to_string(),
                     Some((idx, _)) => format!("{}...", &val[..idx]),
                 }
             }

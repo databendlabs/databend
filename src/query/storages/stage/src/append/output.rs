@@ -154,7 +154,7 @@ fn file_infos_to_block(files: &[OutputFileInfo]) -> DataBlock {
     let mut rows = Vec::with_capacity(files.len());
     let mut sizes = Vec::with_capacity(files.len());
     for file in files {
-        paths.push(file.file_name.clone().as_bytes().to_vec());
+        paths.push(file.file_name.as_str());
         rows.push(file.summary.row_counts as u64);
         sizes.push(file.summary.output_bytes as u64);
     }

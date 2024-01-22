@@ -205,7 +205,7 @@ impl FromStr for StageFileFormatType {
 
 impl ToString for StageFileFormatType {
     fn to_string(&self) -> String {
-        format!("{:?}", *self)
+        format!("{:?}", *self).to_uppercase()
     }
 }
 

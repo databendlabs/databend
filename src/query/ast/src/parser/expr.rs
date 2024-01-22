@@ -1470,6 +1470,13 @@ pub fn at_string(i: Input) -> IResult<String> {
     })(i)
 }
 
+pub fn nullable(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ))(i)
+}
+
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
@@ -1567,14 +1574,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_binary = value(
         TypeName::Binary,
-        rule! { ( BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_string = value(
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
+    map_res(
         alt((
             rule! {
             ( #ty_boolean
@@ -1594,7 +1601,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NULL? : "type name"
+            ) ~ #nullable? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1603,14 +1610,20 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NULL? : "type name" },
+            ) ~ #nullable? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
+        |(ty, opt_nullable)| match opt_nullable {
+            Some(true) => Ok(ty.wrap_nullable()),
+            Some(false) => {
+                if matches!(ty, TypeName::Nullable(_)) {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "ambiguous NOT NULL constraint",
+                    )))
+                } else {
+                    Ok(ty.wrap_not_null())
+                }
             }
+            None => Ok(ty),
         },
     )(i)
 }

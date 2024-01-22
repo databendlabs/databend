@@ -89,13 +89,13 @@ impl SyncSystemTable for QueryProfileTable {
         let profile_mgr = QueryProfileManager::instance();
         let query_profs = profile_mgr.list_all();
 
-        let mut query_ids: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
+        let mut query_ids: Vec<String> = Vec::with_capacity(query_profs.len());
         let mut operator_ids: Vec<u32> = Vec::with_capacity(query_profs.len());
         let mut execution_infos: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
 
         for prof in query_profs.iter() {
             for plan_prof in prof.operator_profiles.iter() {
-                query_ids.push(prof.query_id.clone().into_bytes());
+                query_ids.push(prof.query_id.clone());
                 operator_ids.push(plan_prof.id);
 
                 let execution_info = encode_operator_execution_info(&plan_prof.execution_info);

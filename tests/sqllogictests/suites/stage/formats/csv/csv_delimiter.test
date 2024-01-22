@@ -4,6 +4,12 @@ drop table if exists tit
 statement ok
 create table tit(a string not null, b int not null, c string not null)
 
+query error Invalid CSV option value: FIELD_DELIMITER is currently set to 'x'. Expecting a single one-byte, non-alphanumeric character.
+copy into tit from @data/csv/ file_format = (type = CSV field_delimiter = 'x')
+
+query error Invalid CSV option value: RECORD_DELIMITER is currently set to 'x'. Expecting a single one-byte, non-alphanumeric character or '\\r\\n'.
+copy into tit from @data/csv/ file_format = (type = CSV record_delimiter = 'x')
+
 query TIITI
 copy into tit from @data/csv/x01_field_x02_record.csv file_format = (type = CSV skip_header = 0 field_delimiter = '\x01' record_delimiter = '\x02')
 ----

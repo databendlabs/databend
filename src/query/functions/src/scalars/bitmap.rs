@@ -45,7 +45,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_bitmap",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
-            match parse_bitmap(s) {
+            match parse_bitmap(s.as_bytes()) {
                 Ok(rb) => {
                     rb.serialize_into(&mut builder.data).unwrap();
                 }

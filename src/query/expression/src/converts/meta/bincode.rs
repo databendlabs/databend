@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // DO NOT EDIT.
-// This crate keeps some legacy codes for compatibility
+// This crate keeps some legacy codes for compatibility, it's locked by bincode of meta's v3 version
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -95,7 +95,7 @@ impl From<LegacyScalar> for Scalar {
             LegacyScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             LegacyScalar::Date(date) => Scalar::Date(date),
             LegacyScalar::Boolean(b) => Scalar::Boolean(b),
-            LegacyScalar::String(s) => Scalar::String(s),
+            LegacyScalar::String(s) => Scalar::String(String::from_utf8_lossy(&s).into_owned()),
             LegacyScalar::Array(col) => Scalar::Array(col.into()),
             LegacyScalar::Map(col) => Scalar::Map(col.into()),
             LegacyScalar::Bitmap(bmp) => Scalar::Bitmap(bmp),
@@ -152,7 +152,7 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Date(date) => LegacyScalar::Date(date),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
             Scalar::Binary(_) => unreachable!(),
-            Scalar::String(string) => LegacyScalar::String(string),
+            Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
             Scalar::Array(column) => LegacyScalar::Array(column.into()),
             Scalar::Map(column) => LegacyScalar::Map(column.into()),
             Scalar::Bitmap(bitmap) => LegacyScalar::Bitmap(bitmap),

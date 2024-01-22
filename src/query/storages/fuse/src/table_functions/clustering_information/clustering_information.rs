@@ -218,7 +218,7 @@ impl<'a> ClusteringInformation<'a> {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(cluster_key.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(cluster_key.clone())),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

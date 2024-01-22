@@ -564,7 +564,6 @@ impl BindContext {
         }
 
         let column = metadata.column(column_index);
-        let virtual_computed_expr = column_binding.internal_column.virtual_computed_expr();
         let column_binding = ColumnBindingBuilder::new(
             column.name(),
             column_index,
@@ -578,7 +577,6 @@ impl BindContext {
         .database_name(Some(table.database().to_string()))
         .table_name(Some(table.name().to_string()))
         .table_index(Some(table_index))
-        .virtual_computed_expr(virtual_computed_expr)
         .build();
 
         if new {

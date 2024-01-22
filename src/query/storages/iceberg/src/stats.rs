@@ -107,7 +107,7 @@ fn parse_binary_value(ty: &TableDataType, data: &[u8]) -> Option<Scalar> {
             let v = i64::from_le_bytes(data.try_into().ok()?);
             Some(Scalar::Timestamp(v))
         }
-        TableDataType::String => Some(Scalar::String(data.to_vec())),
+        TableDataType::String => Some(Scalar::String(String::from_utf8(data.to_vec()).ok()?)),
         // TODO: support Decimal.
         _ => None, // Not supported.
     }

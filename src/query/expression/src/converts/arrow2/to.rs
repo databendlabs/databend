@@ -25,7 +25,6 @@ use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
-use crate::types::string::CheckUTF8;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -321,11 +320,6 @@ impl Column {
                 )
             }
             Column::String(col) => {
-                // todo!("new string")
-                // always check utf8 until we can guarantee the correctness of data in string column
-                // #[cfg(debug_assertions)]
-                col.check_utf8().unwrap();
-
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
 

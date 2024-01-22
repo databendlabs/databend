@@ -71,8 +71,8 @@ impl Interpreter for DescDataMaskInterpreter {
             }
         };
 
-        let name: Vec<Vec<u8>> = vec![self.plan.name.as_bytes().to_vec()];
-        let create_on: Vec<Vec<u8>> = vec![policy.create_on.to_string().as_bytes().to_vec()];
+        let name: Vec<String> = vec![self.plan.name.clone()];
+        let create_on: Vec<String> = vec![policy.create_on.to_string().clone()];
         let args = format!(
             "({})",
             policy
@@ -83,12 +83,12 @@ impl Interpreter for DescDataMaskInterpreter {
                 .collect::<Vec<_>>()
                 .join(",")
         );
-        let signature: Vec<Vec<u8>> = vec![args.as_bytes().to_vec()];
-        let return_type = vec![policy.return_type.as_bytes().to_vec()];
-        let body = vec![policy.body.as_bytes().to_vec()];
+        let signature: Vec<String> = vec![args.clone()];
+        let return_type = vec![policy.return_type.clone()];
+        let body = vec![policy.body.clone()];
         let comment = vec![match policy.comment {
-            Some(comment) => comment.as_bytes().to_vec(),
-            None => "".to_string().as_bytes().to_vec(),
+            Some(comment) => comment.clone(),
+            None => "".to_string().clone(),
         }];
 
         let blocks = vec![DataBlock::new_from_columns(vec![

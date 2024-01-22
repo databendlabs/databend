@@ -42,8 +42,8 @@ async fn test_clustering_information_table_read() -> Result<()> {
     fixture.create_default_table().await?;
 
     // func args
-    let arg_db = Scalar::String(db.as_bytes().to_vec());
-    let arg_tbl = Scalar::String(tbl.as_bytes().to_vec());
+    let arg_db = Scalar::String(db.clone());
+    let arg_tbl = Scalar::String(tbl.clone());
 
     {
         let expected = vec![

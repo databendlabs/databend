@@ -128,4 +128,22 @@ impl TaskClient {
         let resp = client.show_task_runs(req).await?;
         Ok(resp.into_inner())
     }
+
+    pub async fn get_task_dependents(
+        &self,
+        req: Request<crate::pb::GetTaskDependentsRequest>,
+    ) -> Result<crate::pb::GetTaskDependentsResponse> {
+        let mut client = self.task_client.clone();
+        let resp = client.get_task_dependents(req).await?;
+        Ok(resp.into_inner())
+    }
+
+    pub async fn enable_task_dependents(
+        &self,
+        req: Request<crate::pb::EnableTaskDependentsRequest>,
+    ) -> Result<crate::pb::EnableTaskDependentsResponse> {
+        let mut client = self.task_client.clone();
+        let resp = client.enable_task_dependents(req).await?;
+        Ok(resp.into_inner())
+    }
 }

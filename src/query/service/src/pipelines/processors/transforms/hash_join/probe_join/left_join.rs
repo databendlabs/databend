@@ -207,7 +207,7 @@ impl HashJoinProbeState {
             // Probe hash table and fill `build_indexes`.
             let (mut match_count, mut incomplete_ptr) =
                 hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
-
+            // `total_probe_matched` is used to record the matched rows count for current `idx` row from probe_block
             let mut total_probe_matched = 0;
             if match_count > 0 {
                 total_probe_matched += match_count;
@@ -454,6 +454,11 @@ impl HashJoinProbeState {
                     };
                 }
             }
+            self.merge_into_check_and_set_matched(
+                build_indexes,
+                matched_idx,
+                &probe_state.true_validity,
+            )?;
             return Ok(());
         }
 
@@ -480,6 +485,11 @@ impl HashJoinProbeState {
                     };
                 }
             }
+            self.merge_into_check_and_set_matched(
+                build_indexes,
+                matched_idx,
+                &probe_state.true_validity,
+            )?;
         } else if all_false {
             let mut idx = 0;
             while idx < matched_idx {
@@ -510,6 +520,7 @@ impl HashJoinProbeState {
                 }
             } else {
                 let mut idx = 0;
+                self.merge_into_check_and_set_matched(build_indexes, matched_idx, &validity)?;
                 while idx < matched_idx {
                     unsafe {
                         let valid = validity.get_bit_unchecked(idx);
