@@ -22,145 +22,22 @@ use crate::Config;
 // The following code should be removed from the release after the next release.
 // Just give user errors without any detail explanation and migration suggestions.
 impl Config {
-    pub const fn obsoleted_option_keys() -> &'static [&'static str; 11] {
-        &[
-            "table_disk_cache_mb_size",
-            "table_meta_cache_enabled",
-            "table_cache_block_meta_count",
-            "table_memory_cache_mb_size",
-            "table_disk_cache_root",
-            "table_cache_snapshot_count",
-            "table_cache_statistic_count",
-            "table_cache_segment_count",
-            "table_cache_bloom_index_meta_count",
-            "table_cache_bloom_index_filter_count",
-            "table_cache_bloom_index_data_bytes",
-        ]
+    pub const fn obsoleted_option_keys() -> &'static [&'static str; 1] {
+        &["obsoleted-name"]
     }
 
     pub(crate) fn check_obsoleted(&self) -> Result<()> {
         let check_results = vec![
+            // This is a demo.
             Self::check(
-                &self.query.table_disk_cache_mb_size,
-                "table-disk-cache-mb-size",
-                "cache-disk-max-bytes",
+                &Some("obsoleted-name"),
+                "obsoleted-name",
+                "new-name",
                 r#"
-                    [cache]
                     ...
-                    data_cache_storage = "disk"
-                    ...
-                    [cache.disk]
-                    max_bytes = [MAX_BYTES]
-                    ...
+                    name-name = "value"
                   "#,
-                "CACHE_DISK_MAX_BYTES",
-            ),
-            Self::check(
-                &self.query.table_meta_cache_enabled,
-                "table-meta-cache-enabled",
-                "cache-enable-table-meta-cache",
-                r#"
-                    [cache]
-                    enable_table_meta_cache=[true|false]
-                  "#,
-                "CACHE_ENABLE_TABLE_META_CACHE",
-            ),
-            Self::check(
-                &self.query.table_cache_block_meta_count,
-                "table-cache-block-meta-count",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-            Self::check(
-                &self.query.table_memory_cache_mb_size,
-                "table-memory-cache-mb-size",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-            Self::check(
-                &self.query.table_disk_cache_root,
-                "table-disk-cache-root",
-                "cache-disk-path",
-                r#"
-                    [cache]
-                    ...
-                    data_cache_storage = "disk"
-                    ...
-                    [cache.disk]
-                    max_bytes = [MAX_BYTES]
-                    path = [PATH]
-                    ...
-                    "#,
-                "CACHE_DISK_PATH",
-            ),
-            Self::check(
-                &self.query.table_cache_snapshot_count,
-                "table-cache-snapshot-count",
-                "cache-table-meta-snapshot-count",
-                r#"
-                    [cache]
-                    table_meta_snapshot_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_SNAPSHOT_COUNT",
-            ),
-            Self::check(
-                &self.query.table_cache_statistic_count,
-                "table-cache-statistic-count",
-                "cache-table-meta-statistic-count",
-                r#"
-                    [cache]
-                    table_meta_statistic_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_STATISTIC_COUNT",
-            ),
-            Self::check(
-                &self.query.table_cache_segment_count,
-                "table-cache-segment-count",
-                "cache-table-meta-segment-count",
-                r#"
-                    [cache]
-                    table_meta_segment_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_SEGMENT_COUNT",
-            ),
-            Self::check(
-                &self.query.table_cache_bloom_index_meta_count,
-                "table-cache-bloom-index-meta-count",
-                "cache-table-bloom-index-meta-count",
-                r#"
-                    [cache]
-                    table_bloom_index_meta_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_BLOOM_INDEX_META_COUNT",
-            ),
-            Self::check(
-                &self.query.table_cache_bloom_index_filter_count,
-                "table-cache-bloom-index-filter-count",
-                "cache-table-bloom-index-filter-count",
-                r#"
-                    [cache]
-                    table_bloom_index_filter_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
-            ),
-            Self::check(
-                &self.query.table_cache_bloom_index_data_bytes,
-                "table-cache-bloom-index-data-bytes",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-            Self::check(
-                &self.cache.table_meta_segment_count,
-                "cache-table-meta-segment-count",
-                "cache-table-meta-segment-bytes",
-                r#"
-                    [cache]
-                    table_meta_segment_bytes = [BYTES]
-                    "#,
-                "CACHE_TABLE_META_SEGMENT_BYTES",
+                "NEW-NAME",
             ),
         ];
 
