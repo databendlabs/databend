@@ -9105,6 +9105,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4af824652d4d2ffabf606d337a071677ae621b05622adf35df9562f69d9b4498"
 dependencies = [
  "anyhow",
+ "async-backtrace",
  "async-trait",
  "backon",
  "base64 0.21.0",
