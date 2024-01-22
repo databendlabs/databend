@@ -645,21 +645,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumTableOption {
-    pub retain_hours: Option<Expr>,
     pub dry_run: Option<()>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(retain_hours) = &self.retain_hours {
-            write!(f, "RETAIN {} HOURS", retain_hours)?;
-        }
         if self.dry_run.is_some() {
-            if self.retain_hours.is_some() {
-                write!(f, " DRY RUN")?;
-            } else {
-                write!(f, "DRY RUN")?;
-            }
+            write!(f, "DRY RUN")?;
         }
         Ok(())
     }

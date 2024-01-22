@@ -8668,7 +8668,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: None,
             dry_run: None,
         },
     },
@@ -8676,9 +8675,9 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
+VACUUM TABLE t DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -8692,16 +8691,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..23,
-                    ),
-                    lit: UInt64(
-                        4,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8711,9 +8700,9 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 40 HOURS;
+VACUUM TABLE t ;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 40 HOURS
+VACUUM TABLE t 
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -8727,16 +8716,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..24,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
         },
     },

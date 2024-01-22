@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use chrono::Duration;
 
+use chrono::Duration;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -67,10 +67,7 @@ impl Interpreter for VacuumTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let duration = match self.plan.option.retain_hours {
-            Some(hours) => Duration::hours(hours as i64),
-            None => Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64),
-        };
+        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
         let retention_time = chrono::Utc::now() - duration;
         let ctx = self.ctx.clone();

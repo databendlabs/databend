@@ -147,7 +147,6 @@ pub struct VacuumDropTableOption {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumTableOption {
-    pub retain_hours: Option<usize>,
     pub dry_run: Option<()>,
 }
 

@@ -2884,21 +2884,14 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)?
+            (DRY ~ ^RUN)?
         },
-        |(retain_hours_opt, dry_run_opt)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |dry_run_opt| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
-            VacuumTableOption {
-                retain_hours,
-                dry_run,
-            }
+            VacuumTableOption { dry_run }
         },
     ),))(i)
 }
