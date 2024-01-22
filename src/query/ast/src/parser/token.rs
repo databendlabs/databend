@@ -1093,10 +1093,6 @@ pub enum TokenKind {
     RANDOM,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
-    #[token("NVL", ignore(ascii_case))]
-    NVL,
-    #[token("NVL2", ignore(ascii_case))]
-    NVL2,
     #[token("NULLS", ignore(ascii_case))]
     NULLS,
     #[token("FIRST", ignore(ascii_case))]
