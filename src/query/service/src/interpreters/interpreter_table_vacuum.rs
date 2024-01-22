@@ -86,16 +86,9 @@ impl Interpreter for VacuumTableInterpreter {
 
         match purge_files_opt {
             None => return Ok(PipelineBuildResult::create()),
-            Some(purge_files) => {
-                let mut files: Vec<Vec<u8>> = Vec::with_capacity(purge_files.len());
-                for file in purge_files.into_iter() {
-                    files.push(file.as_bytes().to_vec());
-                }
-
-                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                    StringType::from_data(files),
-                ])])
-            }
+            Some(purge_files) => PipelineBuildResult::from_blocks(vec![
+                DataBlock::new_from_columns(vec![StringType::from_data(purge_files)]),
+            ]),
         }
     }
 }

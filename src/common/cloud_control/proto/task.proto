@@ -186,6 +186,26 @@ message ShowTaskRunsResponse {
   optional TaskError error = 2;
 }
 
+message GetTaskDependentsRequest {
+  string tenant_id = 1;
+  string task_name = 2;
+  bool recursive = 3;
+}
+
+message GetTaskDependentsResponse {
+  repeated Task task = 1;
+  optional TaskError error = 2;
+}
+
+message EnableTaskDependentsRequest {
+  string tenant_id = 1;
+  string task_name = 2;
+}
+
+message EnableTaskDependentsResponse {
+  optional TaskError error = 1;
+}
+
 service TaskService {
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc DescribeTask(DescribeTaskRequest) returns (DescribeTaskResponse);
@@ -194,4 +214,6 @@ service TaskService {
   rpc AlterTask(AlterTaskRequest) returns(AlterTaskResponse);
   rpc ShowTasks(ShowTasksRequest) returns (ShowTasksResponse);
   rpc ShowTaskRuns(ShowTaskRunsRequest) returns (ShowTaskRunsResponse);
+  rpc GetTaskDependents(GetTaskDependentsRequest) returns (GetTaskDependentsResponse);
+  rpc EnableTaskDependents(EnableTaskDependentsRequest) returns (EnableTaskDependentsResponse);
 }

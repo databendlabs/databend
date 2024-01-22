@@ -200,7 +200,7 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
 map MAP(INT32, STRING) NO {} (empty)
 variant VARIANT NO null (empty)
 
@@ -226,7 +226,7 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
 map MAP(STRING, DATE) NO {} (empty)
 variant VARIANT NO null (empty)
 
@@ -372,3 +372,19 @@ alter table t_row_per_block set options(row_per_block = 100000000000);
 
 statement ok
 alter table t_row_per_block set options(row_per_block = 100000);
+
+statement ok
+drop table if exists t_nested
+
+statement ok
+create table t_nested(a int, b array(int not null), c array(int null), d map(string, int null), e map(string, string not null), f tuple(int null, string not null, array(int null), array(string not null)))
+
+query TTTTT
+desc t_nested
+----
+a INT YES NULL (empty)
+b ARRAY(INT32) YES NULL (empty)
+c ARRAY(INT32) YES NULL (empty)
+d MAP(STRING, INT32) YES NULL (empty)
+e MAP(STRING, STRING) YES NULL (empty)
+f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)

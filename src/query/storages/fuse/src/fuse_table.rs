@@ -37,6 +37,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
@@ -517,6 +518,9 @@ impl Table for FuseTable {
                     .unwrap(),
                 STREAM_COLUMN_FACTORY
                     .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ROW_VERSION_COL_NAME)
                     .unwrap(),
             ]
         } else {

@@ -181,7 +181,7 @@ impl SyncSource for TracingSource {
 
                         entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                     }
-                    entry_column.push(Scalar::String(line.unwrap().as_bytes().to_vec()).as_ref());
+                    entry_column.push(Scalar::String(line.unwrap()).as_ref());
                 }
 
                 if entry_column.len() > 0 {

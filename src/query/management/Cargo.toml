@@ -27,6 +27,7 @@ databend-common-protos = { path = "../../meta/protos" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 enumflags2 = { workspace = true }
+log = { workspace = true }
 minitrace = { workspace = true }
 serde_json = { workspace = true }
 

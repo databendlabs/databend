@@ -21,16 +21,15 @@ use databend_query::table_functions::GPT2SQLTable;
 fn test_ai_to_sql_args() -> Result<()> {
     // 1 arg.
     {
-        let tbl_args =
-            TableArgs::new_positioned(vec![Scalar::String("prompt".to_string().into_bytes())]);
+        let tbl_args = TableArgs::new_positioned(vec![Scalar::String("prompt".to_string())]);
         let _ = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args)?;
     }
 
     // 2 args.
     {
         let tbl_args = TableArgs::new_positioned(vec![
-            Scalar::String("prompt".to_string().into_bytes()),
-            Scalar::String("api-key".to_string().into_bytes()),
+            Scalar::String("prompt".to_string()),
+            Scalar::String("api-key".to_string()),
         ]);
         let result = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args);
         assert!(result.is_err());

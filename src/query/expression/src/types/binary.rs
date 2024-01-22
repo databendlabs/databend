@@ -182,6 +182,7 @@ pub struct BinaryColumn {
 impl BinaryColumn {
     pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
         debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
+
         BinaryColumn { data, offsets }
     }
 
@@ -216,7 +217,9 @@ impl BinaryColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
-        &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
+        let start = *self.offsets.get_unchecked(index) as usize;
+        let end = *self.offsets.get_unchecked(index + 1) as usize;
+        self.data.get_unchecked(start..end)
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -314,6 +317,8 @@ impl BinaryColumnBuilder {
     }
 
     pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
+        debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
+
         BinaryColumnBuilder {
             need_estimated: false,
             data,
@@ -419,6 +424,7 @@ impl BinaryColumnBuilder {
 
     pub fn build_scalar(self) -> Vec<u8> {
         assert_eq!(self.offsets.len(), 2);
+
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
 
@@ -431,9 +437,10 @@ impl BinaryColumnBuilder {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
+        debug_assert!(row + 1 < self.offsets.len());
+
         let start = *self.offsets.get_unchecked(row) as usize;
         let end = *self.offsets.get_unchecked(row + 1) as usize;
-        // soundness: the invariant of the struct
         self.data.get_unchecked(start..end)
     }
 

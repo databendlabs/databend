@@ -280,9 +280,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 |lhs, rhs, output, _| {
                     for (i, d) in lhs.iter().enumerate() {
                         if i != 0 {
-                            output.put_slice(rhs);
+                            output.put_str(rhs);
                         }
-                        output.put_slice(d);
+                        output.put_str(d);
                     }
                     output.commit_row();
                 },

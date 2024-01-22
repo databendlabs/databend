@@ -171,13 +171,9 @@ impl FuseTable {
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
 
-        let block_reader = self.create_block_reader(
-            ctx.clone(),
-            projection,
-            false,
-            self.change_tracking_enabled(),
-            false,
-        )?;
+        let update_stream_columns = self.change_tracking_enabled();
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(
@@ -194,11 +190,15 @@ impl FuseTable {
         ));
 
         let all_column_indices = self.all_column_indices();
+        let row_num_index = all_column_indices.len();
         let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
             .filter(|index| !col_indices.contains(index))
             .collect();
         let mut source_col_indices = col_indices;
+        if update_stream_columns {
+            source_col_indices.push(row_num_index);
+        }
         let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
         } else {

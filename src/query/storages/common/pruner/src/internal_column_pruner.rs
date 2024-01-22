@@ -59,10 +59,9 @@ impl InternalColumnPruner {
     pub fn should_keep(&self, col_name: &str, value: &str) -> bool {
         if self.input_domains.contains_key(col_name) {
             let mut input_domains = self.input_domains.clone();
-            let bytes = value.as_bytes().to_vec();
             let domain = Domain::String(StringDomain {
-                min: bytes.clone(),
-                max: Some(bytes),
+                min: value.to_string(),
+                max: Some(value.to_string()),
             });
             input_domains.insert(col_name.to_string(), domain);
 

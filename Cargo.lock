@@ -2524,6 +2524,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "dyn-clone",
  "goldenfile",
+ "log",
  "parking_lot 0.12.1",
  "parquet",
  "rand 0.8.5",
@@ -2672,6 +2673,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "rust_decimal",
  "serde",
@@ -2723,7 +2725,6 @@ dependencies = [
  "borsh 1.2.1",
  "bstr 1.6.2",
  "bumpalo",
- "bytes",
  "chrono",
  "chrono-tz",
  "comfy-table 6.1.4",
@@ -2765,6 +2766,7 @@ dependencies = [
  "siphasher",
  "streaming_algorithms",
  "strength_reduce",
+ "stringslice",
  "twox-hash",
 ]
 
@@ -2831,6 +2833,7 @@ dependencies = [
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
  "rand 0.8.5",
+ "rmp-serde",
  "roaring",
  "serde",
 ]
@@ -2865,6 +2868,7 @@ dependencies = [
  "databend-common-protos",
  "databend-common-storage",
  "enumflags2",
+ "log",
  "minitrace",
  "mockall",
  "serde_json",
@@ -3288,6 +3292,7 @@ dependencies = [
  "async-backtrace",
  "dashmap",
  "databend-common-ast",
+ "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-meta-app",
@@ -3801,7 +3806,6 @@ dependencies = [
  "futures-util",
  "log",
  "minitrace",
- "opendal",
 ]
 
 [[package]]
@@ -9109,11 +9113,12 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.44.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c32736a48ef08a5d2212864e2295c8e54f4d6b352b7f49aa0c29a12fc410ff66"
+checksum = "bc0ad72f7b44ca4ae59d27ea151fdc6f37305cf6efe099bdaedbb30ec34579c0"
 dependencies = [
  "anyhow",
+ "async-backtrace",
  "async-compat",
  "async-trait",
  "backon",
@@ -10403,7 +10408,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -12093,6 +12098,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
+name = "stringslice"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dad614e9c8a0773603982e0c1d3192f2bce1c0ee193caf0526b8ae3c6c3e38c"
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13046,7 +13057,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

@@ -64,12 +64,10 @@ impl GPT2SQLTable {
     ) -> Result<Arc<dyn TableFunction>> {
         // Check args.
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let prompt = String::from_utf8(
-            args[0]
-                .clone()
-                .into_string()
-                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-        )?;
+        let prompt = args[0]
+            .clone()
+            .into_string()
+            .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?;
 
         let schema = TableSchema::new(vec![
             TableField::new("database", TableDataType::String),
@@ -248,8 +246,8 @@ impl AsyncSource for GPT2SQLSource {
         let sql = format!("SELECT {}", sql);
         info!("openai response sql: {}", sql);
         let database = self.ctx.get_current_database();
-        let database: Vec<Vec<u8>> = vec![database.into_bytes()];
-        let sql: Vec<Vec<u8>> = vec![sql.into_bytes()];
+        let database: Vec<String> = vec![database];
+        let sql: Vec<String> = vec![sql];
 
         // Mark done.
         self.finished = true;

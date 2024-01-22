@@ -236,86 +236,74 @@ pub const STATS_STRING_PREFIX_LEN: usize = 16;
 impl Trim for Scalar {
     fn trim_min(self, trim_len: usize) -> Option<Self> {
         match self {
-            Scalar::String(bytes) => match String::from_utf8(bytes) {
-                Ok(mut v) => {
-                    if v.len() <= trim_len {
-                        Some(Scalar::String(v.into_bytes()))
-                    } else {
-                        // find the character boundary to prevent String::truncate from panic
-                        let vs = v.as_str();
-                        let slice = match vs.char_indices().nth(trim_len) {
-                            None => vs,
-                            Some((idx, _)) => &vs[..idx],
-                        };
+            Scalar::String(mut s) => {
+                if s.len() <= trim_len {
+                    Some(Scalar::String(s))
+                } else {
+                    // find the character boundary to prevent String::truncate from panic
+                    let vs = s.as_str();
+                    let slice = match vs.char_indices().nth(trim_len) {
+                        None => vs,
+                        Some((idx, _)) => &vs[..idx],
+                    };
 
-                        // do truncate
-                        Some(Scalar::String({
-                            v.truncate(slice.len());
-                            v.into_bytes()
-                        }))
-                    }
+                    // do truncate
+                    Some(Scalar::String({
+                        s.truncate(slice.len());
+                        s
+                    }))
                 }
-                Err(_) => {
-                    // if failed to convert the bytes into (utf-8)string, just ignore it.
-                    None
-                }
-            },
+            }
             v => Some(v),
         }
     }
 
     fn trim_max(self, trim_len: usize) -> Option<Self> {
         match self {
-            Scalar::String(bytes) => match String::from_utf8(bytes) {
-                Ok(v) => {
-                    if v.len() <= trim_len {
-                        // if number of bytes is lesser, just return
-                        Some(Scalar::String(v.into_bytes()))
-                    } else {
-                        // no need to trim, less than STRING_PREFIX_LEN chars
-                        let number_of_chars = v.as_str().chars().count();
-                        if number_of_chars <= trim_len {
-                            return Some(Scalar::String(v.into_bytes()));
-                        }
-
-                        // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
-                        let vs = v.as_str();
-                        let sliced = match vs.char_indices().nth(trim_len) {
-                            None => vs,
-                            Some((idx, _)) => &vs[..idx],
-                        };
-
-                        // find the position to replace the char with REPLACEMENT_CHAR
-                        // in reversed order, break at the first one we met
-                        let mut idx = None;
-                        for (i, c) in sliced.char_indices().rev() {
-                            if c < STATS_REPLACEMENT_CHAR {
-                                idx = Some(i);
-                                break;
-                            }
-                        }
-
-                        // grab the replacement_point
-                        let replacement_point = idx?;
-
-                        // rebuild the string (since the len of result string is rather small)
-                        let mut r = String::with_capacity(trim_len);
-                        for (i, c) in sliced.char_indices() {
-                            if i < replacement_point {
-                                r.push(c)
-                            } else {
-                                r.push(STATS_REPLACEMENT_CHAR);
-                            }
-                        }
-
-                        Some(Scalar::String(r.into_bytes()))
+            Scalar::String(v) => {
+                if v.len() <= trim_len {
+                    // if number of bytes is lesser, just return
+                    Some(Scalar::String(v))
+                } else {
+                    // no need to trim, less than STRING_PREFIX_LEN chars
+                    let number_of_chars = v.as_str().chars().count();
+                    if number_of_chars <= trim_len {
+                        return Some(Scalar::String(v));
                     }
+
+                    // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
+                    let vs = v.as_str();
+                    let sliced = match vs.char_indices().nth(trim_len) {
+                        None => vs,
+                        Some((idx, _)) => &vs[..idx],
+                    };
+
+                    // find the position to replace the char with REPLACEMENT_CHAR
+                    // in reversed order, break at the first one we met
+                    let mut idx = None;
+                    for (i, c) in sliced.char_indices().rev() {
+                        if c < STATS_REPLACEMENT_CHAR {
+                            idx = Some(i);
+                            break;
+                        }
+                    }
+
+                    // grab the replacement_point
+                    let replacement_point = idx?;
+
+                    // rebuild the string (since the len of result string is rather small)
+                    let mut r = String::with_capacity(trim_len);
+                    for (i, c) in sliced.char_indices() {
+                        if i < replacement_point {
+                            r.push(c)
+                        } else {
+                            r.push(STATS_REPLACEMENT_CHAR);
+                        }
+                    }
+
+                    Some(Scalar::String(r))
                 }
-                Err(_) => {
-                    // if failed to convert the bytes into (utf-8)string, just ignore it.
-                    None
-                }
-            },
+            }
             v => Some(v),
         }
     }

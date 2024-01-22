@@ -108,6 +108,7 @@ pub struct SnapshotMerged {
     pub merged_statistics: Statistics,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub enum ConflictResolveContext {
     AppendOnly((SnapshotMerged, TableSchemaRef)),
@@ -441,7 +442,7 @@ impl SnapshotGenerator for AppendGenerator {
 
         // check if need to auto compact
         // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
-        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 1000.
+        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 50.
         let imperfect_count = new_summary.block_count - new_summary.perfect_block_count;
         let auto_compaction_imperfect_blocks_threshold = self
             .ctx

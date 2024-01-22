@@ -32,6 +32,5 @@ futures = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
-opendal = { workspace = true }
 
 [build-dependencies]
