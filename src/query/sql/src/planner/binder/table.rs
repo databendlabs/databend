@@ -352,15 +352,15 @@ impl Binder {
                 let query = match mode {
                     StreamMode::AppendOnly => {
                         format!(
-                            "select *,
-                                    'INSERT' as change$action,
-                                    false as change$is_update,
-                                    if(is_not_null(_origin_block_id),
-                                       concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')),
-                                       _change_append._base_row_id
-                                    ) as change$row_id
-                             from {} as _change_append
-                             where not(is_not_null(_origin_version) and
+                            "select *, \
+                                    'INSERT' as change$action, \
+                                    false as change$is_update, \
+                                    if(is_not_null(_origin_block_id), \
+                                       concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                       _change_append._base_row_id \
+                                    ) as change$row_id \
+                             from {} as _change_append \
+                             where not(is_not_null(_origin_version) and \
                                        (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
                             table_name, table_version
                         )
@@ -389,43 +389,43 @@ impl Binder {
                             .join(", ");
 
                         format!(
-                            "with _change as (
-                                select *
-                                from (
-                                    select {},
-                                           _row_version,
-                                           'INSERT' as change$action,
-                                           if(is_not_null(_origin_block_id),
-                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')),
-                                              _change_insert._base_row_id
-                                           ) as change$row_id
-                                    from {} as _change_insert
-                                ) as A
-                                FULL OUTER JOIN (
-                                    select {},
-                                           _row_version,
-                                           'DELETE' as d_change$action,
-                                           if(is_not_null(_origin_block_id),
-                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')),
-                                              _change_delete._base_row_id
-                                           ) as d_change$row_id
-                                    from {} as _change_delete
-                                ) as D
-                                on A.change$row_id = D.d_change$row_id
-                                where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version
-                            )
-                            select {},
-                                   change$action,
-                                   change$row_id,
-                                   d_change$action is not null as change$is_update
-                            from _change
-                            where change$action is not null
-                            union all
-                            select {},
-                                   d_change$action,
-                                   d_change$row_id,
-                                   change$action is not null as change$is_update
-                            from _change
+                            "with _change as ( \
+                                select * \
+                                from ( \
+                                    select {}, \
+                                           _row_version, \
+                                           'INSERT' as change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              _change_insert._base_row_id \
+                                           ) as change$row_id \
+                                    from {} as _change_insert \
+                                ) as A \
+                                FULL OUTER JOIN ( \
+                                    select {}, \
+                                           _row_version, \
+                                           'DELETE' as d_change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              _change_delete._base_row_id \
+                                           ) as d_change$row_id \
+                                    from {} as _change_delete \
+                                ) as D \
+                                on A.change$row_id = D.d_change$row_id \
+                                where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
+                            ) \
+                            select {}, \
+                                   change$action, \
+                                   change$row_id, \
+                                   d_change$action is not null as change$is_update \
+                            from _change \
+                            where change$action is not null \
+                            union all \
+                            select {}, \
+                                   d_change$action, \
+                                   d_change$row_id, \
+                                   change$action is not null as change$is_update \
+                            from _change \
                             where d_change$action is not null",
                             a_cols, table_name, d_col_alias, table_name, a_cols, d_cols
                         )
