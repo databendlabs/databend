@@ -1994,7 +1994,7 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        self.resolve_scalar_function_call(span, &func_name, params, args)
+        self.resolve_scalar_function_call(span, func_name, params, args)
     }
 
     pub fn resolve_scalar_function_call(
