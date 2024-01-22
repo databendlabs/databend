@@ -32,6 +32,7 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::VirtualColumnNotFound;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
@@ -76,7 +77,6 @@ use ConditionResult::Eq;
 
 use crate::kv_app_error::KVAppError;
 use crate::reply::txn_reply_to_api_result;
-use crate::Id;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
 
