@@ -29,6 +29,7 @@ async-trait = { workspace = true }
 enumflags2 = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
+serde = "1.0.150"
 serde_json = { workspace = true }
 
 [dev-dependencies]

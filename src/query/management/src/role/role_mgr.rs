@@ -38,7 +38,7 @@ use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 
 use crate::role::role_api::RoleApi;
-use crate::serde::deserialize_struct;
+use crate::serde::check_and_upgrade_to_pb;
 use crate::serialize_struct;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
@@ -173,18 +173,16 @@ impl RoleApi for RoleMgr {
 
         match seq.match_seq(&seq_value) {
             Ok(_) => {
-                let mut need_serialize_pb = false;
-                let data = deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "").or_else(|err| {
-                    log::debug!("deserialize RoleInfo as pb err when get role. cause : {}, rollback to use serde json", err);
-                    need_serialize_pb = true;
-                    serde_json::from_slice::<RoleInfo>(&seq_value.data)
-                })?;
+                let data = check_and_upgrade_to_pb(
+                    key,
+                    &seq_value,
+                    self.kv_api.clone(),
+                    ErrorCode::UnknownRole,
+                    || format!("Role '{}' does not exist.", role),
+                )
+                .await?
+                .data;
 
-                if need_serialize_pb {
-                    let value = serialize_struct(&data, ErrorCode::IllegalUserInfoFormat, || "")?;
-                    self.upgrade_to_pb(key, value, MatchSeq::Exact(seq_value.seq))
-                        .await?;
-                }
                 Ok(SeqV::new(seq_value.seq, data))
             }
             Err(_) => Err(ErrorCode::UnknownRole(format!(
@@ -203,19 +201,15 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
         for (key, val) in values {
-            let mut need_serialize_pb = false;
-            let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "").or_else(|err| {
-                log::debug!("deserialize RoleInfo as pb err when get role. cause : {}, rollback to use serde json", err);
-                need_serialize_pb = true;
-                serde_json::from_slice::<RoleInfo>(&val.data)
-            })?;
-
-            if need_serialize_pb {
-                let value = serialize_struct(&u, ErrorCode::IllegalUserInfoFormat, || "")?;
-                self.upgrade_to_pb(key, value, MatchSeq::Exact(val.seq))
-                    .await?;
-            }
-
+            let u = check_and_upgrade_to_pb(
+                key,
+                &val,
+                self.kv_api.clone(),
+                ErrorCode::UnknownRole,
+                || "",
+            )
+            .await?
+            .data;
             r.push(SeqV::new(val.seq, u));
         }
 
@@ -347,24 +341,17 @@ impl RoleApi for RoleMgr {
             None => return Ok(None),
         };
 
-        let mut need_serialize_pb = false;
-        let data = deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")
-            .or_else(|err| {
-                log::debug!(
-                    "deserialize OwnershipInfo as pb err. cause : {}, rollback to use serde json",
-                    err
-                );
-                need_serialize_pb = true;
-                serde_json::from_slice::<OwnershipInfo>(&seq_value.data)
-            })?;
+        // if can not get ownership, will directly return None.
+        let seq_val = check_and_upgrade_to_pb(
+            key,
+            &seq_value,
+            self.kv_api.clone(),
+            ErrorCode::UnknownRole,
+            || "",
+        )
+        .await?;
 
-        if need_serialize_pb {
-            let value = serialize_struct(&data, ErrorCode::IllegalUserInfoFormat, || "")?;
-            self.upgrade_to_pb(key, value, MatchSeq::Exact(seq_value.seq))
-                .await?;
-        }
-
-        Ok(Some(data))
+        Ok(Some(seq_val.data))
     }
 
     #[async_backtrace::framed]

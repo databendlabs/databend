@@ -2871,6 +2871,7 @@ dependencies = [
  "log",
  "minitrace",
  "mockall",
+ "serde",
  "serde_json",
 ]
 
