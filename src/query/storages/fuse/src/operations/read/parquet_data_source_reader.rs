@@ -31,6 +31,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
+use log::debug;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
@@ -313,6 +314,7 @@ impl Processor for ReadParquetDataSource<false> {
                 });
             }
 
+            debug!("ReadParquetDataSource parts: {}", chunks.len());
             self.output_data = Some((
                 fuse_part_infos,
                 futures::future::try_join_all(chunks).await?,
