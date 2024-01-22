@@ -294,16 +294,12 @@ impl TaskDependentsParsed {
     pub fn parse(table_args: &TableArgs) -> databend_common_exception::Result<Self> {
         let args = table_args.expect_all_named("task_dependents")?;
 
-        let mut task_name = String::from("");
-        let mut recursive = false;
+        let mut task_name = None;
+        let mut recursive = None;
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
-                "task_name" => {
-                    task_name = v.to_string();
-                }
-                "recursive" => {
-                    recursive = *v.as_boolean().unwrap();
-                }
+                "task_name" => task_name = v.as_string().cloned(),
+                "recursive" => recursive = v.as_boolean().cloned(),
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
                         "unknown param {} for {}",
@@ -312,7 +308,8 @@ impl TaskDependentsParsed {
                 }
             }
         }
-        if task_name.is_empty() {
+
+        if task_name.is_none() {
             return Err(ErrorCode::BadArguments(format!(
                 "task_name must be specified for {}",
                 "task_dependents"
@@ -320,8 +317,8 @@ impl TaskDependentsParsed {
         }
 
         Ok(Self {
-            task_name,
-            recursive,
+            task_name: task_name.unwrap(),
+            recursive: recursive.unwrap_or_default(),
         })
     }
 }

@@ -364,6 +364,14 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("LONGBLOB", ignore(ascii_case))]
+    LONGBLOB,
+    #[token("MEDIUMBLOB", ignore(ascii_case))]
+    MEDIUMBLOB,
+    #[token("TINYBLOB", ignore(ascii_case))]
+    TINYBLOB,
+    #[token("BLOB", ignore(ascii_case))]
+    BLOB,
     #[token("BINARY_FORMAT", ignore(ascii_case))]
     BINARY_FORMAT,
     #[token("BITMAP", ignore(ascii_case))]
@@ -971,6 +979,12 @@ pub enum TokenKind {
     TABLES,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,
+    #[token("LONGTEXT", ignore(ascii_case))]
+    LONGTEXT,
+    #[token("MEDIUMTEXT", ignore(ascii_case))]
+    MEDIUMTEXT,
+    #[token("TINYTEXT", ignore(ascii_case))]
+    TINYTEXT,
     #[token("TENANTSETTING", ignore(ascii_case))]
     TENANTSETTING,
     #[token("TENANTS", ignore(ascii_case))]
