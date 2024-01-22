@@ -46,7 +46,10 @@ message S3StorageConfig {
   string security_token = 10;
   string role_arn = 11;
   string external_id = 12;
-  bool allow_anonymous = 13;
+
+  // allow_anonymous has been removed.
+  // bool allow_anonymous = 13;
+  reserved 13;
 }
 
 message FsStorageConfig {

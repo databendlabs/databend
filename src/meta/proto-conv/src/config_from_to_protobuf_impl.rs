@@ -132,7 +132,6 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: p.enable_virtual_host_style,
             role_arn: p.role_arn,
             external_id: p.external_id,
-            allow_anonymous: p.allow_anonymous,
         })
     }
 
@@ -152,7 +151,6 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.role_arn.clone(),
             external_id: self.external_id.clone(),
-            allow_anonymous: self.allow_anonymous,
         })
     }
 }
