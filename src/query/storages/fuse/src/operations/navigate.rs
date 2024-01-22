@@ -143,7 +143,8 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+        let retention =
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
