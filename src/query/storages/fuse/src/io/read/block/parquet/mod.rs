@@ -58,28 +58,12 @@ impl BlockReader {
         for (i, field) in self.projected_schema.fields.iter().enumerate() {
             let data_type = field.data_type().into();
             let leaf_column_ids = field.leaf_column_ids();
-            if leaf_column_ids.len() > 1 {
-                if leaf_column_ids
-                    .iter()
-                    .any(|id| matches!(column_chunks.get(id), Some(DataItem::ColumnArray(_))))
-                {
-                    return Err(ErrorCode::StorageOther(
-                        "unexpected nested field: nested leaf field hits cached",
-                    ));
-                }
-                let arrow_array = column_by_name(&record_batch, &field.name);
-                let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
-                    arrow_array.into();
-                let value = Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?);
-                columns.push(BlockEntry::new(data_type, value));
-                continue;
-            }
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(data)) => {
                     let arrow_array = column_by_name(&record_batch, &field.name);
                     let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
                         arrow_array.into();
-                    if self.put_cache {
+                    if self.put_cache && leaf_column_ids.len() == 1 {
                         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
@@ -91,6 +75,11 @@ impl BlockReader {
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)
                 }
                 Some(DataItem::ColumnArray(cached)) => {
+                    if leaf_column_ids.len() != 1 {
+                        return Err(ErrorCode::StorageOther(
+                            "unexpected nested field: nested leaf field hits cached",
+                        ));
+                    }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
