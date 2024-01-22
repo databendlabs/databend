@@ -264,6 +264,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.role_arn(&cfg.role_arn);
     builder.external_id(&cfg.external_id);
 
+    // It's safe to allow anonymous since opendal will perform the check first.
+    builder.allow_anonymous();
+
     // Root.
     builder.root(&cfg.root);
 
@@ -276,11 +279,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
         builder.enable_virtual_host_style();
-    }
-
-    // Enable allow anonymous
-    if cfg.allow_anonymous {
-        builder.allow_anonymous();
     }
 
     let http_builder = {

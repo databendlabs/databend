@@ -17,8 +17,8 @@ use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_app::storage::StorageS3Config;
 use minitrace::func_name;
+use mt::storage::StorageS3Config;
 
 use crate::common;
 
@@ -30,21 +30,23 @@ use crate::common;
 // * only be added when a new version is added,                *
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
+//
 #[test]
-fn test_decode_v66_stage() -> anyhow::Result<()> {
-    let stage_info_v66 = vec![
-        10, 10, 115, 116, 97, 103, 101, 95, 110, 97, 109, 101, 16, 2, 26, 50, 10, 48, 10, 46, 10,
-        4, 116, 101, 115, 116, 18, 24, 104, 116, 116, 112, 115, 58, 47, 47, 115, 51, 46, 97, 109,
-        97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109, 42, 4, 116, 101, 115, 116, 104, 1, 160,
-        6, 66, 168, 6, 24, 42, 11, 10, 2, 48, 2, 16, 231, 7, 24, 1, 56, 1, 50, 3, 99, 99, 99, 56,
-        100, 66, 19, 10, 8, 100, 97, 116, 97, 98, 101, 110, 100, 18, 1, 37, 160, 6, 66, 168, 6, 24,
-        74, 8, 10, 6, 160, 6, 66, 168, 6, 24, 82, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32,
-        48, 49, 58, 50, 54, 58, 48, 57, 32, 85, 84, 67, 160, 6, 66, 168, 6, 24,
+fn test_v077_s3_remove_allow_anonymous() -> anyhow::Result<()> {
+    let stage_info_v77 = vec![
+        10, 17, 115, 51, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
+        48, 10, 46, 10, 44, 10, 4, 116, 101, 115, 116, 18, 24, 104, 116, 116, 112, 115, 58, 47, 47,
+        115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109, 42, 4, 116, 101,
+        115, 116, 160, 6, 77, 168, 6, 24, 42, 11, 10, 2, 48, 2, 16, 142, 8, 24, 1, 56, 1, 50, 4,
+        116, 101, 115, 116, 56, 100, 66, 29, 10, 8, 100, 97, 116, 97, 98, 101, 110, 100, 18, 11,
+        100, 97, 116, 97, 98, 101, 110, 100, 46, 114, 115, 160, 6, 77, 168, 6, 24, 74, 10, 34, 8,
+        8, 2, 160, 6, 77, 168, 6, 24, 82, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48,
+        58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 77, 168, 6, 24,
     ];
 
     let want = || mt::principal::StageInfo {
-        stage_name: "stage_name".to_string(),
-        stage_type: mt::principal::StageType::Internal,
+        stage_name: "s3://dir/to/files".to_string(),
+        stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "test".to_string(),
@@ -53,14 +55,14 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
             }),
         },
         is_temporary: false,
-        file_format_params: mt::principal::FileFormatParams::Parquet(
-            mt::principal::ParquetFileFormatParams {
-                missing_field_as: Default::default(),
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
             },
         ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::AbortNum(2),
-            size_limit: 999,
+            size_limit: 1038,
             max_files: 0,
             split_size: 0,
             purge: true,
@@ -70,16 +72,17 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
             return_failed_only: false,
             detailed_output: false,
         },
-        comment: "ccc".to_string(),
+        comment: "test".to_string(),
         number_of_files: 100,
         creator: Some(UserIdentity {
             username: "databend".to_string(),
-            hostname: "%".to_string(),
+            hostname: "databend.rs".to_string(),
         }),
-        created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        created_on: DateTime::<Utc>::default(),
     };
+
+    common::test_load_old(func_name!(), stage_info_v77.as_slice(), 77, want())?;
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), stage_info_v66.as_slice(), 66, want())?;
 
     Ok(())
 }

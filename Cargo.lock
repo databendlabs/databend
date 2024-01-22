@@ -585,19 +585,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compat"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b48b4ff0c2026db683dea961cd8ea874737f56cffca86fa84415eaddc51c00d"
-dependencies = [
- "futures-core",
- "futures-io",
- "once_cell",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9113,13 +9100,12 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.44.1"
+version = "0.44.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc0ad72f7b44ca4ae59d27ea151fdc6f37305cf6efe099bdaedbb30ec34579c0"
+checksum = "4af824652d4d2ffabf606d337a071677ae621b05622adf35df9562f69d9b4498"
 dependencies = [
  "anyhow",
  "async-backtrace",
- "async-compat",
  "async-trait",
  "backon",
  "base64 0.21.0",
@@ -9135,9 +9121,7 @@ dependencies = [
  "minitrace",
  "moka",
  "once_cell",
- "parking_lot 0.12.1",
  "percent-encoding",
- "pin-project",
  "prometheus",
  "prometheus-client",
  "prost 0.11.9",

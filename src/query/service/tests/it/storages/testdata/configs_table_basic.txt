@@ -156,7 +156,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 'oss.server_side_encryption'               | ''                                                             | ''       |
 | 'storage' | 'oss.server_side_encryption_key_id'        | ''                                                             | ''       |
 | 'storage' | 's3.access_key_id'                         | ''                                                             | ''       |
-| 'storage' | 's3.allow_anonymous'                       | 'false'                                                        | ''       |
 | 'storage' | 's3.bucket'                                | ''                                                             | ''       |
 | 'storage' | 's3.enable_virtual_host_style'             | 'false'                                                        | ''       |
 | 'storage' | 's3.endpoint_url'                          | 'https://s3.amazonaws.com'                                     | ''       |
