@@ -102,7 +102,7 @@ impl LockKey {
         }
     }
 
-    pub fn gen_key(&self, revision: u64) -> impl Key {
+    pub fn gen_key(&self, revision: u64) -> TableLockKey {
         match self {
             LockKey::Table { table_id } => TableLockKey {
                 table_id: *table_id,
@@ -181,12 +181,15 @@ pub struct TableLockKey {
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::LockMeta;
     use crate::schema::TableLockKey;
     use crate::schema::PREFIX_TABLE_LOCK;
 
     /// __fd_table_lock/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
         const PREFIX: &'static str = PREFIX_TABLE_LOCK;
+
+        type ValueType = LockMeta;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
