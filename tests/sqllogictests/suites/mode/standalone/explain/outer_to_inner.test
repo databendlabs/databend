@@ -1,0 +1,92 @@
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+# table with string column
+statement ok
+create table t1(a string, b string);
+
+statement ok
+create table t2(a string, b string);
+
+query T
+explain  select * from t1 left join t2 on t1.b = t2.b where t2.a > 'a';
+----
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+# table with binary column
+statement ok
+create table t1(a binary, b binary);
+
+statement ok
+create table t2(a binary, b binary);
+
+query T
+explain  select * from t1 left join t2 on t1.b = t2.b where t2.a > '中国';
+----
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+# table with date column
+statement ok
+create table t1(a date, b date);
+
+statement ok
+create table t2(a date, b date);
+
+query T
+explain  select * from t1 left join t2 on t1.b = t2.b where t2.a > '2022-01-01 02:00:11';
+----
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+# table with decimal column
+statement ok
+create table t1(a decimal(4, 2), b decimal(4, 2));
+
+statement ok
+create table t2(a decimal(4, 2), b decimal(4, 2));
+
+query T
+explain  select * from t1 left join t2 on t1.b = t2.b where t2.a > 1.1;
+----
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+# table with float column
+statement ok
+create table t1(a float, b float);
+
+statement ok
+create table t2(a float, b float);
+
+query T
+explain  select * from t1 left join t2 on t1.b = t2.b where t2.a > 1.1;
+----
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
