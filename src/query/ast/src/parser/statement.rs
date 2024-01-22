@@ -2861,19 +2861,14 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(retain_hours_opt, dry_run_opt, opt_limit)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |(dry_run_opt, opt_limit)| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
             VacuumDropTableOption {
-                retain_hours,
                 dry_run,
                 limit: opt_limit.map(|(_, limit)| limit as usize),
             }

@@ -112,10 +112,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
-        let duration = match self.plan.option.retain_hours {
-            Some(hours) => Duration::hours(hours as i64),
-            None => Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64),
-        };
+        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
         let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;

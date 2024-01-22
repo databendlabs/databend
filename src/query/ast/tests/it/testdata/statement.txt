@@ -8700,48 +8700,15 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t ;
+VACUUM DROP TABLE;
 ---------- Output ---------
-VACUUM TABLE t 
----------- AST ------------
-VacuumTable(
-    VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "t",
-            quote: None,
-            span: Some(
-                13..14,
-            ),
-        },
-        option: VacuumTableOption {
-            dry_run: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE RETAIN 20 HOURS;
----------- Output ---------
-VACUUM DROP TABLE RETAIN 20 HOURS
+VACUUM DROP TABLE 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        20,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8750,25 +8717,15 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+VACUUM DROP TABLE DRY RUN;
 ---------- Output ---------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+VACUUM DROP TABLE DRY RUN
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        30,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8779,9 +8736,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+VACUUM DROP TABLE FROM db 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8796,16 +8753,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8814,9 +8761,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;
+VACUUM DROP TABLE FROM db LIMIT 10;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10
+VACUUM DROP TABLE FROM db  LIMIT 10
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8831,16 +8778,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: Some(
                 10,

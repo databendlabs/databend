@@ -140,7 +140,6 @@ impl VacuumDropTablePlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumDropTableOption {
-    pub retain_hours: Option<usize>,
     pub dry_run: Option<()>,
     pub limit: Option<usize>,
 }
