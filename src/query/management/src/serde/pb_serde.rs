@@ -78,28 +78,33 @@ where
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,
 {
-    let mut need_serialize_pb = false;
-    let data = deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")
-        .or_else(|err| {
-            log::debug!(
-                "deserialize as pb err. cause : {}, rollback to use serde json",
-                err
-            );
-            need_serialize_pb = true;
-            serde_json::from_slice::<T>(&seq_value.data)
-        })?;
+    let deserialize_result =
+        deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "");
 
-    if need_serialize_pb {
-        let value = serialize_struct(&data, ErrorCode::IllegalUserInfoFormat, || "")?;
-        kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &key,
-                MatchSeq::Exact(seq_value.seq),
-                Operation::Update(value),
-                None,
-            ))
-            .await
-            .map_err_to_code(err_code_fn, context_fn)?;
+    let err = match deserialize_result {
+        Ok(data) => return Ok(SeqV::new(seq_value.seq, data)),
+        Err(err) => err,
+    };
+
+    log::debug!("deserialize as pb err: {}, rollback to use serde json", err);
+
+    // If there's an error, try to deserialize as JSON.
+    let data = serde_json::from_slice::<T>(&seq_value.data)?;
+
+    // If we reached here, it means JSON deserialization was successful but we need to serialize to protobuf format.
+    let value = serialize_struct(&data, ErrorCode::IllegalUserInfoFormat, || "")?;
+    if let Err(e) = kv_api
+        .upsert_kv(UpsertKVReq::new(
+            &key,
+            MatchSeq::Exact(seq_value.seq),
+            Operation::Update(value),
+            None,
+        ))
+        .await
+        .map_err_to_code(err_code_fn, context_fn)
+    {
+        log::error!("json to pb upsert_kv failed, error: {}", e);
     }
+
     Ok(SeqV::new(seq_value.seq, data))
 }
