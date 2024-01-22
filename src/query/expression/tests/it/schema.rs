@@ -215,7 +215,7 @@ fn test_field_leaf_default_values() -> Result<()> {
         Scalar::Tuple(vec![
             Scalar::Tuple(vec![
                 Scalar::Boolean(true),
-                Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+                Scalar::String("ab".to_string()),
             ]),
             Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),
         ]),
@@ -229,10 +229,7 @@ fn test_field_leaf_default_values() -> Result<()> {
             Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(1)),
         ),
         (1, Scalar::Boolean(true)),
-        (
-            2,
-            Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
-        ),
+        (2, Scalar::String("ab".to_string())),
         (
             3,
             Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),

@@ -43,6 +43,7 @@ use databend_common_metrics::load_global_prometheus_registry;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use once_cell::sync::OnceCell;
+use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -104,14 +105,16 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(
             TimeoutLayer::new()
                 // Return timeout error if the operation failed to finish in
-                // 60s
-                .with_timeout(Duration::from_secs(60))
+                // 10s
+                .with_timeout(Duration::from_secs(10))
                 // Return timeout error if the request speed is less than
                 // 1 KiB/s.
                 .with_speed(1024),
         )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
+        // Add async backtrace
+        .layer(AsyncBacktraceLayer)
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
@@ -261,6 +264,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.role_arn(&cfg.role_arn);
     builder.external_id(&cfg.external_id);
 
+    // It's safe to allow anonymous since opendal will perform the check first.
+    builder.allow_anonymous();
+
     // Root.
     builder.root(&cfg.root);
 
@@ -273,11 +279,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
         builder.enable_virtual_host_style();
-    }
-
-    // Enable allow anonymous
-    if cfg.allow_anonymous {
-        builder.allow_anonymous();
     }
 
     let http_builder = {
@@ -297,6 +298,13 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+
+        // Enable TCP keepalive if set.
+        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
+            if let Ok(v) = v.parse::<u64>() {
+                builder = builder.tcp_keepalive(Duration::from_secs(v));
+            }
+        }
 
         builder
     };

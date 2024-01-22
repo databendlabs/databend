@@ -206,13 +206,13 @@ impl CopyIntoTableInterpreter {
         for entry in results {
             let status = entry.value();
             if let Some(err) = &status.error {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(err.num_errors as i32);
-                first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
+                first_error.push(Some(err.first_error.error.to_string().clone()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
             } else if return_all {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(0);
                 first_error.push(None);

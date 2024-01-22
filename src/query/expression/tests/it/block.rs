@@ -12,10 +12,10 @@ use crate::common::new_block;
 
 #[test]
 fn test_split_block() {
-    let value = b"abc";
+    let value = "abc";
     let n = 10;
     let block = new_block(&[Column::String(
-        StringColumnBuilder::repeat(&value[..], n).build(),
+        StringColumnBuilder::repeat(value, n).build(),
     )]);
     let sizes = block
         .split_by_rows_if_needed_no_tail(3)
@@ -27,11 +27,11 @@ fn test_split_block() {
 
 #[test]
 fn test_box_render_block() {
-    let value = b"abc";
+    let value = "abc";
     let n = 10;
     let block = new_block(&[
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-        Column::String(StringColumnBuilder::repeat(&value[..], n).build()),
+        Column::String(StringColumnBuilder::repeat(value, n).build()),
     ]);
 
     let schema = DataSchemaRefExt::create(vec![

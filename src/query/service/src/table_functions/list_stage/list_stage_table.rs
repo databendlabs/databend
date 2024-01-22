@@ -211,28 +211,24 @@ impl AsyncSource for ListStagesSource {
 
         let files = files_info.list(&op, false, None).await?;
 
-        let names: Vec<Vec<u8>> = files
-            .iter()
-            .map(|file| file.path.to_string().into_bytes())
-            .collect();
+        let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
 
         let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
-        let etags: Vec<Option<Vec<u8>>> = files
+        let etags: Vec<Option<String>> = files
             .iter()
-            .map(|file| file.etag.as_ref().map(|f| f.to_string().into_bytes()))
+            .map(|file| file.etag.as_ref().map(|f| f.to_string()))
             .collect();
-        let last_modifieds: Vec<Vec<u8>> = files
+        let last_modifieds: Vec<String> = files
             .iter()
             .map(|file| {
                 file.last_modified
                     .format("%Y-%m-%d %H:%M:%S.%3f %z")
                     .to_string()
-                    .into_bytes()
             })
             .collect();
-        let creators: Vec<Option<Vec<u8>>> = files
+        let creators: Vec<Option<String>> = files
             .iter()
-            .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
+            .map(|file| file.creator.as_ref().map(|c| c.to_string()))
             .collect();
 
         let block = DataBlock::new_from_columns(vec![

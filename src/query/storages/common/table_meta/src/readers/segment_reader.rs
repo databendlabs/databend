@@ -58,7 +58,6 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
                 let current: SegmentInfo = (v0, &fields[..]).into();
                 current.try_into()
             }
-            SegmentInfoVersion::V5(_) => unimplemented!(),
         }
     }
 }

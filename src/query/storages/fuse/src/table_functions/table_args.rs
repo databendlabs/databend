@@ -23,14 +23,13 @@ use crate::table_functions::TableArgs;
 
 pub fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val.clone())
-            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        Scalar::String(val) => Ok(val.clone()),
         _ => Err(ErrorCode::BadArguments("invalid string.")),
     }
 }
 
 pub fn string_literal(val: &str) -> Scalar {
-    Scalar::String(val.as_bytes().to_vec())
+    Scalar::String(val.to_string())
 }
 
 pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {

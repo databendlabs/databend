@@ -55,14 +55,11 @@ impl Interpreter for ShowConnectionsInterpreter {
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let names = formats
-            .iter()
-            .map(|x| x.name.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
 
         let types = formats
             .iter()
-            .map(|x| x.storage_type.as_bytes().to_vec())
+            .map(|x| x.storage_type.clone())
             .collect::<Vec<_>>();
 
         let options = formats
@@ -70,7 +67,7 @@ impl Interpreter for ShowConnectionsInterpreter {
             .map(|x| {
                 let conn = Connection::new(x.storage_params.clone()).mask();
                 x.storage_params = conn.conns;
-                x.storage_params_display().as_bytes().to_vec()
+                x.storage_params_display().clone()
             })
             .collect::<Vec<_>>();
 

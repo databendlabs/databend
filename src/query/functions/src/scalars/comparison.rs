@@ -48,7 +48,7 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::ValueRef;
 use memchr::memchr;
 use memchr::memmem;
-use regex::bytes::Regex;
+use regex::Regex;
 
 use crate::scalars::decimal::register_decimal_compare_op;
 use crate::scalars::string_multi_args::regexp;
@@ -495,38 +495,29 @@ fn register_like(registry: &mut FunctionRegistry) {
         "like",
         |_, lhs, rhs| {
             if rhs.max.as_ref() == Some(&rhs.min) {
-                let pattern_type = check_pattern_type(&rhs.min, false);
-                if pattern_type == PatternType::EndOfPercent
-                    || pattern_type == PatternType::OrdinalStr
-                {
-                    let (min, max) = if pattern_type == PatternType::EndOfPercent {
-                        let min = rhs.min[..rhs.min.len() - 1].to_vec();
-                        let mut max = min.clone();
+                let pattern_type = check_pattern_type(rhs.min.as_bytes(), false);
 
-                        let l = max.len();
-                        if max[l - 1] != u8::MAX {
-                            max[l - 1] += 1;
-                        } else {
-                            return FunctionDomain::Full;
-                        }
-                        (min, max)
-                    } else {
-                        (rhs.min.clone(), rhs.min.clone())
-                    };
+                if pattern_type == PatternType::OrdinalStr {
+                    return lhs.domain_eq(rhs);
+                }
 
+                if pattern_type == PatternType::EndOfPercent {
+                    let mut pat_str = rhs.min.clone();
+                    // remove the last char '%'
+                    pat_str.pop();
+                    let pat_len = pat_str.chars().count();
                     let other = StringDomain {
-                        min,
-                        max: Some(max),
+                        min: pat_str.clone(),
+                        max: Some(pat_str),
                     };
-                    let gte = lhs.domain_gte(&other);
-                    let lt = lhs.domain_lt(&other);
-
-                    if let (FunctionDomain::Domain(lhs), FunctionDomain::Domain(rhs)) = (lt, gte) {
-                        return FunctionDomain::Domain(BooleanDomain {
-                            has_false: lhs.has_false || rhs.has_false,
-                            has_true: lhs.has_true && rhs.has_true,
-                        });
-                    }
+                    let lhs = StringDomain {
+                        min: lhs.min.chars().take(pat_len).collect(),
+                        max: lhs
+                            .max
+                            .as_ref()
+                            .map(|max| max.chars().take(pat_len).collect()),
+                    };
+                    return lhs.domain_eq(&other);
                 }
             }
             FunctionDomain::Full
@@ -572,7 +563,7 @@ fn register_like(registry: &mut FunctionRegistry) {
                 match regexp::build_regexp_from_pattern("regexp", pat, None) {
                     Ok(re) => {
                         builder.push(re.is_match(str));
-                        map.insert(pat.to_vec(), re);
+                        map.insert(pat.to_string(), re);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e);
@@ -590,24 +581,24 @@ fn vectorize_like(
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = check_pattern_type(arg2, false);
-            Value::Scalar(func(arg1, arg2, ctx, &pattern_type))
+            let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+            Value::Scalar(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
 
-            let pattern_type = check_pattern_type(arg2, false);
+            let pattern_type = check_pattern_type(arg2.as_bytes(), false);
             // faster path for memmem to have a single instance of Finder
             if pattern_type == PatternType::SurroundByPercent && arg2.len() > 2 {
                 let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
-                let it = arg1_iter.map(|arg1| finder.find(arg1).is_some());
+                let it = arg1_iter.map(|arg1| finder.find(arg1.as_bytes()).is_some());
                 let bitmap = BooleanType::column_from_iter(it, &[]);
                 return Value::Column(bitmap);
             }
 
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                builder.push(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -615,8 +606,8 @@ fn vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+                builder.push(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -625,8 +616,8 @@ fn vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+                builder.push(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -639,13 +630,13 @@ fn variant_vectorize_like(
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = check_pattern_type(arg2, false);
-            Value::Scalar(func(arg1, arg2, ctx, &pattern_type))
+            let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+            Value::Scalar(func(arg1, arg2.as_bytes(), ctx, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = VariantType::iter_column(&arg1);
 
-            let pattern_type = check_pattern_type(arg2, false);
+            let pattern_type = check_pattern_type(arg2.as_bytes(), false);
             // faster path for memmem to have a single instance of Finder
             if pattern_type == PatternType::SurroundByPercent && arg2.len() > 2 {
                 let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
@@ -656,7 +647,7 @@ fn variant_vectorize_like(
 
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                builder.push(func(arg1, arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -664,8 +655,8 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+                builder.push(func(arg1, arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -674,8 +665,8 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, &pattern_type));
+                let pattern_type = check_pattern_type(arg2.as_bytes(), false);
+                builder.push(func(arg1, arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -684,11 +675,11 @@ fn variant_vectorize_like(
 
 fn vectorize_regexp(
     func: impl Fn(
-        &[u8],
-        &[u8],
+        &str,
+        &str,
         &mut MutableBitmap,
         &mut EvalContext,
-        &mut HashMap<Vec<u8>, Regex>,
+        &mut HashMap<String, Regex>,
         &mut HashMap<Vec<u8>, String>,
     ) + Copy,
 ) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy

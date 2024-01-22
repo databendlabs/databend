@@ -161,33 +161,19 @@ impl LicenseInfoSource {
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.issuer
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.issuer.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.custom
-                            .r#type
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.custom.r#type.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.custom
-                            .org
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.custom.org.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
@@ -204,9 +190,7 @@ impl LicenseInfoSource {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        human_readable_available_time.into_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(human_readable_available_time)),
                 ),
             ],
             1,
