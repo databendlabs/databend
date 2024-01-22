@@ -161,7 +161,7 @@ run_test() {
     echo " === bring up $query_old"
 
     nohup "$query_old" -c "$old_config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-old.log &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+    python3 scripts/ci/wait_tcp.py --timeout 15 --port 3307
 
     echo " === Run test: fuse_compat_write with old query"
 
@@ -175,7 +175,7 @@ run_test() {
     echo ' === Start new databend-meta...'
 
     nohup "$metasrv_new" --single --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
+    python3 scripts/ci/wait_tcp.py --timeout 20 --port 9191
 
     echo " === Start new databend-query..."
 
@@ -183,7 +183,7 @@ run_test() {
     echo "new databend config path: $config_path"
 
     nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
-    python3 scripts/ci/wait_tcp.py --timeout 15 --port 3307
+    python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
 
     echo " === Run test: fuse_compat_read with current query"
 
