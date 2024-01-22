@@ -176,6 +176,7 @@ impl PartitionedPayload {
         } else {
             state.clear();
 
+            // flush for other's each page to correct partition
             while self.gather_flush(&other, state) {
                 // copy rows
                 for partition in 0..self.partition_count as usize {
@@ -192,6 +193,7 @@ impl PartitionedPayload {
         }
     }
 
+    // for each page's row, compute which partition it belongs to
     pub fn gather_flush(&self, other: &Payload, state: &mut PayloadFlushState) -> bool {
         if state.flush_page >= other.pages.len() {
             return false;
