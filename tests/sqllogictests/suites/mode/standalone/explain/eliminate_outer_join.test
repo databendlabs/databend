@@ -125,7 +125,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(t.a (#1))], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -164,7 +164,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(t.a (#1))], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -238,7 +238,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(t.a (#1))], limit: NONE]
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
@@ -273,7 +273,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       ├── push downs: [filters: [is_not_null(t.a (#1))], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -312,7 +312,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) = 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) = 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -351,7 +351,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) > 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) > 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -390,7 +390,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) < 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) < 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -429,7 +429,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) <> 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) <> 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -468,7 +468,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) >= 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) >= 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -507,7 +507,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(t1.a (#1) <= 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t.a (#1) <= 1)], limit: NONE]
 │       └── estimated rows: 10.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -586,7 +586,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)], limit: NONE]
+    │       ├── push downs: [filters: [is_true(t.a (#1) <= 1 OR t.a (#1) > 1)], limit: NONE]
     │       └── estimated rows: 10.00
     └── Filter(Probe)
         ├── output columns: [t.a (#0)]
@@ -658,7 +658,7 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(t1.a (#1) > '2001-01-01 00:00:00.000000')], limit: NONE]
+│       ├── push downs: [filters: [is_true(time_table.a (#1) > '2001-01-01 00:00:00.000000')], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
@@ -671,7 +671,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true(t.a (#0) > '2001-01-01 00:00:00.000000')], limit: NONE]
+        ├── push downs: [filters: [is_true(time_table.a (#0) > '2001-01-01 00:00:00.000000')], limit: NONE]
         └── estimated rows: 0.00
 
 

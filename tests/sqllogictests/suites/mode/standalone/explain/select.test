@@ -25,7 +25,7 @@ Filter
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [t1.number (#0) = 1], limit: NONE]
+    ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
     └── estimated rows: 1.00
 
 query T

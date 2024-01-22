@@ -162,7 +162,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(CAST(t2.a (#2) AS Float64 NULL) > 1.1)]
+│   ├── filters: [is_true(t2.a (#2) > 1.1)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -171,7 +171,7 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(CAST(t2.a (#2) AS Float64 NULL) > 1.1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
 │       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
