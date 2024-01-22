@@ -125,7 +125,7 @@ impl Binder {
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        scalar: Option<&ScalarExpr>,
+        parent: Option<&ScalarExpr>,
         subquery_expr: &SubqueryExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
@@ -133,7 +133,7 @@ impl Binder {
             == DataType::Nullable(Box::new(DataType::Boolean))
         {
             subquery_expr.clone().into()
-        } else if let Some(scalar) = scalar {
+        } else if let Some(scalar) = parent {
             if let Ok(data_type) = scalar.data_type() {
                 if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
                     scalar.clone()

@@ -229,4 +229,14 @@ select * from t;
 100
 
 statement ok
+update t set a = 101 where 200 > (select avg(a) from t);
+
+query I
+select * from t;
+----
+101
+101
+101
+
+statement ok
 DROP DATABASE db1

@@ -40,7 +40,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
@@ -183,11 +182,7 @@ impl UpdateInterpreter {
             }
             // Traverse `selection` and put `filters` into `selection`.
             let mut selection = self.plan.selection.clone().unwrap();
-            if let ScalarExpr::SubqueryExpr(_) = selection {
-                replace_subquery(&mut filters, &mut selection)?;
-            } else {
-                selection = filters.pop_back().unwrap();
-            }
+            replace_subquery(&mut filters, &mut selection)?;
             Some(selection)
         } else {
             self.plan.selection.clone()
