@@ -4696,31 +4696,31 @@ UnionAll
 │       ├── Left
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── HashJoin: RIGHT OUTER
+│       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
-│       │       │       │   └── Scan: default.tpcds.web_sales (read rows: 7212)
+│       │       │       │   └── Scan: default.tpcds.web_returns (read rows: 679)
 │       │       │       └── Probe
-│       │       │           └── Scan: default.tpcds.web_returns (read rows: 679)
+│       │       │           └── Scan: default.tpcds.web_sales (read rows: 7212)
 │       │       └── Probe
 │       │           └── Scan: default.tpcds.date_dim (read rows: 73049)
 │       └── Right
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── HashJoin: RIGHT OUTER
+│               │   └── HashJoin: INNER
 │               │       ├── Build
-│               │       │   └── Scan: default.tpcds.catalog_sales (read rows: 14313)
+│               │       │   └── Scan: default.tpcds.catalog_returns (read rows: 1358)
 │               │       └── Probe
-│               │           └── Scan: default.tpcds.catalog_returns (read rows: 1358)
+│               │           └── Scan: default.tpcds.catalog_sales (read rows: 14313)
 │               └── Probe
 │                   └── Scan: default.tpcds.date_dim (read rows: 73049)
 └── Right
     └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: RIGHT OUTER
+        │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── Scan: default.tpcds.store_sales (read rows: 28810)
+        │       │   └── Scan: default.tpcds.store_returns (read rows: 2810)
         │       └── Probe
-        │           └── Scan: default.tpcds.store_returns (read rows: 2810)
+        │           └── Scan: default.tpcds.store_sales (read rows: 28810)
         └── Probe
             └── Scan: default.tpcds.date_dim (read rows: 73049)
 
