@@ -3257,6 +3257,7 @@ dependencies = [
  "minitrace",
  "num",
  "pretty_assertions",
+ "prost 0.12.1",
  "thiserror",
 ]
 

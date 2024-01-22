@@ -33,7 +33,6 @@ pub fn serialize_struct<T, ErrFn, CtxFn, D>(
 ) -> Result<Vec<u8>>
 where
     T: FromToProto + 'static,
-    T::PB: databend_common_protos::prost::Message + Default,
     ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,
@@ -52,7 +51,6 @@ pub fn deserialize_struct<T, ErrFn, CtxFn, D>(
 ) -> Result<T>
 where
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
     ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,

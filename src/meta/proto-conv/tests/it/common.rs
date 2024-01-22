@@ -23,10 +23,7 @@ use pretty_assertions::assert_eq;
 /// Tests converting rust types from/to protobuf defined types.
 /// It also print out encoded protobuf message as data for backward compatibility test.
 pub(crate) fn test_pb_from_to<MT>(name: impl Display, m: MT) -> anyhow::Result<()>
-where
-    MT: FromToProto + PartialEq + Debug,
-    MT::PB: databend_common_protos::prost::Message,
-{
+where MT: FromToProto + PartialEq + Debug {
     let p = m.to_pb()?;
 
     let n = std::any::type_name::<MT>();
@@ -61,7 +58,6 @@ pub(crate) fn test_load_old<MT>(
 ) -> anyhow::Result<()>
 where
     MT: FromToProto + PartialEq + Debug,
-    MT::PB: databend_common_protos::prost::Message + Default,
 {
     let p: MT::PB = databend_common_protos::prost::Message::decode(buf).map_err(print_err)?;
     assert_eq!(want_msg_ver, MT::get_pb_ver(&p), "loading {}", name);

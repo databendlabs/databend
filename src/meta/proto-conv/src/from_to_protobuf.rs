@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// Defines API to convert from/to protobuf meta type.
 pub trait FromToProto {
     /// The corresponding protobuf defined type.
-    type PB;
+    type PB: prost::Message + Default;
 
     /// Get the version encoded in a protobuf message.
     fn get_pb_ver(p: &Self::PB) -> u64;
@@ -28,6 +28,19 @@ pub trait FromToProto {
 
     /// Convert from rust type to protobuf type.
     fn to_pb(&self) -> Result<Self::PB, Incompatible>;
+}
+
+/// Defines API to convert from/to protobuf Enumeration.
+pub trait FromToProtoEnum {
+    /// The corresponding protobuf defined type.
+    type PBEnum;
+
+    /// Convert to rust type from protobuf enum type.
+    fn from_pb_enum(p: Self::PBEnum) -> Result<Self, Incompatible>
+    where Self: Sized;
+
+    /// Convert from rust type to protobuf type.
+    fn to_pb_enum(&self) -> Result<Self::PBEnum, Incompatible>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
