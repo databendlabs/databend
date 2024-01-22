@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "z3-prove")]
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use crate::{ColumnSet, IndexType, ScalarExpr};
 
-use crate::optimizer::{RelExpr, SExpr};
-use crate::plans::{Filter, Join, JoinType};
+use crate::optimizer::RelExpr;
+use crate::optimizer::SExpr;
+use crate::plans::Filter;
+use crate::plans::Join;
+use crate::plans::JoinType;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::ScalarExpr;
 
 pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
     let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
@@ -100,15 +104,20 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
     outer_to_inner_impl(s_expr)
 }
 
-
 fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
     let filter: Filter = s_expr.plan().clone().try_into()?;
-    let mut join: Join= s_expr.child(0)?.plan().clone().try_into()?;
+    let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     let origin_join_type = join.join_type.clone();
     let s_join_expr = s_expr.child(0)?;
     let join_expr = RelExpr::with_s_expr(s_join_expr);
-    let left_child_output_column = join_expr.derive_relational_prop_child(0)?.output_columns.clone();
-    let right_child_output_column = join_expr.derive_relational_prop_child(1)?.output_columns.clone();
+    let left_child_output_column = join_expr
+        .derive_relational_prop_child(0)?
+        .output_columns
+        .clone();
+    let right_child_output_column = join_expr
+        .derive_relational_prop_child(1)?
+        .output_columns
+        .clone();
     let predicates = &filter.predicates;
     let mut nullable_columns: Vec<IndexType> = vec![];
     for predicate in predicates {
@@ -206,7 +215,7 @@ fn find_nullable_columns(
                                 if (left_output_columns.contains(left_col)
                                     && left_output_columns.contains(right_col))
                                     || (right_output_columns.contains(left_col)
-                                    && right_output_columns.contains(right_col))
+                                        && right_output_columns.contains(right_col))
                                 {
                                     nullable_columns.push(*left_col);
                                     break;
@@ -242,8 +251,7 @@ fn find_nullable_columns(
             )?;
         }
         // Todo: support more ScalarExpr.
-        _ => {},
+        _ => {}
     }
     Ok(())
 }
-
