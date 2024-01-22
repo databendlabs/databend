@@ -67,7 +67,6 @@ fn make_role_key(role: &str) -> String {
 }
 
 mod add {
-    use databend_common_exception::ErrorCode;
     use databend_common_meta_app::principal::RoleInfo;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_types::Operation;
@@ -84,15 +83,14 @@ mod add {
 
         let v = serde_json::to_vec(&role_info)?;
         let kv_api = kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
-            &role_key,
-            MatchSeq::Exact(0),
-            Operation::Update(v),
-            None,
-        ));
-        upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
-        })?;
+        let _upsert_kv = kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &role_key,
+                MatchSeq::Exact(0),
+                Operation::Update(v),
+                None,
+            ))
+            .await?;
 
         let get = role_api
             .get_role(&role_name.to_owned(), MatchSeq::GE(1))
