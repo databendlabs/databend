@@ -15,11 +15,14 @@
 use std::collections::BTreeMap;
 
 use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::TypeName;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -87,15 +90,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_nested_type(&mut self, depth: u8) -> TypeName {
-        // TODO: generate nullable type for inner type
         if depth == 0 {
             let i = self.rng.gen_range(0..=17);
             // replace bitmap with string, as generated bitmap value can't display
             if i == 16 {
-                TypeName::String
-            } else if self.rng.gen_bool(0.5) {
-                TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
+                TypeName::Nullable(Box::new(TypeName::String))
             } else {
+                // TODO: fix not null types as inner nested type
                 TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             }
         } else {
@@ -181,15 +182,96 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             let name = format!("c{}", i);
             let data_type = self.gen_data_type_name(Some(i));
 
+            // TODO: computed expr
+            // TODO: fix bitmap and variant default values
+            let default_expr = if data_type == TypeName::NotNull(Box::new(TypeName::Bitmap))
+                || data_type == TypeName::NotNull(Box::new(TypeName::Variant))
+            {
+                None
+            } else {
+                Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))))
+            };
             let column_def = ColumnDefinition {
                 name: Identifier::from_name(name),
                 data_type,
-                // TODO
-                expr: None,
+                expr: default_expr,
                 comment: None,
             };
             column_defs.push(column_def);
         }
         CreateTableSource::Columns(column_defs)
+    }
+}
+
+fn gen_default_expr(type_name: &TypeName) -> Expr {
+    match type_name {
+        TypeName::Boolean => Expr::Literal {
+            span: None,
+            lit: Literal::Boolean(false),
+        },
+        TypeName::UInt8
+        | TypeName::UInt16
+        | TypeName::UInt32
+        | TypeName::UInt64
+        | TypeName::Int8
+        | TypeName::Int16
+        | TypeName::Int32
+        | TypeName::Int64 => Expr::Literal {
+            span: None,
+            lit: Literal::UInt64(0),
+        },
+        TypeName::Float32 | TypeName::Float64 => Expr::Literal {
+            span: None,
+            lit: Literal::Float64(0.0),
+        },
+        TypeName::Decimal { precision, scale } => Expr::Literal {
+            span: None,
+            lit: Literal::Decimal256 {
+                value: 0.into(),
+                precision: *precision,
+                scale: *scale,
+            },
+        },
+        TypeName::Date => Expr::Literal {
+            span: None,
+            lit: Literal::String("1970-01-01".to_string()),
+        },
+        TypeName::Timestamp => Expr::Literal {
+            span: None,
+            lit: Literal::String("1970-01-01 00:00:00".to_string()),
+        },
+        TypeName::Binary => Expr::Literal {
+            span: None,
+            lit: Literal::String("".to_string()),
+        },
+        TypeName::String => Expr::Literal {
+            span: None,
+            lit: Literal::String("".to_string()),
+        },
+        TypeName::Array(_) => Expr::Array {
+            span: None,
+            exprs: vec![],
+        },
+        TypeName::Map { .. } => Expr::Map {
+            span: None,
+            kvs: vec![],
+        },
+        TypeName::Bitmap => Expr::Literal {
+            span: None,
+            lit: Literal::UInt64(0),
+        },
+        TypeName::Tuple { fields_type, .. } => Expr::Tuple {
+            span: None,
+            exprs: fields_type.iter().map(gen_default_expr).collect(),
+        },
+        TypeName::Variant => Expr::Literal {
+            span: None,
+            lit: Literal::String("null".to_string()),
+        },
+        TypeName::Nullable(_) => Expr::Literal {
+            span: None,
+            lit: Literal::Null,
+        },
+        TypeName::NotNull(box ty) => gen_default_expr(ty),
     }
 }
