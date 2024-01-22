@@ -16,14 +16,15 @@ use std::ops::Range;
 
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use enum_as_inner::EnumAsInner;
+use databend_common_exception::Result;
 
 use crate::types::geo::coord::CoordColumn;
+use crate::types::geo::coord::CoordColumnBuilder;
 use crate::types::geo::coord::CoordScalar;
 use crate::types::geo::geo_trait::AsArrow;
 use crate::types::geo::utils::coord_eq_allow_nan;
 
-#[derive(Clone, Debug, EnumAsInner)]
+#[derive(Clone, Debug)]
 pub struct PointColumn {
     pub coords: CoordColumn,
 }
@@ -39,11 +40,15 @@ impl PointColumn {
         }
     }
     pub fn get(&self, index: usize) -> Option<PointScalar> {
-        self.coords.get(index).map(|coord| PointScalar(coord))
+        self.coords.get(index).map(|c| PointScalar(c))
     }
 
     pub unsafe fn get_unchecked(&self, index: usize) -> PointScalar {
         PointScalar(self.coords.get_unchecked(index))
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.len() * 8 * 2
     }
 }
 
@@ -55,7 +60,6 @@ impl AsArrow for PointColumn {
 
 impl PartialEq for PointColumn {
     fn eq(&self, other: &Self) -> bool {
-        // todo: check validity
         if self.coords.len() != other.coords.len() {
             return false;
         }
@@ -77,4 +81,60 @@ impl PartialEq for PointColumn {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default, Hash)]
 pub struct PointScalar(CoordScalar);
+
+pub struct PointColumnBuilder(CoordColumnBuilder);
+
+impl PointColumnBuilder {
+    pub fn from_column(col: PointColumn) -> Self {
+        Self(CoordColumnBuilder::from_column(col.coords))
+    }
+
+    pub fn repeat(scalar: PointScalar, n: usize) -> Self {
+        let coords = CoordColumnBuilder::repeat(scalar.0, n);
+        Self(coords)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.0.memory_size()
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(CoordColumnBuilder::with_capacity(capacity))
+    }
+
+    pub fn push(&mut self, item: PointScalar) {
+        self.0.push(item.0)
+    }
+
+    pub fn push_default(&mut self) {
+        self.0.push_default()
+    }
+
+    pub fn push_binary(&mut self, bytes: &mut &[u8]) -> Result<()> {
+        self.0.push_binary(bytes)
+    }
+
+    pub fn pop(&mut self) -> Option<PointScalar> {
+        self.0.pop().map(|c| PointScalar(c))
+    }
+
+    pub fn append_column(&mut self, other: &PointColumn) {
+        self.0.append_column(&other.coords)
+    }
+
+    pub fn build(self) -> PointColumn {
+        PointColumn {
+            coords: self.0.build(),
+        }
+    }
+
+    pub fn build_scalar(self) -> PointScalar {
+        PointScalar(self.0.build_scalar())
+    }
+}

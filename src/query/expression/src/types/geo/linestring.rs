@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::array::Array;
@@ -20,6 +19,7 @@ use databend_common_arrow::arrow::array::ListArray;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::geo::coord::CoordColumn;
@@ -55,10 +55,18 @@ impl LineStringColumn {
                 .sliced(range.start, range.end - range.start),
         }
     }
+
+    pub fn memory_size(&self) -> usize {
+        todo!()
+    }
+
+    pub fn iter(&self) -> LineStringIterator {
+        todo!()
+    }
 }
 
 impl<'a> GeometryColumnAccessor<'a> for LineStringColumn {
-    type Item = LineStringScalar<'a>;
+    type Item = LineStringScalar;
 
     fn len(&self) -> usize {
         self.offsets_buffer().len_proxy()
@@ -95,18 +103,53 @@ impl PartialEq for LineStringColumn {
     }
 }
 
-pub struct LineStringScalar<'a> {
-    pub coords: Cow<'a, CoordColumn>,
-    pub geom_offsets: Cow<'a, OffsetsBuffer<i64>>,
+#[derive(Clone, Debug)]
+pub struct LineStringColumnIter<'a> {
+    column: &'a LineStringColumn,
+    current: usize,
+    current_end: usize,
+}
+
+impl<'a> LineStringColumnIter<'a> {
+    #[inline]
+    pub fn new(column: &'a LineStringColumn) -> Self {
+        let len = column.len();
+        Self {
+            column,
+            current: 0,
+            current_end: len,
+        }
+    }
+}
+
+impl<'a> Iterator for LineStringColumnIter<'a> {
+    type Item = Option<LineStringScalar>;
+
+    // todo: check null
+    // else if self.is_null(self.current) {
+    // self.current += 1;
+    // Some(None)
+    // }
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current = self.current_end {
+            None
+        } else {
+            let old = self.current;
+            self.current += 1;
+
+            unsafe { Some(Some(self.column.get_unchecked(old))) }
+        }
+    }
+}
+
+pub struct LineStringScalar {
+    pub coords: CoordColumn,
+    pub geom_offsets: OffsetsBuffer<i64>,
     pub geom_index: usize,
 }
 
-impl<'a> LineStringScalar<'a> {
-    pub fn new(
-        coords: Cow<'a, CoordColumn>,
-        geom_offsets: Cow<'a, OffsetsBuffer<i64>>,
-        geom_index: usize,
-    ) -> Self {
+impl LineStringScalar {
+    pub fn new(coords: CoordColumn, geom_offsets: OffsetsBuffer<i64>, geom_index: usize) -> Self {
         Self {
             coords,
             geom_offsets,
@@ -114,19 +157,7 @@ impl<'a> LineStringScalar<'a> {
         }
     }
 
-    pub fn new_borrowed(
-        coords: &'a CoordColumn,
-        geom_offsets: &'a OffsetsBuffer<i64>,
-        geom_index: usize,
-    ) -> Self {
-        Self {
-            coords: Cow::Borrowed(coords),
-            geom_offsets: Cow::Borrowed(geom_offsets),
-            geom_index,
-        }
-    }
-
-    pub fn coords(&self) -> LineStringIterator<'a> {
+    pub fn coords(&self) -> LineStringIterator {
         LineStringIterator::new(self)
     }
 
@@ -146,7 +177,7 @@ impl<'a> LineStringScalar<'a> {
 
 // Geometry Iterator
 pub struct LineStringIterator<'a> {
-    geom: &'a LineStringScalar<'a>,
+    geom: &'a LineStringScalar,
     index: usize,
     end: usize,
 }
@@ -176,5 +207,56 @@ impl<'a> Iterator for LineStringIterator<'a> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.end - self.index, Some(self.end - self.index))
+    }
+}
+
+pub struct LineStringColumnBuilder;
+
+impl LineStringColumnBuilder {
+    pub fn from_column(col: LineStringColumn) -> Self {
+        todo!()
+    }
+
+    pub fn repeat(scalar: LineStringScalar, n: usize) -> Self {
+        todo!()
+    }
+
+    pub fn len(&self) -> usize {
+        todo!()
+    }
+
+    pub fn memory_size(&self) -> usize {
+        todo!()
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        todo!()
+    }
+
+    pub fn push(&mut self, item: LineStringScalar) {
+        todo!()
+    }
+
+    pub fn push_default(&mut self) {
+        todo!()
+    }
+
+    pub fn push_binary(&mut self, bytes: &mut &[u8]) -> Result<()> {
+        todo!()
+    }
+
+    pub fn pop(&mut self) -> Option<LineStringScalar> {
+        todo!()
+    }
+
+    pub fn append_column(&mut self, other: &LineStringColumn) {
+        todo!()
+    }
+    pub fn build(self) -> LineStringColumn {
+        todo!()
+    }
+
+    pub fn build_scalar(self) -> LineStringScalar {
+        todo!()
     }
 }

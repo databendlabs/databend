@@ -18,6 +18,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::usize;
 
+use arrow_buffer::ScalarBuffer;
 use either::Either;
 
 use super::Bytes;
@@ -340,5 +341,19 @@ impl<T: crate::arrow::types::NativeType> From<Buffer<T>> for arrow_buffer::Buffe
             value.offset * std::mem::size_of::<T>(),
             value.length * std::mem::size_of::<T>(),
         )
+    }
+}
+
+#[cfg(feature = "arrow")]
+impl<T: crate::arrow::types::NativeType> From<arrow_buffer::ScalarBuffer<T>> for Buffer<T> {
+    fn from(value: ScalarBuffer<T>) -> Self {
+        Self::from(value.into_inner())
+    }
+}
+
+#[cfg(feature = "arrow")]
+impl<T: crate::arrow::types::NativeType> From<Buffer<T>> for arrow_buffer::ScalarBuffer<T> {
+    fn from(value: Buffer<T>) -> Self {
+        arrow_buffer::Buffer::from(value).into()
     }
 }
