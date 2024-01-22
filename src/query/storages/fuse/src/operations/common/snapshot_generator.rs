@@ -388,8 +388,9 @@ impl SnapshotGenerator for AppendGenerator {
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
 
+                let leaf_fields = schema.leaf_fields();
                 let column_data_types: HashMap<ColumnId, &TableDataType> =
-                    HashMap::from_iter(schema.fields.iter().map(|f| (f.column_id, &f.data_type)));
+                    HashMap::from_iter(leaf_fields.iter().map(|f| (f.column_id, &f.data_type)));
 
                 if self.check_fill_default(&summary)? {
                     self.leaf_default_values
