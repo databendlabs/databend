@@ -469,6 +469,22 @@ impl Settings {
         self.try_set_u64("use_parquet2", u64::from(val))
     }
 
+    pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_write_use_parquet2")? != 0)
+    }
+
+    pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_write_use_parquet2", u64::from(val))
+    }
+
+    pub fn get_fuse_read_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_read_use_parquet2")? != 0)
+    }
+
+    pub fn set_fuse_read_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_read_use_parquet2", u64::from(val))
+    }
+
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_partitioning")? != 0)
     }
