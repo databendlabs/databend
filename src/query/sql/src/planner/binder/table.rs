@@ -681,8 +681,8 @@ impl Binder {
         bind_context: &mut BindContext,
         span: &Span,
         name: &Identifier,
-        params: &Vec<Expr>,
-        named_params: &Vec<(String, Expr)>,
+        params: &[Expr],
+        named_params: &[(String, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
@@ -1540,8 +1540,8 @@ pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
 fn parse_table_function_args(
     span: &Span,
     func_name: &Identifier,
-    params: &Vec<Expr>,
-    named_params: &Vec<(String, Expr)>,
+    params: &[Expr],
+    named_params: &[(String, Expr)],
 ) -> Result<Vec<Expr>> {
     if func_name.name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
@@ -1574,7 +1574,7 @@ fn parse_table_function_args(
         }
 
         if !params.is_empty() {
-            args.extend(params.clone());
+            args.extend(params.iter().cloned());
         }
         Ok(args)
     } else {
@@ -1591,6 +1591,6 @@ fn parse_table_function_args(
             .set_span(*span));
         }
 
-        Ok(params.clone())
+        Ok(params.to_vec())
     }
 }

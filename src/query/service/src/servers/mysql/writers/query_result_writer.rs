@@ -231,7 +231,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         .collect::<Vec<_>>();
 
                     for row_index in 0..num_rows {
-                        for (_col_index, column) in columns.iter().enumerate() {
+                        for column in columns.iter() {
                             let value = unsafe { column.index_unchecked(row_index) };
                             match value {
                                 ScalarRef::Null => {

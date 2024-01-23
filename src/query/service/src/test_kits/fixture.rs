@@ -432,7 +432,7 @@ impl TestFixture {
         let create_table_plan = self.default_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -440,7 +440,7 @@ impl TestFixture {
         let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -448,7 +448,7 @@ impl TestFixture {
         let create_table_plan = self.variant_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -481,7 +481,7 @@ impl TestFixture {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 

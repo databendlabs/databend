@@ -179,7 +179,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
     let mn3 = MetaNode::open_create(&tc3.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn1, mn2, mn3];
+    let all = [mn0, mn1, mn2, mn3];
 
     info!("--- check reopened memberships");
 
@@ -473,7 +473,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let mn0 = MetaNode::open_create(&tc0.config.raft_config, Some(()), None).await?;
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn2];
+    let all = [mn0, mn2];
 
     info!("--- check reopened memberships");
 
@@ -784,7 +784,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     }
 
     // Assert applied index on every node
-    for (_i, mn) in meta_nodes.iter().enumerate() {
+    for mn in meta_nodes.iter() {
         mn.raft
             .wait(timeout())
             .log(

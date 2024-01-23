@@ -89,9 +89,9 @@ async fn test_merge() {
 
     // for gap=10
     let gap10 = InMemoryRowGroup::new(path, op, &meta, None, 10, 200);
-    let ranges = vec![(1..10), (15..30), (40..50)];
-    let (gap0_chunks, gap0_merged) = gap0.get_ranges(&ranges.to_vec()).await.unwrap();
-    let (gap10_chunks, gap10_merged) = gap10.get_ranges(&ranges.to_vec()).await.unwrap();
+    let ranges = [(1..10), (15..30), (40..50)];
+    let (gap0_chunks, gap0_merged) = gap0.get_ranges(ranges.as_ref()).await.unwrap();
+    let (gap10_chunks, gap10_merged) = gap10.get_ranges(ranges.as_ref()).await.unwrap();
     // gap=0 no merged
     assert!(!gap0_merged);
     // gap=10  merge happend
