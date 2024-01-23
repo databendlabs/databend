@@ -23,6 +23,7 @@ mod -> modulo
 neg -> minus
 negate -> minus
 object_keys -> json_object_keys
+power -> pow
 remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
