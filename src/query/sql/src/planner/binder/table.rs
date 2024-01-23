@@ -359,10 +359,10 @@ impl Binder {
                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                        _change_append._base_row_id \
                                     ) as change$row_id \
-                             from {} as _change_append \
+                             from {}.{} as _change_append \
                              where not(is_not_null(_origin_version) and \
                                        (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
-                            table_name, table_version
+                            database, table_name, table_version
                         )
                     }
                     StreamMode::Standard => {
@@ -399,7 +399,7 @@ impl Binder {
                                               concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                               _change_insert._base_row_id \
                                            ) as change$row_id \
-                                    from {} as _change_insert \
+                                    from {}.{} as _change_insert \
                                 ) as A \
                                 FULL OUTER JOIN ( \
                                     select {}, \
@@ -409,7 +409,7 @@ impl Binder {
                                               concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                               _change_delete._base_row_id \
                                            ) as d_change$row_id \
-                                    from {} as _change_delete \
+                                    from {}.{} as _change_delete \
                                 ) as D \
                                 on A.change$row_id = D.d_change$row_id \
                                 where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
@@ -427,7 +427,14 @@ impl Binder {
                                    change$action is not null as change$is_update \
                             from _change \
                             where d_change$action is not null",
-                            a_cols, table_name, d_col_alias, table_name, a_cols, d_cols
+                            a_cols,
+                            database,
+                            table_name,
+                            d_col_alias,
+                            database,
+                            table_name,
+                            a_cols,
+                            d_cols
                         )
                     }
                 };
