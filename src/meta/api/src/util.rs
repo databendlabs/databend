@@ -102,12 +102,13 @@ pub async fn get_u64_value<T: kvapi::Key>(
     }
 }
 
-pub fn deserialize_struct_get_response<K, T>(
+#[allow(clippy::type_complexity)]
+pub fn deserialize_struct_get_response<K>(
     resp: TxnGetResponse,
-) -> Result<(K, Option<SeqV<T>>), MetaError>
+) -> Result<(K, Option<SeqV<K::ValueType>>), MetaError>
 where
     K: kvapi::Key,
-    T: FromToProto,
+    K::ValueType: FromToProto,
 {
     let key = K::from_str_key(&resp.key).map_err(|e| {
         let inv = InvalidReply::new(
@@ -119,7 +120,7 @@ where
 
     if let Some(pb_seqv) = resp.value {
         let seqv = SeqV::from(pb_seqv);
-        let value = deserialize_struct::<T>(&seqv.data)?;
+        let value = deserialize_struct::<K::ValueType>(&seqv.data)?;
         let seqv = SeqV::with_meta(seqv.seq, seqv.meta, value);
         Ok((key, Some(seqv)))
     } else {
@@ -152,13 +153,13 @@ where K: kvapi::Key {
 /// Get value that are encoded with FromToProto.
 ///
 /// It returns seq number and the data.
-pub async fn get_pb_value<K, T>(
+pub async fn get_pb_value<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     k: &K,
-) -> Result<(u64, Option<T>), MetaError>
+) -> Result<(u64, Option<K::ValueType>), MetaError>
 where
     K: kvapi::Key,
-    T: FromToProto,
+    K::ValueType: FromToProto,
 {
     let res = kv_api.get_kv(&k.to_string_key()).await?;
 
