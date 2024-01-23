@@ -60,15 +60,15 @@ where
     Ok(v)
 }
 
-pub async fn check_and_upgrade_to_pb<'a, T, ErrFn, CtxFn, D>(
+pub async fn check_and_upgrade_to_pb<T, ErrFn, CtxFn, D>(
     key: String,
-    seq_value: &'a SeqV,
+    seq_value: &SeqV,
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     err_code_fn: ErrFn,
     context_fn: CtxFn,
 ) -> std::result::Result<SeqV<T>, ErrorCode>
 where
-    T: FromToProto + serde::de::DeserializeOwned + 'a + 'static,
+    T: FromToProto + serde::de::DeserializeOwned + 'static,
     ErrFn: FnOnce(String) -> ErrorCode + Copy,
     D: Display,
     CtxFn: FnOnce() -> D + Copy,
