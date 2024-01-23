@@ -49,6 +49,7 @@ use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use databend_common_meta_app::principal::XmlFileFormatParams;
@@ -183,6 +184,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -339,6 +341,13 @@ impl SeparatedTextDecoder {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn read_geometry(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
+        let geom = parse_to_ewkb(data)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
         Ok(())
     }
 
