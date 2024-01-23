@@ -72,8 +72,8 @@ pub struct MergeInto {
     pub row_id_index: IndexType,
     pub split_idx: IndexType,
     // an optimization:
-    // if it's full_operation and we have only one update without condition here, we shouldn't run
-    // evalutaor, we can just do projection to get the right columns.But the limitation is below:
+    // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
+    // evaluator, we can just do projection to get the right columns.But the limitation is below:
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub map_columns: HashMap<IndexType, IndexType>,
