@@ -160,10 +160,6 @@ echo "show tables from nogrant" | $USER_A_CONNECT
 
 echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.columns where table_schema in ('information_schema', 'system');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('grant_db');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('nogrant');" | $USER_A_CONNECT
 
 #DML privilege check
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"

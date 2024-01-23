@@ -75,6 +75,7 @@ impl Binder {
         select_builder.with_column(format!("name AS `databases_in_{ctl}`"));
         select_builder.with_order_by("catalog");
         select_builder.with_order_by("name");
+
         match limit {
             Some(ShowLimit::Like { pattern }) => {
                 select_builder.with_filter(format!("name LIKE '{pattern}'"));
