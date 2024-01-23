@@ -232,11 +232,11 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        let state_buffer = unsafe { addr_of_mut!(STAT_BUFFER) };
+        let state_buffer = unsafe { &mut *addr_of_mut!(STAT_BUFFER) };
 
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
-        if unsafe { &mut *state_buffer }.destroyed_thread_local_macro {
+        if state_buffer.destroyed_thread_local_macro {
             let used = GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
             GLOBAL_MEM_STAT
                 .peak_used
@@ -244,9 +244,9 @@ impl ThreadTracker {
             return Ok(());
         }
 
-        let has_oom = match unsafe { &mut *state_buffer }.incr(size) <= MEM_STAT_BUFFER_SIZE {
+        let has_oom = match state_buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => unsafe { &mut *state_buffer }.flush::<true>(),
+            false => state_buffer.flush::<true>(),
         };
 
         if let Err(out_of_limit) = has_oom {
