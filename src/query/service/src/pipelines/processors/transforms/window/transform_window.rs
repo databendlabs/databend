@@ -137,6 +137,8 @@ pub struct TransformWindow<T: Number> {
 
     // If `is_empty_frame`, the window function result of non-NULL rows will be NULL.
     is_empty_frame: bool,
+    // If window function is ranking function
+    is_ranking: bool,
 }
 
 impl<T: Number> TransformWindow<T> {
@@ -435,10 +437,12 @@ impl<T: Number> TransformWindow<T> {
             }
         }
         // Release memory that is no longer needed.
-        let first_used_block = self
-            .next_output_block
-            .min(self.prev_frame_start.block)
-            .min(self.current_row.block);
+        let first_used_block = if self.is_ranking {
+            self.next_output_block.min(self.peer_group_start.block)
+        } else {
+            self.next_output_block.min(self.prev_frame_start.block)
+        }
+        .min(self.current_row.block);
 
         if self.first_block < first_used_block {
             self.blocks.drain(..first_used_block - self.first_block);
@@ -655,6 +659,12 @@ impl TransformWindow<u64> {
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
+        let is_ranking = match func {
+            WindowFunctionImpl::RowNumber
+            | WindowFunctionImpl::Rank
+            | WindowFunctionImpl::DenseRank => true,
+            _ => false,
+        };
 
         let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
         let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
@@ -698,6 +708,7 @@ impl TransformWindow<u64> {
             current_dense_rank: 1,
             input_is_finished: false,
             is_empty_frame,
+            is_ranking,
         })
     }
 }
@@ -719,6 +730,12 @@ where T: Number + ResultTypeOfUnary
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
+        let is_ranking = match func {
+            WindowFunctionImpl::RowNumber
+            | WindowFunctionImpl::Rank
+            | WindowFunctionImpl::DenseRank => true,
+            _ => false,
+        };
 
         // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
         let need_check_null_frame = if order_by.len() == 1 {
@@ -768,6 +785,7 @@ where T: Number + ResultTypeOfUnary
             current_dense_rank: 1,
             input_is_finished: false,
             is_empty_frame,
+            is_ranking,
         })
     }
 
@@ -1250,6 +1268,7 @@ mod tests {
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
     use databend_common_pipeline_core::processors::Event;
@@ -1263,6 +1282,25 @@ mod tests {
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
+
+    fn get_ranking_transform_window(
+        bounds: (FrameBound<u64>, FrameBound<u64>),
+    ) -> Result<TransformWindow<u64>> {
+        let func = WindowFunctionInfo::DenseRank;
+        TransformWindow::try_create_range(
+            InputPort::create(),
+            OutputPort::create(),
+            func,
+            vec![],
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: false,
+                nulls_first: false,
+                is_nullable: false,
+            }],
+            bounds,
+        )
+    }
 
     fn get_transform_window(
         _unit: WindowFuncFrameUnits,
@@ -1420,6 +1458,68 @@ mod tests {
             transform.advance_frame_end();
             assert!(transform.frame_ended);
             assert_eq!(transform.frame_end, RowPtr::new(0, 3));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_release() -> Result<()> {
+        {
+            let mut transform = get_ranking_transform_window((
+                FrameBound::Preceding(None),
+                FrameBound::CurrentRow,
+            ))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            assert_eq!(transform.blocks.len(), 2);
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "| 2        | 2        |",
+                    "| 2        | 2        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+            transform.add_block(None)?;
+            transform.check_outputs();
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 3        |",
+                    "| 4        | 4        |",
+                    "| 4        | 4        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
         }
 
         Ok(())
