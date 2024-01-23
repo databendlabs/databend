@@ -68,9 +68,7 @@ impl Histogram {
     }
 
     /// Get iterator of buckets
-    pub fn buckets_iter(
-        &self,
-    ) -> impl Iterator<Item = &HistogramBucket> + DoubleEndedIterator<Item = &HistogramBucket> {
+    pub fn buckets_iter(&self) -> impl DoubleEndedIterator<Item = &HistogramBucket> {
         self.buckets.iter()
     }
 }

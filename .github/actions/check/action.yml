@@ -47,4 +47,4 @@ runs:
 
     - name: Clippy
       shell: bash
-      run: cargo -Zgitoxide=fetch,shallow-index,shallow-deps clippy --workspace --all-targets --all-features -- -D warnings
+      run: cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps clippy --workspace --all-targets --all-features -- -D warnings

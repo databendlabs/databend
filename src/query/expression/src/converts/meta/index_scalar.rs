@@ -214,6 +214,7 @@ impl<'de> Deserialize<'de> for IndexColumn {
 }
 
 impl PartialEq for IndexColumn {
+    #[allow(clippy::unconditional_recursion)]
     fn eq(&self, other: &Self) -> bool {
         let a: Column = self.clone().into();
         let b: Column = other.clone().into();

@@ -93,7 +93,7 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 
 async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
     let sql = format!("DROP AGGREGATING INDEX {index_name}");
-    execute_sql(ctx, &sql).await?;
+    let _ = execute_sql(ctx, &sql).await?;
 
     Ok(())
 }
@@ -634,7 +634,7 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
 
     // Create agg index
-    execute_sql(
+    let _ = execute_sql(
         ctx.clone(),
         &format!("CREATE ASYNC AGGREGATING INDEX index AS {index_sql}"),
     )
@@ -657,7 +657,7 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
 
     // Refresh index
     if num_index_blocks > 0 {
-        execute_sql(
+        let _ = execute_sql(
             ctx.clone(),
             &format!("REFRESH AGGREGATING INDEX index LIMIT {num_index_blocks}"),
         )

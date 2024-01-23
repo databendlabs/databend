@@ -18,9 +18,6 @@ mod topk_only;
 mod utils;
 
 pub mod policy;
-pub use no_prefetch::NoPrefetchPolicy;
 pub use no_prefetch::NoPretchPolicyBuilder;
-pub use predicate_and_topk::PredicateAndTopkPolicy;
 pub use predicate_and_topk::PredicateAndTopkPolicyBuilder;
-pub use topk_only::TopkOnlyPolicy;
 pub use topk_only::TopkOnlyPolicyBuilder;

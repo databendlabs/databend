@@ -29,8 +29,8 @@ use crate::ScalarExpr;
 #[async_backtrace::framed]
 pub async fn bind_table_args(
     scalar_binder: &mut ScalarBinder<'_>,
-    params: &Vec<Expr>,
-    named_params: &Vec<(String, Expr)>,
+    params: &[Expr],
+    named_params: &[(String, Expr)],
 ) -> Result<TableArgs> {
     let mut args = Vec::with_capacity(params.len());
     for arg in params.iter() {
