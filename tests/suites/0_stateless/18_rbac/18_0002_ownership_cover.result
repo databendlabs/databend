@@ -21,6 +21,7 @@ t
 t1
 db_a
 information_schema
+system
 GRANT OWNERSHIP ON 'default'.'db_a'.* TO ROLE `role1`
 GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO ROLE `role1`
 GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO ROLE `role1`
