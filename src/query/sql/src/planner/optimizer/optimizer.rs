@@ -340,6 +340,17 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         Arc::new(right_source),
     ]));
 
+    assert!(matches!(
+        join_sexpr.as_ref().plan.as_ref(),
+        RelOperator::Join(_)
+    ));
+
+    let non_equal_join = if let RelOperator::Join(join) = join_sexpr.as_ref().plan.as_ref() {
+        join.left_conditions.is_empty() && join.right_conditions.is_empty()
+    } else {
+        unreachable!()
+    };
+
     // before, we think source table is always the small table.
     // 1. for matched only, we use inner join
     // 2. for insert only, we use right anti join
@@ -400,7 +411,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     {
         // distributed execution stargeties:
         // I. change join order is true, we use the `optimize_distributed_query`'s result.
-        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // II. change join order is false and match_pattern and not enable spill and not non-equal-join, we use right outer join with rownumber distributed strategies.
         // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
         // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
         // input is a Join_SExpr
@@ -416,6 +427,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             == 0
             && !change_join_order
             && merge_into_join_sexpr.match_pattern(&merge_source_optimizer.merge_source_pattern)
+            && !non_equal_join
         {
             (
                 merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
