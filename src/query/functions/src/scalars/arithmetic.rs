@@ -77,6 +77,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
+    registry.register_aliases("pow", &["power"]);
 
     register_unary_minus(registry);
     register_string_to_number(registry);
