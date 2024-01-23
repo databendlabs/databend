@@ -23,7 +23,7 @@ pub const MODE_APPEND_ONLY: &str = "append_only";
 pub const MODE_STANDARD: &str = "standard";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ChangeAction {
+pub enum ChangeType {
     // append only.
     Append,
     // standard.
