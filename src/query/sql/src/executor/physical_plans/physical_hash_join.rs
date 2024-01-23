@@ -365,17 +365,22 @@ impl PhysicalPlanBuilder {
                     (build_fields, probe_fields)
                 };
                 for field in dropped_fields.iter() {
-                    if result_fields.iter().all(|x| x.name() != field.name()) &&
-                        let Ok(index) = field.name().parse::<usize>() &&
-                        column_projections.contains(&index)
+                    if result_fields.iter().all(|x| x.name() != field.name())
+                        && let Ok(index) = field.name().parse::<usize>()
+                        && column_projections.contains(&index)
                     {
                         let metadata = self.metadata.read();
                         let unexpected_column = metadata.column(index);
-                        let unexpected_column_info = if let Some(table_index) = unexpected_column.table_index() {
-                            format!("{:?}.{:?}", metadata.table(table_index).name(), unexpected_column.name())
-                        } else {
-                            unexpected_column.name().to_string()
-                        };
+                        let unexpected_column_info =
+                            if let Some(table_index) = unexpected_column.table_index() {
+                                format!(
+                                    "{:?}.{:?}",
+                                    metadata.table(table_index).name(),
+                                    unexpected_column.name()
+                                )
+                            } else {
+                                unexpected_column.name().to_string()
+                            };
                         return Err(ErrorCode::SemanticError(format!(
                             "cannot access the {} in ANTI or SEMI join",
                             unexpected_column_info

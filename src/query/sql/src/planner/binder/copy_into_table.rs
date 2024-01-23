@@ -178,7 +178,9 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
+        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params
+            && fmt.missing_field_as == NullAs::Error
+        {
             let table_ctx = self.ctx.clone();
             let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
             let stage_info = plan.stage_table_info.stage_info.clone();
@@ -199,9 +201,7 @@ impl<'a> Binder {
                     span: None,
                     database: None,
                     table: None,
-                    column: AstColumnID::Name(Identifier::from_name(
-                        dest_field.name().to_string(),
-                    )),
+                    column: AstColumnID::Name(Identifier::from_name(dest_field.name().to_string())),
                 };
                 let expr = match table_schema.field_with_name(dest_field.name()) {
                     Ok(src_field) => {
@@ -229,9 +229,7 @@ impl<'a> Binder {
                             column
                         }
                     }
-                    Err(_) => {
-                        column
-                    }
+                    Err(_) => column,
                 };
                 select_list.push(SelectTarget::AliasedExpr {
                     expr: Box::new(expr),

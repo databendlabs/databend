@@ -211,7 +211,7 @@ impl BlockBuilder {
                 .as_ref()
                 .map(|v| v.size)
                 .unwrap_or_default(),
-            compression: self.write_settings.table_compression.try_into()?,
+            compression: self.write_settings.table_compression.into(),
             create_on: Some(Utc::now()),
         };
 

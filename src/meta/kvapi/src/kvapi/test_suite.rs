@@ -477,7 +477,7 @@ impl kvapi::TestSuite {
     fn check_transaction_responses(
         &self,
         reply: &TxnReply,
-        expected: &Vec<TxnOpResponse>,
+        expected: &[TxnOpResponse],
         success: bool,
     ) {
         assert_eq!(reply.success, success);

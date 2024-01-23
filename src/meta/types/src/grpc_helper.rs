@@ -89,9 +89,7 @@ impl GrpcHelper {
     pub fn get_response_meta_leader<T>(reply: &tonic::Response<T>) -> Option<Endpoint> {
         let metadata = reply.metadata();
 
-        let Some(meta_leader) = metadata.get(HEADER_LEADER) else {
-            return None;
-        };
+        let meta_leader = metadata.get(HEADER_LEADER)?;
 
         let s = match meta_leader.to_str() {
             Ok(x) => x,
