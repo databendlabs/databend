@@ -241,6 +241,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             dphyp_optimized = true;
         }
     }
+
+    s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
+
     let mut cascades = CascadesOptimizer::new(
         opt_ctx.table_ctx.clone(),
         opt_ctx.metadata.clone(),
@@ -279,8 +282,6 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr
         }
     };
-
-    s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 
     Ok(s_expr)
 }
