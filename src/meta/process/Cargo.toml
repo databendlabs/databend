@@ -22,5 +22,6 @@ databend-common-tracing = { path = "../../common/tracing" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 openraft = { workspace = true }
+prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

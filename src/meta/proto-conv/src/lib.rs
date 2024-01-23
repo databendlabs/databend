@@ -86,6 +86,7 @@ mod util;
 mod virtual_column_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
+pub use from_to_protobuf::FromToProtoEnum;
 pub use from_to_protobuf::Incompatible;
 pub use util::missing;
 pub use util::reader_check_msg;

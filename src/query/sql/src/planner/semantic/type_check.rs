@@ -2394,6 +2394,8 @@ impl<'a> TypeChecker<'a> {
             "timezone",
             "nullif",
             "ifnull",
+            "nvl",
+            "nvl2",
             "is_null",
             "coalesce",
             "last_query_id",
@@ -2499,6 +2501,37 @@ impl<'a> TypeChecker<'a> {
                         },
                         arg_y,
                         arg_x,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl", &[arg_x, arg_y]) => {
+                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // nvl is essentially an alias for ifnull.
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_x,
+                        arg_y,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl2", &[arg_x, arg_y, arg_z]) => {
+                // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_y,
+                        arg_z,
                     ])
                     .await,
                 )

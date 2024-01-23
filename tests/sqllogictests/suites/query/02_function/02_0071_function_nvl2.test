@@ -1,0 +1,61 @@
+query I
+SELECT NVL2(1, 2, 3)
+----
+2
+
+query I
+SELECT NVL2(NULL, 2, 3)
+----
+3
+
+query I
+SELECT NVL2(0, 2, 3)
+----
+2
+
+query T
+SELECT NVL2('a', 'b', 'c')
+----
+b
+
+query T
+SELECT NVL2(NULL, 'b', 'c')
+----
+c
+
+query T
+SELECT NVL2('', 'b', 'c')
+----
+b
+
+query T
+SELECT NVL2('a', NULL, 'c')
+----
+NULL
+
+query T
+SELECT NVL2('a', 'b', NULL)
+----
+b
+
+query T
+SELECT NVL2(NULL, NULL, NULL)
+----
+NULL
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT, b INT, c INT) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES (0, 1, 2), (1, 2, 3), (NULL, 3, 4), (NULL, NULL, 5)
+
+query III
+SELECT a, b, c, NVL2(a, b, c) FROM t
+----
+0 1 2 1
+1 2 3 2
+NULL 3 4 4
+NULL NULL 5 5
+
+statement ok
+DROP TABLE t
