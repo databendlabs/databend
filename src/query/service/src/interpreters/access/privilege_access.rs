@@ -24,6 +24,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
@@ -48,7 +49,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 13] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 15] = [
     "catalogs",
     "columns",
     "databases",
@@ -62,6 +63,8 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 13] = [
     "stages",
     "one",
     "processes",
+    "functions",
+    "udf_functions",
 ];
 
 impl PrivilegeAccess {
@@ -555,8 +558,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select]).await?
             }
-            Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create])
+            Plan::CreateDatabase(_) => {
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::CreateDatabase])
                     .await?;
             }
             Plan::DropDatabase(_)
@@ -901,6 +904,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowConnections(_)
             | Plan::DescConnection(_)
             | Plan::DropConnection(_)
+            | Plan::CreateUDF(_)
+            | Plan::CreateIndex(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
@@ -963,7 +968,15 @@ async fn has_priv(
         .any(|e| {
             let object = e.object();
             match object {
-                GrantObject::Global => true,
+                GrantObject::Global => {
+                    if db_name.to_lowercase() == "system" {
+                        return true;
+                    }
+                    e.privileges().iter().any(|privilege| {
+                        UserPrivilegeSet::available_privileges_on_database(false)
+                            .has_privilege(privilege)
+                    })
+                }
                 GrantObject::Database(_, ldb) => *ldb == db_name,
                 GrantObject::DatabaseById(_, ldb) => *ldb == db_id,
                 GrantObject::Table(_, ldb, ltab) => {

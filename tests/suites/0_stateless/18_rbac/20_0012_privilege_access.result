@@ -1,4 +1,5 @@
 information_schema
+system
 test -- insert
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
 1
@@ -31,6 +32,7 @@ GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
 default
 grant_db
 information_schema
+system
 test -- show tables from system
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 test -- show tables from grant_db
@@ -41,10 +43,6 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 c1	INT	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tables'
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
-1
-0
-92
-7
 1
 0
 1	64	262

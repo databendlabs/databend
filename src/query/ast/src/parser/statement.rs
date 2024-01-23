@@ -2281,6 +2281,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Alter, rule! { ALTER }),
         value(UserPrivilegeType::Super, rule! { SUPER }),
         value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
+        value(
+            UserPrivilegeType::CreateDatabase,
+            rule! { CREATE ~ DATABASE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
