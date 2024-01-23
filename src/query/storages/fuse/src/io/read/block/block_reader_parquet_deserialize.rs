@@ -90,8 +90,7 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        // let use_parquet2 = self.ctx.get_settings().get_use_parquet2()?;
-        let use_parquet2 = false;
+        let use_parquet2 = self.ctx.get_settings().get_fuse_read_use_parquet2()?;
         match use_parquet2 {
             true => self.deserialize_column_chunks_2(
                 block_path,
