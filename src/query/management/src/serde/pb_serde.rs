@@ -39,8 +39,7 @@ where
 {
     let p = value.to_pb().map_err_to_code(err_code_fn, context_fn)?;
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf)
-        .map_err_to_code(err_code_fn, context_fn)?;
+    prost::Message::encode(&p, &mut buf).map_err_to_code(err_code_fn, context_fn)?;
     Ok(buf)
 }
 
@@ -55,8 +54,7 @@ where
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,
 {
-    let p: T::PB = databend_common_protos::prost::Message::decode(buf)
-        .map_err_to_code(err_code_fn, context_fn)?;
+    let p: T::PB = prost::Message::decode(buf).map_err_to_code(err_code_fn, context_fn)?;
     let v: T = FromToProto::from_pb(p).map_err_to_code(err_code_fn, context_fn)?;
 
     Ok(v)
@@ -71,7 +69,6 @@ pub async fn check_and_upgrade_to_pb<'a, T, ErrFn, CtxFn, D>(
 ) -> std::result::Result<SeqV<T>, ErrorCode>
 where
     T: FromToProto + serde::de::DeserializeOwned + 'a + 'static,
-    T::PB: databend_common_protos::prost::Message + Default,
     ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
     D: Display,
     CtxFn: FnOnce() -> D + std::marker::Copy,

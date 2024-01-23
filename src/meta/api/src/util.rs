@@ -292,7 +292,7 @@ where T: FromToProto + 'static {
         MetaNetworkError::InvalidArgument(inv)
     })?;
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+    prost::Message::encode(&p, &mut buf).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -301,7 +301,7 @@ where T: FromToProto + 'static {
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
 where T: FromToProto {
-    let p: T::PB = databend_common_protos::prost::Message::decode(buf).map_err(|e| {
+    let p: T::PB = prost::Message::decode(buf).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;

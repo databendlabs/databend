@@ -29,7 +29,7 @@ where MT: FromToProto + PartialEq + Debug {
     let n = std::any::type_name::<MT>();
 
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+    prost::Message::encode(&p, &mut buf)?;
 
     let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatability test.
@@ -59,7 +59,7 @@ pub(crate) fn test_load_old<MT>(
 where
     MT: FromToProto + PartialEq + Debug,
 {
-    let p: MT::PB = databend_common_protos::prost::Message::decode(buf).map_err(print_err)?;
+    let p: MT::PB = prost::Message::decode(buf).map_err(print_err)?;
     assert_eq!(want_msg_ver, MT::get_pb_ver(&p), "loading {}", name);
 
     let got = MT::from_pb(p).map_err(print_err)?;
