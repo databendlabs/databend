@@ -299,7 +299,7 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         .ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("endpoint_url is required for storage oss"),
+                anyhow!("endpoint_url is required for storage cos"),
             )
         })?;
     let sp = StorageParams::Cos(StorageCosConfig {
