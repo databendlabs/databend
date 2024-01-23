@@ -32,6 +32,7 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
+use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::rule::TransformResult;
@@ -278,6 +279,8 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr
         }
     };
+
+    s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 
     Ok(s_expr)
 }
