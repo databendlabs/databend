@@ -55,7 +55,7 @@ impl Binder {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
                 let grant_object = self.convert_to_grant_object(level).await?;
-                let priv_types = grant_object.available_privileges_without_ownership();
+                let priv_types = grant_object.available_privileges(false);
                 let plan = GrantPrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,
@@ -98,7 +98,7 @@ impl Binder {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
                 let grant_object = self.convert_to_grant_object(level).await?;
-                let priv_types = grant_object.available_privileges_without_ownership();
+                let priv_types = grant_object.available_privileges(false);
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,

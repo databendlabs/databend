@@ -94,32 +94,21 @@ impl GrantObject {
     }
 
     /// Global, database and table has different available privileges
-    pub fn available_privileges(&self) -> UserPrivilegeSet {
+    pub fn available_privileges(&self, available_ownership: bool) -> UserPrivilegeSet {
         match self {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
             GrantObject::Database(_, _) | GrantObject::DatabaseById(_, _) => {
-                UserPrivilegeSet::available_privileges_on_database()
+                UserPrivilegeSet::available_privileges_on_database(available_ownership)
             }
             GrantObject::Table(_, _, _) | GrantObject::TableById(_, _, _) => {
-                UserPrivilegeSet::available_privileges_on_table()
+                UserPrivilegeSet::available_privileges_on_table(available_ownership)
             }
-            GrantObject::UDF(_) => UserPrivilegeSet::available_privileges_on_udf(),
-            GrantObject::Stage(_) => UserPrivilegeSet::available_privileges_on_stage(),
-        }
-    }
-
-    /// Global, database and table has different available privileges without ownership
-    pub fn available_privileges_without_ownership(&self) -> UserPrivilegeSet {
-        match self {
-            GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
-            GrantObject::Database(_, _) | GrantObject::DatabaseById(_, _) => {
-                UserPrivilegeSet::privileges_on_database_without_ownership()
+            GrantObject::UDF(_) => {
+                UserPrivilegeSet::available_privileges_on_udf(available_ownership)
             }
-            GrantObject::Table(_, _, _) | GrantObject::TableById(_, _, _) => {
-                UserPrivilegeSet::privileges_on_table_without_ownership()
+            GrantObject::Stage(_) => {
+                UserPrivilegeSet::available_privileges_on_stage(available_ownership)
             }
-            GrantObject::UDF(_) => UserPrivilegeSet::privileges_on_udf_without_ownership(),
-            GrantObject::Stage(_) => UserPrivilegeSet::privileges_on_stage_without_ownership(),
         }
     }
 
@@ -190,8 +179,8 @@ impl GrantEntry {
         &self.object == object
     }
 
-    pub fn has_all_available_privileges_without_ownership(&self) -> bool {
-        let all_available_privileges = self.object.available_privileges_without_ownership();
+    pub fn has_all_available_privileges(&self) -> bool {
+        let all_available_privileges = self.object.available_privileges(false);
         self.privileges
             .contains(BitFlags::from(all_available_privileges))
     }
@@ -200,7 +189,7 @@ impl GrantEntry {
 impl fmt::Display for GrantEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
-        let privileges_str = if self.has_all_available_privileges_without_ownership() {
+        let privileges_str = if self.has_all_available_privileges() {
             "ALL".to_string()
         } else {
             privileges.to_string()

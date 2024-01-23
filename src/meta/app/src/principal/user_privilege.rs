@@ -151,57 +151,48 @@ impl UserPrivilegeSet {
     /// The all privileges which available to the global grant object. It contains ALL the privileges
     /// on databases and tables, and has some Global only privileges.
     pub fn available_privileges_on_global() -> Self {
-        let database_privs = Self::privileges_on_database_without_ownership();
-        let stage_privs_without_ownership = Self::privileges_on_stage_without_ownership();
-        let udf_privs_without_ownership = Self::privileges_on_udf_without_ownership();
+        let database_privs = Self::available_privileges_on_database(false);
+        let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
+        let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
         let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateDataMask });
         (database_privs.privileges
             | privs
-            | stage_privs_without_ownership
-            | udf_privs_without_ownership)
+            | stage_privs_without_ownership.privileges
+            | udf_privs_without_ownership.privileges)
             .into()
-    }
-
-    pub fn privileges_on_database_without_ownership() -> Self {
-        UserPrivilegeSet::privileges_on_table_without_ownership()
-    }
-
-    pub fn privileges_on_table_without_ownership() -> Self {
-        make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant }).into()
     }
 
     /// The available privileges on database object contains ALL the available privileges to a table.
     /// Currently the privileges available to a database and a table are the same, it might becomes
     /// some differences in the future.
-    pub fn available_privileges_on_database() -> Self {
-        UserPrivilegeSet::available_privileges_on_table()
+    pub fn available_privileges_on_database(available_ownership: bool) -> Self {
+        UserPrivilegeSet::available_privileges_on_table(available_ownership)
     }
 
     /// The all privileges global which available to the table object
-    pub fn available_privileges_on_table() -> Self {
-        (UserPrivilegeSet::privileges_on_table_without_ownership().privileges
-            | make_bitflags!(UserPrivilegeType::{  Ownership }))
-        .into()
+    pub fn available_privileges_on_table(available_ownership: bool) -> Self {
+        let tab_privs = make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant });
+        if available_ownership {
+            (tab_privs | make_bitflags!(UserPrivilegeType::{  Ownership })).into()
+        } else {
+            tab_privs.into()
+        }
     }
 
-    pub fn available_privileges_on_stage() -> Self {
-        (UserPrivilegeSet::privileges_on_stage_without_ownership().privileges
-            | make_bitflags!(UserPrivilegeType::{  Ownership }))
-        .into()
+    pub fn available_privileges_on_stage(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{  Read | Write | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
+        }
     }
 
-    pub fn privileges_on_stage_without_ownership() -> Self {
-        make_bitflags!(UserPrivilegeType::{  Read | Write }).into()
-    }
-
-    pub fn privileges_on_udf_without_ownership() -> Self {
-        make_bitflags!(UserPrivilegeType::{ Usage }).into()
-    }
-
-    pub fn available_privileges_on_udf() -> Self {
-        (UserPrivilegeSet::privileges_on_udf_without_ownership().privileges
-            | make_bitflags!(UserPrivilegeType::{ Ownership }))
-        .into()
+    pub fn available_privileges_on_udf(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ Usage | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ Usage }).into()
+        }
     }
 
     // TODO: remove this, as ALL has different meanings on different objects
