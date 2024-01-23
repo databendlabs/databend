@@ -444,6 +444,9 @@ impl AccessChecker for PrivilegeAccess {
                     Some(RewriteKind::ShowDatabases)
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
+                    | Some(RewriteKind::ShowUserFunctions) => {
+                        return Ok(());
+                    }
                     | Some(RewriteKind::ShowTableFunctions) => {
                         return Ok(());
                     }
