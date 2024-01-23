@@ -242,7 +242,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             order_by: None,
             prewhere: None,
             agg_index: None,
-            change_action: None,
+            change_type: None,
             statistics: Default::default(),
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));

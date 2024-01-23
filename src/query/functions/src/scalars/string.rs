@@ -24,6 +24,7 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::unify_string;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -267,7 +268,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
-        |_, _, _| FunctionDomain::Full,
+        |_, lhs, rhs| {
+            let (d1, d2) = unify_string(lhs, rhs);
+            if d1.min > d2.max {
+                return FunctionDomain::Domain(SimpleDomain { min: 1, max: 1 });
+            }
+            if d1.max < d2.min {
+                return FunctionDomain::Domain(SimpleDomain { min: -1, max: -1 });
+            }
+            if d1.min == d1.max && d2.min == d2.max && d1.min == d2.min {
+                return FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 });
+            }
+            FunctionDomain::Full
+        },
         |s1, s2, _| match s1.cmp(s2) {
             Ordering::Equal => 0,
             Ordering::Greater => 1,

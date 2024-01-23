@@ -82,10 +82,12 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let limit = self
-            .compact_params
-            .num_segment_limit
-            .unwrap_or(number_segments);
+        let (num_segment_limit, num_block_limit) =
+            if let Some(limit) = self.compact_params.num_segment_limit {
+                (limit, MAX_BLOCK_COUNT * 100)
+            } else {
+                (number_segments, MAX_BLOCK_COUNT)
+            };
 
         // Status.
         self.ctx
@@ -139,8 +141,8 @@ impl BlockCompactMutator {
                     self.generate_part(segments, &mut parts, &mut checker);
                 }
 
-                if checker.compacted_segment_cnt + checker.segments.len() >= limit
-                    || checker.compacted_block_cnt >= MAX_BLOCK_COUNT as u64
+                if checker.compacted_segment_cnt + checker.segments.len() >= num_segment_limit
+                    || checker.compacted_block_cnt >= num_block_limit as u64
                 {
                     is_end = true;
                     break;
@@ -224,7 +226,7 @@ impl BlockCompactMutator {
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
-        let semaphore: Arc<Semaphore> = Arc::new(Semaphore::new(max_concurrency));
+        let semaphore = Arc::new(Semaphore::new(max_concurrency));
 
         let mut remain = lazy_parts.len() % max_threads;
         let batch_size = lazy_parts.len() / max_threads;

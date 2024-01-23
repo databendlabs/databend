@@ -484,7 +484,7 @@ impl PhysicalPlanBuilder {
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,
-            change_action: scan.change_action.clone(),
+            change_type: scan.change_type.clone(),
         })
     }
 

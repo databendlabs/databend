@@ -32,7 +32,6 @@ use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
@@ -1107,22 +1106,8 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let option = {
-            let retain_hours = match option.retain_hours {
-                Some(Expr::Literal {
-                    lit: Literal::UInt64(uint),
-                    ..
-                }) => Some(uint as usize),
-                Some(_) => {
-                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
-                }
-                _ => None,
-            };
-
-            VacuumTableOption {
-                retain_hours,
-                dry_run: option.dry_run,
-            }
+        let option = VacuumTableOption {
+            dry_run: option.dry_run,
         };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
             catalog,
@@ -1154,19 +1139,7 @@ impl Binder {
             .unwrap_or_else(|| "".to_string());
 
         let option = {
-            let retain_hours = match option.retain_hours {
-                Some(Expr::Literal {
-                    lit: Literal::UInt64(uint),
-                    ..
-                }) => Some(uint as usize),
-                Some(_) => {
-                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
-                }
-                _ => None,
-            };
-
             VacuumDropTableOption {
-                retain_hours,
                 dry_run: option.dry_run,
                 limit: option.limit,
             }

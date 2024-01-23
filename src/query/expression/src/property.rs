@@ -523,7 +523,7 @@ impl SimpleDomainCmp for StringDomain {
     }
 }
 
-fn unify_string(
+pub fn unify_string(
     lhs: &StringDomain,
     rhs: &StringDomain,
 ) -> (SimpleDomain<String>, SimpleDomain<String>) {

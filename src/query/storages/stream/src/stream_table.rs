@@ -55,7 +55,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::table::ChangeAction;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
@@ -268,12 +268,12 @@ impl StreamTable {
             .collect_incremental_blocks(ctx.clone(), fuse_table)
             .await?;
 
-        let change_action = push_downs.as_ref().map_or(ChangeAction::Append, |v| {
-            v.change_action.clone().unwrap_or(ChangeAction::Append)
+        let change_type = push_downs.as_ref().map_or(ChangeType::Append, |v| {
+            v.change_type.clone().unwrap_or(ChangeType::Append)
         });
         let mut push_downs = push_downs;
-        let (blocks, base_block_ids_scalar) = match change_action {
-            ChangeAction::Append => {
+        let (blocks, base_block_ids_scalar) = match change_type {
+            ChangeType::Append => {
                 let mut base_block_ids = Vec::with_capacity(del_blocks.len());
                 for base_block in del_blocks {
                     let block_id = block_id_from_location(&base_block.location.0)?;
@@ -284,8 +284,8 @@ impl StreamTable {
                 push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
                 (add_blocks, Some(base_block_ids_scalar))
             }
-            ChangeAction::Insert => (add_blocks, None),
-            ChangeAction::Delete => (del_blocks, None),
+            ChangeType::Insert => (add_blocks, None),
+            ChangeType::Delete => (del_blocks, None),
         };
 
         let summary = blocks.len();
