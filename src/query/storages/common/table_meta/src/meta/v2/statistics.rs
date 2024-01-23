@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt;
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
@@ -24,8 +27,16 @@ use databend_common_expression::TableField;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: IndexScalar,
-    pub max: IndexScalar,
+    #[serde(
+        serialize_with = "serialize_index_scalar",
+        deserialize_with = "deserialize_index_scalar"
+    )]
+    pub min: Scalar,
+    #[serde(
+        serialize_with = "serialize_index_scalar",
+        deserialize_with = "deserialize_index_scalar"
+    )]
+    pub max: Scalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
@@ -35,12 +46,20 @@ pub struct ColumnStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
-    pub min: Vec<IndexScalar>,
-    pub max: Vec<IndexScalar>,
+    #[serde(
+        serialize_with = "serialize_index_scalar_vec",
+        deserialize_with = "deserialize_index_scalar_vec"
+    )]
+    pub min: Vec<Scalar>,
+    #[serde(
+        serialize_with = "serialize_index_scalar_vec",
+        deserialize_with = "deserialize_index_scalar_vec"
+    )]
+    pub max: Vec<Scalar>,
     pub level: i32,
 
     // currently it's only used in native engine
-    pub pages: Option<Vec<IndexScalar>>,
+    pub pages: Option<Vec<Scalar>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -53,6 +72,7 @@ pub struct Statistics {
     pub compressed_byte_size: u64,
     pub index_size: u64,
 
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
 }
@@ -69,8 +89,8 @@ impl ColumnStatistics {
         distinct_of_values: Option<u64>,
     ) -> Self {
         Self {
-            min: min.into(),
-            max: max.into(),
+            min,
+            max,
             null_count,
             in_memory_size,
             distinct_of_values,
@@ -78,11 +98,11 @@ impl ColumnStatistics {
     }
 
     pub fn min(&self) -> Scalar {
-        self.min.clone().into()
+        self.min.clone()
     }
 
     pub fn max(&self) -> Scalar {
-        self.max.clone().into()
+        self.max.clone()
     }
 
     pub fn from_v0(
@@ -106,8 +126,8 @@ impl ColumnStatistics {
         let max = from_scalar(&v0.max, &data_type);
 
         Some(Self {
-            min: min.into(),
-            max: max.into(),
+            min,
+            max,
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
@@ -123,10 +143,6 @@ impl ClusterStatistics {
         level: i32,
         pages: Option<Vec<Scalar>>,
     ) -> Self {
-        let min = min.into_iter().map(|s| s.into()).collect::<Vec<_>>();
-        let max = max.into_iter().map(|s| s.into()).collect::<Vec<_>>();
-        let pages = pages.map(|p| p.into_iter().map(|s| s.into()).collect::<Vec<_>>());
-
         Self {
             cluster_key_id,
             min,
@@ -137,11 +153,11 @@ impl ClusterStatistics {
     }
 
     pub fn min(&self) -> Vec<Scalar> {
-        self.min.iter().map(|s| s.clone().into()).collect()
+        self.min.clone()
     }
 
     pub fn max(&self) -> Vec<Scalar> {
-        self.max.iter().map(|s| s.clone().into()).collect()
+        self.max.clone()
     }
 
     pub fn is_const(&self) -> bool {
@@ -168,13 +184,13 @@ impl ClusterStatistics {
         let min = v0
             .min
             .into_iter()
-            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
+            .map(|s| from_scalar(&s, &data_type))
             .collect();
 
         let max = v0
             .max
             .into_iter()
-            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
+            .map(|s| from_scalar(&s, &data_type))
             .collect();
 
         Some(Self {
@@ -208,5 +224,130 @@ impl Statistics {
             col_stats,
             cluster_stats: None,
         }
+    }
+}
+
+/// Serializes a `Scalar` value by first converting it to `IndexScalar`.
+///
+/// This function indirectly uses `IndexScalar` for serialization because `IndexScalar`
+/// ensures safe persistence to disk without being affected by version iterations.
+/// Since `IndexScalar` is a subset of `Scalar`, serialization will fail if it attempts
+/// to serialize a `Scalar` that is not supported by `IndexScalar`.
+/// Callers should ensure that all `Scalar` values used for serialization are within
+/// the supported subset of `IndexScalar`.
+fn serialize_index_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S::Error>
+where S: serde::Serializer {
+    match IndexScalar::try_from(scalar.clone()) {
+        Ok(index_scalar) => serde::Serialize::serialize(&index_scalar, serializer),
+        Err(_) => Err(serde::ser::Error::custom(format!(
+            "Failed to convert {scalar} to IndexScalar"
+        ))),
+    }
+}
+
+/// Deserializes a value into a `Scalar` by first interpreting it as `IndexScalar`.
+///
+/// This function first deserializes the value into `IndexScalar` and then converts it
+/// to `Scalar`.
+fn deserialize_index_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
+where D: serde::Deserializer<'de> {
+    let index_scalar = <IndexScalar as serde::Deserialize>::deserialize(deserializer)?;
+    Ok(Scalar::from(index_scalar))
+}
+
+/// Serializes a vector of `Scalar` values by first converting each to `IndexScalar`.
+///
+/// This function processes each `Scalar` in the vector, converting them to `IndexScalar`
+/// for serialization. The use of `IndexScalar` is crucial for ensuring that the serialized
+/// data is safe for persistence and unaffected by version iterations. Serialization will
+/// fail if any `Scalar` in the vector is not a supported subset of `IndexScalar`.
+/// Callers should verify that all `Scalar` values in the vector can be represented as
+/// `IndexScalar`.
+fn serialize_index_scalar_vec<S>(scalars: &[Scalar], serializer: S) -> Result<S::Ok, S::Error>
+where S: serde::Serializer {
+    let mut index_scalars = Vec::with_capacity(scalars.len());
+    for scalar in scalars {
+        match IndexScalar::try_from(scalar.clone()) {
+            Ok(index_scalar) => index_scalars.push(index_scalar),
+            Err(_) => {
+                return Err(serde::ser::Error::custom(format!(
+                    "Failed to convert {scalar} to IndexScalar"
+                )));
+            }
+        }
+    }
+    serde::Serialize::serialize(&index_scalars, serializer)
+}
+
+/// Deserializes a value into a vector of `Scalar` by interpreting each element as `IndexScalar`.
+///
+/// This function deserializes a vector of `IndexScalar` values and then attempts to convert
+/// each `IndexScalar` back into `Scalar`.
+fn deserialize_index_scalar_vec<'de, D>(deserializer: D) -> Result<Vec<Scalar>, D::Error>
+where D: serde::Deserializer<'de> {
+    let index_scalars: Vec<IndexScalar> =
+        <Vec<IndexScalar> as serde::Deserialize>::deserialize(deserializer)?;
+    index_scalars
+        .into_iter()
+        .map(Scalar::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(serde::de::Error::custom)
+}
+
+/// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
+///
+/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
+/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
+/// unsupported index types cannot be deserialized correctly.
+///
+/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
+/// item that fails to deserialize due to containing these unsupported index types.
+/// This allows the rest of the outer struct, including `col_stats` items that do not
+/// contain unsupported index types, to be deserialized successfully.
+///
+/// Note: This function is a workaround for a specific historical issue. If the data being
+/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
+/// the standard deserialization process can be used instead.
+pub fn deserialize_col_stats<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<ColumnId, ColumnStatistics>, D::Error>
+where D: serde::Deserializer<'de> {
+    deserializer.deserialize_map(ColStatsVisitor::new())
+}
+
+struct ColStatsVisitor<K, V> {
+    marker: PhantomData<fn() -> HashMap<K, V>>,
+}
+
+impl<K, V> ColStatsVisitor<K, V> {
+    fn new() -> Self {
+        ColStatsVisitor {
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'de, K, V> serde::de::Visitor<'de> for ColStatsVisitor<K, V>
+where
+    K: serde::Deserialize<'de> + Hash + Eq,
+    V: serde::Deserialize<'de>,
+{
+    type Value = HashMap<K, V>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map")
+    }
+
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where M: serde::de::MapAccess<'de> {
+        let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+        while let Some(key) = access.next_key()? {
+            if let Ok(value) = access.next_value() {
+                map.insert(key, value);
+            }
+        }
+
+        Ok(map)
     }
 }

@@ -92,7 +92,7 @@ impl PageIndex {
             None => return Ok((true, None)),
         };
         let min_values: Vec<Scalar> = match stats.pages {
-            Some(ref pages) => pages.iter().map(|c| c.clone().into()).collect(),
+            Some(ref pages) => pages.clone(),
             None => return Ok((true, None)),
         };
 
