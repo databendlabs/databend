@@ -68,9 +68,15 @@ pub struct MergeInto {
     pub merge_type: MergeIntoType,
     pub distributed: bool,
     pub change_join_order: bool,
-    // when we use target table as build side, we need to remove rowid columns.
+    // when we use target table as build side or insert only, we will remove rowid columns.
     pub row_id_index: IndexType,
     pub split_idx: IndexType,
+    // an optimization:
+    // if it's full_operation and we have only one update without condition here, we shouldn't run
+    // evalutaor, we can just do projection to get the right columns.But the limitation is below:
+    // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
+    // we don't support complex expressions.
+    pub map_columns: HashMap<IndexType, IndexType>,
 }
 
 impl std::fmt::Debug for MergeInto {

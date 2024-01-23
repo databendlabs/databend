@@ -422,6 +422,7 @@ impl Binder {
             change_join_order: false,
             row_id_index: column_binding.index,
             split_idx,
+            map_columns: Default::default(),
         })
     }
 
