@@ -26,6 +26,7 @@ mod datetime;
 mod decimal;
 mod geo;
 mod geo_h3;
+mod geometry;
 mod hash;
 mod map;
 mod math;

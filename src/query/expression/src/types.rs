@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geometry;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -86,6 +87,7 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+    Geometry,
 
     // Used internally for generic types
     Generic(usize),
