@@ -27,15 +27,6 @@ pub enum ParquetFileMeta {
     ParquetRs(::parquet_rs::format::FileMetaData),
 }
 
-impl ParquetFileMeta {
-    pub fn as_parquet2(self) -> Option<parquet_format_safe::FileMetaData> {
-        match self {
-            ParquetFileMeta::Parquet2(meta) => Some(meta),
-            ParquetFileMeta::ParquetRs(_) => None,
-        }
-    }
-}
-
 pub fn blocks_to_parquet(
     schema: &TableSchema,
     blocks: Vec<DataBlock>,

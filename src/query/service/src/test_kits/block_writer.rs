@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use chrono::Utc;
-use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -26,6 +25,7 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_blocks::ParquetFileMeta;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -59,7 +59,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<ThriftFileMetaData>)> {
+    ) -> Result<(BlockMeta, Option<ParquetFileMeta>)> {
         let (location, block_id) = self.location_generator.gen_block_location();
 
         let data_accessor = &self.data_accessor;
@@ -102,7 +102,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>, Option<ThriftFileMetaData>)> {
+    ) -> Result<(u64, Option<Location>, Option<ParquetFileMeta>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
@@ -127,9 +127,7 @@ impl<'a> BlockWriter<'a> {
                 &mut data,
                 TableCompression::None,
                 false,
-            )?
-            .as_parquet2()
-            .unwrap();
+            )?;
             let size = data.len() as u64;
             data_accessor.write(&location.0, data).await?;
             Ok((size, Some(location), Some(meta)))
