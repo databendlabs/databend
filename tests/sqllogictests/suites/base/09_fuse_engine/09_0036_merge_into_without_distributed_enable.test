@@ -1091,5 +1091,127 @@ select * from tt1_;
 ----
 0 20 21
 
+## add more tests cases for distributed modes.
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_200_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_400_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_random(
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) engine = random;
+
+## add 400w rows
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+4000000
+
+statement ok
+insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
+
+query T
+select count(*) from lineitem_target_origin_200_blocks1;
+----
+4000000
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+4500000
+
+## it maybe flaky test, but in most times, it's normal.
+query TT
+MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on      
+t1.l_orderkey = t2.l_orderkey and     
+t1.l_partkey = t2.l_partkey  
+and t1.l_suppkey = t2.l_suppkey and     
+t1.l_linenumber = t2.l_linenumber and      
+t1.l_quantity = t2.l_quantity and      
+t1.l_extendedprice = t2.l_extendedprice and     
+t1.l_discount = t2.l_discount     
+when matched then update *     
+when not matched then insert *;
+----
+0 4000000
+
 statement ok
 set enable_experimental_merge_into = 0;
