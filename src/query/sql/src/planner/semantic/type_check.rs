@@ -2506,17 +2506,17 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
-                // Rewrite nvl(x, y) to if(is_null(x), y, x)
+                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
                 // nvl is essentially an alias for ifnull.
                 Some(
                     self.resolve_function(span, "if", vec![], &[
                         &Expr::IsNull {
                             span,
                             expr: Box::new(arg_x.clone()),
-                            not: false,
+                            not: true,
                         },
-                        arg_y,
                         arg_x,
+                        arg_y,
                     ])
                     .await,
                 )
