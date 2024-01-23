@@ -340,17 +340,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         Arc::new(right_source),
     ]));
 
-    assert!(matches!(
-        join_sexpr.as_ref().plan.as_ref(),
-        RelOperator::Join(_)
-    ));
-
-    let non_equal_join = if let RelOperator::Join(join) = join_sexpr.as_ref().plan.as_ref() {
-        join.left_conditions.is_empty() && join.right_conditions.is_empty()
-    } else {
-        unreachable!()
-    };
-
+    let join_op = Join::try_from(join_sexpr.plan().clone())?;
+    let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
     // before, we think source table is always the small table.
     // 1. for matched only, we use inner join
     // 2. for insert only, we use right anti join
