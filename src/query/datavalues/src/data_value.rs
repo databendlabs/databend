@@ -35,6 +35,7 @@ pub enum DataValue {
 
     // Custom type.
     Variant(VariantValue),
+    Geometry(Vec<u8>),
 }
 
 impl Eq for DataValue {}
@@ -55,6 +56,7 @@ impl std::hash::Hash for DataValue {
             DataValue::Array(v) => v.hash(state),
             DataValue::Struct(v) => v.hash(state),
             DataValue::Variant(v) => v.hash(state),
+            DataValue::Geometry(v) => v.hash(state),
         }
     }
 }

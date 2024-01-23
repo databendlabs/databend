@@ -18,6 +18,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::prelude::FormatSettings;
+use geozero::wkb::Ewkb;
+use geozero::ToJson;
 use roaring::RoaringTreemap;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
@@ -140,6 +142,12 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::Variant(x) => {
             let b = jsonb::from_slice(x).unwrap();
             b.into()
+        }
+        ScalarRef::Geometry(x) => {
+            let geom = Ewkb(x.to_vec())
+                .to_json()
+                .expect("failed to convert ewkb to json");
+            JsonValue::String(geom)
         }
     }
 }

@@ -23,6 +23,7 @@ arrow-schema = { workspace = true }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6bac65c38375f1216a565a6cc7deb89a2d" }
 #backtrace = "0.3.69"
 bincode = { workspace = true }
+geozero = "0.11.0"
 http = "0.2"
 opendal = { workspace = true }
 parquet = { workspace = true }

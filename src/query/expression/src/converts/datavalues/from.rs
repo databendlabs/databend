@@ -137,6 +137,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataType) -> Scalar {
             }
             _ => unreachable!(),
         },
+        DataType::Geometry => Scalar::Geometry((*datavalue.as_geometry().unwrap()).clone()),
         DataType::Tuple(types) => {
             let values = match datavalue {
                 DataValue::Struct(x) => x,

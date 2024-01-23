@@ -23,6 +23,8 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
+use geozero::wkb::Ewkb;
+use geozero::ToWkt;
 
 use crate::binary::encode_binary;
 use crate::field_encoder::write_tsv_escaped_string;
@@ -135,6 +137,12 @@ impl FieldEncoderCSV {
                 let mut buf = Vec::new();
                 self.simple.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);
+            }
+
+            Column::Geometry(g) => {
+                let buf = unsafe { g.index_unchecked(row_index) };
+                let geom = Ewkb(buf.to_vec()).to_ewkt(None).unwrap();
+                self.string_formatter.write_string(geom.as_bytes(), out_buf);
             }
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {

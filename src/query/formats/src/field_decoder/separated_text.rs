@@ -52,6 +52,9 @@ use databend_common_io::parse_bitmap;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use databend_common_meta_app::principal::XmlFileFormatParams;
+use geozero::wkb::Ewkb;
+use geozero::CoordDimensions;
+use geozero::ToWkb;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
@@ -183,6 +186,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -339,6 +343,13 @@ impl SeparatedTextDecoder {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn read_geometry(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
+        let geom = Ewkb(data.to_vec()).to_ewkb(CoordDimensions::xy(), None)?;
+        column.put_slice(&geom);
+        column.commit_row();
         Ok(())
     }
 

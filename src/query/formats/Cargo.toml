@@ -16,6 +16,7 @@ async-trait = { workspace = true }
 base64 = "0.21.0"
 bstr = "1.0.1"
 chrono-tz = { workspace = true }
+geozero = { version = "0.11.0", features = ["default", "with-wkb"] }
 hex = "0.4.3"
 lexical-core = "0.8.5"
 match-template = { workspace = true }

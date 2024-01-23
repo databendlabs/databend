@@ -36,6 +36,8 @@ educe = "0.4"
 enum-as-inner = "0.5"
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
+geo = { version = "0.27.0", features = ["use-serde"] }
+geozero = { version = "0.11.0", features = ["default", "with-wkb"] }
 hex = "0.4.3"
 itertools = { workspace = true }
 jsonb = { workspace = true }

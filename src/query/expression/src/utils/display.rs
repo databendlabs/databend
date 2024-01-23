@@ -21,6 +21,8 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use geozero::wkb::Ewkb;
+use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use roaring::RoaringTreemap;
@@ -162,6 +164,10 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 Ok(())
             }
+            ScalarRef::Geometry(s) => {
+                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                write!(f, "{geom:?}")
+            }
         }
     }
 }
@@ -185,6 +191,7 @@ impl Debug for Column {
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
+            Column::Geometry(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -244,6 +251,10 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Variant(s) => {
                 let value = jsonb::to_string(s);
                 write!(f, "{value}")
+            }
+            ScalarRef::Geometry(s) => {
+                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                write!(f, "{geom:?}")
             }
         }
     }
@@ -509,6 +520,7 @@ impl Display for DataType {
                 write!(f, ")")
             }
             DataType::Variant => write!(f, "Variant"),
+            DataType::Geometry => write!(f, "Geometry"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -556,6 +568,7 @@ impl Display for TableDataType {
                 write!(f, ")")
             }
             TableDataType::Variant => write!(f, "Variant"),
+            TableDataType::Geometry => write!(f, "Geometry"),
         }
     }
 }

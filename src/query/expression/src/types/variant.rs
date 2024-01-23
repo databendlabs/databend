@@ -15,6 +15,8 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use geozero::wkb::Ewkb;
+use geozero::ToJson;
 use roaring::RoaringTreemap;
 
 use super::binary::BinaryColumn;
@@ -264,6 +266,12 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Variant(bytes) => {
             buf.extend_from_slice(bytes);
             return;
+        }
+        ScalarRef::Geometry(bytes) => {
+            let geometry = Ewkb(bytes.to_vec())
+                .to_json()
+                .expect("failed to decode wkb data");
+            jsonb::Value::String(geometry.into())
         }
     };
     value.write_to_vec(buf);
