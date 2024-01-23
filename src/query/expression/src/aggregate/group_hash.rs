@@ -16,6 +16,7 @@ use ethnum::i256;
 use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
+use crate::types::geometry::GeometryType;
 use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
@@ -68,6 +69,7 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
         DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
         DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
         DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
+        DataType::Geometry => combine_group_hash_string_column::<IS_FIRST, GeometryType>(c, values),
         DataType::Nullable(_) => {
             let col = c.as_nullable().unwrap();
             if IS_FIRST {

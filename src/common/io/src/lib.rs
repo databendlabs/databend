@@ -38,6 +38,7 @@ pub mod cursor_ext;
 mod decimal;
 mod escape;
 mod format_settings;
+mod geometry;
 mod position;
 mod stat_buffer;
 
@@ -46,3 +47,4 @@ pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
+pub use geometry::parse_to_ewkb;
