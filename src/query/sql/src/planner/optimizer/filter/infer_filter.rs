@@ -429,20 +429,26 @@ impl InferFilterOptimizer {
             }
         }
 
-        for equal_index_set in equal_index_sets.into_values() {
-            let equal_index_set = equal_index_set.into_iter().collect::<Vec<_>>();
-            let equal_index_set_len = equal_index_set.len();
-            for i in 0..equal_index_set_len {
-                for j in i + 1..equal_index_set_len {
-                    result.push(ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: String::from(ComparisonOp::Equal.to_func_name()),
-                        params: vec![],
-                        arguments: vec![
-                            self.exprs[equal_index_set[i]].clone(),
-                            self.exprs[equal_index_set[j]].clone(),
-                        ],
-                    }));
+        for index in 0..num_exprs {
+            let parent_index = Self::find(&mut parents, index);
+            if index == parent_index {
+                if let Some(equal_index_set) = equal_index_sets.get(&parent_index) {
+                    let mut equal_indexes = equal_index_set.iter().copied().collect::<Vec<_>>();
+                    equal_indexes.sort();
+                    let equal_indexes_len = equal_indexes.len();
+                    for i in 0..equal_indexes_len {
+                        for j in i + 1..equal_indexes_len {
+                            result.push(ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: String::from(ComparisonOp::Equal.to_func_name()),
+                                params: vec![],
+                                arguments: vec![
+                                    self.exprs[equal_indexes[i]].clone(),
+                                    self.exprs[equal_indexes[j]].clone(),
+                                ],
+                            }));
+                        }
+                    }
                 }
             }
         }

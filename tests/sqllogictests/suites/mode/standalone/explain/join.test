@@ -505,8 +505,8 @@ explain select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b  where t2.
 HashJoin
 ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
-├── build keys: [t2.b (#3), t2.a (#2)]
-├── probe keys: [t1.b (#1), t1.a (#0)]
+├── build keys: [t2.a (#2), t2.b (#3)]
+├── probe keys: [t1.a (#0), t1.b (#1)]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)

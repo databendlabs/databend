@@ -162,7 +162,7 @@ EXPLAIN SELECT t1.b, SUM(a) FROM t1 GROUP BY t1.b HAVING SUM(a)=(SELECT SUM(a) F
 ----
 Filter
 ├── output columns: [SUM(a) (#2), t1.b (#1)]
-├── filters: [is_true(scalar_subquery_5 (#5) = SUM(a) (#2))]
+├── filters: [is_true(SUM(a) (#2) = scalar_subquery_5 (#5))]
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [SUM(a) (#2), t1.b (#1), SUM(a) (#5)]
