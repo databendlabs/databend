@@ -31,7 +31,6 @@ pub(crate) async fn get_kv_data<T>(
 ) -> Result<T, KVAppError>
 where
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {

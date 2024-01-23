@@ -2858,6 +2858,7 @@ dependencies = [
  "log",
  "minitrace",
  "mockall",
+ "prost 0.12.1",
  "serde",
  "serde_json",
 ]
@@ -2883,6 +2884,7 @@ dependencies = [
  "logcall",
  "maplit",
  "minitrace",
+ "prost 0.12.1",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -3003,6 +3005,7 @@ dependencies = [
  "databend-common-protos",
  "databend-common-tracing",
  "openraft 0.9.0",
+ "prost 0.12.1",
  "serde",
  "serde_json",
 ]
@@ -3257,6 +3260,7 @@ dependencies = [
  "minitrace",
  "num",
  "pretty_assertions",
+ "prost 0.12.1",
  "thiserror",
 ]
 
