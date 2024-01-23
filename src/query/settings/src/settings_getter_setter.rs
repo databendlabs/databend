@@ -175,14 +175,6 @@ impl Settings {
         self.try_set_u64("max_memory_usage", val)
     }
 
-    pub fn set_retention_period(&self, hours: u64) -> Result<()> {
-        self.try_set_u64("retention_period", hours)
-    }
-
-    pub fn get_retention_period(&self) -> Result<u64> {
-        self.try_get_u64("retention_period")
-    }
-
     pub fn set_data_retention_time_in_days(&self, days: u64) -> Result<()> {
         self.try_set_u64("data_retention_time_in_days", days)
     }
