@@ -61,7 +61,7 @@ select count(*) from fuse_snapshot('db_09_0008', 't')
 5
 
 statement ok
-set retention_period = 0
+set data_retention_time_in_days = 0
 
 statement ok
 optimize table `t` purge
