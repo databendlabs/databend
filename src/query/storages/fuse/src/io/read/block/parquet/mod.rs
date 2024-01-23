@@ -58,6 +58,16 @@ impl BlockReader {
         for (i, field) in self.projected_schema.fields.iter().enumerate() {
             let data_type = field.data_type().into();
             let leaf_column_ids = field.leaf_column_ids();
+            if leaf_column_ids.len() > 1
+                && leaf_column_ids
+                    .iter()
+                    .any(|id| matches!(column_chunks.get(id), Some(DataItem::ColumnArray(_))))
+            {
+                return Err(ErrorCode::StorageOther(
+                    "unexpected nested field: nested leaf field hits cached",
+                ));
+            }
+
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(data)) => {
                     let arrow_array = column_by_name(&record_batch, &field.name);
@@ -75,11 +85,6 @@ impl BlockReader {
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)
                 }
                 Some(DataItem::ColumnArray(cached)) => {
-                    if leaf_column_ids.len() != 1 {
-                        return Err(ErrorCode::StorageOther(
-                            "unexpected nested field: nested leaf field hits cached",
-                        ));
-                    }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
