@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use geozero::error::GeozeroError;
+
 use crate::exception::ErrorCodeBacktrace;
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
@@ -226,6 +228,12 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
             error
         ))
+    }
+}
+
+impl From<GeozeroError> for ErrorCode {
+    fn from(value: GeozeroError) -> Self {
+        ErrorCode::GeometryError(value.to_string())
     }
 }
 

@@ -46,7 +46,11 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Timestamp => 8,
         DataType::Date => 4,
         // use address instead
-        DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => 4 + 8, /* u32 len + address */
+        DataType::Binary
+        | DataType::String
+        | DataType::Bitmap
+        | DataType::Variant
+        | DataType::Geometry => 4 + 8, // u32 len + address
         DataType::Nullable(x) => rowformat_size(x),
         DataType::Array(_) => todo!(),
         DataType::Map(_) => todo!(),
@@ -97,7 +101,7 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
-        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
@@ -282,18 +286,20 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) => row_match_binary_column(
-            v,
-            validity,
-            address,
-            select_vector,
-            temp_vector,
-            count,
-            validity_offset,
-            col_offset,
-            no_match,
-            no_match_count,
-        ),
+        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
+            row_match_binary_column(
+                v,
+                validity,
+                address,
+                select_vector,
+                temp_vector,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
         Column::String(v) => {
             let v = &BinaryColumn::from(v.clone());
             row_match_binary_column(

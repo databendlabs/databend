@@ -196,7 +196,10 @@ build_exceptions! {
     // Cloud control error codes
     CloudControlConnectError(1701),
     CloudControlNotEnabled(1702),
-    IllegalCloudControlMessageFormat(1703)
+    IllegalCloudControlMessageFormat(1703),
+
+    // Geometry errors.
+    GeometryError(1801)
 }
 
 // Meta service errors [2001, 3000].

@@ -26,6 +26,7 @@ mod datetime;
 mod decimal;
 mod geo;
 mod geo_h3;
+mod geometry;
 mod hash;
 mod map;
 mod math;
@@ -62,4 +63,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     decimal::register_to_decimal(registry);
     vector::register(registry);
     bitmap::register(registry);
+    geometry::register(registry);
 }
