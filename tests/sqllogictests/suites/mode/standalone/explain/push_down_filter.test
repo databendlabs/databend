@@ -266,7 +266,7 @@ Filter
     ├── table: default.default.t
     ├── output columns: [x (#0)]
     ├── read rows: 2
-    ├── read bytes: 41
+    ├── read bytes: 40
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
