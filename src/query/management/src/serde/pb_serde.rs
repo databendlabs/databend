@@ -33,9 +33,9 @@ pub fn serialize_struct<T, ErrFn, CtxFn, D>(
 ) -> Result<Vec<u8>>
 where
     T: FromToProto + 'static,
-    ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
+    ErrFn: FnOnce(String) -> ErrorCode + Copy,
     D: Display,
-    CtxFn: FnOnce() -> D + std::marker::Copy,
+    CtxFn: FnOnce() -> D + Copy,
 {
     let p = value.to_pb().map_err_to_code(err_code_fn, context_fn)?;
     let mut buf = vec![];
@@ -50,9 +50,9 @@ pub fn deserialize_struct<T, ErrFn, CtxFn, D>(
 ) -> Result<T>
 where
     T: FromToProto,
-    ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
+    ErrFn: FnOnce(String) -> ErrorCode + Copy,
     D: Display,
-    CtxFn: FnOnce() -> D + std::marker::Copy,
+    CtxFn: FnOnce() -> D + Copy,
 {
     let p: T::PB = prost::Message::decode(buf).map_err_to_code(err_code_fn, context_fn)?;
     let v: T = FromToProto::from_pb(p).map_err_to_code(err_code_fn, context_fn)?;
@@ -69,9 +69,9 @@ pub async fn check_and_upgrade_to_pb<'a, T, ErrFn, CtxFn, D>(
 ) -> std::result::Result<SeqV<T>, ErrorCode>
 where
     T: FromToProto + serde::de::DeserializeOwned + 'a + 'static,
-    ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
+    ErrFn: FnOnce(String) -> ErrorCode + Copy,
     D: Display,
-    CtxFn: FnOnce() -> D + std::marker::Copy,
+    CtxFn: FnOnce() -> D + Copy,
 {
     let deserialize_result =
         deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "");
