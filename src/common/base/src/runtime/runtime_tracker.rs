@@ -49,6 +49,7 @@ use std::fmt::Formatter;
 use std::future::Future;
 use std::mem::take;
 use std::pin::Pin;
+use std::ptr::addr_of_mut;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -67,7 +68,7 @@ pub static GLOBAL_MEM_STAT: MemStat = MemStat::global();
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
 thread_local! {
-    static TRACKER: RefCell<ThreadTracker> = RefCell::new(ThreadTracker::empty());
+    static TRACKER: RefCell<ThreadTracker> = const { RefCell::new(ThreadTracker::empty()) };
 }
 
 #[thread_local]
@@ -231,11 +232,11 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        let state_buffer = unsafe { &mut STAT_BUFFER };
+        let state_buffer = unsafe { addr_of_mut!(STAT_BUFFER) };
 
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
-        if state_buffer.destroyed_thread_local_macro {
+        if unsafe { &mut *state_buffer }.destroyed_thread_local_macro {
             let used = GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
             GLOBAL_MEM_STAT
                 .peak_used
@@ -243,9 +244,9 @@ impl ThreadTracker {
             return Ok(());
         }
 
-        let has_oom = match state_buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
+        let has_oom = match unsafe { &mut *state_buffer }.incr(size) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => state_buffer.flush::<true>(),
+            false => unsafe { &mut *state_buffer }.flush::<true>(),
         };
 
         if let Err(out_of_limit) = has_oom {
@@ -265,16 +266,16 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        let state_buffer = unsafe { &mut STAT_BUFFER };
+        let state_buffer = unsafe { addr_of_mut!(STAT_BUFFER) };
 
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
-        if state_buffer.destroyed_thread_local_macro {
+        if unsafe { &mut *state_buffer }.destroyed_thread_local_macro {
             GLOBAL_MEM_STAT.used.fetch_add(-size, Ordering::Relaxed);
             return;
         }
 
-        if state_buffer.incr(-size) < -MEM_STAT_BUFFER_SIZE {
-            let _ = state_buffer.flush::<false>();
+        if unsafe { &mut *state_buffer }.incr(-size) < -MEM_STAT_BUFFER_SIZE {
+            let _ = unsafe { &mut *state_buffer }.flush::<false>();
         }
 
         // NOTE: De-allocation does not panic

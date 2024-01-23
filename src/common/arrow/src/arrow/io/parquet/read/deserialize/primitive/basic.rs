@@ -321,7 +321,6 @@ impl<T, I, P, F> Iter<T, I, P, F>
 where
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {

@@ -488,7 +488,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {

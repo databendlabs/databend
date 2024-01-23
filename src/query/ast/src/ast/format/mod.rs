@@ -20,8 +20,6 @@ mod syntax;
 use std::fmt::Display;
 
 pub use ast_format::format_statement;
-pub use indent_format::*;
-pub use pretty_format::*;
 pub use syntax::pretty_statement;
 
 #[derive(Clone)]

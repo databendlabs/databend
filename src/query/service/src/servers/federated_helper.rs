@@ -28,7 +28,7 @@ impl FederatedHelper {
         query: &str,
         rules: &[(Regex, Option<(TableSchemaRef, DataBlock)>)],
     ) -> Option<(TableSchemaRef, DataBlock)> {
-        for (_index, (regex, data)) in rules.iter().enumerate() {
+        for (regex, data) in rules.iter() {
             if regex.is_match(query) {
                 return match data {
                     None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
@@ -44,7 +44,7 @@ impl FederatedHelper {
         query: &str,
         rules: &[(Regex, LazyBlockFunc)],
     ) -> Option<(TableSchemaRef, DataBlock)> {
-        for (_index, (regex, func)) in rules.iter().enumerate() {
+        for (regex, func) in rules.iter() {
             if regex.is_match(query) {
                 return match func(query) {
                     None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),

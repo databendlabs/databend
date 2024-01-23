@@ -399,7 +399,7 @@ impl AligningStateTrait for ParquetAligningState {
     }
 }
 
-fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
+fn get_used_fields(fields: &[Field], schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
         if let Some(m) = fields
