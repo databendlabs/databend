@@ -355,6 +355,36 @@ query II
 select a, b from s3
 ----
 
+###############
+# issue 14431 #
+###############
+
+statement ok
+create stream default.s4 on table t3
+
+statement ok
+insert into t3 values(7, 7)
+
+query II
+select a, b from default.s4
+----
+7 7
+
+statement ok
+drop stream default.s4
+
+######################
+# end of issue 14431 #
+######################
+
+statement error 2733
+create stream s_err on table t4 at (stream => s3)
+
+statement ok
+create transient table t5(a int)
+
+statement error 2733
+create stream s5 on table t5
 
 statement ok
 drop stream s3
@@ -364,6 +394,9 @@ drop table t3 all
 
 statement ok
 drop table t4 all
+
+statement ok
+drop table t5 all
 
 statement ok
 DROP DATABASE IF EXISTS test_stream
