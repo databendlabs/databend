@@ -108,7 +108,6 @@ pub fn deserialize_struct_get_response<K, T>(
 where
     K: kvapi::Key,
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let key = K::from_str_key(&resp.key).map_err(|e| {
         let inv = InvalidReply::new(
@@ -160,7 +159,6 @@ pub async fn get_pb_value<K, T>(
 where
     K: kvapi::Key,
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&k.to_string_key()).await?;
 
@@ -178,7 +176,6 @@ pub async fn mget_pb_values<T>(
 ) -> Result<Vec<(u64, Option<T>)>, MetaError>
 where
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let seq_bytes = kv_api.mget_kv(keys).await?;
     let mut seq_values = Vec::with_capacity(keys.len());
@@ -289,16 +286,13 @@ pub async fn fetch_id<T: kvapi::Key>(
 }
 
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
-where
-    T: FromToProto + 'static,
-    T::PB: databend_common_protos::prost::Message,
-{
+where T: FromToProto + 'static {
     let p = value.to_pb().map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+    prost::Message::encode(&p, &mut buf).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -306,11 +300,8 @@ where
 }
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
-where
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
-{
-    let p: T::PB = databend_common_protos::prost::Message::decode(buf).map_err(|e| {
+where T: FromToProto {
+    let p: T::PB = prost::Message::decode(buf).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;
