@@ -91,9 +91,6 @@ query I
 select a from s
 ----
 
-statement error 2733
-create stream s_err on table t1 at (stream => s)
-
 statement ok
 insert into t values(4)
 
@@ -379,6 +376,9 @@ drop stream default.s4
 ######################
 # end of issue 14431 #
 ######################
+
+statement error 2733
+create stream s_err on table t4 at (stream => s3)
 
 statement ok
 create transient table t5(a int)
