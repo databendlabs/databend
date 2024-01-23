@@ -4389,3 +4389,154 @@ output domain  : Undefined
 output         : {"a":3,"b":4,"d":10}
 
 
+error: 
+  --> SQL:1:20
+  |
+1 | parse_json('true') - '1'
+  |                    ^ InvalidJsonType while evaluating function `minus(true, '1')`
+
+
+
+ast            : parse_json('[1,2,3]') - '1'
+raw expr       : minus(parse_json('[1,2,3]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[1,2,3]"), "1")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3]
+
+
+ast            : parse_json('["1","2","3"]') - '0'
+raw expr       : minus(parse_json('["1","2","3"]'), '0')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "0")
+optimized expr : 0x80000003100000011000000110000001313233
+output type    : Variant
+output domain  : Undefined
+output         : ["1","2","3"]
+
+
+ast            : parse_json('["1","2","3"]') - '1'
+raw expr       : minus(parse_json('["1","2","3"]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+optimized expr : 0x8000000210000001100000013233
+output type    : Variant
+output domain  : Undefined
+output         : ["2","3"]
+
+
+ast            : parse_json('["1","2","3",{"a":1,"b":2}]') - '1'
+raw expr       : minus(parse_json('["1","2","3",{"a":1,"b":2}]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\",{\"a\":1,\"b\":2}]"), "1")
+optimized expr : 0x8000000310000001100000015000001a32334000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : ["2","3",{"a":1,"b":2}]
+
+
+ast            : parse_json('{"a":1,"b":2}') - 'c'
+raw expr       : minus(parse_json('{"a":1,"b":2}'), 'c')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "c")
+optimized expr : 0x4000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : {"a":1,"b":2}
+
+
+ast            : parse_json('{"a":1,"b":2}') - 'a'
+raw expr       : minus(parse_json('{"a":1,"b":2}'), 'a')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "a")
+optimized expr : 0x400000011000000120000002625002
+output type    : Variant
+output domain  : Undefined
+output         : {"b":2}
+
+
+ast            : parse_json('{"b":2}') - 'b'
+raw expr       : minus(parse_json('{"b":2}'), 'b')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"b\":2}"), "b")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : {}
+
+
+error: 
+  --> SQL:1:20
+  |
+1 | parse_json('true') - 1
+  |                    ^ InvalidJsonType while evaluating function `minus(true, 1)`
+
+
+
+ast            : parse_json('[1,2,3]') - 0
+raw expr       : minus(parse_json('[1,2,3]'), 0)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(0_u8))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : [2,3]
+
+
+ast            : parse_json('[1,2,3]') - 1
+raw expr       : minus(parse_json('[1,2,3]'), 1)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(1_u8))
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : [1,3]
+
+
+ast            : parse_json('[1,2,3]') - 2
+raw expr       : minus(parse_json('[1,2,3]'), 2)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(2_u8))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
+
+
+ast            : parse_json('[1,2,3]') - -1
+raw expr       : minus(parse_json('[1,2,3]'), minus(1))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(1_u8)))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
+
+
+ast            : parse_json('[1,2,3]') - -2
+raw expr       : minus(parse_json('[1,2,3]'), minus(2))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(2_u8)))
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : [1,3]
+
+
+ast            : parse_json('[1,2,3]') - -3
+raw expr       : minus(parse_json('[1,2,3]'), minus(3))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(3_u8)))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : [2,3]
+
+
+ast            : parse_json('[1,2,3]') - -4
+raw expr       : minus(parse_json('[1,2,3]'), minus(4))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(4_u8)))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3]
+
+
+ast            : parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2
+raw expr       : minus(parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]'), 2)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,{\"a\":[1,2,3],\"b\":[40,50,60]}]"), to_int32<UInt8>(2_u8))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
+
+
