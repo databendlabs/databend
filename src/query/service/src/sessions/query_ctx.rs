@@ -36,6 +36,7 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -919,6 +920,11 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
+        let mut merge_into_join = self.shared.merge_into_join.write();
+        *merge_into_join = join;
+    }
+
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
@@ -936,6 +942,15 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let merge_into_join = self.shared.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
+            is_distributed: merge_into_join.is_distributed,
+            target_tbl_idx: merge_into_join.target_tbl_idx,
         }
     }
 

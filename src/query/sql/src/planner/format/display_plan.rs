@@ -23,6 +23,7 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::MergeIntoType;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::planner::format::display_rel_operator::FormatContext;
@@ -241,6 +242,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             order_by: None,
             prewhere: None,
             agg_index: None,
+            change_action: None,
             statistics: Default::default(),
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
@@ -292,6 +294,16 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         table_entry.database(),
         table_entry.name(),
     ));
+    let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
+        && !merge_into.columns_set.contains(&merge_into.row_id_index);
+    let target_build_optimization_format = FormatTreeNode::new(FormatContext::Text(format!(
+        "target_build_optimization: {}",
+        target_build_optimization
+    )));
+    let distributed_format = FormatTreeNode::new(FormatContext::Text(format!(
+        "distributed: {}",
+        merge_into.distributed
+    )));
 
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
@@ -307,12 +319,14 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
                 condition_format
             ))));
         } else {
-            let update_format = evaluator
-                .update
-                .as_ref()
-                .unwrap()
+            let map = evaluator.update.as_ref().unwrap();
+            let mut field_indexes: Vec<usize> =
+                map.iter().map(|(field_idx, _)| *field_idx).collect();
+            field_indexes.sort();
+            let update_format = field_indexes
                 .iter()
-                .map(|(field_idx, expr)| {
+                .map(|field_idx| {
+                    let expr = map.get(field_idx).unwrap();
                     format!(
                         "{} = {}",
                         taregt_schema.field(*field_idx).name(),
@@ -351,9 +365,13 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     }
     let s_expr = merge_into.input.as_ref();
     let input_format_child = s_expr.to_format_tree(&merge_into.meta_data);
-    let all_children = [matched_children, unmatched_children, vec![
-        input_format_child,
-    ]]
+    let all_children = [
+        vec![distributed_format],
+        vec![target_build_optimization_format],
+        matched_children,
+        unmatched_children,
+        vec![input_format_child],
+    ]
     .concat();
     let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
     Ok(format!("MergeInto:\n{res}"))

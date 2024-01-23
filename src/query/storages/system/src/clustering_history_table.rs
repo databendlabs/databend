@@ -65,11 +65,11 @@ impl SystemLogElement for ClusteringHistoryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.database.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.database.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.table.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.table.clone()).as_ref());
         columns
             .next()
             .unwrap()

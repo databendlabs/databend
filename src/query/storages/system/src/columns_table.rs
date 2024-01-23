@@ -58,22 +58,22 @@ impl AsyncSystemTable for ColumnsTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let rows = self.dump_table_columns(ctx, push_downs).await?;
-        let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut is_nullables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut comments: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut names: Vec<String> = Vec::with_capacity(rows.len());
+        let mut tables: Vec<String> = Vec::with_capacity(rows.len());
+        let mut databases: Vec<String> = Vec::with_capacity(rows.len());
+        let mut types: Vec<String> = Vec::with_capacity(rows.len());
+        let mut data_types: Vec<String> = Vec::with_capacity(rows.len());
+        let mut default_kinds: Vec<String> = Vec::with_capacity(rows.len());
+        let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
+        let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
+        let mut comments: Vec<String> = Vec::with_capacity(rows.len());
         for (database_name, table_name, field) in rows.into_iter() {
-            names.push(field.name().clone().into_bytes());
-            tables.push(table_name.into_bytes());
-            databases.push(database_name.into_bytes());
-            types.push(field.data_type().wrapped_display().into_bytes());
+            names.push(field.name().clone());
+            tables.push(table_name);
+            databases.push(database_name);
+            types.push(field.data_type().wrapped_display());
             let data_type = field.data_type().remove_recursive_nullable().sql_name();
-            data_types.push(data_type.into_bytes());
+            data_types.push(data_type);
 
             let mut default_kind = "".to_string();
             let mut default_expr = "".to_string();
@@ -81,15 +81,15 @@ impl AsyncSystemTable for ColumnsTable {
                 default_kind = "DEFAULT".to_string();
                 default_expr = expr.to_string();
             }
-            default_kinds.push(default_kind.into_bytes());
-            default_exprs.push(default_expr.into_bytes());
+            default_kinds.push(default_kind);
+            default_exprs.push(default_expr);
             if field.is_nullable() {
-                is_nullables.push("YES".to_string().into_bytes());
+                is_nullables.push("YES".to_string());
             } else {
-                is_nullables.push("NO".to_string().into_bytes());
+                is_nullables.push("NO".to_string());
             }
 
-            comments.push("".to_string().into_bytes());
+            comments.push("".to_string());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -166,7 +166,7 @@ pub(crate) async fn dump_tables(
     let tenant = ctx.get_tenant();
     let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
-    let mut tables = Vec::new();
+    let mut tables: Vec<String> = Vec::new();
     let mut databases: Vec<String> = Vec::new();
 
     if let Some(push_downs) = push_downs {
@@ -174,19 +174,15 @@ pub(crate) async fn dump_tables(
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
             find_eq_filter(&expr, &mut |col_name, scalar| {
                 if col_name == "database" {
-                    if let Scalar::String(s) = scalar {
-                        if let Ok(database) = String::from_utf8(s.clone()) {
-                            if !databases.contains(&database) {
-                                databases.push(database);
-                            }
+                    if let Scalar::String(database) = scalar {
+                        if !databases.contains(database) {
+                            databases.push(database.clone());
                         }
                     }
                 } else if col_name == "table" {
-                    if let Scalar::String(s) = scalar {
-                        if let Ok(table) = String::from_utf8(s.clone()) {
-                            if !tables.contains(&table) {
-                                tables.push(table);
-                            }
+                    if let Scalar::String(table) = scalar {
+                        if !tables.contains(table) {
+                            tables.push(table.clone());
                         }
                     }
                 }

@@ -105,6 +105,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (73, "2024-01-11: Add: config.proto/StorageConfig add HuggingfaceConfig", ),
     (74, "2024-01-12: Remove: owner in DatabaseMeta and TableMeta", ),
     (75, "2024-01-15: ADD: user.proto/CsvFileFormatParams add field `binary_format` and `output_header`", ),
+    (76, "2024-01-18: ADD: ownership.proto and role.proto", ),
+    (77, "2024-01-22: Remove: allow_anonymous in S3 Config", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

@@ -58,7 +58,7 @@ impl Binder {
             ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
         match new_expr {
             databend_common_expression::Expr::Constant { scalar, .. } => {
-                let value = String::from_utf8(scalar.into_string().unwrap())?;
+                let value = scalar.into_string().unwrap();
                 let vars = vec![VarValue {
                     is_global,
                     variable,

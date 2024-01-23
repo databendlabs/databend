@@ -175,6 +175,7 @@ impl FuseTable {
             gen_mutation_stream_operator(
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
+                false,
             )?
         } else {
             (vec![], vec![])

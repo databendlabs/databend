@@ -95,9 +95,7 @@ impl Interpreter for PresignInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        presigned_req.method().as_str().as_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(presigned_req.method().as_str().to_string())),
                 ),
                 BlockEntry::new(
                     DataType::Variant,
@@ -105,9 +103,7 @@ impl Interpreter for PresignInterpreter {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        presigned_req.uri().to_string().as_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(presigned_req.uri().to_string())),
                 ),
             ],
             1,

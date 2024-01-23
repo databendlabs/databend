@@ -183,6 +183,14 @@ impl Settings {
         self.try_get_u64("retention_period")
     }
 
+    pub fn set_data_retention_time_in_days(&self, days: u64) -> Result<()> {
+        self.try_set_u64("data_retention_time_in_days", days)
+    }
+
+    pub fn get_data_retention_time_in_days(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_time_in_days")
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }
@@ -276,6 +284,10 @@ impl Settings {
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
+    }
+
+    pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -491,7 +503,7 @@ impl Settings {
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
-        Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
+        Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
 
     pub fn get_enable_query_profiling(&self) -> Result<bool> {

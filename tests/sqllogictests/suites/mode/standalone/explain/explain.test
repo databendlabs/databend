@@ -1173,49 +1173,49 @@ from numbers(10) where number > 5
 ) b on  a.number=b.number order by a.number) where pt = register_at;
 ----
 Sort
-├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
+├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── HashJoin
-    ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
+    ├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
     ├── join type: INNER
-    ├── build keys: [b.number (#2), b.register_at (#3)]
-    ├── probe keys: [a.number (#0), a.pt (#1)]
+    ├── build keys: [a.number (#0), a.pt (#1)]
+    ├── probe keys: [b.number (#2), b.register_at (#3)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#2), register_at (#3)]
-    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
+    │   ├── output columns: [numbers.number (#0), pt (#1)]
+    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
     │   ├── estimated rows: 0.00
     │   └── Filter
-    │       ├── output columns: [numbers.number (#2)]
-    │       ├── filters: [numbers.number (#2) > 5]
+    │       ├── output columns: [numbers.number (#0)]
+    │       ├── filters: [numbers.number (#0) > 5]
     │       ├── estimated rows: 0.00
     │       └── TableScan
     │           ├── table: default.system.numbers
-    │           ├── output columns: [number (#2)]
+    │           ├── output columns: [number (#0)]
     │           ├── read rows: 10
     │           ├── read bytes: 80
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
-    │           ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
+    │           ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
     │           └── estimated rows: 10.00
     └── EvalScalar(Probe)
-        ├── output columns: [numbers.number (#0), pt (#1)]
-        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
+        ├── output columns: [numbers.number (#2), register_at (#3)]
+        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
         ├── estimated rows: 0.00
         └── Filter
-            ├── output columns: [numbers.number (#0)]
-            ├── filters: [numbers.number (#0) > 5]
+            ├── output columns: [numbers.number (#2)]
+            ├── filters: [numbers.number (#2) > 5]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── output columns: [number (#0)]
+                ├── output columns: [number (#2)]
                 ├── read rows: 10
                 ├── read bytes: 80
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+                ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
                 └── estimated rows: 10.00
 
 
@@ -1264,7 +1264,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(id (#2) = b.id (#2))], limit: NONE]
+    │       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
     │       └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.default.a
@@ -1642,7 +1642,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -1697,7 +1697,7 @@ Filter
     │                       ├── read bytes: 0
     │                       ├── partitions total: 0
     │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(t1.a (#3) = a (#3))], limit: NONE]
+    │                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
     │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2

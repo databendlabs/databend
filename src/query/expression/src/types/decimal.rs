@@ -120,6 +120,8 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         *col.get_unchecked(index)
     }
 
@@ -944,6 +946,7 @@ impl DecimalColumn {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> DecimalScalar {
+        debug_assert!(index < self.len());
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 DecimalScalar::DECIMAL_TYPE(*col.get_unchecked(index), *size),

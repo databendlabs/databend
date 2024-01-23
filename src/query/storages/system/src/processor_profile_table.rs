@@ -53,13 +53,13 @@ impl SyncSystemTable for ProcessorProfileTable {
         let local_id = ctx.get_cluster().local_id.clone();
         let total_size = queries_profiles.values().map(Vec::len).sum();
 
-        let mut node: Vec<Vec<u8>> = Vec::with_capacity(total_size);
-        let mut queries_id: Vec<Vec<u8>> = Vec::with_capacity(total_size);
+        let mut node: Vec<String> = Vec::with_capacity(total_size);
+        let mut queries_id: Vec<String> = Vec::with_capacity(total_size);
         let mut pid: Vec<u64> = Vec::with_capacity(total_size);
-        let mut p_name: Vec<Vec<u8>> = Vec::with_capacity(total_size);
+        let mut p_name: Vec<String> = Vec::with_capacity(total_size);
         let mut plan_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut parent_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
-        let mut plan_name: Vec<Option<Vec<u8>>> = Vec::with_capacity(total_size);
+        let mut plan_name: Vec<Option<String>> = Vec::with_capacity(total_size);
         let mut cpu_time: Vec<u64> = Vec::with_capacity(total_size);
         let mut wait_time: Vec<u64> = Vec::with_capacity(total_size);
         let mut exchange_rows: Vec<u64> = Vec::with_capacity(total_size);
@@ -67,13 +67,13 @@ impl SyncSystemTable for ProcessorProfileTable {
 
         for (query_id, query_profiles) in queries_profiles {
             for query_profile in query_profiles {
-                node.push(local_id.clone().into_bytes());
-                queries_id.push(query_id.clone().into_bytes());
+                node.push(local_id.clone());
+                queries_id.push(query_id.clone());
                 pid.push(query_profile.pid as u64);
-                p_name.push(query_profile.p_name.clone().into_bytes());
+                p_name.push(query_profile.p_name.clone());
                 plan_id.push(query_profile.plan_id);
                 parent_id.push(query_profile.plan_parent_id);
-                plan_name.push(query_profile.plan_name.clone().map(String::into_bytes));
+                plan_name.push(query_profile.plan_name.clone());
 
                 cpu_time.push(query_profile.cpu_time.load(Ordering::Relaxed));
                 wait_time.push(query_profile.wait_time.load(Ordering::Relaxed));

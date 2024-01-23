@@ -47,6 +47,7 @@ impl Binder {
             table_database,
             table,
             stream_point,
+            append_only,
             comment,
         } = stmt;
 
@@ -80,6 +81,7 @@ impl Binder {
             table_database,
             table_name,
             navigation,
+            append_only: *append_only,
             comment: comment.clone(),
         };
         Ok(Plan::CreateStream(plan.into()))

@@ -83,14 +83,6 @@ impl SyncSystemTable for SettingsTable {
             types.push(typename.to_string());
         }
 
-        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let defaults: Vec<Vec<u8>> = defaults.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let ranges: Vec<Vec<u8>> = ranges.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let levels: Vec<Vec<u8>> = levels.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(values),

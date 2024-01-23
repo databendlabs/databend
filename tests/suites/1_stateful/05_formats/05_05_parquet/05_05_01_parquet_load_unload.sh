@@ -9,11 +9,11 @@ echo "CREATE TABLE test_load_unload
 (
     a VARCHAR NULL,
     b float,
-    c array(string),
+    c array(string not null),
     d Variant,
     e timestamp,
     f decimal(4, 2),
-    h tuple(string,int)
+    h tuple(string not null,int not null)
 );" | $BENDSQL_CLIENT_CONNECT
 
 insert_data() {

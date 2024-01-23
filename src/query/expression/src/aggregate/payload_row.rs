@@ -108,7 +108,7 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::String(v) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
-                let data = arena.alloc_slice_copy(v.index_unchecked(index));
+                let data = arena.alloc_slice_copy(v.index_unchecked(index).as_bytes());
 
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
 

@@ -4,6 +4,9 @@ set sandbox_tenant = 'test_tenant';
 statement ok
 use tpch_test;
 
+statement ok
+set enable_runtime_filter = 1;
+
 query I
 select
     c_custkey, count(o_orderkey) as c_count
@@ -328,3 +331,6 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 3
 3
 3
+
+statement ok
+set enable_runtime_filter = 0;

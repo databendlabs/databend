@@ -58,10 +58,10 @@ impl SyncSystemTable for ClustersTable {
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
 
-            names.push(Scalar::String(cluster_node.id.as_bytes().to_vec()).as_ref());
-            addresses.push(Scalar::String(ip.as_bytes().to_vec()).as_ref());
+            names.push(Scalar::String(cluster_node.id.clone()).as_ref());
+            addresses.push(Scalar::String(ip).as_ref());
             addresses_port.push(Scalar::Number(NumberScalar::UInt16(port)).as_ref());
-            versions.push(Scalar::String(cluster_node.binary_version.as_bytes().to_vec()).as_ref());
+            versions.push(Scalar::String(cluster_node.binary_version.clone()).as_ref());
         }
 
         Ok(DataBlock::new_from_columns(vec![

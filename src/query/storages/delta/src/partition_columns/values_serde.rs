@@ -38,7 +38,7 @@ fn field_to_value(value: &ParquetFieldValue) -> Result<Scalar> {
         ParquetFieldValue::ULong(v) => Ok(Scalar::Number(NumberScalar::UInt64(*v))),
         ParquetFieldValue::Float(v) => Ok(Scalar::Number(NumberScalar::Float32(OrderedFloat(*v)))),
         ParquetFieldValue::Double(v) => Ok(Scalar::Number(NumberScalar::Float64(OrderedFloat(*v)))),
-        ParquetFieldValue::Str(v) => Ok(Scalar::String(v.as_bytes().to_vec())),
+        ParquetFieldValue::Str(v) => Ok(Scalar::String(v.clone())),
         _ => Err(ErrorCode::IllegalDataType(format!(
             "Unsupported parquet type {:?}",
             value
@@ -54,7 +54,7 @@ pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
     }
     match data_type {
         DataType::Nullable(t) => str_to_scalar(value, t),
-        DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
+        DataType::String => Ok(Scalar::String(value.to_string())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {
                 let num = value.parse::<u8>().unwrap();

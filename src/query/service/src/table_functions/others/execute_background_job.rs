@@ -53,7 +53,7 @@ impl ExecuteBackgroundJobTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let job_name = String::from_utf8_lossy(args[0].as_string().unwrap().as_slice()).to_string();
+        let job_name = args[0].as_string().unwrap().clone();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -107,7 +107,7 @@ impl Table for ExecuteBackgroundJobTable {
 
     fn table_args(&self) -> Option<TableArgs> {
         Some(TableArgs::new_positioned(vec![Scalar::String(
-            self.job_name.as_bytes().to_vec(),
+            self.job_name.clone(),
         )]))
     }
 

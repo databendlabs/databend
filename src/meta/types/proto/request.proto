@@ -44,6 +44,7 @@ message TxnPutRequest {
   bytes value = 2;
 
   // Whether or not to return the prev value
+  // Not used anymore
   bool prev_value = 3;
 
   // Absolute expire time
@@ -64,7 +65,9 @@ message TxnPutResponse {
 // Delete request and response
 message TxnDeleteRequest {
   string key = 1;
+
   // if or not return the prev value
+  // Not used anymore
   bool prev_value = 2;
 
   // Delete only if the `seq` matches the specified value.
