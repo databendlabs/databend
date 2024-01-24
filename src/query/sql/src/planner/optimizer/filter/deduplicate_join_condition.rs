@@ -23,6 +23,17 @@ use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
+// The DeduplicateJoinConditionOptimizer will use the Union-Find algorithm to remove duplicate join conditions,
+// for example: select * from t1, t2, t3 where t1.id = t2.id and t1.id = t3.id and t2.id = t3.id, its join tree is:
+//
+//    Join [t1.id = t3.id, t2.id = t3.id(removed)]
+//    /  \
+//   t3   \
+//       Join: [t1.id = t2.id]
+//       /  \
+//      t1  t2
+// 
+// Join condition `t2.id = t3.id` is duplicate, so we can remove it.
 pub struct DeduplicateJoinConditionOptimizer {
     pub scalar_expr_index: HashMap<ScalarExpr, usize>,
     pub parent: HashMap<usize, usize>,

@@ -31,19 +31,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
-struct Predicate {
-    op: ComparisonOp,
-    constant: ConstantExpr,
-}
-
-enum MergeResult {
-    All,
-    Left,
-    Right,
-    None,
-}
-
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
 // 2. [A = 10 and A = B] => [B = 10]
@@ -455,6 +442,19 @@ impl InferFilterOptimizer {
 
         result
     }
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+struct Predicate {
+    op: ComparisonOp,
+    constant: ConstantExpr,
+}
+
+enum MergeResult {
+    All,
+    Left,
+    Right,
+    None,
 }
 
 pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
