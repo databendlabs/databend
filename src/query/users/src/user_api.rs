@@ -47,8 +47,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
-use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
     meta: MetaStore,
