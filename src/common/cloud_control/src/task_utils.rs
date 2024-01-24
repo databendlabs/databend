@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -77,6 +78,7 @@ pub struct Task {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_suspended_at: Option<DateTime<Utc>>,
+    pub session_params: BTreeMap<String, String>,
 }
 
 pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
@@ -203,6 +205,7 @@ impl TryFrom<crate::pb::Task> for Task {
             status,
             created_at,
             updated_at,
+            session_params: value.session_parameters,
         };
         Ok(t)
     }
@@ -227,6 +230,7 @@ pub struct TaskRun {
     pub error_code: i64,
     pub error_message: Option<String>,
     pub root_task_id: String,
+    pub session_params: BTreeMap<String, String>,
 }
 
 // convert from crate::pb::taskRun to struct taskRun
@@ -305,6 +309,7 @@ impl TryFrom<crate::pb::TaskRun> for TaskRun {
             scheduled_at,
             completed_at,
             root_task_id: value.root_task_id,
+            session_params: value.session_parameters,
         };
         Ok(tr)
     }
