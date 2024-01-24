@@ -143,7 +143,7 @@ impl BloomIndexState {
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
-                ctx.get_settings().get_fuse_write_use_parquet2()?,
+                true,
             )?;
             let data_size = data.len() as u64;
             Ok(Some(Self {

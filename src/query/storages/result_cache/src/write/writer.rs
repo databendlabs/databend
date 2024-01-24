@@ -75,7 +75,7 @@ impl ResultCacheWriter {
             self.blocks.clone(),
             &mut buf,
             TableCompression::None,
-            self.ctx.get_settings().get_fuse_write_use_parquet2()?,
+            true,
         )?;
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());
