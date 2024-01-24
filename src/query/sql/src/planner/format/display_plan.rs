@@ -307,7 +307,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     )));
     let update_column_only_optimization_format = FormatTreeNode::new(FormatContext::Text(format!(
         "update_column_only_optimization: {}",
-        merge_into.is_update_column_only
+        merge_into.can_try_update_column_only
     )));
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());

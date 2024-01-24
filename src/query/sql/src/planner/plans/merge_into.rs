@@ -76,7 +76,7 @@ pub struct MergeInto {
     // evaluator, we can just do projection to get the right columns.But the limitation is below:
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
-    pub is_update_column_only: bool,
+    pub can_try_update_column_only: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -92,7 +92,7 @@ impl std::fmt::Debug for MergeInto {
             .field("distributed", &self.distributed)
             .field(
                 "update_column_only_optimization",
-                &self.is_update_column_only,
+                &self.can_try_update_column_only,
             )
             .finish()
     }

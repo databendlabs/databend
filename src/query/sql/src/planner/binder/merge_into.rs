@@ -137,7 +137,7 @@ impl Binder {
         Ok(Plan::MergeInto(Box::new(plan)))
     }
 
-    fn is_update_column_only(&self, matched_clauses: &[MatchedClause]) -> bool {
+    fn can_try_update_column_only(&self, matched_clauses: &[MatchedClause]) -> bool {
         if matched_clauses.len() == 1 {
             let matched_clause = &matched_clauses[0];
             if matched_clause.selection.is_none() {
@@ -444,7 +444,7 @@ impl Binder {
             change_join_order: false,
             row_id_index: column_binding.index,
             split_idx,
-            is_update_column_only: self.is_update_column_only(&matched_clauses),
+            can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
         })
     }
 

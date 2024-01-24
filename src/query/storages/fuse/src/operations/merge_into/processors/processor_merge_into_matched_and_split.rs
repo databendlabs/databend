@@ -126,10 +126,58 @@ pub struct MatchedSplitProcessor {
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
     target_build_optimization: bool,
-    is_update_column_only: bool,
+    can_try_update_column_only: bool,
 }
 
 impl MatchedSplitProcessor {
+    pub fn try_update_column_only(
+        update_projections: &mut Vec<usize>,
+        matched: MatchExpr,
+        field_index_of_input_schema: HashMap<FieldIndex, usize>,
+    ) -> bool {
+        assert_eq!(matched.len(), 1);
+        let item = &matched[0];
+        // there is no condition
+        assert!(item.0.is_none());
+        // it's update not delete.
+        assert!(item.1.is_some());
+        let update_exprs = item.1.as_ref().unwrap();
+        let mut update_field_indexes: HashMap<FieldIndex, IndexType> =
+            HashMap::with_capacity(update_exprs.len());
+        for item in update_exprs.iter() {
+            let mut update_set_expr = if let RemoteExpr::FunctionCall { id, args, .. } = &item.1 {
+                assert_eq!(id.name(), "if");
+                // the predcate is always true.
+                &args[1]
+            } else {
+                unreachable!()
+            };
+            // in `generate_update_list` we will do `wrap_cast_expr` to cast `left` into dest_type,
+            // but after that, we will do a `type_check` in `scalar.as_expr`, if the cast's dest_type
+            // is the same, we will deref the `cast`.
+            if let RemoteExpr::Cast { expr, .. } = update_set_expr {
+                update_set_expr = expr.as_ref();
+            }
+
+            if let RemoteExpr::ColumnRef { id, .. } = update_set_expr {
+                // (field_index,project_idx)
+                update_field_indexes.insert(item.0, *id);
+            } else {
+                return false;
+            }
+        }
+
+        // `field_index_of_input_schema` contains all columns of target_table
+        for field_index in 0..field_index_of_input_schema.len() {
+            if update_field_indexes.contains_key(&field_index) {
+                update_projections.push(*update_field_indexes.get(&field_index).unwrap());
+            } else {
+                update_projections.push(*field_index_of_input_schema.get(&field_index).unwrap());
+            }
+        }
+        true
+    }
+
     pub fn create(
         ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
@@ -138,54 +186,21 @@ impl MatchedSplitProcessor {
         input_schema: DataSchemaRef,
         target_table_schema: DataSchemaRef,
         target_build_optimization: bool,
-        is_update_column_only: bool,
+        can_try_update_column_only: bool,
     ) -> Result<Self> {
         let mut update_projections = Vec::with_capacity(field_index_of_input_schema.len());
         let mut ops = Vec::<MutationKind>::new();
-        if is_update_column_only {
-            assert_eq!(matched.len(), 1);
-            let item = &matched[0];
-            // there is no condition
-            assert!(item.0.is_none());
-            // it's update not delete.
-            assert!(item.1.is_some());
-            let update_exprs = item.1.as_ref().unwrap();
-            let update_field_indexes: HashMap<FieldIndex, IndexType> = update_exprs
-                .iter()
-                .map(|item| {
-                    let mut update_set_expr =
-                        if let RemoteExpr::FunctionCall { id, args, .. } = &item.1 {
-                            assert_eq!(id.name(), "if");
-                            // the predcate is always true.
-                            &args[1]
-                        } else {
-                            unreachable!()
-                        };
-                    // in `generate_update_list` we will do `wrap_cast_expr` to cast `left` into dest_type,
-                    // but after that, we will do a `type_check` in `scalar.as_expr`, if the cast's dest_type
-                    // is the same, we will deref the `cast`.
-                    if let RemoteExpr::Cast { expr, .. } = update_set_expr {
-                        update_set_expr = expr.as_ref();
-                    }
-                    assert!(matches!(update_set_expr, RemoteExpr::ColumnRef { .. }));
-                    if let RemoteExpr::ColumnRef { id, .. } = update_set_expr {
-                        // (field_index,project_idx)
-                        (item.0, *id)
-                    } else {
-                        unreachable!()
-                    }
-                })
-                .collect();
-            // `field_index_of_input_schema` contains all columns of target_table
-            for field_index in 0..field_index_of_input_schema.len() {
-                if update_field_indexes.contains_key(&field_index) {
-                    update_projections.push(*update_field_indexes.get(&field_index).unwrap());
-                } else {
-                    update_projections
-                        .push(*field_index_of_input_schema.get(&field_index).unwrap());
-                }
-            }
-        } else {
+        let mut enable_update_column_only = false;
+
+        if can_try_update_column_only {
+            enable_update_column_only = MatchedSplitProcessor::try_update_column_only(
+                &mut update_projections,
+                matched.clone(),
+                field_index_of_input_schema.clone(),
+            );
+        }
+
+        if !enable_update_column_only {
             for item in matched.iter() {
                 // delete
                 if item.1.is_none() {
@@ -240,7 +255,7 @@ impl MatchedSplitProcessor {
             update_projections,
             target_table_schema,
             target_build_optimization,
-            is_update_column_only,
+            can_try_update_column_only,
         })
     }
 
@@ -335,12 +350,12 @@ impl Processor for MatchedSplitProcessor {
                 return Ok(());
             }
             // insert-only, we need to remove this pipeline according to strategy.
-            if self.ops.is_empty() && !self.is_update_column_only {
+            if self.ops.is_empty() && !self.can_try_update_column_only {
                 return Ok(());
             }
             let start = Instant::now();
             let mut current_block = data_block;
-            if !self.is_update_column_only {
+            if !self.can_try_update_column_only {
                 for op in self.ops.iter() {
                     match op {
                         MutationKind::Update(update_mutation) => {
