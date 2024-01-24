@@ -402,7 +402,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn get_title(&self) -> Result<String> {
+    pub fn get_desc(&self) -> Result<String> {
         Ok(match self {
             PhysicalPlan::TableScan(v) => format!(
                 "{}.{}",

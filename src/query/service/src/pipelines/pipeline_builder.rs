@@ -107,7 +107,7 @@ impl PipelineBuilder {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
             _ => {
-                let title = plan.get_title()?;
+                let desc = plan.get_desc()?;
                 let plan_labels = plan.get_labels()?;
                 let mut profile_labels = Vec::with_capacity(plan_labels.len());
                 for (name, value) in plan_labels {
@@ -117,7 +117,7 @@ impl PipelineBuilder {
                 let scope = PlanScope::create(
                     plan.get_id(),
                     plan.name(),
-                    Arc::new(title),
+                    Arc::new(desc),
                     Arc::new(profile_labels),
                 );
                 Ok(Some(self.main_pipeline.add_plan_scope(scope)))
