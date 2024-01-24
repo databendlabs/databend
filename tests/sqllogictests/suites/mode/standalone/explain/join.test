@@ -774,30 +774,30 @@ query T
 explain select * from numbers(10) as t1 join numbers(20) as t2 on t1.number = t2.number;
 ----
 HashJoin
-├── output columns: [t1.number (#0), t2.number (#1)]
+├── output columns: [t2.number (#1), t1.number (#0)]
 ├── join type: INNER
-├── build keys: [t2.number (#1)]
-├── probe keys: [t1.number (#0)]
+├── build keys: [t1.number (#0)]
+├── probe keys: [t2.number (#1)]
 ├── filters: []
 ├── estimated rows: 200.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [number (#1)]
-│   ├── read rows: 20
-│   ├── read bytes: 160
+│   ├── output columns: [number (#0)]
+│   ├── read rows: 10
+│   ├── read bytes: 80
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 20.00
+│   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 10
-    ├── read bytes: 80
+    ├── output columns: [number (#1)]
+    ├── read rows: 20
+    ├── read bytes: 160
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+    └── estimated rows: 20.00
 
 
 
