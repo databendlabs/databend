@@ -1487,58 +1487,6 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "90")]
     pub(crate) data_retention_time_in_days_max: u64,
 
-    // ----- the following options/args are all deprecated               ----
-    // ----- and turned into Option<T>, to help user migrate the configs ----
-    /// OBSOLETED: Table disk cache size (mb).
-    #[clap(long, value_name = "VALUE")]
-    pub table_disk_cache_mb_size: Option<u64>,
-
-    /// OBSOLETED: Table Meta Cached enabled
-    #[clap(long, value_name = "VALUE")]
-    pub table_meta_cache_enabled: Option<bool>,
-
-    /// OBSOLETED: Max number of cached table block meta
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_block_meta_count: Option<u64>,
-
-    /// OBSOLETED: Table memory cache size (mb)
-    #[clap(long, value_name = "VALUE")]
-    pub table_memory_cache_mb_size: Option<u64>,
-
-    /// OBSOLETED: Table disk cache folder root
-    #[clap(long, value_name = "VALUE")]
-    pub table_disk_cache_root: Option<String>,
-
-    /// OBSOLETED: Max number of cached table snapshot
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_snapshot_count: Option<u64>,
-
-    /// OBSOLETED: Max number of cached table snapshot statistics
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_statistic_count: Option<u64>,
-
-    /// OBSOLETED: Max number of cached table segment
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_segment_count: Option<u64>,
-
-    /// OBSOLETED: Max number of cached bloom index meta objects
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_bloom_index_meta_count: Option<u64>,
-
-    /// OBSOLETED:
-    /// Max number of cached bloom index filters, default value is 1024 * 1024 items.
-    /// One bloom index filter per column of data block being indexed will be generated if necessary.
-    ///
-    /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
-    /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long, value_name = "VALUE")]
-    pub table_cache_bloom_index_filter_count: Option<u64>,
-
-    /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
-    /// Max bytes of cached bloom filter bytes.
-    #[clap(long, value_name = "VALUE")]
-    pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
-
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long, value_name = "VALUE")]
     pub disable_system_table_load: bool,
@@ -1733,18 +1681,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             internal_merge_on_read_mutation: false,
             data_retention_time_in_days_max: 90,
 
-            // obsoleted config entries
-            table_disk_cache_mb_size: None,
-            table_meta_cache_enabled: None,
-            table_cache_block_meta_count: None,
-            table_memory_cache_mb_size: None,
-            table_disk_cache_root: None,
-            table_cache_snapshot_count: None,
-            table_cache_statistic_count: None,
-            table_cache_segment_count: None,
-            table_cache_bloom_index_meta_count: None,
-            table_cache_bloom_index_filter_count: None,
-            table_cache_bloom_index_data_bytes: None,
             //
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_chat_base_url: inner.openai_api_chat_base_url,
@@ -2685,11 +2621,6 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub table_data_deserialized_data_bytes: u64,
-
-    // ----- the following options/args are all deprecated               ----
-    /// Max number of cached table segment
-    #[clap(long = "cache-table-meta-segment-count", value_name = "VALUE")]
-    pub table_meta_segment_count: Option<u64>,
 }
 
 impl Default for CacheConfig {
@@ -2838,7 +2769,6 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
-                table_meta_segment_count: None,
             }
         }
     }
