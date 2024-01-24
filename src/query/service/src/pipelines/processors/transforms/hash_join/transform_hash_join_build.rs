@@ -156,7 +156,9 @@ impl Processor for TransformHashJoinBuild {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinBuildStep::Running => {
-                if let Some(spill_state) = self.spill_state.as_ref() && !self.from_spill {
+                if let Some(spill_state) = self.spill_state.as_ref()
+                    && !self.from_spill
+                {
                     if spill_state.check_need_spill()? {
                         spill_state.spill_coordinator.need_spill()?;
                         self.wait_spill()?;
@@ -175,25 +177,45 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
-                    if let Some(spill_state) = self.spill_state.as_mut() && !self.from_spill {
+                    if let Some(spill_state) = self.spill_state.as_mut()
+                        && !self.from_spill
+                    {
                         // The processor won't be triggered spill, because there won't be data from input port
                         // Add the processor to `non_spill_processors`
                         let spill_coordinator = &spill_state.spill_coordinator;
-                        let mut non_spill_processors = spill_coordinator.non_spill_processors.write();
+                        let mut non_spill_processors =
+                            spill_coordinator.non_spill_processors.write();
                         *non_spill_processors += 1;
-                        let waiting_spill_count = spill_coordinator.waiting_spill_count.load(Ordering::Acquire);
-                        info!("waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}", waiting_spill_count, *non_spill_processors, spill_state.spill_coordinator.total_builder_count);
-                        if (waiting_spill_count != 0 && *non_spill_processors + waiting_spill_count == spill_state.spill_coordinator.total_builder_count) && spill_coordinator.get_need_spill() {
+                        let waiting_spill_count = spill_coordinator
+                            .waiting_spill_count
+                            .load(Ordering::Acquire);
+                        info!(
+                            "waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}",
+                            waiting_spill_count,
+                            *non_spill_processors,
+                            spill_state.spill_coordinator.total_builder_count
+                        );
+                        if (waiting_spill_count != 0
+                            && *non_spill_processors + waiting_spill_count
+                                == spill_state.spill_coordinator.total_builder_count)
+                            && spill_coordinator.get_need_spill()
+                        {
                             spill_coordinator.no_need_spill();
                             drop(non_spill_processors);
                             let mut spill_task = spill_coordinator.spill_tasks.lock();
-                            spill_state.split_spill_tasks(spill_coordinator.active_processor_num(), &mut spill_task)?;
-                            spill_coordinator.waiting_spill_count.store(0, Ordering::Relaxed);
-                            spill_coordinator.ready_spill_watcher.send(true).map_err(|_| {
-                                ErrorCode::TokioError(
-                                    "ready_spill_watcher channel is closed",
-                                )
-                            })?;
+                            spill_state.split_spill_tasks(
+                                spill_coordinator.active_processor_num(),
+                                &mut spill_task,
+                            )?;
+                            spill_coordinator
+                                .waiting_spill_count
+                                .store(0, Ordering::Relaxed);
+                            spill_coordinator
+                                .ready_spill_watcher
+                                .send(true)
+                                .map_err(|_| {
+                                    ErrorCode::TokioError("ready_spill_watcher channel is closed")
+                                })?;
                         }
                     }
                     self.build_state.row_space_build_done()?;

@@ -25,6 +25,5 @@ pub use aggregator_keys_builder::*;
 pub use aggregator_keys_iter::*;
 pub use aggregator_polymorphic_keys::*;
 pub use aggregator_state::*;
-pub use aggregator_state_entity::*;
 
 pub const BUCKETS_LG2: u32 = 8;

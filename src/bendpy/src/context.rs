@@ -68,16 +68,6 @@ impl PySessionContext {
                 UserPrivilegeSet::available_privileges_on_global(),
             );
 
-            user.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_stage(),
-            );
-
-            user.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_udf(),
-            );
-
             session.set_authed_user(user, None).await.unwrap();
             session
         });

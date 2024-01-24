@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #![feature(int_roundings)]
+#![allow(internal_features)]
+#![allow(clippy::useless_asref)]
 #![allow(clippy::uninlined_format_args)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
@@ -23,7 +25,6 @@
 #![feature(box_patterns)]
 #![feature(sync_unsafe_cell)]
 #![feature(option_get_or_insert_default)]
-#![feature(result_option_inspect)]
 #![feature(result_flattening)]
 #![feature(iterator_try_reduce)]
 #![feature(cursor_remaining)]

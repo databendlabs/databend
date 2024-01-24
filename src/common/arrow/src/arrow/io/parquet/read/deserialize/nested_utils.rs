@@ -26,7 +26,6 @@ use super::super::Pages;
 use super::utils::DecodedState;
 use super::utils::MaybeNext;
 use super::utils::PageState;
-pub use super::utils::Zip;
 use crate::arrow::array::Array;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::error::Result;

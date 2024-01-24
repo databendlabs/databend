@@ -504,40 +504,37 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 if let Expr::Subquery {
-                    subquery, modifier, ..
+                    subquery,
+                    modifier: Some(subquery_modifier),
+                    ..
                 } = &**right
                 {
-                    if let Some(subquery_modifier) = modifier {
-                        match subquery_modifier {
-                            SubqueryModifier::Any | SubqueryModifier::Some => {
-                                let comparison_op = ComparisonOp::try_from(op)?;
-                                self.resolve_subquery(
-                                    SubqueryType::Any,
-                                    subquery,
-                                    Some(*left.clone()),
-                                    Some(comparison_op),
-                                )
-                                .await?
-                            }
-                            SubqueryModifier::All => {
-                                let contrary_op = op.to_contrary()?;
-                                let rewritten_subquery = Expr::Subquery {
-                                    span: right.span(),
-                                    modifier: Some(SubqueryModifier::Any),
-                                    subquery: (*subquery).clone(),
-                                };
-                                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                                    span: *span,
-                                    op: contrary_op,
-                                    left: (*left).clone(),
-                                    right: Box::new(rewritten_subquery),
-                                })
-                                .await?
-                            }
-                        }
-                    } else {
-                        self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
+                    match subquery_modifier {
+                        SubqueryModifier::Any | SubqueryModifier::Some => {
+                            let comparison_op = ComparisonOp::try_from(op)?;
+                            self.resolve_subquery(
+                                SubqueryType::Any,
+                                subquery,
+                                Some(*left.clone()),
+                                Some(comparison_op),
+                            )
                             .await?
+                        }
+                        SubqueryModifier::All => {
+                            let contrary_op = op.to_contrary()?;
+                            let rewritten_subquery = Expr::Subquery {
+                                span: right.span(),
+                                modifier: Some(SubqueryModifier::Any),
+                                subquery: (*subquery).clone(),
+                            };
+                            self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                                span: *span,
+                                op: contrary_op,
+                                left: (*left).clone(),
+                                right: Box::new(rewritten_subquery),
+                            })
+                            .await?
+                        }
                     }
                 } else {
                     self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())

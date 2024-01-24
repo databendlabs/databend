@@ -326,10 +326,7 @@ impl SegmentCompactChecker {
         }
     }
 
-    fn check_for_compact(
-        &mut self,
-        segments: &Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
-    ) -> bool {
+    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<CompactSegmentInfo>)]) -> bool {
         if segments.is_empty() {
             return false;
         }

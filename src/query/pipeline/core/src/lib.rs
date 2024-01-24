@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::arc_with_non_send_sync)]
+#![allow(clippy::useless_asref)]
 
 pub mod processors;
 

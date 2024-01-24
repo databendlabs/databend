@@ -69,7 +69,7 @@ impl ValueType for StringType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_string().map(StringDomain::clone)
+        domain.as_string().cloned()
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

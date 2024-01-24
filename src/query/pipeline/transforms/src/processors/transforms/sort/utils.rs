@@ -56,7 +56,9 @@ fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> Data
 
 #[inline(always)]
 pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
-    if let Some(f) = schema.fields.last() && f.name() == ORDER_COL_NAME {
+    if let Some(f) = schema.fields.last()
+        && f.name() == ORDER_COL_NAME
+    {
         schema
     } else {
         let mut fields = schema.fields().clone();

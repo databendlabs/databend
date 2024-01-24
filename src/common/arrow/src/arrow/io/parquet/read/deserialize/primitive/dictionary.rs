@@ -74,7 +74,6 @@ where
     K: DictionaryKey,
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {
@@ -153,7 +152,6 @@ where
     K: DictionaryKey,
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {

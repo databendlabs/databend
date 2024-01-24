@@ -33,7 +33,7 @@ impl DeletionAccumulator {
         segment_index: SegmentIndex,
         block_index: BlockIndex,
         source_on_conflict_key_set: &HashSet<UniqueKeyDigest>,
-        source_bloom_hashes: &Vec<Vec<u64>>,
+        source_bloom_hashes: &[Vec<u64>],
     ) {
         match self.deletions.entry(segment_index) {
             Entry::Occupied(ref mut v) => {
@@ -50,7 +50,7 @@ impl DeletionAccumulator {
                     })
                     .or_insert((
                         source_on_conflict_key_set.clone(),
-                        source_bloom_hashes.clone(),
+                        source_bloom_hashes.to_owned(),
                     ));
             }
             Entry::Vacant(e) => {
@@ -58,7 +58,7 @@ impl DeletionAccumulator {
                     block_index,
                     (
                         source_on_conflict_key_set.clone(),
-                        source_bloom_hashes.clone(),
+                        source_bloom_hashes.to_owned(),
                     ),
                 )]));
             }
