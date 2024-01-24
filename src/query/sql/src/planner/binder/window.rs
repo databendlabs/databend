@@ -60,6 +60,7 @@ impl Binder {
             partition_by: window_info.partition_by_items.clone(),
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
+            limit: None,
         };
 
         Ok(SExpr::create_unary(
