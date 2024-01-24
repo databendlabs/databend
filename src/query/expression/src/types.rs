@@ -127,22 +127,44 @@ impl DataType {
 
     pub fn has_generic(&self) -> bool {
         match self {
-            DataType::Generic(_) => true,
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
-            _ => false,
+            DataType::Generic(_) => true,
         }
     }
 
     pub fn has_nested_nullable(&self) -> bool {
         match self {
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
-            _ => false,
         }
     }
 
@@ -195,7 +217,7 @@ impl DataType {
     #[inline]
     pub fn is_string_column(&self) -> bool {
         match self {
-            DataType::String | DataType::Bitmap | DataType::Variant => true,
+            DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => true,
             DataType::Nullable(ty) => ty.is_string_column(),
             _ => false,
         }
