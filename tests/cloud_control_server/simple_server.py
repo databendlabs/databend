@@ -212,7 +212,7 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                 )
                 has_options = True
             if request.set_session_parameters:
-                task.session_parameters.update(request.set_session_parameters)
+                task.session_parameters.update(request.session_parameters)
                 has_options = True
             if has_options is False:
                 return task_pb2.AlterTaskResponse(

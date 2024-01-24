@@ -118,6 +118,16 @@ select name, session_parameters from system.task_history where name = 'sessionTa
 sessionTask {"database":"mydb","timezone":"America/Los_Angeles"}
 
 statement ok
+ALTER TASK sessionTask
+  SET
+  DATABASE = 'db2', TIMEZONE = 'Pacific/Honolulu'
+
+query SSS
+select name, state, session_parameters from system.tasks where name = 'sessionTask'
+----
+sessionTask Suspended {"database":"db2","timezone":"Pacific/Honolulu"}
+
+statement ok
 DROP TASK mytask
 
 statement ok
