@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+use once_cell::sync::OnceCell;
+
+#[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
 pub enum ProfileStatisticsName {
     /// The time spent to process in nanoseconds
     CpuTime,
@@ -87,71 +91,67 @@ impl From<usize> for ProfileStatisticsName {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileDesc {
-    name: ProfileStatisticsName,
     desc: &'static str,
     display_name: &'static str,
     index: usize,
 }
 
-pub static PROFILES_DESC: [ProfileDesc; std::mem::variant_count::<ProfileStatisticsName>()] = [
-    ProfileDesc {
-        name: ProfileStatisticsName::CpuTime,
-        display_name: "cpu time",
-        desc: "The time spent to process in nanoseconds",
-        index: ProfileStatisticsName::CpuTime as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::WaitTime,
-        display_name: "wait time",
-        desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
-        index: ProfileStatisticsName::WaitTime as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::ExchangeRows,
-        display_name: "exchange rows",
-        desc: "The number of data rows exchange between nodes in cluster mode",
-        index: ProfileStatisticsName::ExchangeRows as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::ExchangeBytes,
-        display_name: "exchange bytes",
-        desc: "The number of data bytes exchange between nodes in cluster mode",
-        index: ProfileStatisticsName::ExchangeBytes as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::OutputRows,
-        display_name: "output rows",
-        desc: "The number of rows from the physical plan output to the next physical plan",
-        index: ProfileStatisticsName::OutputRows as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::OutputBytes,
-        display_name: "output bytes",
-        desc: "The number of bytes from the physical plan output to the next physical plan",
-        index: ProfileStatisticsName::OutputBytes as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::ScanBytes,
-        display_name: "bytes scanned",
-        desc: "The bytes scanned of query",
-        index: ProfileStatisticsName::ScanBytes as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::ScanCacheBytes,
-        display_name: "bytes scanned from cache",
-        desc: "The bytes scanned from cache of query",
-        index: ProfileStatisticsName::ScanCacheBytes as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::ScanPartitions,
-        display_name: "partitions scanned",
-        desc: "The partitions scanned of query",
-        index: ProfileStatisticsName::ScanPartitions as usize,
-    },
-    ProfileDesc {
-        name: ProfileStatisticsName::PartitionTotal,
-        display_name: "partitions total",
-        desc: "The partitions total of table",
-        index: ProfileStatisticsName::PartitionTotal as usize,
-    },
-];
+pub static PROFILES_DESC_NEW: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
+    OnceCell::new();
+
+pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>> {
+    PROFILES_DESC_NEW.get_or_init(|| {
+        Arc::new(HashMap::from([
+            (ProfileStatisticsName::CpuTime, ProfileDesc {
+                display_name: "cpu time",
+                desc: "The time spent to process in nanoseconds",
+                index: ProfileStatisticsName::CpuTime as usize,
+            }),
+            (ProfileStatisticsName::WaitTime, ProfileDesc {
+                display_name: "wait time",
+                desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
+                index: ProfileStatisticsName::WaitTime as usize,
+            }),
+            (ProfileStatisticsName::ExchangeRows, ProfileDesc {
+                display_name: "exchange rows",
+                desc: "The number of data rows exchange between nodes in cluster mode",
+                index: ProfileStatisticsName::ExchangeRows as usize,
+            }),
+            (ProfileStatisticsName::ExchangeBytes, ProfileDesc {
+                display_name: "exchange bytes",
+                desc: "The number of data bytes exchange between nodes in cluster mode",
+                index: ProfileStatisticsName::ExchangeBytes as usize,
+            }),
+            (ProfileStatisticsName::OutputRows, ProfileDesc {
+                display_name: "output rows",
+                desc: "The number of rows from the physical plan output to the next physical plan",
+                index: ProfileStatisticsName::OutputRows as usize,
+            }),
+            (ProfileStatisticsName::OutputBytes, ProfileDesc {
+                display_name: "output bytes",
+                desc: "The number of bytes from the physical plan output to the next physical plan",
+                index: ProfileStatisticsName::OutputBytes as usize,
+            }),
+            (ProfileStatisticsName::ScanBytes, ProfileDesc {
+                display_name: "bytes scanned",
+                desc: "The bytes scanned of query",
+                index: ProfileStatisticsName::ScanBytes as usize,
+            }),
+            (ProfileStatisticsName::ScanCacheBytes, ProfileDesc {
+                display_name: "bytes scanned from cache",
+                desc: "The bytes scanned from cache of query",
+                index: ProfileStatisticsName::ScanCacheBytes as usize,
+            }),
+            (ProfileStatisticsName::ScanPartitions, ProfileDesc {
+                display_name: "partitions scanned",
+                desc: "The partitions scanned of query",
+                index: ProfileStatisticsName::ScanPartitions as usize,
+            }),
+            (ProfileStatisticsName::PartitionTotal, ProfileDesc {
+                display_name: "partitions total",
+                desc: "The partitions total of table",
+                index: ProfileStatisticsName::PartitionTotal as usize,
+            }),
+        ]))
+    }).clone()
+}

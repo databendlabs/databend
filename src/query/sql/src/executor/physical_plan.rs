@@ -493,20 +493,19 @@ impl PhysicalPlan {
                 .iter()
                 .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                 .join(", "),
-            PhysicalPlan::AggregateExpand(v) => {
-                v.grouping_sets
-                    .sets
-                    .iter()
-                    .map(|set| {
-                        set.iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    })
-                    .map(|s| format!("({})", s))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-            }
+            PhysicalPlan::AggregateExpand(v) => v
+                .grouping_sets
+                .sets
+                .iter()
+                .map(|set| {
+                    set.iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .map(|s| format!("({})", s))
+                .collect::<Vec<_>>()
+                .join(", "),
             PhysicalPlan::Window(v) => {
                 let partition_by = v
                     .partition_by
