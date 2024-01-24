@@ -219,7 +219,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 /// Some global privileges can not be granted to a database or table, for example,
 /// a KILL statement is meaningless for a table.
 pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
-    let available_privileges = object.available_privileges();
+    let available_privileges = object.available_privileges(true);
     let ok = privileges
         .iter()
         .all(|p| available_privileges.has_privilege(p));
