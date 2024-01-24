@@ -592,6 +592,9 @@ impl PhysicalPlan {
                         v.source.source_info.desc()
                     )]),
                     (columns_name, v.name_mapping.keys().cloned().collect()),
+                    (String::from("Total partitions"), vec![
+                        v.source.statistics.partitions_total.to_string(),
+                    ]),
                 ])
             }
             PhysicalPlan::Filter(v) => HashMap::from([(

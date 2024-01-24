@@ -36,8 +36,7 @@ pub struct PlanProfile {
     pub exchange_rows: usize,
     pub exchange_bytes: usize,
 
-    pub statistics:
-        [(ProfileStatisticsName, usize); std::mem::variant_count::<ProfileStatisticsName>()],
+    pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
 }
 
 impl PlanProfile {
@@ -52,18 +51,15 @@ impl PlanProfile {
             wait_time: profile.load_profile(ProfileStatisticsName::WaitTime),
             exchange_rows: profile.load_profile(ProfileStatisticsName::ExchangeRows),
             exchange_bytes: profile.load_profile(ProfileStatisticsName::ExchangeBytes),
-            statistics: std::array::from_fn(|idx| {
-                (
-                    From::from(idx),
-                    profile.statistics[idx].load(Ordering::SeqCst),
-                )
+            statistics: std::array::from_fn(|index| {
+                profile.statistics[index].load(Ordering::SeqCst)
             }),
         }
     }
 
     pub fn accumulate(&mut self, profile: &Profile) {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
-            self.statistics[index].1 += profile.statistics[index].load(Ordering::SeqCst);
+            self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
         }
 
         self.cpu_time += profile.load_profile(ProfileStatisticsName::CpuTime);
@@ -74,7 +70,7 @@ impl PlanProfile {
 
     pub fn merge(&mut self, profile: &PlanProfile) {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
-            self.statistics[index].1 += profile.statistics[index].1;
+            self.statistics[index] += profile.statistics[index];
         }
 
         self.cpu_time += profile.cpu_time;

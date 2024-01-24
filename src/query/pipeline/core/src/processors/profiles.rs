@@ -33,7 +33,6 @@ pub enum ProfileStatisticsName {
     ScanBytes,
     ScanCacheBytes,
     ScanPartitions,
-    PartitionTotal,
     SpillWriteCount,
     SpillWriteBytes,
     SpillWriteTime,
@@ -140,11 +139,6 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 display_name: "partitions scanned",
                 desc: "The partitions scanned of query",
                 index: ProfileStatisticsName::ScanPartitions as usize,
-            }),
-            (ProfileStatisticsName::PartitionTotal, ProfileDesc {
-                display_name: "partitions total",
-                desc: "The partitions total of table",
-                index: ProfileStatisticsName::PartitionTotal as usize,
             }),
             (ProfileStatisticsName::SpillWriteCount, ProfileDesc {
                 display_name: "numbers spilled by write",
