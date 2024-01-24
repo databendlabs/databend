@@ -935,7 +935,7 @@ evaluation:
 | Row 0  | 'true'                      | '[0]'        | NULL        |
 | Row 1  | '{"k":1}'                   | '["k"]'      | '1'         |
 | Row 2  | NULL                        | ''           | NULL        |
-| Row 3  | '["a","b"]'                 | '[0]'        | '"a"'       |
+| Row 3  | '["a","b"]'                 | '[0]'        | 'a'         |
 +--------+-----------------------------+--------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -943,7 +943,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d5b2261222c2262225d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
 | k      | StringColumn { data: 0x5b305d5b226b225d5b305d, offsets: [0, 3, 8, 8, 11] }                                                                        |
-| Output | NullableColumn { column: StringColumn { data: 0x31226122, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x3161, offsets: [0, 0, 1, 1, 2] }, validity: [0b____1010] }                                        |
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -2468,7 +2468,7 @@ evaluation (internal):
 
 ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
-checked expr   : json_to_string<Variant>(parse_json<String>("true"))
+checked expr   : to_string<Variant>(parse_json<String>("true"))
 optimized expr : "true"
 output type    : String
 output domain  : {"true"..="true"}
@@ -2477,7 +2477,7 @@ output         : 'true'
 
 ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
-checked expr   : json_to_string<Variant>(parse_json<String>("123456"))
+checked expr   : to_string<Variant>(parse_json<String>("123456"))
 optimized expr : "123456"
 output type    : String
 output domain  : {"123456"..="123456"}
@@ -2486,16 +2486,16 @@ output         : '123456'
 
 ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
-checked expr   : json_to_string<Variant>(parse_json<String>("\"abcd\""))
-optimized expr : "\"abcd\""
+checked expr   : to_string<Variant>(parse_json<String>("\"abcd\""))
+optimized expr : "abcd"
 output type    : String
-output domain  : {"\"abcd\""..="\"abcd\""}
-output         : '"abcd"'
+output domain  : {"abcd"..="abcd"}
+output         : 'abcd'
 
 
 ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
-checked expr   : json_to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
+checked expr   : to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
 optimized expr : "[1,2,3,4,5,6]"
 output type    : String
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
@@ -2504,7 +2504,7 @@ output         : '[1,2,3,4,5,6]'
 
 ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
-checked expr   : json_to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
+checked expr   : to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
 output type    : String
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
@@ -3014,10 +3014,10 @@ output         : NULL
 ast            : parse_json('{"k":"v"}')->>'k'
 raw expr       : get_string(parse_json('{"k":"v"}'), 'k')
 checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
-optimized expr : "\"v\""
+optimized expr : "v"
 output type    : String NULL
-output domain  : {"\"v\""..="\"v\""}
-output         : '"v"'
+output domain  : {"v"..="v"}
+output         : 'v'
 
 
 ast            : parse_json('{"k":"v"}')->>'x'
@@ -3032,10 +3032,10 @@ output         : NULL
 ast            : CAST(('a', 'b') AS VARIANT)->>'2'
 raw expr       : get_string(CAST(tuple('a', 'b') AS Variant), '2')
 checked expr   : get_string<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(tuple<String, String>("a", "b")), "2")
-optimized expr : "\"b\""
+optimized expr : "b"
 output type    : String NULL
-output domain  : {"\"b\""..="\"b\""}
-output         : '"b"'
+output domain  : {"b"..="b"}
+output         : 'b'
 
 
 ast            : parse_json(s)->>i
@@ -3049,16 +3049,16 @@ evaluation:
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown     |
 | Row 0  | 'true'                           | 0       | NULL        |
 | Row 1  | '[1,2,3,4]'                      | 0       | '1'         |
-| Row 2  | '["a","b","c"]'                  | 1       | '"b"'       |
+| Row 2  | '["a","b","c"]'                  | 1       | 'b'         |
 +--------+----------------------------------+---------+-------------+
 evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                        |
-+--------+-------------------------------------------------------------------------------------------------------------+
-| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }      |
-| i      | UInt64([0, 0, 1])                                                                                           |
-| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 4] }, validity: [0b_____110] } |
-+--------+-------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }  |
+| i      | UInt64([0, 0, 1])                                                                                       |
+| Output | NullableColumn { column: StringColumn { data: 0x3162, offsets: [0, 0, 1, 2] }, validity: [0b_____110] } |
++--------+---------------------------------------------------------------------------------------------------------+
 
 
 ast            : parse_json(s)->>i
@@ -3073,7 +3073,7 @@ evaluation:
 | Row 0  | 'true'                 | NULL             | NULL        |
 | Row 1  | '[1,2,3,4]'            | 2                | '3'         |
 | Row 2  | NULL                   | NULL             | NULL        |
-| Row 3  | '["a","b","c"]'        | 1                | '"b"'       |
+| Row 3  | '["a","b","c"]'        | 1                | 'b'         |
 +--------+------------------------+------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3081,7 +3081,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | NullableColumn { column: StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 13, 26] }, validity: [0b____1011] } |
 | i      | NullableColumn { column: UInt64([0, 2, 0, 1]), validity: [0b____1010] }                                                                                       |
-| Output | NullableColumn { column: StringColumn { data: 0x33226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                                |
+| Output | NullableColumn { column: StringColumn { data: 0x3362, offsets: [0, 0, 1, 1, 2] }, validity: [0b____1010] }                                                    |
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -3120,7 +3120,7 @@ evaluation:
 | Row 0  | 'true'                      | ''         | NULL        |
 | Row 1  | '{"k":1}'                   | 'k'        | '1'         |
 | Row 2  | NULL                        | ''         | NULL        |
-| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'       |
+| Row 3  | '{"a":"b"}'                 | 'a'        | 'b'         |
 +--------+-----------------------------+------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3128,7 +3128,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
 | k      | StringColumn { data: 0x6b61, offsets: [0, 0, 1, 1, 2] }                                                                                           |
-| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x3162, offsets: [0, 0, 1, 1, 2] }, validity: [0b____1010] }                                        |
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -3393,7 +3393,7 @@ evaluation:
 | Row 0  | 'true'                      | '{1}'                 | NULL        |
 | Row 1  | '{"k":1}'                   | '{k}'                 | '1'         |
 | Row 2  | NULL                        | NULL                  | NULL        |
-| Row 3  | '{"a":"b"}'                 | '{a}'                 | '"b"'       |
+| Row 3  | '{"a":"b"}'                 | '{a}'                 | 'b'         |
 +--------+-----------------------------+-----------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3401,7 +3401,7 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a317d7b2261223a2262227d, offsets: [0, 4, 11, 11, 20] }, validity: [0b____1011] } |
 | k      | NullableColumn { column: StringColumn { data: 0x7b317d7b6b7d7b617d, offsets: [0, 3, 6, 6, 9] }, validity: [0b____1011] }                          |
-| Output | NullableColumn { column: StringColumn { data: 0x31226222, offsets: [0, 0, 1, 1, 4] }, validity: [0b____1010] }                                    |
+| Output | NullableColumn { column: StringColumn { data: 0x3162, offsets: [0, 0, 1, 1, 2] }, validity: [0b____1010] }                                        |
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -4387,5 +4387,156 @@ optimized expr : 0x4000000310000001100000011000000120000002200000022000000261626
 output type    : Variant
 output domain  : Undefined
 output         : {"a":3,"b":4,"d":10}
+
+
+error: 
+  --> SQL:1:20
+  |
+1 | parse_json('true') - '1'
+  |                    ^ InvalidJsonType while evaluating function `minus(true, '1')`
+
+
+
+ast            : parse_json('[1,2,3]') - '1'
+raw expr       : minus(parse_json('[1,2,3]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[1,2,3]"), "1")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3]
+
+
+ast            : parse_json('["1","2","3"]') - '0'
+raw expr       : minus(parse_json('["1","2","3"]'), '0')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "0")
+optimized expr : 0x80000003100000011000000110000001313233
+output type    : Variant
+output domain  : Undefined
+output         : ["1","2","3"]
+
+
+ast            : parse_json('["1","2","3"]') - '1'
+raw expr       : minus(parse_json('["1","2","3"]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+optimized expr : 0x8000000210000001100000013233
+output type    : Variant
+output domain  : Undefined
+output         : ["2","3"]
+
+
+ast            : parse_json('["1","2","3",{"a":1,"b":2}]') - '1'
+raw expr       : minus(parse_json('["1","2","3",{"a":1,"b":2}]'), '1')
+checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\",{\"a\":1,\"b\":2}]"), "1")
+optimized expr : 0x8000000310000001100000015000001a32334000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : ["2","3",{"a":1,"b":2}]
+
+
+ast            : parse_json('{"a":1,"b":2}') - 'c'
+raw expr       : minus(parse_json('{"a":1,"b":2}'), 'c')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "c")
+optimized expr : 0x4000000210000001100000012000000220000002616250015002
+output type    : Variant
+output domain  : Undefined
+output         : {"a":1,"b":2}
+
+
+ast            : parse_json('{"a":1,"b":2}') - 'a'
+raw expr       : minus(parse_json('{"a":1,"b":2}'), 'a')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "a")
+optimized expr : 0x400000011000000120000002625002
+output type    : Variant
+output domain  : Undefined
+output         : {"b":2}
+
+
+ast            : parse_json('{"b":2}') - 'b'
+raw expr       : minus(parse_json('{"b":2}'), 'b')
+checked expr   : minus<Variant, String>(parse_json<String>("{\"b\":2}"), "b")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : {}
+
+
+error: 
+  --> SQL:1:20
+  |
+1 | parse_json('true') - 1
+  |                    ^ InvalidJsonType while evaluating function `minus(true, 1)`
+
+
+
+ast            : parse_json('[1,2,3]') - 0
+raw expr       : minus(parse_json('[1,2,3]'), 0)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(0_u8))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : [2,3]
+
+
+ast            : parse_json('[1,2,3]') - 1
+raw expr       : minus(parse_json('[1,2,3]'), 1)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(1_u8))
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : [1,3]
+
+
+ast            : parse_json('[1,2,3]') - 2
+raw expr       : minus(parse_json('[1,2,3]'), 2)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<UInt8>(2_u8))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
+
+
+ast            : parse_json('[1,2,3]') - -1
+raw expr       : minus(parse_json('[1,2,3]'), minus(1))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(1_u8)))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
+
+
+ast            : parse_json('[1,2,3]') - -2
+raw expr       : minus(parse_json('[1,2,3]'), minus(2))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(2_u8)))
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : [1,3]
+
+
+ast            : parse_json('[1,2,3]') - -3
+raw expr       : minus(parse_json('[1,2,3]'), minus(3))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(3_u8)))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : [2,3]
+
+
+ast            : parse_json('[1,2,3]') - -4
+raw expr       : minus(parse_json('[1,2,3]'), minus(4))
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<Int16>(minus<UInt8>(4_u8)))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3]
+
+
+ast            : parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2
+raw expr       : minus(parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]'), 2)
+checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,{\"a\":[1,2,3],\"b\":[40,50,60]}]"), to_int32<UInt8>(2_u8))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : [1,2]
 
 

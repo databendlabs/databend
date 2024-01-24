@@ -85,7 +85,7 @@ impl ValueType for BooleanType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().map(BooleanDomain::clone)
+        domain.as_boolean().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -110,6 +110,8 @@ impl ValueType for BooleanType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         col.get_bit_unchecked(index)
     }
 

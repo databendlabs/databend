@@ -432,7 +432,7 @@ impl TestFixture {
         let create_table_plan = self.default_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -440,7 +440,7 @@ impl TestFixture {
         let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -448,7 +448,7 @@ impl TestFixture {
         let create_table_plan = self.variant_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -481,7 +481,7 @@ impl TestFixture {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -638,7 +638,7 @@ impl TestFixture {
                     let mut d_values = Vec::with_capacity(rows_per_block);
                     for i in 0..rows_per_block {
                         id_values.push(i as i32 + start * 3);
-                        c_values.push(format!("s-{}-{}", start, i).as_bytes().to_vec());
+                        c_values.push(format!("s-{}-{}", start, i));
                         d_values.push(i as i64 + (start * 10) as i64);
                     }
                     let column0 = Int32Type::from_data(id_values);

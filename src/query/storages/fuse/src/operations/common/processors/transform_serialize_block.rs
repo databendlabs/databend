@@ -47,6 +47,7 @@ use crate::operations::mutation::SerializeDataMeta;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
+#[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
     NeedSerialize {

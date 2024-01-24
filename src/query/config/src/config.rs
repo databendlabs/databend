@@ -715,14 +715,6 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-external-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
-
-    #[clap(
-        long = "storage-s3-allow-anonymous",
-        value_name = "VALUE",
-        default_value_t
-    )]
-    #[serde(rename = "allow_anonymous")]
-    pub s3_allow_anonymous: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -747,7 +739,6 @@ impl Debug for S3StorageConfig {
                 &mask_string(&self.secret_access_key, 3),
             )
             .field("master_key", &mask_string(&self.master_key, 3))
-            .field("allow_anonymous", &self.s3_allow_anonymous)
             .finish()
     }
 }
@@ -766,7 +757,6 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: inner.enable_virtual_host_style,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
-            s3_allow_anonymous: inner.allow_anonymous,
         }
     }
 }
@@ -788,7 +778,6 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
-            allow_anonymous: self.s3_allow_anonymous,
         })
     }
 }
@@ -1493,6 +1482,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
 
+    /// Max retention time in days for data, default is 90 days.
+    #[clap(long, value_name = "VALUE", default_value = "90")]
+    pub(crate) data_retention_time_in_days_max: u64,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1657,6 +1650,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
             openai_api_chat_base_url: self.openai_api_chat_base_url,
             openai_api_embedding_base_url: self.openai_api_embedding_base_url,
@@ -1732,6 +1726,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
+            data_retention_time_in_days_max: 90,
+
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
@@ -1744,6 +1740,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            //
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_chat_base_url: inner.openai_api_chat_base_url,
             openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
@@ -1940,6 +1937,15 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
     #[serde(rename = "limit")]
     pub file_limit: usize,
+
+    /// Log prefix filter
+    #[clap(
+        long = "log-file-prefix-filter",
+        value_name = "VALUE",
+        default_value = "databend_"
+    )]
+    #[serde(rename = "prefix_filter")]
+    pub file_prefix_filter: String,
 }
 
 impl Default for FileLogConfig {
@@ -1958,6 +1964,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -1970,6 +1977,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_prefix_filter: inner.prefix_filter,
         }
     }
 }

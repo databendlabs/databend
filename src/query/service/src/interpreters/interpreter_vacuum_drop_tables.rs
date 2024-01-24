@@ -15,6 +15,8 @@
 use std::cmp::min;
 use std::sync::Arc;
 
+use chrono::Duration;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
@@ -22,12 +24,12 @@ use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use log::as_debug;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -46,6 +48,54 @@ impl VacuumDropTablesInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumDropTablePlan) -> Result<Self> {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
     }
+
+    async fn gc_drop_tables(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        drop_ids: Vec<DroppedId>,
+    ) -> Result<()> {
+        info!(
+            "vacuum drop table from db {:?}, gc_drop_tables",
+            self.plan.database,
+        );
+
+        let mut drop_db_ids = vec![];
+        let mut drop_db_table_ids = vec![];
+        for drop_id in drop_ids {
+            match drop_id {
+                DroppedId::Db(db_id, db_name) => {
+                    drop_db_ids.push(DroppedId::Db(db_id, db_name));
+                }
+                DroppedId::Table(db_id, table_id, table_name) => {
+                    drop_db_table_ids.push(DroppedId::Table(db_id, table_id, table_name));
+                }
+            }
+        }
+
+        let chunk_size = 50;
+
+        // first gc drop table ids
+        for c in drop_db_table_ids.chunks(chunk_size) {
+            info!("vacuum drop {} table ids: {:?}", c.len(), c);
+            let req = GcDroppedTableReq {
+                tenant: self.ctx.get_tenant(),
+                drop_ids: c.to_vec(),
+            };
+            let _ = catalog.gc_drop_tables(req).await?;
+        }
+
+        // then gc drop db ids
+        for c in drop_db_ids.chunks(chunk_size) {
+            info!("vacuum drop {} db ids: {:?}", c.len(), c);
+            let req = GcDroppedTableReq {
+                tenant: self.ctx.get_tenant(),
+                drop_ids: c.to_vec(),
+            };
+            let _ = catalog.gc_drop_tables(req).await?;
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -62,11 +112,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
-        let hours = match self.plan.option.retain_hours {
-            Some(hours) => hours as i64,
-            None => ctx.get_settings().get_retention_period()? as i64,
-        };
-        let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
+        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+
+        let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
             "vacuum drop table from db {:?}, retention_time: {:?}",
@@ -119,16 +167,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .await?;
         // gc meta data only when not dry run
         if self.plan.option.dry_run.is_none() {
-            info!(
-                "vacuum drop table from db {:?}, gc_drop_tables",
-                self.plan.database,
-            );
-            info!(drop_ids = as_debug!(&drop_ids); "vacuum drop table");
-            let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
-                drop_ids,
-            };
-            let _ = catalog.gc_drop_tables(req).await?;
+            self.gc_drop_tables(catalog, drop_ids).await?;
         }
 
         match files_opt {
@@ -138,12 +177,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 if let Some(limit) = self.plan.option.limit {
                     len = min(len, limit);
                 }
-                let mut tables: Vec<Vec<u8>> = Vec::with_capacity(len);
-                let mut files: Vec<Vec<u8>> = Vec::with_capacity(len);
+                let mut tables: Vec<String> = Vec::with_capacity(len);
+                let mut files: Vec<String> = Vec::with_capacity(len);
                 let purge_files = &purge_files[0..len];
                 for file in purge_files.iter() {
-                    tables.push(file.0.to_string().as_bytes().to_vec());
-                    files.push(file.1.to_string().as_bytes().to_vec());
+                    tables.push(file.0.to_string());
+                    files.push(file.1.to_string());
                 }
 
                 PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

@@ -98,7 +98,7 @@ impl ValueType for TimestampType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i64>> {
-        domain.as_timestamp().map(SimpleDomain::clone)
+        domain.as_timestamp().cloned()
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -141,6 +141,8 @@ impl ValueType for TimestampType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         *col.get_unchecked(index)
     }
 

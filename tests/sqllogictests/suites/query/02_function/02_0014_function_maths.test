@@ -373,3 +373,50 @@ SELECT
     (FLOOR(PI() * 10000) % 18446744073709551615) c, a + b - c
 ----
 9.754610558146624e15 1.817827108747062e19 31415.0 1.8188025698028737e19
+
+
+query F
+SELECT power(-2, 2)
+----
+4.0
+
+query F
+SELECT power(2, -2)
+----
+0.25
+
+query T
+SELECT power(NULL, 2)
+----
+NULL
+
+query T
+SELECT power(2, NULL)
+----
+NULL
+
+query T
+SELECT power(NULL, number) from numbers(2)
+----
+NULL
+NULL
+
+query T
+SELECT power(number, NULL) from numbers(2)
+----
+NULL
+NULL
+
+statement error 1006
+SELECT power('a', 2)
+
+statement error 1006
+SELECT power(2, 'a')
+
+query FFF
+SELECT
+    (POWER(FLOOR(ABS(9876.54321) * 10000), 2) % 18446744073709551615) a,
+    (FLOOR(EXP(SQRT(1234.56789)) * 10000) % 18446744073709551615) b,
+    (FLOOR(PI() * 10000) % 18446744073709551615) c, a + b - c
+----
+9.754610558146624e15 1.817827108747062e19 31415.0 1.8188025698028737e19

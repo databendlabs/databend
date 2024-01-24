@@ -134,6 +134,7 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
+
         // case 1
         if !*change_join_order {
             if let MergeIntoType::MatechedOnly = merge_type {
@@ -141,7 +142,7 @@ impl PipelineBuilder {
                 return Ok(());
             }
             assert!(self.join_state.is_some());
-            assert!(self.probe_data_fields.is_some());
+            assert!(self.merge_into_probe_data_fields.is_some());
 
             let join_state = self.join_state.clone().unwrap();
             // split row_number and log
@@ -160,7 +161,7 @@ impl PipelineBuilder {
             let pipe_items = vec![
                 ExtractHashTableByRowNumber::create(
                     join_state,
-                    self.probe_data_fields.clone().unwrap(),
+                    self.merge_into_probe_data_fields.clone().unwrap(),
                     merge_type.clone(),
                 )?
                 .into_pipe_item(),
@@ -169,11 +170,13 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
             // not macthed operation
+            let table_default_schema = &tbl.schema().remove_computed_fields();
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input_schema.clone(),
                 self.func_ctx.clone(),
                 self.ctx.clone(),
+                Arc::new(DataSchema::from(table_default_schema)),
             )?;
             let pipe_items = vec![
                 merge_into_not_matched_processor.into_pipe_item(),
@@ -308,6 +311,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    false, // we don't support for distributed mode.
                 )?,
                 create_dummy_item(),
             ]));
@@ -318,14 +322,16 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    // Optimization Todo(@JackTan25): If insert only, we can reduce the target columns after join.
     pub(crate) fn build_merge_into_source(
         &mut self,
         merge_into_source: &MergeIntoSource,
     ) -> Result<()> {
         let MergeIntoSource {
             input,
-            row_id_idx,
             merge_type,
+            merge_into_split_idx,
+            ..
         } = merge_into_source;
 
         self.build_pipeline(input)?;
@@ -340,7 +346,7 @@ impl PipelineBuilder {
             let output_len = self.main_pipeline.output_len();
             for _ in 0..output_len {
                 let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                    MergeIntoSplitProcessor::create(*merge_into_split_idx, false)?;
                 items.push(merge_into_split_processor.into_pipe_item());
             }
 
@@ -375,6 +381,7 @@ impl PipelineBuilder {
     }
 
     // build merge into pipeline.
+    // the block rows is limitd by join (65536 rows), but we don't promise the block size.
     pub(crate) fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
         let MergeInto {
             input,
@@ -467,6 +474,7 @@ impl PipelineBuilder {
                     field_index_of_input_schema.clone(),
                     input.output_schema()?,
                     Arc::new(DataSchema::from(tbl.schema())),
+                    merge_into.target_build_optimization,
                 )?;
                 pipe_items.push(matched_split_processor.into_pipe_item());
             }
@@ -476,11 +484,13 @@ impl PipelineBuilder {
                 // (distributed,change join order):(true,true) target is build side, we
                 // need to support insert in local node.
                 if !*distributed || *change_join_order {
+                    let table_default_schema = &tbl.schema().remove_computed_fields();
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
                         self.func_ctx.clone(),
                         self.ctx.clone(),
+                        Arc::new(DataSchema::from(table_default_schema)),
                     )?;
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
@@ -767,6 +777,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    merge_into.target_build_optimization,
                 )?);
             }
         }

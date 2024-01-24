@@ -78,6 +78,8 @@ pub struct MatchedAggregator {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
     aggregation_ctx: Arc<AggregationContext>,
+    target_build_optimization: bool,
+    meta_indexes: HashSet<(SegmentIndex, BlockIndex)>,
 }
 
 impl MatchedAggregator {
@@ -91,6 +93,7 @@ impl MatchedAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
+        target_build_optimization: bool,
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
@@ -123,11 +126,35 @@ impl MatchedAggregator {
             block_mutation_row_offset: HashMap::new(),
             segment_locations: AHashMap::from_iter(segment_locations),
             ctx: ctx.clone(),
+            target_build_optimization,
+            meta_indexes: HashSet::new(),
         })
     }
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        // An optimization: If we use target table as build side, the deduplicate will be done
+        // in hashtable probe phase.In this case, We don't support delete for now, so we
+        // don't to add MergeStatus here.
+        if data_block.get_meta().is_some() && data_block.is_empty() {
+            let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+            if meta_index.is_some() {
+                let meta_index = meta_index.unwrap();
+                if !self
+                    .meta_indexes
+                    .insert((meta_index.segment_idx, meta_index.block_idx))
+                {
+                    // we can get duplicated partial unmodified blocks,this is not an error
+                    // |----------------------------block----------------------------------------|
+                    // |----partial-unmodified----|-----macthed------|----partial-unmodified-----|
+                    info!(
+                        "duplicated block: segment_idx: {}, block_idx: {}",
+                        meta_index.segment_idx, meta_index.block_idx
+                    );
+                }
+            }
+            return Ok(());
+        }
         if data_block.is_empty() {
             return Ok(());
         }
@@ -192,10 +219,23 @@ impl MatchedAggregator {
         let start = Instant::now();
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
+        let segment_indexes = if self.target_build_optimization {
+            let mut vecs = Vec::with_capacity(self.meta_indexes.len());
+            for prefix in &self.meta_indexes {
+                vecs.push(prefix.0);
+            }
+            vecs
+        } else {
+            let mut vecs = Vec::with_capacity(self.block_mutation_row_offset.len());
+            for prefix in self.block_mutation_row_offset.keys() {
+                let (segment_idx, _) = split_prefix(*prefix);
+                let segment_idx = segment_idx as usize;
+                vecs.push(segment_idx);
+            }
+            vecs
+        };
 
-        for prefix in self.block_mutation_row_offset.keys() {
-            let (segment_idx, _) = split_prefix(*prefix);
-            let segment_idx = segment_idx as usize;
+        for segment_idx in segment_indexes {
             if let Entry::Vacant(e) = segment_infos.entry(segment_idx) {
                 let (path, ver) = self.segment_locations.get(&segment_idx).ok_or_else(|| {
                     ErrorCode::Internal(format!(
@@ -220,6 +260,30 @@ impl MatchedAggregator {
             }
         }
 
+        if self.target_build_optimization {
+            let mut mutation_logs = Vec::with_capacity(self.meta_indexes.len());
+            for item in &self.meta_indexes {
+                let segment_idx = item.0;
+                let block_idx = item.1;
+                let segment_info = segment_infos.get(&item.0).unwrap();
+                let block_idx = segment_info.blocks.len() - block_idx - 1;
+                info!(
+                    "target_build_optimization, merge into apply: segment_idx:{},blk_idx:{}",
+                    segment_idx, block_idx
+                );
+                mutation_logs.push(MutationLogEntry::DeletedBlock {
+                    index: BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                        inner: None,
+                    },
+                })
+            }
+            return Ok(Some(MutationLogs {
+                entries: mutation_logs,
+            }));
+        }
+
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());
 
@@ -229,12 +293,12 @@ impl MatchedAggregator {
             let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
             let aggregation_ctx = self.aggregation_ctx.clone();
             let segment_info = segment_infos.get(&segment_idx).unwrap();
+            let block_idx = segment_info.blocks.len() - block_idx as usize - 1;
+            assert!(block_idx < segment_info.blocks.len());
             info!(
                 "merge into apply: segment_idx:{},blk_idx:{}",
                 segment_idx, block_idx
             );
-            let block_idx = segment_info.blocks.len() - block_idx as usize - 1;
-            assert!(block_idx < segment_info.blocks.len());
             // the row_id is generated by block_id, not block_idx,reference to fill_internal_column_meta()
             let block_meta = segment_info.blocks[block_idx].clone();
 
@@ -334,6 +398,7 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx,
                     block_idx,
+                    inner: None,
                 },
             }));
         }
@@ -370,6 +435,7 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
+                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };

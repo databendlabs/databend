@@ -19,7 +19,7 @@ statement ok
 create table ints(c0 int, c1 int, c2 int default 2, c3 int not null, c4 int not null default 4)
 
 query TIITI
-copy into ints from @data/csv/empty/ file_format = (type = CSV)
+copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = FIELD_DEFAULT)
 ----
 csv/empty/empty1.csv 1 0 NULL NULL
 csv/empty/empty2.csv 1 0 NULL NULL
@@ -37,13 +37,14 @@ NULL NULL 2 0 4
 statement ok
 truncate table ints
 
+# empty_field_as = NULL
 query TIITI
-copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as='null') force=true on_error=continue
+copy into ints from @data/csv/empty/ file_format = (type = CSV) force=true on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as='null' 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as='null' 1
+csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as='null' 2
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 2
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -54,12 +55,12 @@ statement ok
 truncate table ints
 
 query TIITI
-copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as='string') force=true on_error=continue
+copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = STRING) force=true on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 1 (c1 Int32 NULL), when option empty_field_as='string' 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as='string' 1
+csv/empty/empty1.csv 0 1 Empty value for column 1 (c1 Int32 NULL), when option empty_field_as = STRING 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = STRING 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as='string' 2
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -73,7 +74,7 @@ statement ok
 create table strings(c0 int,c1 string, c2 string default 2, c3 string not null, c4 string not null default 4)
 
 query TIITI
-copy into strings from @data/csv/empty/ file_format = (type = CSV)
+copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as = FIELD_DEFAULT)
 ----
 csv/empty/empty1.csv 1 0 NULL NULL
 csv/empty/empty2.csv 1 0 NULL NULL
@@ -91,13 +92,14 @@ NULL NULL 2 (empty) 4
 statement ok
 truncate table strings
 
+# empty_field_as = NULL
 query TIITI
-copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as='null') force=true  on_error=continue
+copy into strings from @data/csv/empty/ file_format = (type = CSV) force=true  on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as='null' 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as='null' 1
+csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as='null' 2
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 2
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;
@@ -108,12 +110,12 @@ statement ok
 truncate table strings
 
 query TIITI
-copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as='string') force=true on_error=continue
+copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as = STRING) force=true on_error=continue
 ----
 csv/empty/empty1.csv 1 0 NULL NULL
 csv/empty/empty2.csv 1 0 NULL NULL
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as='string' 2
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;

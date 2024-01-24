@@ -103,7 +103,7 @@ impl HiveBlockFilter {
                         null_count = row_group.num_rows();
                         Scalar::Null
                     } else {
-                        Scalar::String(p_value.as_bytes().to_vec())
+                        Scalar::String(p_value)
                     };
 
                     let col_stats = ColumnStatistics::new(v.clone(), v, null_count as u64, 0, None);
@@ -282,8 +282,12 @@ impl HiveBlockFilter {
                     None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = StringType::upcast_scalar(s.max_value.clone().unwrap());
-                    let min = StringType::upcast_scalar(s.min_value.clone().unwrap());
+                    let max = StringType::upcast_scalar(
+                        String::from_utf8(s.max_value.clone().unwrap()).ok()?,
+                    );
+                    let min = StringType::upcast_scalar(
+                        String::from_utf8(s.min_value.clone().unwrap()).ok()?,
+                    );
                     Some((max, min, null_count))
                 }
             }

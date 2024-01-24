@@ -320,7 +320,9 @@ mod kvapi_key_impl {
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
+    use crate::schema::DatabaseMeta;
     use crate::schema::DatabaseNameIdent;
+    use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
     use crate::schema::PREFIX_DATABASE;
     use crate::schema::PREFIX_DATABASE_BY_ID;
@@ -330,6 +332,8 @@ mod kvapi_key_impl {
     /// __fd_database/<tenant>/<db_name> -> <db_id>
     impl kvapi::Key for DatabaseNameIdent {
         const PREFIX: &'static str = PREFIX_DATABASE;
+
+        type ValueType = DatabaseId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -353,6 +357,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseId {
         const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
+        type ValueType = DatabaseMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.db_id)
@@ -373,6 +379,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseIdToName {
         const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
 
+        type ValueType = DatabaseNameIdent;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.db_id)
@@ -392,6 +400,8 @@ mod kvapi_key_impl {
     /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
     impl kvapi::Key for DbIdListKey {
         const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+
+        type ValueType = DbIdList;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

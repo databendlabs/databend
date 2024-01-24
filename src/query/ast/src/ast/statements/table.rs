@@ -645,21 +645,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumTableOption {
-    pub retain_hours: Option<Expr>,
     pub dry_run: Option<()>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(retain_hours) = &self.retain_hours {
-            write!(f, "RETAIN {} HOURS", retain_hours)?;
-        }
         if self.dry_run.is_some() {
-            if self.retain_hours.is_some() {
-                write!(f, " DRY RUN")?;
-            } else {
-                write!(f, "DRY RUN")?;
-            }
+            write!(f, "DRY RUN")?;
         }
         Ok(())
     }
@@ -667,22 +659,14 @@ impl Display for VacuumTableOption {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumDropTableOption {
-    pub retain_hours: Option<Expr>,
     pub dry_run: Option<()>,
     pub limit: Option<usize>,
 }
 
 impl Display for VacuumDropTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(retain_hours) = &self.retain_hours {
-            write!(f, "RETAIN {} HOURS", retain_hours)?;
-        }
         if self.dry_run.is_some() {
-            if self.retain_hours.is_some() {
-                write!(f, " DRY RUN")?;
-            } else {
-                write!(f, "DRY RUN")?;
-            }
+            write!(f, "DRY RUN")?;
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
@@ -760,20 +744,11 @@ pub struct ColumnDefinition {
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
-    pub nullable_constraint: Option<NullableConstraint>,
 }
 
 impl Display for ColumnDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
-
-        if let Some(constraint) = &self.nullable_constraint {
-            match constraint {
-                NullableConstraint::NotNull => write!(f, " NOT NULL")?,
-                NullableConstraint::Null => write!(f, " NULL")?,
-            }
-        }
-
         if let Some(expr) = &self.expr {
             write!(f, "{expr}")?;
         }

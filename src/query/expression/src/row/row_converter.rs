@@ -156,16 +156,16 @@ impl RowConverter {
                             .iter()
                             .zip(validity.iter())
                             .zip(lengths.iter_mut())
-                            .for_each(|((bytes, v), length)| {
-                                *length += variable::encoded_len(bytes, !v) as u64
+                            .for_each(|((str, v), length)| {
+                                *length += variable::encoded_len(str.as_bytes(), !v) as u64
                             })
                     } else {
                         col.as_string()
                             .unwrap()
                             .iter()
                             .zip(lengths.iter_mut())
-                            .for_each(|(bytes, length)| {
-                                *length += variable::encoded_len(bytes, false) as u64
+                            .for_each(|(str, length)| {
+                                *length += variable::encoded_len(str.as_bytes(), false) as u64
                             })
                     }
                 }
@@ -255,7 +255,13 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Binary(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
-        Column::String(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
+        Column::String(col) => variable::encode(
+            out,
+            col.iter().map(|s| s.as_bytes()),
+            validity,
+            asc,
+            nulls_first,
+        ),
         Column::Variant(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         _ => unimplemented!(),
     }

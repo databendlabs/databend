@@ -73,7 +73,7 @@ fn test_bloom_filter() -> Result<()> {
     ]);
     let map_ty = DataType::Map(Box::new(kv_ty));
 
-    let blocks = vec![
+    let blocks = [
         DataBlock::new(
             vec![
                 BlockEntry::new(
@@ -82,7 +82,7 @@ fn test_bloom_filter() -> Result<()> {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(b"a".to_vec())),
+                    Value::Scalar(Scalar::String("a".to_string())),
                 ),
                 BlockEntry::new(
                     map_ty.clone(),
@@ -161,7 +161,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields.clone(),
             schema.clone(),
-            Scalar::String(b"a".to_vec()),
+            Scalar::String("a".to_string()),
             DataType::String
         )
     );
@@ -172,7 +172,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields.clone(),
             schema.clone(),
-            Scalar::String(b"b".to_vec()),
+            Scalar::String("b".to_string()),
             DataType::String
         )
     );
@@ -183,7 +183,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields,
             schema.clone(),
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );
@@ -197,7 +197,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty.clone(),
             Scalar::Number(NumberScalar::UInt8(1)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"a".to_vec()),
+            Scalar::String("a".to_string()),
             DataType::String
         )
     );
@@ -210,7 +210,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty.clone(),
             Scalar::Number(NumberScalar::UInt8(2)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"b".to_vec()),
+            Scalar::String("b".to_string()),
             DataType::String
         )
     );
@@ -223,7 +223,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty,
             Scalar::Number(NumberScalar::UInt8(3)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"x".to_vec()),
+            Scalar::String("x".to_string()),
             DataType::String
         )
     );
@@ -238,7 +238,7 @@ fn test_specify_bloom_filter() -> Result<()> {
         TableField::new("1", TableDataType::String),
     ]));
 
-    let blocks = vec![DataBlock::new_from_columns(vec![
+    let blocks = [DataBlock::new_from_columns(vec![
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec!["a", "b"]),
     ])];
@@ -261,7 +261,7 @@ fn test_specify_bloom_filter() -> Result<()> {
             "1",
             fields,
             schema,
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );
@@ -277,7 +277,7 @@ fn test_string_bloom_filter() -> Result<()> {
     ]));
 
     let val: String = (0..512).map(|_| 'a').collect();
-    let blocks = vec![DataBlock::new_from_columns(vec![
+    let blocks = [DataBlock::new_from_columns(vec![
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec![&val, "bc"]),
     ])];
@@ -301,7 +301,7 @@ fn test_string_bloom_filter() -> Result<()> {
             "1",
             fields,
             schema,
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );

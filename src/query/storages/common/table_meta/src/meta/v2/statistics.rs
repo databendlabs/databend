@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_expression::converts::datavalues::from_scalar;
+use databend_common_expression::converts::meta::IndexScalar;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -22,8 +24,8 @@ use databend_common_expression::TableField;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: Scalar,
-    pub max: Scalar,
+    pub min: IndexScalar,
+    pub max: IndexScalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
@@ -33,12 +35,12 @@ pub struct ColumnStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
-    pub min: Vec<Scalar>,
-    pub max: Vec<Scalar>,
+    pub min: Vec<IndexScalar>,
+    pub max: Vec<IndexScalar>,
     pub level: i32,
 
     // currently it's only used in native engine
-    pub pages: Option<Vec<Scalar>>,
+    pub pages: Option<Vec<IndexScalar>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -67,34 +69,49 @@ impl ColumnStatistics {
         distinct_of_values: Option<u64>,
     ) -> Self {
         Self {
-            min,
-            max,
+            min: min.into(),
+            max: max.into(),
             null_count,
             in_memory_size,
             distinct_of_values,
         }
     }
 
-    pub fn min(&self) -> &Scalar {
-        &self.min
+    pub fn min(&self) -> Scalar {
+        self.min.clone().into()
     }
 
-    pub fn max(&self) -> &Scalar {
-        &self.max
+    pub fn max(&self) -> Scalar {
+        self.max.clone().into()
     }
 
     pub fn from_v0(
         v0: &crate::meta::v0::statistics::ColumnStatistics,
         data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
-        Self {
-            min: from_scalar(&v0.min, &data_type),
-            max: from_scalar(&v0.max, &data_type),
+    ) -> Option<Self> {
+        let data_type: DataType = data_type.into();
+
+        if !matches!(
+            data_type.remove_nullable(),
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        ) {
+            return None;
+        }
+
+        let min = from_scalar(&v0.min, &data_type);
+        let max = from_scalar(&v0.max, &data_type);
+
+        Some(Self {
+            min: min.into(),
+            max: max.into(),
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
-        }
+        })
     }
 }
 
@@ -106,6 +123,10 @@ impl ClusterStatistics {
         level: i32,
         pages: Option<Vec<Scalar>>,
     ) -> Self {
+        let min = min.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+        let max = max.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+        let pages = pages.map(|p| p.into_iter().map(|s| s.into()).collect::<Vec<_>>());
+
         Self {
             cluster_key_id,
             min,
@@ -116,11 +137,11 @@ impl ClusterStatistics {
     }
 
     pub fn min(&self) -> Vec<Scalar> {
-        self.min.clone()
+        self.min.iter().map(|s| s.clone().into()).collect()
     }
 
     pub fn max(&self) -> Vec<Scalar> {
-        self.max.clone()
+        self.max.iter().map(|s| s.clone().into()).collect()
     }
 
     pub fn is_const(&self) -> bool {
@@ -130,23 +151,39 @@ impl ClusterStatistics {
     pub fn from_v0(
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
-        Self {
+    ) -> Option<Self> {
+        let data_type: DataType = data_type.into();
+
+        if !matches!(
+            data_type.remove_nullable(),
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        ) {
+            return None;
+        }
+
+        let min = v0
+            .min
+            .into_iter()
+            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
+            .collect();
+
+        let max = v0
+            .max
+            .into_iter()
+            .map(|s| IndexScalar::from(from_scalar(&s, &data_type)))
+            .collect();
+
+        Some(Self {
             cluster_key_id: v0.cluster_key_id,
-            min: v0
-                .min
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
-            max: v0
-                .max
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
+            min,
+            max,
             level: v0.level,
             pages: None,
-        }
+        })
     }
 }
 
@@ -155,9 +192,10 @@ impl Statistics {
         let col_stats = v0
             .col_stats
             .into_iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
                 let t = fields[k as usize].data_type();
-                (k, ColumnStatistics::from_v0(&v, t))
+                let stats = ColumnStatistics::from_v0(&v, t);
+                stats.map(|s| (k, s))
             })
             .collect();
         Self {

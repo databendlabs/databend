@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
@@ -161,22 +162,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    let allow_anonymous = {
-        if let Some(s) = l.connection.get("allow_anonymous") {
-            s
-        } else {
-            "false"
-        }
-    }
-    .to_string()
-    .parse()
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!("value for allow_anonymous is invalid: {err:?}"),
-        )
-    })?;
-
     // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
     let disable_credential_loader =
         role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
@@ -194,7 +179,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         enable_virtual_host_style,
         role_arn,
         external_id,
-        allow_anonymous,
     });
 
     l.connection.check()?;
@@ -298,6 +282,31 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
             .get("secret_access_key")
             .cloned()
             .unwrap_or_default(),
+        root,
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
+fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let endpoint = l
+        .connection
+        .get("endpoint_url")
+        .cloned()
+        .map(secure_omission)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("endpoint_url is required for storage cos"),
+            )
+        })?;
+    let sp = StorageParams::Cos(StorageCosConfig {
+        endpoint_url: endpoint,
+        bucket: l.name.to_string(),
+        secret_id: l.connection.get("secret_id").cloned().unwrap_or_default(),
+        secret_key: l.connection.get("secret_key").cloned().unwrap_or_default(),
         root,
     });
 
@@ -490,6 +499,7 @@ pub async fn parse_uri_location(
         Scheme::S3 => parse_s3_params(l, root)?,
         Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
+        Scheme::Cos => parse_cos_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
             let path = percent_decode_str(&l.path).decode_utf8_lossy();

@@ -61,21 +61,21 @@ impl Interpreter for DescShareInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut names: Vec<Vec<u8>> = vec![];
-        let mut kinds: Vec<Vec<u8>> = vec![];
-        let mut shared_owns: Vec<Vec<u8>> = vec![];
+        let mut names: Vec<String> = vec![];
+        let mut kinds: Vec<String> = vec![];
+        let mut shared_owns: Vec<String> = vec![];
         for entry in resp.objects.iter() {
             match &entry.object {
                 ShareGrantObjectName::Database(db) => {
-                    kinds.push("DATABASE".to_string().as_bytes().to_vec());
-                    names.push(db.clone().as_bytes().to_vec());
+                    kinds.push("DATABASE".to_string());
+                    names.push(db.clone());
                 }
                 ShareGrantObjectName::Table(db, table_name) => {
-                    kinds.push("TABLE".to_string().as_bytes().to_vec());
-                    names.push(format!("{}.{}", db, table_name).as_bytes().to_vec());
+                    kinds.push("TABLE".to_string());
+                    names.push(format!("{}.{}", db, table_name));
                 }
             }
-            shared_owns.push(entry.grant_on.to_string().as_bytes().to_vec());
+            shared_owns.push(entry.grant_on.to_string());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

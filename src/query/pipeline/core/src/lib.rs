@@ -15,6 +15,7 @@
 #![feature(once_cell_try)]
 #![feature(variant_count)]
 #![allow(clippy::arc_with_non_send_sync)]
+#![allow(clippy::useless_asref)]
 
 pub mod processors;
 
@@ -38,3 +39,4 @@ pub use pipeline::Pipeline;
 pub use processors::PlanScope;
 pub use processors::PlanScopeGuard;
 pub use processors::ProfileLabel;
+pub use processors::PROFILES_DESC;

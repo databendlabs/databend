@@ -50,5 +50,3 @@ query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
 Nothing to update
-
-

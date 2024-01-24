@@ -44,8 +44,8 @@ pub struct PipelineBuilder {
 
     pub pipelines: Vec<Pipeline>,
 
-    // probe data_fields for merge into
-    pub probe_data_fields: Option<Vec<DataField>>,
+    // probe data_fields for distributed merge into when source build
+    pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
     // Cte -> state, each cte has it's own state
@@ -75,7 +75,7 @@ impl PipelineBuilder {
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             cte_state: HashMap::new(),
-            probe_data_fields: None,
+            merge_into_probe_data_fields: None,
             join_state: None,
         }
     }
@@ -98,7 +98,7 @@ impl PipelineBuilder {
             exchange_injector: self.exchange_injector,
             builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,
-                input_probe_schema: self.probe_data_fields,
+                input_probe_schema: self.merge_into_probe_data_fields,
             },
         })
     }

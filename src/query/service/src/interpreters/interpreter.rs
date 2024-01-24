@@ -20,7 +20,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::ProfileDesc;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_pipeline_core::PROFILES_DESC;
 use log::error;
 use log::info;
 
@@ -91,6 +94,8 @@ pub trait Interpreter: Sync + Send {
                     struct QueryProfiles {
                         query_id: String,
                         profiles: Vec<PlanProfile>,
+                        profiles_desc:
+                            [ProfileDesc; std::mem::variant_count::<ProfileStatisticsName>()],
                     }
 
                     info!(
@@ -98,6 +103,7 @@ pub trait Interpreter: Sync + Send {
                         serde_json::to_string(&QueryProfiles {
                             query_id: query_ctx.get_id(),
                             profiles: query_profiles,
+                            profiles_desc: PROFILES_DESC.clone(),
                         })?
                     );
                 }

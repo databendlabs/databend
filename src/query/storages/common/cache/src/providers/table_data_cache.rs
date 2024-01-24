@@ -77,12 +77,12 @@ impl TableDataCacheBuilder {
         disk_cache_bytes_size: u64,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
-        let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
+        let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {
             external_cache: disk_cache.clone(),
-            population_queue: rx,
-            _cache_populator: DiskCachePopulator::new(tx, disk_cache, num_population_thread)?,
+            population_queue: tx,
+            _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
         })
     }
 }

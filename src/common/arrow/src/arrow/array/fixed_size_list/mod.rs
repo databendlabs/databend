@@ -26,7 +26,6 @@ mod data;
 mod ffi;
 pub(super) mod fmt;
 mod iterator;
-pub use iterator::*;
 mod mutable;
 pub use mutable::*;
 

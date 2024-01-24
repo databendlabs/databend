@@ -33,6 +33,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
@@ -69,7 +70,7 @@ pub struct HashJoin {
     pub stat_info: Option<PlanStatsInfo>,
 
     // probe keys for runtime filter
-    pub probe_keys_rt: Vec<RemoteExpr<String>>,
+    pub probe_keys_rt: Vec<Option<RemoteExpr<String>>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
 }
@@ -188,10 +189,25 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let left_expr_for_runtime_filter = left_condition
-                .as_raw_expr()
-                .type_check(&*self.metadata.read())?
-                .project_column_ref(|col| col.column_name.clone());
+            let left_expr_for_runtime_filter =
+                if left_condition.used_columns().iter().all(|idx| {
+                    // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+                    // the same name as a base table column, so we need to check if the column is a base table column.
+                    matches!(
+                        self.metadata.read().column(*idx),
+                        ColumnEntry::BaseTableColumn(_)
+                    )
+                }) && matches!(probe_side, box PhysicalPlan::TableScan(_))
+                {
+                    Some(
+                        left_condition
+                            .as_raw_expr()
+                            .type_check(&*self.metadata.read())?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )
+                } else {
+                    None
+                };
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -249,28 +265,22 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let left_expr_for_runtime_filter = check_cast(
-                left_expr_for_runtime_filter.span(),
-                false,
-                left_expr_for_runtime_filter,
-                &common_ty,
-                &BUILTIN_FUNCTIONS,
-            )?;
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
+                .map(|expr| check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS))
+                .transpose()?;
 
             let (left_expr, _) =
                 ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let (left_expr_for_runtime_filter, _) = ConstantFolder::fold(
-                &left_expr_for_runtime_filter,
-                &self.func_ctx,
-                &BUILTIN_FUNCTIONS,
-            );
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
+                .map(|expr| ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0);
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
-            left_join_conditions_rt.push(left_expr_for_runtime_filter.as_remote_expr());
+            left_join_conditions_rt
+                .push(left_expr_for_runtime_filter.map(|expr| expr.as_remote_expr()));
         }
 
         let mut probe_projections = ColumnSet::new();
@@ -355,17 +365,22 @@ impl PhysicalPlanBuilder {
                     (build_fields, probe_fields)
                 };
                 for field in dropped_fields.iter() {
-                    if result_fields.iter().all(|x| x.name() != field.name()) &&
-                        let Ok(index) = field.name().parse::<usize>() &&
-                        column_projections.contains(&index)
+                    if result_fields.iter().all(|x| x.name() != field.name())
+                        && let Ok(index) = field.name().parse::<usize>()
+                        && column_projections.contains(&index)
                     {
                         let metadata = self.metadata.read();
                         let unexpected_column = metadata.column(index);
-                        let unexpected_column_info = if let Some(table_index) = unexpected_column.table_index() {
-                            format!("{:?}.{:?}", metadata.table(table_index).name(), unexpected_column.name())
-                        } else {
-                            unexpected_column.name().to_string()
-                        };
+                        let unexpected_column_info =
+                            if let Some(table_index) = unexpected_column.table_index() {
+                                format!(
+                                    "{:?}.{:?}",
+                                    metadata.table(table_index).name(),
+                                    unexpected_column.name()
+                                )
+                            } else {
+                                unexpected_column.name().to_string()
+                            };
                         return Err(ErrorCode::SemanticError(format!(
                             "cannot access the {} in ANTI or SEMI join",
                             unexpected_column_info

@@ -48,6 +48,7 @@ pub struct CreateStreamStmt {
     pub table_database: Option<Identifier>,
     pub table: Identifier,
     pub stream_point: Option<StreamPoint>,
+    pub append_only: bool,
     pub comment: Option<String>,
 }
 
@@ -68,6 +69,9 @@ impl Display for CreateStreamStmt {
         write_dot_separated_list(f, self.table_database.iter().chain(Some(&self.table)))?;
         if let Some(stream_point) = &self.stream_point {
             write!(f, "{}", stream_point)?;
+        }
+        if !self.append_only {
+            write!(f, " APPEND_ONLY = false")?;
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = '{}'", comment)?;

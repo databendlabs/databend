@@ -2153,7 +2153,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             (def, constraints)
         },
@@ -2162,16 +2161,18 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     for constraint in constraints {
         match constraint {
             ColumnConstraint::Nullable(nullable) => {
-                if nullable {
-                    def.data_type = def.data_type.wrap_nullable();
-                    def.nullable_constraint = Some(NullableConstraint::Null);
-                } else if def.data_type.is_nullable() {
+                if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                    || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other("ambiguous NOT NULL constraint"),
                     )));
+                }
+                if nullable {
+                    def.data_type = def.data_type.wrap_nullable();
                 } else {
-                    def.nullable_constraint = Some(NullableConstraint::NotNull);
+                    def.data_type = def.data_type.wrap_not_null();
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2557,7 +2558,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
-    map(
+    map_res(
         rule! {
             #ident
             ~ #type_name
@@ -2571,16 +2572,21 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => {
+                        if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                            || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                        {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "ambiguous NOT NULL constraint",
+                            )));
+                        }
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
-                            def.nullable_constraint = Some(NullableConstraint::Null);
                         } else {
-                            def.nullable_constraint = Some(NullableConstraint::NotNull);
+                            def.data_type = def.data_type.wrap_not_null();
                         }
                     }
                     ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2588,7 +2594,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                     }
                 }
             }
-            def
+            Ok(def)
         },
     )(i)
 }
@@ -2855,19 +2861,14 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(retain_hours_opt, dry_run_opt, opt_limit)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |(dry_run_opt, opt_limit)| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
             VacuumDropTableOption {
-                retain_hours,
                 dry_run,
                 limit: opt_limit.map(|(_, limit)| limit as usize),
             }
@@ -2878,21 +2879,14 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)?
+            (DRY ~ ^RUN)?
         },
-        |(retain_hours_opt, dry_run_opt)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |dry_run_opt| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
-            VacuumTableOption {
-                retain_hours,
-                dry_run,
-            }
+            VacuumTableOption { dry_run }
         },
     ),))(i)
 }
@@ -3331,16 +3325,12 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
-    let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         rule! {
-            #type_name ~ #nullable?
+            #type_name
         },
-        |(type_name, nullable)| match nullable {
-            Some(false) => type_name,
+        |type_name| match type_name {
+            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
             _ => type_name.wrap_nullable(),
         },
     )(i)

@@ -468,14 +468,16 @@ fn string_to_decimal<T: Decimal>(
 where
     T: Decimal + Mul<Output = T>,
 {
-    let f = |x: &[u8], builder: &mut Vec<T>, ctx: &mut EvalContext| {
-        let value = match read_decimal_with_size::<T>(x, size, true, ctx.func_ctx.rounding_mode) {
-            Ok((d, _)) => d,
-            Err(e) => {
-                ctx.set_error(builder.len(), e.message());
-                T::zero()
-            }
-        };
+    let f = |x: &str, builder: &mut Vec<T>, ctx: &mut EvalContext| {
+        let value =
+            match read_decimal_with_size::<T>(x.as_bytes(), size, true, ctx.func_ctx.rounding_mode)
+            {
+                Ok((d, _)) => d,
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.message());
+                    T::zero()
+                }
+            };
 
         builder.push(value);
     };

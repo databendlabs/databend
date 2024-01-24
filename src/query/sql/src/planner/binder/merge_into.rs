@@ -57,6 +57,7 @@ use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
@@ -73,8 +74,6 @@ pub enum MergeIntoType {
 //      right outer
 // 3. matched only:
 //      inner join
-// we will import optimizer for these join type in the future.
-
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]
@@ -391,6 +390,18 @@ impl Binder {
                 .await?,
             );
         }
+        let mut split_idx = DUMMY_COLUMN_INDEX;
+        // find any target table column index for merge_into_split
+        for column in self.metadata.read().columns() {
+            if column.table_index().is_some()
+                && *column.table_index().as_ref().unwrap() == table_index
+                && column.index() != column_binding.index
+            {
+                split_idx = column.index();
+                break;
+            }
+        }
+        assert!(split_idx != DUMMY_COLUMN_INDEX);
 
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
@@ -409,6 +420,8 @@ impl Binder {
             merge_type,
             distributed: false,
             change_join_order: false,
+            row_id_index: column_binding.index,
+            split_idx,
         })
     }
 

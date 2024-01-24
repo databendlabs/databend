@@ -128,7 +128,7 @@ impl FieldEncoderCSV {
             }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.string_formatter.write_string(buf, out_buf);
+                self.string_formatter.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) | Column::Variant(..) => {

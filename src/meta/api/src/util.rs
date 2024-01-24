@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -31,6 +32,7 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::VirtualColumnNotFound;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
@@ -59,7 +61,9 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
@@ -73,7 +77,6 @@ use ConditionResult::Eq;
 
 use crate::kv_app_error::KVAppError;
 use crate::reply::txn_reply_to_api_result;
-use crate::Id;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
 
@@ -89,7 +92,7 @@ pub const DEFAULT_MGET_SIZE: usize = 256;
 pub async fn get_u64_value<T: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &T,
-) -> Result<(u64, u64), KVAppError> {
+) -> Result<(u64, u64), MetaError> {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
 
     if let Some(seq_v) = res {
@@ -99,17 +102,64 @@ pub async fn get_u64_value<T: kvapi::Key>(
     }
 }
 
+#[allow(clippy::type_complexity)]
+pub fn deserialize_struct_get_response<K>(
+    resp: TxnGetResponse,
+) -> Result<(K, Option<SeqV<K::ValueType>>), MetaError>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto,
+{
+    let key = K::from_str_key(&resp.key).map_err(|e| {
+        let inv = InvalidReply::new(
+            format!("fail to parse {} key, {}", type_name::<K>(), resp.key),
+            &e,
+        );
+        MetaNetworkError::InvalidReply(inv)
+    })?;
+
+    if let Some(pb_seqv) = resp.value {
+        let seqv = SeqV::from(pb_seqv);
+        let value = deserialize_struct::<K::ValueType>(&seqv.data)?;
+        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, value);
+        Ok((key, Some(seqv)))
+    } else {
+        Ok((key, None))
+    }
+}
+
+pub fn deserialize_id_get_response<K>(
+    resp: TxnGetResponse,
+) -> Result<(K, Option<SeqV<Id>>), MetaError>
+where K: kvapi::Key {
+    let key = K::from_str_key(&resp.key).map_err(|e| {
+        let inv = InvalidReply::new(
+            format!("fail to parse {} key, {}", type_name::<K>(), resp.key),
+            &e,
+        );
+        MetaNetworkError::InvalidReply(inv)
+    })?;
+
+    if let Some(pb_seqv) = resp.value {
+        let seqv = SeqV::from(pb_seqv);
+        let id = deserialize_u64(&seqv.data)?;
+        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, id);
+        Ok((key, Some(seqv)))
+    } else {
+        Ok((key, None))
+    }
+}
+
 /// Get value that are encoded with FromToProto.
 ///
 /// It returns seq number and the data.
-pub async fn get_pb_value<K, T>(
+pub async fn get_pb_value<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     k: &K,
-) -> Result<(u64, Option<T>), MetaError>
+) -> Result<(u64, Option<K::ValueType>), MetaError>
 where
     K: kvapi::Key,
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
+    K::ValueType: FromToProto,
 {
     let res = kv_api.get_kv(&k.to_string_key()).await?;
 
@@ -127,7 +177,6 @@ pub async fn mget_pb_values<T>(
 ) -> Result<Vec<(u64, Option<T>)>, MetaError>
 where
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let seq_bytes = kv_api.mget_kv(keys).await?;
     let mut seq_values = Vec::with_capacity(keys.len());
@@ -238,16 +287,13 @@ pub async fn fetch_id<T: kvapi::Key>(
 }
 
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
-where
-    T: FromToProto + 'static,
-    T::PB: databend_common_protos::prost::Message,
-{
+where T: FromToProto + 'static {
     let p = value.to_pb().map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+    prost::Message::encode(&p, &mut buf).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -255,11 +301,8 @@ where
 }
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
-where
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
-{
-    let p: T::PB = databend_common_protos::prost::Message::decode(buf).map_err(|e| {
+where T: FromToProto {
+    let p: T::PB = prost::Message::decode(buf).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;
