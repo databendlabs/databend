@@ -164,7 +164,7 @@ databend[+flight]://user:[password]@host[:port]/[database][?sslmode=disable][&ar
 
 Examples:
 
-- `databend://root:@localhost:8000/?sslmode=disable`
+- `databend://root:@localhost:8000/?sslmode=disable&presign=detect`
 
 - `databend://user1:password1@tnxxxx--default.gw.aws-us-east-2.default.databend.com:443/benchmark?enable_dphyp=1`
 
@@ -187,16 +187,13 @@ RestAPI client:
 
 | Arg | Description |
 |---|---|
-| `presigned_url_disabled` | Set to `1` to disable presigned upload to object storage, *should only be used with local testing environment* |
+| `presigned_url_disabled` | Set to `1` to disable presigned upload to object storage, *deprecated, use `presign` instead* |
 | `wait_time_secs` | Request wait time for page, default to `1` |
 | `max_rows_in_buffer` | Max rows for page buffer |
 | `max_rows_per_page` | Max response rows for a single page |
 | `page_request_timeout_secs` | Timeout for a single page request, default to `30` |
+| `presign` | Whether to enable presign for data loading, available arguments are auto/detect/on/off, default to `auto` which only enable presign for `Databend Cloud` |
 
-Example to disable presign using set
-```
-bendsql --set presigned_url_disabled=1
-```
 
 FlightSQL client:
 

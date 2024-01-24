@@ -18,12 +18,14 @@ use databend_client::APIClient;
 
 use crate::common::DEFAULT_DSN;
 
-async fn insert_with_stage(presigned: bool) {
+async fn insert_with_stage(presign: bool) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let client = if presigned {
-        APIClient::from_dsn(dsn).await.unwrap()
+    let client = if presign {
+        APIClient::from_dsn(&format!("{}&presign=on", dsn))
+            .await
+            .unwrap()
     } else {
-        APIClient::from_dsn(&format!("{}&presigned_url_disabled=1", dsn))
+        APIClient::from_dsn(&format!("{}&presign=off", dsn))
             .await
             .unwrap()
     };
@@ -33,7 +35,7 @@ async fn insert_with_stage(presigned: bool) {
 
     let path = chrono::Utc::now().format("%Y%m%d%H%M%S%9f").to_string();
     let stage_location = format!("@~/{}/sample.csv", path);
-    let table = if presigned {
+    let table = if presign {
         format!("sample_insert_presigned_{}", path)
     } else {
         format!("sample_insert_stream_{}", path)

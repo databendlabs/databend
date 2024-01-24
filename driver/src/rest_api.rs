@@ -24,6 +24,7 @@ use log::info;
 use tokio::fs::File;
 use tokio_stream::Stream;
 
+use databend_client::error::Error as ClientError;
 use databend_client::presign::PresignedResponse;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
@@ -140,6 +141,9 @@ impl Connection for RestAPIConnection {
             .client
             .insert_with_stage(sql, &stage, file_format_options, copy_options)
             .await?;
+        if let Some(err) = resp.error {
+            return Err(ClientError::InvalidResponse(err).into());
+        }
         Ok(ServerStats::from(resp.stats))
     }
 

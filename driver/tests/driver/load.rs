@@ -23,9 +23,9 @@ use crate::common::DEFAULT_DSN;
 async fn prepare_client(presigned: bool) -> Option<Client> {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let client = if presigned {
-        Client::new(dsn.to_string())
+        Client::new(format!("{}&presign=on", dsn))
     } else {
-        Client::new(format!("{}&presigned_url_disabled=1", dsn))
+        Client::new(format!("{}&presign=off", dsn))
     };
     let conn = client.get_conn().await.unwrap();
     let info = conn.info().await;

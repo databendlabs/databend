@@ -173,7 +173,7 @@ impl Session {
                 Err(_) => {
                     eprintln!("-> WARN: Backend storage dose not support presigned url.");
                     eprintln!("         Loading data from local file may not work as expected.");
-                    eprintln!("         Be aware of data transfer cost with argument `presigned_url_disabled=1`.");
+                    eprintln!("         Be aware of data transfer cost with arg `presign=off`.");
                 }
                 Ok(resp) => {
                     let now_utc = chrono::Utc::now();

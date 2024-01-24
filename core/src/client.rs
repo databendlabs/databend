@@ -29,7 +29,7 @@ use tokio_util::io::ReaderStream;
 use url::Url;
 
 use crate::auth::{AccessTokenAuth, AccessTokenFileAuth, Auth, BasicAuth};
-use crate::presign::{presign_upload_to_stage, PresignedResponse, Reader};
+use crate::presign::{presign_upload_to_stage, PresignMode, PresignedResponse, Reader};
 use crate::stage::StageLocation;
 use crate::{
     error::{Error, Result},
@@ -68,7 +68,7 @@ pub struct APIClient {
 
     tls_ca_file: Option<String>,
 
-    presigned_url_disabled: bool,
+    presign: PresignMode,
 }
 
 impl APIClient {
@@ -111,14 +111,29 @@ impl APIClient {
                     };
                 }
                 "presigned_url_disabled" => {
-                    client.presigned_url_disabled = match v.as_ref() {
-                        "true" | "1" => true,
-                        "false" | "0" => false,
+                    warn!("presigned_url_disabled is deprecated, please use presign=auto/detect/on/off in DSN instead");
+                    client.presign = match v.as_ref() {
+                        "true" | "1" => PresignMode::On,
+                        "false" | "0" => PresignMode::Off,
                         _ => {
                             return Err(Error::BadArgument(format!(
                                 "Invalid value for presigned_url_disabled: {}",
                                 v
                             )))
+                        }
+                    }
+                }
+                "presign" => {
+                    client.presign = match v.as_ref() {
+                        "auto" => PresignMode::Auto,
+                        "detect" => PresignMode::Detect,
+                        "on" => PresignMode::On,
+                        "off" => PresignMode::Off,
+                        _ => {
+                            return Err(Error::BadArgument(format!(
+                            "Invalid value for presign: {}, should be one of auto/detect/on/off",
+                            v
+                        )))
                         }
                     }
                 }
@@ -182,7 +197,31 @@ impl APIClient {
                 .with_role(role)
                 .with_database(database),
         ));
+
+        client.init_presign().await?;
+
         Ok(client)
+    }
+
+    async fn init_presign(&mut self) -> Result<()> {
+        match self.presign {
+            PresignMode::Auto => {
+                if self.host.ends_with(".databend.com") || self.host.ends_with(".databend.cn") {
+                    self.presign = PresignMode::On;
+                } else {
+                    self.presign = PresignMode::Off;
+                }
+            }
+            PresignMode::Detect => match self.get_presigned_upload_url("~/.bendsql/check").await {
+                Ok(_) => self.presign = PresignMode::On,
+                Err(e) => {
+                    warn!("presign mode off with error detected: {}", e);
+                    self.presign = PresignMode::Off;
+                }
+            },
+            _ => {}
+        }
+        Ok(())
     }
 
     pub async fn current_warehouse(&self) -> Option<String> {
@@ -481,11 +520,18 @@ impl APIClient {
     }
 
     pub async fn upload_to_stage(&self, stage: &str, data: Reader, size: u64) -> Result<()> {
-        if self.presigned_url_disabled {
-            self.upload_to_stage_with_stream(stage, data, size).await
-        } else {
-            let presigned = self.get_presigned_upload_url(stage).await?;
-            presign_upload_to_stage(presigned, data, size).await
+        match self.presign {
+            PresignMode::Off => self.upload_to_stage_with_stream(stage, data, size).await,
+            PresignMode::On => {
+                let presigned = self.get_presigned_upload_url(stage).await?;
+                presign_upload_to_stage(presigned, data, size).await
+            }
+            PresignMode::Auto => {
+                unreachable!("PresignMode::Auto should be handled during client initialization")
+            }
+            PresignMode::Detect => {
+                unreachable!("PresignMode::Detect should be handled during client initialization")
+            }
         }
     }
 
@@ -536,7 +582,7 @@ impl Default for APIClient {
             max_rows_per_page: None,
             page_request_timeout: Duration::from_secs(30),
             tls_ca_file: None,
-            presigned_url_disabled: false,
+            presign: PresignMode::Auto,
         }
     }
 }

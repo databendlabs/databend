@@ -24,6 +24,14 @@ use crate::error::{Error, Result};
 
 pub type Reader = Box<dyn AsyncRead + Send + Sync + Unpin + 'static>;
 
+#[derive(Debug, Clone)]
+pub enum PresignMode {
+    Auto,
+    Detect,
+    On,
+    Off,
+}
+
 pub struct PresignedResponse {
     pub method: String,
     pub headers: BTreeMap<String, String>,
