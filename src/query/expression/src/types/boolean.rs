@@ -85,7 +85,7 @@ impl ValueType for BooleanType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().map(BooleanDomain::clone)
+        domain.as_boolean().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

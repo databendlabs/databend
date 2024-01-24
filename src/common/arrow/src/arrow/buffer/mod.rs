@@ -22,6 +22,7 @@ use std::ops::Deref;
 
 use crate::arrow::ffi::InternalArrowArray;
 
+#[allow(dead_code)]
 pub(crate) enum BytesAllocator {
     InternalArrowArray(InternalArrowArray),
 

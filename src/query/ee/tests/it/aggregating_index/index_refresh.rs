@@ -423,7 +423,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     }
 
     // Insert more data with insert into ... select ...
-    fixture
+    let _ = fixture
         .execute_query("INSERT INTO t0 SELECT * FROM t0")
         .await?;
 
@@ -462,7 +462,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Copy into data
-    fixture.execute_query(
+    let _ =fixture.execute_query(
         "COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);",
     )
         .await?;
@@ -580,7 +580,7 @@ async fn refresh_index(
         Some(l) => format!("REFRESH AGGREGATING INDEX {index_name} LIMIT {l}"),
         None => format!("REFRESH AGGREGATING INDEX {index_name}"),
     };
-    execute_sql(ctx, &sql).await?;
+    let _ = execute_sql(ctx, &sql).await?;
 
     Ok(())
 }

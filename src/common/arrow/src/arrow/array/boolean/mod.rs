@@ -33,7 +33,6 @@ mod from;
 mod iterator;
 mod mutable;
 
-pub use iterator::*;
 pub use mutable::*;
 
 /// A [`BooleanArray`] is Arrow's semantically equivalent of an immutable `Vec<Option<bool>>`.

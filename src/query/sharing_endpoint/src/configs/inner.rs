@@ -29,7 +29,7 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub async fn load() -> Result<Self> {
-        let mut cfg: Self = OuterV0Config::load(true)?.try_into()?;
+        let mut cfg: Self = OuterV0Config::load(true)?.into();
         cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
         Ok(cfg)
@@ -39,7 +39,7 @@ impl Config {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
-        let cfg: Self = OuterV0Config::load(false)?.try_into()?;
+        let cfg: Self = OuterV0Config::load(false)?.into();
         Ok(cfg)
     }
 

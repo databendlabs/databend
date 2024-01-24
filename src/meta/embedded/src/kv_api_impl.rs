@@ -17,7 +17,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-pub use databend_common_meta_sled_store::init_temp_sled_db;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;

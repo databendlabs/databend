@@ -91,7 +91,7 @@ impl ValueType for DateType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i32>> {
-        domain.as_date().map(SimpleDomain::clone)
+        domain.as_date().cloned()
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

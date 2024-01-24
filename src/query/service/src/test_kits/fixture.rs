@@ -176,11 +176,6 @@ impl TestFixture {
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
-        );
-
         let dummy_session = SessionManager::instance()
             .create_session(session_type)
             .await?;
@@ -432,7 +427,7 @@ impl TestFixture {
         let create_table_plan = self.default_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -440,7 +435,7 @@ impl TestFixture {
         let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -448,7 +443,7 @@ impl TestFixture {
         let create_table_plan = self.variant_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -481,7 +476,7 @@ impl TestFixture {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 

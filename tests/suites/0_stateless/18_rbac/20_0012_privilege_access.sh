@@ -63,7 +63,7 @@ echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT Super ON *.* TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 ## optimize table
-echo "set retention_period=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
 echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 

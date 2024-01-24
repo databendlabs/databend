@@ -673,11 +673,10 @@ impl TableSchema {
     pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
-        let column_ids = self.to_column_ids();
 
         let fields = paths
             .iter()
-            .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
+            .map(|path| Self::traverse_paths(schema_fields, path).unwrap())
             .collect();
 
         Self {
@@ -758,11 +757,7 @@ impl TableSchema {
         column_ids
     }
 
-    fn traverse_paths(
-        fields: &[TableField],
-        path: &[FieldIndex],
-        column_ids: &[ColumnId],
-    ) -> Result<TableField> {
+    fn traverse_paths(fields: &[TableField], path: &[FieldIndex]) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
@@ -792,7 +787,7 @@ impl TableSchema {
         } = &field.data_type.remove_nullable()
         {
             let field_name = field.name();
-            let mut next_column_id = column_ids[1 + index];
+            let mut next_column_id = field.column_id;
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
@@ -802,7 +797,7 @@ impl TableSchema {
                     field.build_column_id(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
-            return Self::traverse_paths(&fields, &path[1..], &column_ids[index + 1..]);
+            return Self::traverse_paths(&fields, &path[1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(

@@ -8,6 +8,9 @@ statement ok
 use join_property
 
 statement ok
+set max_threads = 1
+
+statement ok
 create table t_10(a int) as select * from numbers(10)
 
 statement ok
@@ -22,7 +25,7 @@ select * from t_10, t_100, t_1000 where t_10.a = t_1000.a and t_100.a = t_1000.a
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 8024 bytes
+├── estimated memory: 8160 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []
@@ -76,7 +79,7 @@ select * from t_1000 left join t_10 on t_1000.a = t_10.a left join t_100 on t_10
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 8024 bytes
+├── estimated memory: 8160 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
@@ -130,7 +133,7 @@ select * from t_1000 right join t_10 on t_1000.a = t_10.a right join t_100 on t_
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 7080 bytes
+├── estimated memory: 7200 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
@@ -180,7 +183,7 @@ select * from t_1000 full join t_10 on t_1000.a = t_10.a full join t_100 on t_10
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 7080 bytes
+├── estimated memory: 7200 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
@@ -230,7 +233,7 @@ select * from t_10, t_100, t_1000
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 6136 bytes
+├── estimated memory: 6240 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 10.000, children: []

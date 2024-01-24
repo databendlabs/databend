@@ -68,7 +68,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
 
     {
         let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
             "+----------+----------+----------+----------+----------+----------+-------------+",
             "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6    |",
@@ -90,7 +90,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     {
         // incompatible table engine
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!(
             "select * from clustering_information('{}', '{}')",

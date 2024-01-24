@@ -20,7 +20,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::table::ChangeAction;
+use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;
 use crate::plan::Projection;
@@ -94,7 +94,8 @@ pub struct PushDownInfo {
     pub lazy_materialization: bool,
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
-    pub change_action: Option<ChangeAction>,
+    /// Identifies the type of data change we are looking for
+    pub change_type: Option<ChangeType>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

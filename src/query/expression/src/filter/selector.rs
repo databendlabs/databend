@@ -158,7 +158,7 @@ impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     fn process_and(
         &self,
-        exprs: &mut Vec<SelectExpr>,
+        exprs: &mut [SelectExpr],
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -211,7 +211,7 @@ impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     fn process_or(
         &self,
-        exprs: &mut Vec<SelectExpr>,
+        exprs: &mut [SelectExpr],
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
