@@ -488,34 +488,90 @@ impl PhysicalPlan {
                         .join(" AND ")
                 )
             }
-            // PhysicalPlan::ProjectSet(_) => {}
-            // PhysicalPlan::AggregateExpand(_) => {}
-            // PhysicalPlan::Window(_) => {}
-            // PhysicalPlan::RowFetch(_) => {}
-            // PhysicalPlan::RangeJoin(_) => {}
-            // PhysicalPlan::Exchange(_) => {}
-            // PhysicalPlan::UnionAll(_) => {}
-            // PhysicalPlan::CteScan(_) => {}
-            // PhysicalPlan::MaterializedCte(_) => {}
-            // PhysicalPlan::ConstantTableScan(_) => {}
-            // PhysicalPlan::Udf(_) => {}
-            // PhysicalPlan::DistributedInsertSelect(_) => {}
-            // PhysicalPlan::ExchangeSource(_) => {}
-            // PhysicalPlan::ExchangeSink(_) => {}
-            // PhysicalPlan::DeleteSource(_) => {}
-            // PhysicalPlan::CopyIntoTable(_) => {}
-            // PhysicalPlan::ReplaceAsyncSourcer(_) => {}
-            // PhysicalPlan::ReplaceDeduplicate(_) => {}
-            // PhysicalPlan::ReplaceInto(_) => {}
-            // PhysicalPlan::MergeIntoSource(_) => {}
-            // PhysicalPlan::MergeInto(_) => {}
-            // PhysicalPlan::MergeIntoAppendNotMatched(_) => {}
-            // PhysicalPlan::MergeIntoAddRowNumber(_) => {}
-            // PhysicalPlan::CompactSource(_) => {}
-            // PhysicalPlan::CommitSink(_) => {}
-            // PhysicalPlan::ReclusterSource(_) => {}
-            // PhysicalPlan::ReclusterSink(_) => {}
-            // PhysicalPlan::UpdateSource(_) => {}
+            PhysicalPlan::ProjectSet(v) => v
+                .srf_exprs
+                .iter()
+                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", "),
+            PhysicalPlan::AggregateExpand(v) => {
+                v.grouping_sets
+                    .sets
+                    .iter()
+                    .map(|set| {
+                        set.iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .map(|s| format!("({})", s))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+            }
+            PhysicalPlan::Window(v) => {
+                let partition_by = v
+                    .partition_by
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let order_by = v
+                    .order_by
+                    .iter()
+                    .map(|x| {
+                        format!(
+                            "{}{}{}",
+                            x.order_by,
+                            if x.asc { "" } else { " DESC" },
+                            if x.nulls_first { " NULLS FIRST" } else { "" },
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                format!("partition by {}, order by {}", partition_by, order_by)
+            }
+            PhysicalPlan::RowFetch(v) => {
+                let table_schema = v.source.source_info.schema();
+                let projected_schema = v.cols_to_fetch.project_schema(&table_schema);
+                projected_schema.fields.iter().map(|f| f.name()).join(", ")
+            }
+            PhysicalPlan::RangeJoin(v) => {
+                format!(
+                    "{} AND {}",
+                    v.conditions
+                        .iter()
+                        .map(|condition| {
+                            let left = condition
+                                .left_expr
+                                .as_expr(&BUILTIN_FUNCTIONS)
+                                .sql_display();
+                            let right = condition
+                                .right_expr
+                                .as_expr(&BUILTIN_FUNCTIONS)
+                                .sql_display();
+                            format!("{left} {:?} {right}", condition.operator)
+                        })
+                        .join(" AND "),
+                    v.other_conditions
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(" AND ")
+                )
+            }
+            PhysicalPlan::Udf(v) => v
+                .udf_funcs
+                .iter()
+                .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
+                .join(", "),
+            PhysicalPlan::CteScan(v) => {
+                format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
+            }
+            PhysicalPlan::UnionAll(v) => v
+                .pairs
+                .iter()
+                .map(|(l, r)| format!("{} <- {}", l, r))
+                .join(", "),
             _ => String::new(),
         })
     }
