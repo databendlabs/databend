@@ -557,6 +557,7 @@ impl TableSchema {
                         )
                     });
                 }
+                Scalar::Map(_) | Scalar::Array(_) => {}
                 _ => {
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
                     *index += 1;
@@ -571,12 +572,6 @@ impl TableSchema {
             .zip_eq(leaf_field_column_ids)
             .zip(self.fields().iter())
         {
-            if matches!(
-                field.data_type().remove_nullable(),
-                TableDataType::Map(_) | TableDataType::Array(_)
-            ) {
-                continue;
-            }
             let mut index = 0;
             collect_leaf_default_values(
                 default_value,
