@@ -33,7 +33,7 @@ pub(super) struct ResultCacheWriter {
 
     schema: TableSchemaRef,
     blocks: Vec<DataBlock>,
-    ctx: Arc<dyn TableContext>,
+    _ctx: Arc<dyn TableContext>,
 }
 
 impl ResultCacheWriter {
@@ -52,7 +52,7 @@ impl ResultCacheWriter {
             num_rows: 0,
             schema,
             blocks: vec![],
-            ctx,
+            _ctx: ctx,
         }
     }
 
