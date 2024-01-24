@@ -66,6 +66,7 @@ pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
     pub file_size: u64,
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,

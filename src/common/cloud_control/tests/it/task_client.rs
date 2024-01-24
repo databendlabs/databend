@@ -82,6 +82,7 @@ impl TaskService for MockTaskService {
                 last_suspended_at: None,
                 after: vec![],
                 when_condition: None,
+                session_parameters: Default::default(),
             }),
             error: None,
         }))
@@ -196,6 +197,7 @@ async fn test_task_client_success_cases() -> Result<()> {
         if_not_exist: false,
         after: vec![],
         when_condition: None,
+        session_parameters: Default::default(),
     });
 
     let response = client.create_task(request).await?;

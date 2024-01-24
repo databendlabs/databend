@@ -65,14 +65,15 @@ impl CascadesOptimizer {
 
         let cluster_peers = ctx.get_cluster().nodes.len();
         let dop = ctx.get_settings().get_max_threads()? as usize;
+        let cost_model = Box::new(
+            DefaultCostModel::new(ctx.clone())?
+                .with_cluster_peers(cluster_peers)
+                .with_degree_of_parallelism(dop),
+        );
         Ok(CascadesOptimizer {
             ctx,
             memo: Memo::create(),
-            cost_model: Box::new(
-                DefaultCostModel::new()
-                    .with_cluster_peers(cluster_peers)
-                    .with_degree_of_parallelism(dop),
-            ),
+            cost_model,
             explore_rule_set,
             metadata,
             enforce_distribution,
