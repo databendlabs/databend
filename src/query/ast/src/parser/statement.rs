@@ -2948,12 +2948,16 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
+             ~ (#set_table_option)?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment)| AlterTaskOptions::Set {
-            warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-            schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-            suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-            comments: comment.map(|(_, _, comment)| comment),
+        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+            AlterTaskOptions::Set {
+                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
+                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
+                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
+                comments: comment.map(|(_, _, comment)| comment),
+                session_parameters: session_opts,
+            }
         },
     );
     let unset = map(

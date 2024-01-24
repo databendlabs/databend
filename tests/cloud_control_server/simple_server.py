@@ -55,7 +55,8 @@ def create_task_request_to_task(id, create_task_request):
     task.after.extend(create_task_request.after)
     task.created_at = datetime.now(timezone.utc).isoformat()
     task.updated_at = datetime.now(timezone.utc).isoformat()
-
+    # add session parameters
+    task.session_parameters.update(create_task_request.session_parameters)
     return task
 
 
@@ -91,7 +92,7 @@ def create_task_run_from_task(task):
     task_run.query_id = "qwert"
     task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
     task_run.completed_time = datetime.now(timezone.utc).isoformat()
-
+    task_run.session_parameters.update(task.session_parameters)
     return task_run
 
 
@@ -209,6 +210,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                 task.suspend_task_after_num_failures = (
                     request.suspend_task_after_num_failures
                 )
+                has_options = True
+            if request.set_session_parameters:
+                task.session_parameters.update(request.set_session_parameters)
                 has_options = True
             if has_options is False:
                 return task_pb2.AlterTaskResponse(

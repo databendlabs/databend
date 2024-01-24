@@ -48,6 +48,7 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 
@@ -70,6 +71,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
         DataField::new("root_task_id", DataType::String),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 

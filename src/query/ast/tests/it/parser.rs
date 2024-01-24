@@ -521,6 +521,7 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
+        r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,

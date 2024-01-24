@@ -13984,7 +13984,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS VACUUM TABLE t
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -14097,6 +14097,7 @@ AlterTask(
             comments: Some(
                 "serverless + cron",
             ),
+            session_parameters: None,
         },
     },
 )
@@ -14126,6 +14127,7 @@ AlterTask(
             comments: Some(
                 "serverless + cron",
             ),
+            session_parameters: None,
         },
     },
 )
@@ -14154,6 +14156,32 @@ AlterTask(
             ),
             comments: Some(
                 "serverless + cron",
+            ),
+            session_parameters: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'
+---------- Output ---------
+ALTER TASK MyTask1 database = 'newDB' timezone = 'America/Los_Angeles'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: None,
+            schedule: None,
+            suspend_task_after_num_failures: None,
+            comments: None,
+            session_parameters: Some(
+                {
+                    "database": "newDB",
+                    "timezone": "America/Los_Angeles",
+                },
             ),
         },
     },

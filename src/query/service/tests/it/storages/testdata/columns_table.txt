@@ -325,6 +325,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'schema_owner'                    | 'information_schema' | 'schemata'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'seq_in_index'                    | 'information_schema' | 'statistics'          | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'server_version'                  | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'session_parameters'              | 'system'             | 'task_history'        | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
+| 'session_parameters'              | 'system'             | 'tasks'               | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'session_settings'                | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'size'                            | 'system'             | 'caches'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'snapshot_location'               | 'system'             | 'streams'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |

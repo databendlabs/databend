@@ -137,12 +137,14 @@ impl Binder {
             schedule,
             suspend_task_after_num_failures,
             comments,
+            session_parameters,
         } = options
         {
             if warehouse.is_none()
                 && schedule.is_none()
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
+                && session_parameters.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),

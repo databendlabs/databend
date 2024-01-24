@@ -91,6 +91,7 @@ message Task {
   optional string last_suspended_at = 16;
   repeated string after = 17;
   optional string when_condition = 18;
+  map<string, string> session_parameters = 19;
 }
 
 
@@ -135,6 +136,8 @@ message AlterTaskRequest {
   optional string when_condition = 11;
   repeated string add_after = 12;
   repeated string remove_after = 13;
+  bool set_session_parameters = 14;
+  map<string, string> session_parameters = 15;
 }
 
 message AlterTaskResponse {
@@ -180,6 +183,7 @@ message TaskRun {
   string query_id = 17;
   string condition_text = 18;
   string root_task_id = 19;
+  map<string, string> session_parameters = 20;
 }
 
 message ShowTaskRunsResponse {
