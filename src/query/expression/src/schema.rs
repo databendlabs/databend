@@ -559,6 +559,7 @@ impl TableSchema {
                 }
                 Scalar::Map(_) | Scalar::Array(_) => {}
                 _ => {
+                    debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
                     *index += 1;
                 }

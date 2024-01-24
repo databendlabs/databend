@@ -615,6 +615,10 @@ impl<'a> ScalarRef<'a> {
             },
         }
     }
+
+    pub fn is_nested_scalar(&self) -> bool {
+        matches!(self, Scalar::Array(_) | Scalar::Map(_) | Scalar::Tuple(_))
+    }
 }
 
 impl PartialOrd for Scalar {
