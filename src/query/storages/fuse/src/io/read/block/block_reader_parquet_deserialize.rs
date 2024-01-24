@@ -92,7 +92,7 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         let use_parquet2 = self.ctx.get_settings().get_fuse_read_use_parquet2()?;
         match use_parquet2 {
-            true => self.deserialize_column_chunks_2(
+            true => self.column_chunks_to_data_block_2(
                 block_path,
                 num_rows,
                 compression,
@@ -100,7 +100,7 @@ impl BlockReader {
                 column_chunks,
                 uncompressed_buffer,
             ),
-            false => self.deserialize_column_chunks_1(
+            false => self.column_chunks_to_data_block_1(
                 num_rows,
                 column_metas,
                 column_chunks,

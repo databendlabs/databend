@@ -37,7 +37,7 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::deserialize::deserialize_column_chunks;
 use crate::io::BlockReader;
 impl BlockReader {
-    pub(crate) fn deserialize_column_chunks_1(
+    pub(crate) fn column_chunks_to_data_block_1(
         &self,
         num_rows: usize,
         column_metas: &HashMap<ColumnId, ColumnMeta>,

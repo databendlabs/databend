@@ -33,7 +33,7 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::UncompressedBuffer;
 
 impl BlockReader {
-    pub(crate) fn deserialize_column_chunks_2(
+    pub(crate) fn column_chunks_to_data_block_2(
         &self,
         block_path: &str,
         num_rows: usize,
