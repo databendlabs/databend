@@ -57,7 +57,7 @@ impl From<usize> for ProfileStatisticsName {
         }
 
         match &statistics_index[value] {
-            None => panic!("logical error"),
+            None => panic!("logical error {}", value),
             Some(statistics_name) => statistics_name.clone(),
         }
     }
@@ -147,14 +147,34 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 index: ProfileStatisticsName::PartitionTotal as usize,
             }),
             (ProfileStatisticsName::SpillWriteCount, ProfileDesc {
-                display_name: "numbers spilled",
-                desc: "The number of spilled",
+                display_name: "numbers spilled by write",
+                desc: "The number of spilled by write",
                 index: ProfileStatisticsName::SpillWriteCount as usize,
             }),
             (ProfileStatisticsName::SpillWriteBytes, ProfileDesc {
-                display_name: "bytes spilled",
-                desc: "The bytes spilled of query",
+                display_name: "bytes spilled by write",
+                desc: "The bytes spilled by write",
                 index: ProfileStatisticsName::SpillWriteBytes as usize,
+            }),
+            (ProfileStatisticsName::SpillWriteTime, ProfileDesc {
+                display_name: "spilled time by write",
+                desc: "The time spent to write spill in millisecond",
+                index: ProfileStatisticsName::SpillWriteTime as usize,
+            }),
+            (ProfileStatisticsName::SpillReadCount, ProfileDesc {
+                display_name: "numbers spilled by read",
+                desc: "The number of spilled by read",
+                index: ProfileStatisticsName::SpillReadCount as usize,
+            }),
+            (ProfileStatisticsName::SpillReadBytes, ProfileDesc {
+                display_name: "bytes spilled by read",
+                desc: "The bytes spilled by read",
+                index: ProfileStatisticsName::SpillReadBytes as usize,
+            }),
+            (ProfileStatisticsName::SpillReadTime, ProfileDesc {
+                display_name: "spilled time by read",
+                desc: "The time spent to read spill in millisecond",
+                index: ProfileStatisticsName::SpillReadTime as usize,
             }),
         ]))
     }).clone()
