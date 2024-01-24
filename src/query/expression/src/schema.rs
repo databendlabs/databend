@@ -572,7 +572,7 @@ impl TableSchema {
             .zip(self.fields().iter())
         {
             if matches!(
-                field.data_type(),
+                field.data_type().remove_nullable(),
                 TableDataType::Map(_) | TableDataType::Array(_)
             ) {
                 continue;
