@@ -99,6 +99,7 @@ pub trait Interpreter: Sync + Send {
                     }
 
                     info!(
+                        target: "databend::log::profile",
                         "{}",
                         serde_json::to_string(&QueryProfiles {
                             query_id: query_ctx.get_id(),

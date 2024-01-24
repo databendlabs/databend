@@ -149,7 +149,7 @@ impl Future for ProcessorAsyncTask {
         Profile::track_profile(&self.profile);
 
         let last_nanos = self.last_nanos;
-        let last_instant = self.instant.clone();
+        let last_instant = self.instant;
         let inner = self.inner.as_mut();
 
         let before_poll_nanos = elapsed_nanos(last_instant);

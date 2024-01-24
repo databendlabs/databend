@@ -159,7 +159,7 @@ pub struct Profile {
 }
 
 thread_local! {
-    static CURRENT_PROFILE: RefCell<Option<Arc<Profile >>> = RefCell::new(None);
+    static CURRENT_PROFILE: RefCell<Option<Arc<Profile>>> = const { RefCell::new(None) };
 }
 
 impl Profile {
