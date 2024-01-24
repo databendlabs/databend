@@ -187,7 +187,7 @@ select * from t2 order by a
 3 [1,2,3]
 4 ["a","b"]
 
-statement error 1105
+statement error 1006
 copy into t2 from @data/parquet/invalid_json_string.parquet FILE_FORMAT = (type = PARQUET) disable_variant_check = false ON_ERROR = CONTINUE
 
 query TIITI
