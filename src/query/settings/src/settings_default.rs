@@ -624,6 +624,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("disable_variant_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable variant check to allow insert invalid JSON values",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
