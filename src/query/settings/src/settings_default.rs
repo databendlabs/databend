@@ -25,6 +25,13 @@ use once_cell::sync::OnceCell;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
+// Default value of cost factor settings
+#[allow(dead_code)]
+static COST_FACTOR_COMPUTE_PER_ROW: u64 = 1;
+static COST_FACTOR_HASH_TABLE_PER_ROW: u64 = 10;
+static COST_FACTOR_AGGREGATE_PER_ROW: u64 = 5;
+static COST_FACTOR_NETWORK_PER_ROW: u64 = 50;
+
 // Settings for readability and writability of tags.
 // we will not be able to safely get its value when set to only write.
 // we will not be able to safely set its value when set to only read.
@@ -624,6 +631,24 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("cost_factor_hash_table_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
+                    desc: "Cost factor of building hash table for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_aggregate_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_AGGREGATE_PER_ROW),
+                    desc: "Cost factor of grouping operation for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_network_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_NETWORK_PER_ROW),
+                    desc: "Cost factor of transmit via network for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+               })
             ]);
 
             Ok(Arc::new(DefaultSettings {
