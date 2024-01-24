@@ -285,5 +285,63 @@ Filter
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 0.00
 
+# test push down limit to window function
+statement ok
+drop table if exists t
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values(1), (2), (3), (3)
+
+# range frame
+query T
+explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
+----
+CompoundBlockOperator(Project) × 1 processor
+  LimitTransform × 1 processor
+    Transform Window × 1 processor
+      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+        TransformSortMerge × 4 processors
+          SortPartialTransform × 4 processors
+            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+              DeserializeDataTransform × 1 processor
+                SyncReadParquetDataSource × 1 processor
+
+# rows frame
+query T
+explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t limit 3
+----
+CompoundBlockOperator(Project) × 1 processor
+  LimitTransform × 1 processor
+    Transform Window × 1 processor
+      Merge (TransformSortMergeLimit × 4 processors) to (Transform Window × 1)
+        TransformSortMergeLimit × 4 processors
+          SortPartialTransform × 4 processors
+            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+              DeserializeDataTransform × 1 processor
+                SyncReadParquetDataSource × 1 processor
+
+# rows frame multi window
+query T
+explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row),
+avg(a) over (order by a rows between unbounded preceding and current row) from t limit 3
+----
+CompoundBlockOperator(Project) × 1 processor
+  LimitTransform × 1 processor
+    Transform Window × 1 processor
+      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+        TransformSortMerge × 4 processors
+          SortPartialTransform × 4 processors
+            Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
+              Transform Window × 1 processor
+                Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+                  TransformSortMerge × 4 processors
+                    SortPartialTransform × 4 processors
+                      Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+                        DeserializeDataTransform × 1 processor
+                          SyncReadParquetDataSource × 1 processor
+
 statement ok
 DROP DATABASE test_explain_window;
