@@ -184,14 +184,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             let data_type = self.gen_data_type_name(Some(i));
 
             // TODO: computed expr
-            // TODO: fix bitmap and variant default values
-            let default_expr = if data_type == TypeName::NotNull(Box::new(TypeName::Bitmap))
-                || data_type == TypeName::NotNull(Box::new(TypeName::Variant))
-            {
-                None
-            } else {
-                Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))))
-            };
+            let default_expr = Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))));
             let column_def = ColumnDefinition {
                 name: Identifier::from_name(name),
                 data_type,

@@ -176,7 +176,7 @@ pub fn check_cast<Index: ColumnIndex>(
         })
     } else {
         // fast path to eval function for cast
-        if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
+        if let Some(cast_fn) = get_simple_cast_function(is_try, expr.data_type(), dest_type) {
             let params = if let DataType::Decimal(ty) = dest_type {
                 vec![
                     Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
@@ -272,7 +272,7 @@ pub fn check_function<Index: ColumnIndex>(
     // to_string('a')
     if params.is_empty() && name.starts_with("to_") && args.len() == 1 {
         let type_name = args[0].data_type().remove_nullable();
-        match get_simple_cast_function(false, &type_name) {
+        match get_simple_cast_function(false, &type_name, &type_name) {
             Some(n) if name.eq_ignore_ascii_case(&n) => return Ok(args[0].clone()),
             _ => {}
         }
@@ -692,9 +692,17 @@ pub fn common_super_type(
     }
 }
 
-pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<String> {
+pub fn get_simple_cast_function(
+    is_try: bool,
+    src_type: &DataType,
+    dest_type: &DataType,
+) -> Option<String> {
     let function_name = if dest_type.is_decimal() {
         "to_decimal".to_owned()
+    } else if src_type.remove_nullable() == DataType::String
+        && dest_type.remove_nullable() == DataType::Variant
+    {
+        "parse_json".to_owned()
     } else {
         format!("to_{}", dest_type.to_string().to_lowercase())
     };
@@ -726,6 +734,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_boolean",
     "to_decimal",
     "to_bitmap",
+    "parse_json",
 ];
 
 pub fn is_simple_cast_function(name: &str) -> bool {

@@ -24,15 +24,30 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+<<<<<<< HEAD
+<<<<<<< HEAD
 use databend_common_expression::SourceSchemaIndex;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+=======
+>>>>>>> fa89d26e48 (fix(ddl): fix create table bitmap and variant with default value)
+=======
+use databend_common_functions::BUILTIN_FUNCTIONS;
+>>>>>>> f30f2f8964 (fix err)
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_exprs;
 use databend_common_storages_factory::Table;
+<<<<<<< HEAD
+<<<<<<< HEAD
 use databend_common_storages_fuse::operations::UnMatchedExprs;
+=======
+use databend_common_expression::type_check::check_cast;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+>>>>>>> 57abcecd99 (fix)
+=======
+>>>>>>> f30f2f8964 (fix err)
 
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;

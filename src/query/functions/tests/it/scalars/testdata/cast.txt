@@ -202,13 +202,12 @@ error:
 
 
 
-ast            : CAST(NULL AS VARIANT)
-raw expr       : CAST(NULL AS Variant)
-checked expr   : to_variant<T0=NULL><T0>(NULL)
-optimized expr : 0x2000000000000000
-output type    : Variant
-output domain  : Undefined
-output         : null
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`
+
 
 
 ast            : CAST(0 AS VARIANT)
@@ -217,7 +216,7 @@ checked expr   : to_variant<T0=UInt8><T0>(0_u8)
 optimized expr : 0x200000002000000100
 output type    : Variant
 output domain  : Undefined
-output         : 0
+output         : '0'
 
 
 ast            : CAST(-1 AS VARIANT)
@@ -226,7 +225,7 @@ checked expr   : to_variant<T0=Int16><T0>(minus<UInt8>(1_u8))
 optimized expr : 0x200000002000000240ff
 output type    : Variant
 output domain  : Undefined
-output         : -1
+output         : '-1'
 
 
 ast            : CAST(1.1 AS VARIANT)
@@ -235,16 +234,15 @@ checked expr   : to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
 optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant
 output domain  : Undefined
-output         : 1.1
+output         : '1.1'
 
 
-ast            : CAST('🍦 が美味しい' AS VARIANT)
-raw expr       : CAST('🍦 が美味しい' AS Variant)
-checked expr   : to_variant<T0=String><T0>("🍦 が美味しい")
-optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
-output type    : Variant
-output domain  : Undefined
-output         : "🍦 が美味しい"
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('🍦 が美味しい' AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected value, pos 1 while evaluating function `parse_json('🍦 が美味しい')`
+
 
 
 ast            : CAST([0, 1, 2] AS VARIANT)
@@ -253,16 +251,16 @@ checked expr   : to_variant<T0=Array(UInt8)><T0>(array<T0=UInt8><T0, T0, T0>(0_u
 optimized expr : 0x800000032000000120000002200000020050015002
 output type    : Variant
 output domain  : Undefined
-output         : [0,1,2]
+output         : '[0,1,2]'
 
 
-ast            : CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)
-raw expr       : CAST(array(CAST(0 AS Variant), CAST('a' AS Variant)) AS Variant)
-checked expr   : to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
+ast            : CAST([0::VARIANT, '"a"'::VARIANT] AS VARIANT)
+raw expr       : CAST(array(CAST(0 AS Variant), CAST('"a"' AS Variant)) AS Variant)
+checked expr   : to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), parse_json<String>("\"a\"")))
 optimized expr : 0x8000000220000001100000010061
 output type    : Variant
 output domain  : Undefined
-output         : [0,"a"]
+output         : '[0,"a"]'
 
 
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
@@ -271,7 +269,7 @@ checked expr   : to_variant<T0=Timestamp><T0>(to_timestamp<Int64>(to_int64<UInt3
 optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant
 output domain  : Undefined
-output         : "1970-01-12 13:46:40.000000"
+output         : '"1970-01-12 13:46:40.000000"'
 
 
 ast            : CAST(false AS VARIANT)
@@ -280,7 +278,7 @@ checked expr   : to_variant<T0=Boolean><T0>(false)
 optimized expr : 0x2000000030000000
 output type    : Variant
 output domain  : Undefined
-output         : false
+output         : 'false'
 
 
 ast            : CAST(true AS VARIANT)
@@ -289,16 +287,16 @@ checked expr   : to_variant<T0=Boolean><T0>(true)
 optimized expr : 0x2000000040000000
 output type    : Variant
 output domain  : Undefined
-output         : true
+output         : 'true'
 
 
-ast            : CAST(CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
-raw expr       : CAST(CAST('🍦 が美味しい' AS Variant) AS Variant)
-checked expr   : to_variant<T0=String><T0>("🍦 が美味しい")
+ast            : CAST(CAST('"🍦 が美味しい"' AS VARIANT) AS VARIANT)
+raw expr       : CAST(CAST('"🍦 が美味しい"' AS Variant) AS Variant)
+checked expr   : parse_json<String>("\"🍦 が美味しい\"")
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant
 output domain  : Undefined
-output         : "🍦 が美味しい"
+output         : '"🍦 が美味しい"'
 
 
 ast            : CAST((1,) AS VARIANT)
@@ -307,7 +305,7 @@ checked expr   : to_variant<T0=Tuple(UInt8,)><T0>(tuple<UInt8>(1_u8))
 optimized expr : 0x400000011000000120000002315001
 output type    : Variant
 output domain  : Undefined
-output         : {"1":1}
+output         : '{"1":1}'
 
 
 ast            : CAST((1, 2) AS VARIANT)
@@ -316,7 +314,7 @@ checked expr   : to_variant<T0=Tuple(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8
 optimized expr : 0x4000000210000001100000012000000220000002313250015002
 output type    : Variant
 output domain  : Undefined
-output         : {"1":1,"2":2}
+output         : '{"1":1,"2":2}'
 
 
 ast            : CAST((false, true) AS VARIANT)
@@ -325,7 +323,7 @@ checked expr   : to_variant<T0=Tuple(Boolean, Boolean)><T0>(tuple<Boolean, Boole
 optimized expr : 0x40000002100000011000000130000000400000003132
 output type    : Variant
 output domain  : Undefined
-output         : {"1":false,"2":true}
+output         : '{"1":false,"2":true}'
 
 
 ast            : CAST(('a',) AS VARIANT)
@@ -334,7 +332,7 @@ checked expr   : to_variant<T0=Tuple(String,)><T0>(tuple<String>("a"))
 optimized expr : 0x4000000110000001100000013161
 output type    : Variant
 output domain  : Undefined
-output         : {"1":"a"}
+output         : '{"1":"a"}'
 
 
 ast            : CAST((1, 2, (false, true, ('a',))) AS VARIANT)
@@ -343,45 +341,31 @@ checked expr   : to_variant<T0=Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, Tuple
 optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
 output type    : Variant
 output domain  : Undefined
-output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
+output         : '{"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}'
 
 
-ast            : CAST(a AS VARIANT)
-raw expr       : CAST(a::String NULL AS Variant)
-checked expr   : to_variant<T0=String NULL><T0>(a)
-evaluation:
-+--------+------------------------+-----------+
-|        | a                      | Output    |
-+--------+------------------------+-----------+
-| Type   | String NULL            | Variant   |
-| Domain | {"a"..="def"} ∪ {NULL} | Undefined |
-| Row 0  | 'a'                    | "a"       |
-| Row 1  | NULL                   | null      |
-| Row 2  | 'def'                  | "def"     |
-+--------+------------------------+-----------+
-evaluation (internal):
-+--------+-----------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                            |
-+--------+-----------------------------------------------------------------------------------------------------------------+
-| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] } |
-| Output | BinaryColumn { data: 0x20000000100000016120000000000000002000000010000003646566, offsets: [0, 9, 17, 28] }      |
-+--------+-----------------------------------------------------------------------------------------------------------------+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Variant`
+
 
 
 ast            : CAST(a AS VARIANT)
 raw expr       : CAST(a::Bitmap AS Variant)
 checked expr   : to_variant<T0=Bitmap><T0>(a)
 evaluation:
-+--------+---------------------------------+-------------+
-|        | a                               | Output      |
-+--------+---------------------------------+-------------+
-| Type   | Bitmap                          | Variant     |
-| Domain | Undefined                       | Undefined   |
-| Row 0  | RoaringTreemap<[0, 1, 2, 3, 4]> | [0,1,2,3,4] |
-| Row 1  | RoaringTreemap<[1, 2, 3, 4, 5]> | [1,2,3,4,5] |
-| Row 2  | RoaringTreemap<[2, 3, 4, 5, 6]> | [2,3,4,5,6] |
-| Row 3  | RoaringTreemap<[3, 4, 5, 6, 7]> | [3,4,5,6,7] |
-+--------+---------------------------------+-------------+
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Bitmap      | Variant       |
+| Domain | Undefined   | Undefined     |
+| Row 0  | '0,1,2,3,4' | '[0,1,2,3,4]' |
+| Row 1  | '1,2,3,4,5' | '[1,2,3,4,5]' |
+| Row 2  | '2,3,4,5,6' | '[2,3,4,5,6]' |
+| Row 3  | '3,4,5,6,7' | '[3,4,5,6,7]' |
++--------+-------------+---------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                      |
@@ -2367,10 +2351,10 @@ evaluation (internal):
 ast            : TRY_CAST(NULL AS VARIANT)
 raw expr       : TRY_CAST(NULL AS Variant)
 checked expr   : try_to_variant<T0=NULL><T0>(NULL)
-optimized expr : 0x2000000000000000
+optimized expr : NULL
 output type    : Variant NULL
-output domain  : Undefined
-output         : null
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : TRY_CAST(0 AS VARIANT)
@@ -2379,7 +2363,7 @@ checked expr   : try_to_variant<T0=UInt8><T0>(0_u8)
 optimized expr : 0x200000002000000100
 output type    : Variant NULL
 output domain  : Undefined
-output         : 0
+output         : '0'
 
 
 ast            : TRY_CAST(-1 AS VARIANT)
@@ -2388,7 +2372,7 @@ checked expr   : try_to_variant<T0=Int16><T0>(minus<UInt8>(1_u8))
 optimized expr : 0x200000002000000240ff
 output type    : Variant NULL
 output domain  : Undefined
-output         : -1
+output         : '-1'
 
 
 ast            : TRY_CAST(1.1 AS VARIANT)
@@ -2397,16 +2381,16 @@ checked expr   : try_to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
 optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1.1
+output         : '1.1'
 
 
 ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)
 raw expr       : TRY_CAST('🍦 が美味しい' AS Variant)
-checked expr   : try_to_variant<T0=String><T0>("🍦 が美味しい")
-optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+checked expr   : try_parse_json<String>("🍦 が美味しい")
+optimized expr : NULL
 output type    : Variant NULL
-output domain  : Undefined
-output         : "🍦 が美味しい"
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : TRY_CAST([0, 1, 2] AS VARIANT)
@@ -2415,16 +2399,16 @@ checked expr   : try_to_variant<T0=Array(UInt8)><T0>(array<T0=UInt8><T0, T0, T0>
 optimized expr : 0x800000032000000120000002200000020050015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : [0,1,2]
+output         : '[0,1,2]'
 
 
-ast            : TRY_CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)
-raw expr       : TRY_CAST(array(CAST(0 AS Variant), CAST('a' AS Variant)) AS Variant)
-checked expr   : try_to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
+ast            : TRY_CAST([0::VARIANT, '"a"'::VARIANT] AS VARIANT)
+raw expr       : TRY_CAST(array(CAST(0 AS Variant), CAST('"a"' AS Variant)) AS Variant)
+checked expr   : try_to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), parse_json<String>("\"a\"")))
 optimized expr : 0x8000000220000001100000010061
 output type    : Variant NULL
 output domain  : Undefined
-output         : [0,"a"]
+output         : '[0,"a"]'
 
 
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
@@ -2433,7 +2417,7 @@ checked expr   : try_to_variant<T0=Timestamp><T0>(to_timestamp<Int64>(to_int64<U
 optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant NULL
 output domain  : Undefined
-output         : "1970-01-12 13:46:40.000000"
+output         : '"1970-01-12 13:46:40.000000"'
 
 
 ast            : TRY_CAST(false AS VARIANT)
@@ -2442,7 +2426,7 @@ checked expr   : try_to_variant<T0=Boolean><T0>(false)
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : false
+output         : 'false'
 
 
 ast            : TRY_CAST(true AS VARIANT)
@@ -2451,16 +2435,16 @@ checked expr   : try_to_variant<T0=Boolean><T0>(true)
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : true
+output         : 'true'
 
 
-ast            : TRY_CAST(TRY_CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
-raw expr       : TRY_CAST(TRY_CAST('🍦 が美味しい' AS Variant) AS Variant)
-checked expr   : try_to_variant<T0=String><T0>("🍦 が美味しい")
+ast            : TRY_CAST(TRY_CAST('"🍦 が美味しい"' AS VARIANT) AS VARIANT)
+raw expr       : TRY_CAST(TRY_CAST('"🍦 が美味しい"' AS Variant) AS Variant)
+checked expr   : try_parse_json<String>("\"🍦 が美味しい\"")
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant NULL
 output domain  : Undefined
-output         : "🍦 が美味しい"
+output         : '"🍦 が美味しい"'
 
 
 ast            : TRY_CAST((1,) AS VARIANT)
@@ -2469,7 +2453,7 @@ checked expr   : try_to_variant<T0=Tuple(UInt8,)><T0>(tuple<UInt8>(1_u8))
 optimized expr : 0x400000011000000120000002315001
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"1":1}
+output         : '{"1":1}'
 
 
 ast            : TRY_CAST((1, 2) AS VARIANT)
@@ -2478,7 +2462,7 @@ checked expr   : try_to_variant<T0=Tuple(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(
 optimized expr : 0x4000000210000001100000012000000220000002313250015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"1":1,"2":2}
+output         : '{"1":1,"2":2}'
 
 
 ast            : TRY_CAST((false, true) AS VARIANT)
@@ -2487,7 +2471,7 @@ checked expr   : try_to_variant<T0=Tuple(Boolean, Boolean)><T0>(tuple<Boolean, B
 optimized expr : 0x40000002100000011000000130000000400000003132
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"1":false,"2":true}
+output         : '{"1":false,"2":true}'
 
 
 ast            : TRY_CAST(('a',) AS VARIANT)
@@ -2496,7 +2480,7 @@ checked expr   : try_to_variant<T0=Tuple(String,)><T0>(tuple<String>("a"))
 optimized expr : 0x4000000110000001100000013161
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"1":"a"}
+output         : '{"1":"a"}'
 
 
 ast            : TRY_CAST((1, 2, (false, true, ('a',))) AS VARIANT)
@@ -2505,45 +2489,45 @@ checked expr   : try_to_variant<T0=Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, T
 optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
+output         : '{"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}'
 
 
 ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(a::String NULL AS Variant)
-checked expr   : try_to_variant<T0=String NULL><T0>(a)
+checked expr   : try_parse_json<String NULL>(a)
 evaluation:
-+--------+------------------------+--------------+
-|        | a                      | Output       |
-+--------+------------------------+--------------+
-| Type   | String NULL            | Variant NULL |
-| Domain | {"a"..="def"} ∪ {NULL} | Undefined    |
-| Row 0  | 'a'                    | "a"          |
-| Row 1  | NULL                   | null         |
-| Row 2  | 'def'                  | "def"        |
-+--------+------------------------+--------------+
++--------+----------------------------------------+--------------------+
+|        | a                                      | Output             |
++--------+----------------------------------------+--------------------+
+| Type   | String NULL                            | Variant NULL       |
+| Domain | {"[1,2,3]"..="{\"k\":\"v\"}"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | 'true'                                 | 'true'             |
+| Row 1  | NULL                                   | NULL               |
+| Row 2  | '[1,2,3]'                              | '[1,2,3]'          |
++--------+----------------------------------------+--------------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                          |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] }                                               |
-| Output | NullableColumn { column: BinaryColumn { data: 0x20000000100000016120000000000000002000000010000003646566, offsets: [0, 9, 17, 28] }, validity: [0b_____111] } |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x747275657b226b223a2276227d5b312c322c335d, offsets: [0, 4, 13, 20] }, validity: [0b_____101] }                    |
+| Output | NullableColumn { column: BinaryColumn { data: 0x200000004000000080000003200000022000000220000002500150025003, offsets: [0, 8, 8, 30] }, validity: [0b_____101] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(a::Bitmap AS Variant)
 checked expr   : try_to_variant<T0=Bitmap><T0>(a)
 evaluation:
-+--------+---------------------------------+--------------+
-|        | a                               | Output       |
-+--------+---------------------------------+--------------+
-| Type   | Bitmap                          | Variant NULL |
-| Domain | Undefined                       | Undefined    |
-| Row 0  | RoaringTreemap<[0, 1, 2, 3, 4]> | [0,1,2,3,4]  |
-| Row 1  | RoaringTreemap<[1, 2, 3, 4, 5]> | [1,2,3,4,5]  |
-| Row 2  | RoaringTreemap<[2, 3, 4, 5, 6]> | [2,3,4,5,6]  |
-| Row 3  | RoaringTreemap<[3, 4, 5, 6, 7]> | [3,4,5,6,7]  |
-+--------+---------------------------------+--------------+
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Bitmap      | Variant NULL  |
+| Domain | Undefined   | Undefined     |
+| Row 0  | '0,1,2,3,4' | '[0,1,2,3,4]' |
+| Row 1  | '1,2,3,4,5' | '[1,2,3,4,5]' |
+| Row 2  | '2,3,4,5,6' | '[2,3,4,5,6]' |
+| Row 3  | '3,4,5,6,7' | '[3,4,5,6,7]' |
++--------+-------------+---------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                       |

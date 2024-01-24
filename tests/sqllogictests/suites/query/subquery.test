@@ -664,6 +664,9 @@ select * from t2 where t2.b < ANY(select NULL from t1 where t1.a = t1.a)
 ----
 
 statement ok
+drop table if exists t3
+
+statement ok
 create table t3(a int, b int);
 
 statement ok

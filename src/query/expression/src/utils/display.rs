@@ -222,11 +222,12 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                if !bits.is_empty() {
-                    let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
-                    write!(f, "{rb:?}")?;
-                }
-                Ok(())
+                let rb = if !bits.is_empty() {
+                    RoaringTreemap::deserialize_from(*bits).unwrap()
+                } else {
+                    RoaringTreemap::new()
+                };
+                write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -243,7 +244,7 @@ impl<'a> Display for ScalarRef<'a> {
             }
             ScalarRef::Variant(s) => {
                 let value = jsonb::to_string(s);
-                write!(f, "{value}")
+                write!(f, "'{value}'")
             }
         }
     }

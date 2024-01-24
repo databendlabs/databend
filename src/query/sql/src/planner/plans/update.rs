@@ -30,7 +30,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -81,7 +81,11 @@ impl UpdatePlan {
                 let field = schema.field(*index);
                 let data_type = scalar.data_type()?;
                 let target_type = field.data_type();
-                let left = wrap_cast_scalar(scalar, &data_type, target_type)?;
+                let left = if data_type != *target_type {
+                    wrap_cast(scalar, target_type)
+                } else {
+                    scalar.clone()
+                };
 
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.

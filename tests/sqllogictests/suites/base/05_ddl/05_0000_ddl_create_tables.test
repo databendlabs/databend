@@ -179,7 +179,7 @@ statement error 1065
 alter table db2.test6 add column b timestamp default now()
 
 statement ok
-create table db2.test7(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, variant VARIANT not null)
+create table db2.test7(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, bitmap BITMAP not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test7
@@ -202,10 +202,11 @@ bool BOOLEAN NO false (empty)
 arr ARRAY(INT32) NO [] (empty)
 tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
 map MAP(INT32, STRING) NO {} (empty)
-variant VARIANT NO null (empty)
+bitmap BITMAP NO '' (empty)
+variant VARIANT NO 'null' (empty)
 
 statement ok
-create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, variant VARIANT not null)
+create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, bitmap BITMAP not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test8
@@ -228,7 +229,8 @@ bool BOOLEAN NO false (empty)
 arr ARRAY(STRING) NO [] (empty)
 tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
 map MAP(STRING, DATE) NO {} (empty)
-variant VARIANT NO null (empty)
+bitmap BITMAP NO '' (empty)
+variant VARIANT NO 'null' (empty)
 
 
 statement ok
@@ -390,6 +392,7 @@ e MAP(STRING, STRING) YES NULL (empty)
 f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)
 
 statement ok
+<<<<<<< HEAD
 create table replace_test(a int);
 
 statement ok
@@ -408,3 +411,25 @@ create or replace table replace_test(b int);
 
 statement error 1065
 select a from replace_test;
+=======
+drop table if exists t_default
+
+statement ok
+create table t_default(a int, b bitmap not null default '1,2', c variant not null default '{"k":"v"}')
+
+query TTTTT
+desc t_default
+----
+a INT YES NULL (empty)
+b BITMAP NO '1,2' (empty)
+c VARIANT NO '{"k":"v"}' (empty)
+
+statement ok
+insert into t_default (a) values(1),(2)
+
+query ITT
+select a, to_string(b), c from t_default
+----
+1 1,2 {"k":"v"}
+2 1,2 {"k":"v"}
+>>>>>>> fa89d26e48 (fix(ddl): fix create table bitmap and variant with default value)
