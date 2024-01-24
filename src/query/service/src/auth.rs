@@ -121,6 +121,7 @@ impl AuthMgr {
                     }
                 };
 
+                UserApiProvider::instance().ensure_builtin_roles(&tenant);
                 session.set_authed_user(user, jwt.custom.role).await?;
             }
             Credential::Password {
@@ -161,9 +162,11 @@ impl AuthMgr {
 
                 authed?;
 
+                UserApiProvider::instance().ensure_builtin_roles(&tenant);
                 session.set_authed_user(user, None).await?;
             }
         };
+
         Ok(())
     }
 }
