@@ -664,83 +664,121 @@ pub trait Visitor<'a>: Sized {
 }
 
 pub trait VisitorWithParent<'a>: Sized {
-    fn visit(&mut self, parent: Option<&'a ScalarExpr>, expr: &'a ScalarExpr) -> Result<()> {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        walk_expr_with_parent(self, Some(expr), expr)
+    }
+
+    fn visit_with_parent(
+        &mut self,
+        parent: Option<&'a ScalarExpr>,
+        expr: &'a ScalarExpr,
+    ) -> Result<()> {
         walk_expr_with_parent(self, parent, expr)
     }
 
-    fn visit_bound_column_ref(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        _col: &'a BoundColumnRef,
-    ) -> Result<()> {
+    fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) -> Result<()> {
         Ok(())
     }
 
-    fn visit_constant(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        _constant: &'a ConstantExpr,
-    ) -> Result<()> {
+    fn visit_constant(&mut self, _constant: &'a ConstantExpr) -> Result<()> {
         Ok(())
     }
+
     fn visit_window_function(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         window: &'a WindowFunc,
     ) -> Result<()> {
+        fn walk_window_with_parent<'a, V: VisitorWithParent<'a>>(
+            visitor: &mut V,
+            parent: Option<&'a ScalarExpr>,
+            window: &'a WindowFunc,
+        ) -> Result<()> {
+            for expr in &window.partition_by {
+                visitor.visit_with_parent(parent, expr)?;
+            }
+            for expr in &window.order_by {
+                visitor.visit_with_parent(parent, &expr.expr)?;
+            }
+            match &window.func {
+                WindowFuncType::Aggregate(func) => {
+                    visitor.visit_aggregate_function(parent, func)?
+                }
+                WindowFuncType::NthValue(func) => visitor.visit_with_parent(parent, &func.arg)?,
+                WindowFuncType::LagLead(func) => {
+                    visitor.visit_with_parent(parent, &func.arg)?;
+                    if let Some(default) = func.default.as_ref() {
+                        visitor.visit_with_parent(parent, default)?
+                    }
+                }
+                WindowFuncType::RowNumber
+                | WindowFuncType::CumeDist
+                | WindowFuncType::Rank
+                | WindowFuncType::DenseRank
+                | WindowFuncType::PercentRank
+                | WindowFuncType::Ntile(_) => (),
+            }
+            Ok(())
+        }
         walk_window_with_parent(self, parent, window)
     }
+
     fn visit_aggregate_function(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         aggregate: &'a AggregateFunction,
     ) -> Result<()> {
         for expr in &aggregate.args {
-            self.visit(parent, expr)?;
+            self.visit_with_parent(parent, expr)?;
         }
         Ok(())
     }
+
     fn visit_lambda_function(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         lambda: &'a LambdaFunc,
     ) -> Result<()> {
         for expr in &lambda.args {
-            self.visit(parent, expr)?;
+            self.visit_with_parent(parent, expr)?;
         }
         Ok(())
     }
+
     fn visit_function_call(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         func: &'a FunctionCall,
     ) -> Result<()> {
         for expr in &func.arguments {
-            self.visit(parent, expr)?;
+            self.visit_with_parent(parent, expr)?;
         }
         Ok(())
     }
+
     fn visit_cast(&mut self, parent: Option<&'a ScalarExpr>, cast: &'a CastExpr) -> Result<()> {
-        self.visit(parent, &cast.argument)?;
+        self.visit_with_parent(parent, &cast.argument)?;
         Ok(())
     }
+
     fn visit_subquery(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         subquery: &'a SubqueryExpr,
     ) -> Result<()> {
         if let Some(child_expr) = subquery.child_expr.as_ref() {
-            self.visit(parent, child_expr)?;
+            self.visit_with_parent(parent, child_expr)?;
         }
         Ok(())
     }
+
     fn visit_udf_server_call(
         &mut self,
         parent: Option<&'a ScalarExpr>,
         udf: &'a UDFServerCall,
     ) -> Result<()> {
         for expr in &udf.arguments {
-            self.visit(parent, expr)?;
+            self.visit_with_parent(parent, expr)?;
         }
         Ok(())
     }
@@ -750,7 +788,7 @@ pub trait VisitorWithParent<'a>: Sized {
         parent: Option<&'a ScalarExpr>,
         udf: &'a UDFLambdaCall,
     ) -> Result<()> {
-        self.visit(parent, &udf.scalar)
+        self.visit_with_parent(parent, &udf.scalar)
     }
 }
 
@@ -760,47 +798,19 @@ pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
     expr: &'a ScalarExpr,
 ) -> Result<()> {
     match expr {
-        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(parent, expr),
-        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(parent, expr),
-        ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(parent, expr),
-        ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(parent, expr),
-        ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(parent, expr),
-        ScalarExpr::FunctionCall(expr) => visitor.visit_function_call(parent, expr),
-        ScalarExpr::CastExpr(expr) => visitor.visit_cast(parent, expr),
-        ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(parent, expr),
-        ScalarExpr::UDFServerCall(expr) => visitor.visit_udf_server_call(parent, expr),
-        ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(parent, expr),
-    }
-}
-
-pub fn walk_window_with_parent<'a, V: VisitorWithParent<'a>>(
-    visitor: &mut V,
-    parent: Option<&'a ScalarExpr>,
-    window: &'a WindowFunc,
-) -> Result<()> {
-    for expr in &window.partition_by {
-        visitor.visit(parent, expr)?;
-    }
-    for expr in &window.order_by {
-        visitor.visit(parent, &expr.expr)?;
-    }
-    match &window.func {
-        WindowFuncType::Aggregate(func) => visitor.visit_aggregate_function(parent, func)?,
-        WindowFuncType::NthValue(func) => visitor.visit(parent, &func.arg)?,
-        WindowFuncType::LagLead(func) => {
-            visitor.visit(parent, &func.arg)?;
-            if let Some(default) = func.default.as_ref() {
-                visitor.visit(parent, default)?
-            }
+        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
+        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(expr),
+        ScalarExpr::WindowFunction(win_func) => visitor.visit_window_function(parent, win_func),
+        ScalarExpr::AggregateFunction(aggregate) => {
+            visitor.visit_aggregate_function(parent, aggregate)
         }
-        WindowFuncType::RowNumber
-        | WindowFuncType::CumeDist
-        | WindowFuncType::Rank
-        | WindowFuncType::DenseRank
-        | WindowFuncType::PercentRank
-        | WindowFuncType::Ntile(_) => (),
+        ScalarExpr::LambdaFunction(lambda) => visitor.visit_lambda_function(parent, lambda),
+        ScalarExpr::FunctionCall(func) => visitor.visit_function_call(parent, func),
+        ScalarExpr::CastExpr(cast_expr) => visitor.visit_cast(parent, cast_expr),
+        ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, subquery),
+        ScalarExpr::UDFServerCall(udf) => visitor.visit_udf_server_call(parent, udf),
+        ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, udf),
     }
-    Ok(())
 }
 
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {

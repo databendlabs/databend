@@ -231,7 +231,7 @@ impl Binder {
         }
 
         let mut find_subquery = FindSubqueryVisitor { subqueries: vec![] };
-        find_subquery.visit(Some(scalar), scalar)?;
+        find_subquery.visit(scalar)?;
 
         for subquery in find_subquery.subqueries {
             let desc = self
