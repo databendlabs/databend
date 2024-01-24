@@ -71,6 +71,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -406,15 +407,20 @@ impl TableContext for QueryContext {
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {
-        self.partition_queue.write().pop_front()
+        if let Some(part) = self.partition_queue.write().pop_front() {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+            return Some(part);
+        }
+
+        None
     }
 
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
-        let mut partition_queue = self.partition_queue.write();
+        let mut queue_guard = self.partition_queue.write();
 
         for _index in 0..num {
-            match partition_queue.pop_front() {
+            match queue_guard.pop_front() {
                 None => {
                     break;
                 }
@@ -423,6 +429,8 @@ impl TableContext for QueryContext {
                 }
             };
         }
+
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
 
         res
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -19,7 +20,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_pipeline_core::get_statistics_desc;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::ProfileDesc;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::error;
 use log::info;
@@ -91,12 +95,18 @@ pub trait Interpreter: Sync + Send {
                     struct QueryProfiles {
                         query_id: String,
                         profiles: Vec<PlanProfile>,
+                        statistics_desc: Arc<HashMap<ProfileStatisticsName, ProfileDesc>>,
                     }
 
-                    info!(target: "databend::log::profile", "{}", serde_json::to_string(&QueryProfiles {
-                        query_id: query_ctx.get_id(),
-                        profiles: query_profiles,
-                    })?);
+                    info!(
+                        target: "databend::log::profile",
+                        "{}",
+                        serde_json::to_string(&QueryProfiles {
+                            query_id: query_ctx.get_id(),
+                            profiles: query_profiles,
+                            statistics_desc: get_statistics_desc(),
+                        })?
+                    );
                 }
             }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -26,6 +24,7 @@ use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
@@ -41,7 +40,6 @@ pub struct ExchangeWriterSink {
     source: String,
     destination: String,
     fragment: usize,
-    exchange_bytes: AtomicUsize,
 }
 
 impl ExchangeWriterSink {
@@ -58,7 +56,6 @@ impl ExchangeWriterSink {
             source: source_id.to_string(),
             destination: destination_id.to_string(),
             fragment: fragment_id,
-            exchange_bytes: AtomicUsize::new(0),
         })
     }
 }
@@ -101,17 +98,10 @@ impl AsyncSink for ExchangeWriterSink {
         {
             metrics_inc_exchange_write_count(count);
             metrics_inc_exchange_write_bytes(bytes);
-            self.exchange_bytes.fetch_add(bytes, Ordering::Relaxed);
+            Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
         }
 
         Ok(false)
-    }
-
-    fn record_profile(&self, profile: &Profile) {
-        profile.exchange_bytes.fetch_add(
-            self.exchange_bytes.swap(0, Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
     }
 
     fn details_status(&self) -> Option<String> {
