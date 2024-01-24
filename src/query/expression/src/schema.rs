@@ -90,7 +90,7 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | CHANGE_ACTION_COL_NAME
             | CHANGE_IS_UPDATE_COL_NAME
             | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended 
+            // change$row_id might be expended
             // to the computation of the two following internal columns
             | ORIGIN_BLOCK_ROW_NUM_COL_NAME
             | BASE_ROW_ID_COL_NAME
@@ -566,8 +566,17 @@ impl TableSchema {
 
         let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
         let leaf_field_column_ids = self.field_leaf_column_ids();
-        for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
+        for ((default_value, field_column_ids), field) in default_values
+            .iter()
+            .zip_eq(leaf_field_column_ids)
+            .zip(self.fields().iter())
         {
+            if matches!(
+                field.data_type(),
+                TableDataType::Map(_) | TableDataType::Array(_)
+            ) {
+                continue;
+            }
             let mut index = 0;
             collect_leaf_default_values(
                 default_value,
