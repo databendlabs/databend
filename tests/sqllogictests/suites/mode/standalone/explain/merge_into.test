@@ -25,7 +25,7 @@ MergeInto:
 target_table: default.default.salaries2
 ├── distributed: false
 ├── target_build_optimization: false
-├── update_column_only_optimization: false
+├── can_try_update_column_only: false
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
@@ -55,7 +55,7 @@ MergeInto:
 target_table: default.default.salaries2
 ├── distributed: false
 ├── target_build_optimization: false
-├── update_column_only_optimization: false
+├── can_try_update_column_only: false
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
@@ -96,7 +96,7 @@ MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
 ├── target_build_optimization: true
-├── update_column_only_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t2.b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 └── HashJoin: LEFT OUTER
@@ -122,7 +122,7 @@ MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
 ├── target_build_optimization: true
-├── update_column_only_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 └── HashJoin: LEFT OUTER
@@ -148,18 +148,17 @@ MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
 ├── target_build_optimization: true
-├── update_column_only_optimization: false
+├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = 'test']
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 └── HashJoin: LEFT OUTER
     ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
     ├── non-equi conditions: []
-    ├── Exchange(Merge)
-    │   └── LogicalGet
-    │       ├── table: default.default.column_only_optimization_source
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    ├── LogicalGet
+    │   ├── table: default.default.column_only_optimization_source
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
     └── LogicalGet
         ├── table: default.default.column_only_optimization_target
         ├── filters: []
@@ -174,18 +173,17 @@ MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
 ├── target_build_optimization: true
-├── update_column_only_optimization: false
+├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = concat(t2.b (#1), 'test')]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 └── HashJoin: LEFT OUTER
     ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
     ├── non-equi conditions: []
-    ├── Exchange(Merge)
-    │   └── LogicalGet
-    │       ├── table: default.default.column_only_optimization_source
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    ├── LogicalGet
+    │   ├── table: default.default.column_only_optimization_source
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
     └── LogicalGet
         ├── table: default.default.column_only_optimization_target
         ├── filters: []

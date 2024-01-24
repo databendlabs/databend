@@ -305,8 +305,8 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         "distributed: {}",
         merge_into.distributed
     )));
-    let update_column_only_optimization_format = FormatTreeNode::new(FormatContext::Text(format!(
-        "update_column_only_optimization: {}",
+    let can_try_update_column_only_format = FormatTreeNode::new(FormatContext::Text(format!(
+        "can_try_update_column_only: {}",
         merge_into.can_try_update_column_only
     )));
     // add macthed clauses
@@ -372,7 +372,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],
-        vec![update_column_only_optimization_format],
+        vec![can_try_update_column_only_format],
         matched_children,
         unmatched_children,
         vec![input_format_child],

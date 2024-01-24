@@ -91,7 +91,7 @@ impl std::fmt::Debug for MergeInto {
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
             .field(
-                "update_column_only_optimization",
+                "can_try_update_column_only",
                 &self.can_try_update_column_only,
             )
             .finish()
