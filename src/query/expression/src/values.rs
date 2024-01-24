@@ -402,6 +402,10 @@ impl Scalar {
         }
     }
 
+    pub fn is_nested_scalar(&self) -> bool {
+        matches!(self, Self::Array(_) | Self::Map(_) | Self::Tuple(_))
+    }
+
     pub fn is_positive(&self) -> bool {
         match self {
             Scalar::Number(n) => n.is_positive(),
@@ -614,10 +618,6 @@ impl<'a> ScalarRef<'a> {
                 _ => false,
             },
         }
-    }
-
-    pub fn is_nested_scalar(&self) -> bool {
-        matches!(self, Scalar::Array(_) | Scalar::Map(_) | Scalar::Tuple(_))
     }
 }
 
