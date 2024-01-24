@@ -33,6 +33,7 @@ message CreateTaskRequest {
   // DAG
   repeated string after = 11; //
   optional string when_condition = 12;
+  map<string, string> session_parameters = 13;
 }
 
 message TaskError {

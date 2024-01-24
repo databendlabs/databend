@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTaskOptions;
@@ -82,6 +83,7 @@ pub struct CreateTaskPlan {
     pub after: Vec<String>,
     pub when_condition: Option<String>,
     pub suspend_task_after_num_failures: Option<u64>,
+    pub session_parameters: BTreeMap<String, String>,
     pub sql: String,
     pub comment: String,
 }

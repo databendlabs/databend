@@ -93,6 +93,7 @@ impl Binder {
             after,
             when_condition,
             sql,
+            session_parameters,
         } = stmt;
         if (schedule_opts.is_none() && after.is_empty())
             || (schedule_opts.is_some() && !after.is_empty())
@@ -114,6 +115,7 @@ impl Binder {
             after: after.clone(),
             when_condition: when_condition.clone(),
             comment: comments.clone(),
+            session_parameters: session_parameters.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))

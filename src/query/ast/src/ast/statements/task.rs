@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -23,6 +24,7 @@ pub struct CreateTaskStmt {
     pub name: String,
     pub warehouse_opts: WarehouseOptions,
     pub schedule_opts: Option<ScheduleOptions>,
+    pub session_parameters: BTreeMap<String, String>,
     pub suspend_task_after_num_failures: Option<u64>,
     pub comments: String,
     pub after: Vec<String>,
@@ -43,8 +45,14 @@ impl Display for CreateTaskStmt {
             write!(f, "{}", schedule_opt)?;
         }
 
+        if !self.session_parameters.is_empty() {
+            for (key, value) in &self.session_parameters {
+                write!(f, " {} = '{}'", key, value)?;
+            }
+        }
+
         if let Some(num) = self.suspend_task_after_num_failures {
-            write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;
+            write!(f, " SUSPEND_TASK_AFTER {} FAILURES", num)?;
         }
 
         if !self.comments.is_empty() {
