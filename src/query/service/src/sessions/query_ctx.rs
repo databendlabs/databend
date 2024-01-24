@@ -601,12 +601,14 @@ impl TableContext for QueryContext {
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
             rounding_mode,
+            disable_variant_check,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),

@@ -631,6 +631,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("disable_variant_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable variant check to allow insert invalid JSON values",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("cost_factor_hash_table_per_row", DefaultSettingValue {
                     value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
                     desc: "Cost factor of building hash table for a data row",

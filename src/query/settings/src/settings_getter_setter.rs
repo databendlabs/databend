@@ -568,6 +568,14 @@ impl Settings {
         )
     }
 
+    pub fn get_disable_variant_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_variant_check")? != 0)
+    }
+
+    pub fn set_disable_variant_check(&self, val: bool) -> Result<()> {
+        self.try_set_u64("disable_variant_check", u64::from(val))
+    }
+
     pub fn get_cost_factor_hash_table_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_hash_table_per_row")
     }
