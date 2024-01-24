@@ -137,7 +137,7 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
             mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,

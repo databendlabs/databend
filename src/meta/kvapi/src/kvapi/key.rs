@@ -14,6 +14,7 @@
 
 //! Defines kvapi::KVApi key behaviors.
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
@@ -50,6 +51,8 @@ where Self: Sized
 {
     const PREFIX: &'static str;
 
+    type ValueType;
+
     /// Encode structured key into a string.
     fn to_string_key(&self) -> String;
 
@@ -59,6 +62,9 @@ where Self: Sized
 
 impl kvapi::Key for String {
     const PREFIX: &'static str = "";
+
+    /// For a non structured key, the value type can never be used.
+    type ValueType = Infallible;
 
     fn to_string_key(&self) -> String {
         self.clone()

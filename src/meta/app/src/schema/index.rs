@@ -230,6 +230,7 @@ mod kvapi_key_impl {
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdToName;
+    use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
     use crate::schema::PREFIX_INDEX;
     use crate::schema::PREFIX_INDEX_BY_ID;
@@ -238,6 +239,8 @@ mod kvapi_key_impl {
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
         const PREFIX: &'static str = PREFIX_INDEX;
+
+        type ValueType = IndexId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -261,6 +264,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for IndexId {
         const PREFIX: &'static str = PREFIX_INDEX_BY_ID;
 
+        type ValueType = IndexMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.index_id)
@@ -280,6 +285,8 @@ mod kvapi_key_impl {
     /// "<prefix>/<index_id> -> IndexNameIdent"
     impl kvapi::Key for IndexIdToName {
         const PREFIX: &'static str = PREFIX_INDEX_ID_TO_NAME;
+
+        type ValueType = IndexNameIdent;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

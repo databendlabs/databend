@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(let_chains)]
-#![feature(ip_in_core)]
 #![allow(clippy::uninlined_format_args)]
 
 extern crate core;

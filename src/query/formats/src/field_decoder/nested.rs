@@ -207,7 +207,7 @@ impl NestedValues {
         let mut buf = Vec::new();
         reader.read_quoted_text(&mut buf, b'\'')?;
         let decoded = decode_binary(&buf, self.common_settings.binary_format)?;
-        column.data.extend_from_slice(&decoded);
+        column.put_slice(&decoded);
         column.commit_row();
         Ok(())
     }

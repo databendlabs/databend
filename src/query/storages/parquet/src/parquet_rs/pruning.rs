@@ -235,7 +235,9 @@ impl ParquetRSPruner {
                     selectors.extend(sel_of_cur_rg);
                 }
                 // Trim selectors.
-                while let Some(s) = selectors.last() && s.row_count == 0 {
+                while let Some(s) = selectors.last()
+                    && s.row_count == 0
+                {
                     selectors.pop();
                 }
                 Ok(Some(RowSelection::from(selectors)))

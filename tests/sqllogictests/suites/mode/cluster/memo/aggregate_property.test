@@ -8,6 +8,9 @@ statement ok
 use aggregate_property
 
 statement ok
+set max_threads = 1
+
+statement ok
 create table t_10(a int) as select * from numbers(10)
 
 statement ok
@@ -23,7 +26,7 @@ where t_10.a = t_1000.a and t_100.a = t_1000.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 9912 bytes
+├── estimated memory: 10080 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []
@@ -92,7 +95,7 @@ group by t_10.a, t_100.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 23128 bytes
+├── estimated memory: 23520 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []

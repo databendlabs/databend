@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
@@ -1583,6 +1584,9 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
+
+    #[clap(skip)]
+    pub settings: HashMap<String, UserSettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -1661,6 +1665,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
+            settings: self.settings,
         })
     }
 }
@@ -1751,6 +1756,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
+            settings: HashMap::new(),
         }
     }
 }

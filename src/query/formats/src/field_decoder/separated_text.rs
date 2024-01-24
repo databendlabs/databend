@@ -153,12 +153,12 @@ impl SeparatedTextDecoder {
             }
             ColumnBuilder::Binary(c) => {
                 let data = decode_binary(data, self.common_settings().binary_format)?;
-                c.data.extend_from_slice(&data);
+                c.put_slice(&data);
                 c.commit_row();
                 Ok(())
             }
             ColumnBuilder::String(c) => {
-                c.data.extend_from_slice(data);
+                c.put_str(std::str::from_utf8(data)?);
                 c.commit_row();
                 Ok(())
             }

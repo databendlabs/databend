@@ -43,7 +43,10 @@ impl Settings {
     unsafe fn unchecked_try_get_u64(&self, key: &str) -> Result<u64> {
         match self.changes.get(key) {
             Some(v) => v.value.as_u64(),
-            None => DefaultSettings::try_get_u64(key),
+            None => match self.configs.get(key) {
+                Some(v) => v.as_u64(),
+                None => DefaultSettings::try_get_u64(key),
+            },
         }
     }
 
@@ -56,7 +59,10 @@ impl Settings {
     unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
-            None => DefaultSettings::try_get_string(key),
+            None => match self.configs.get(key) {
+                Some(v) => Ok(v.as_string()),
+                None => DefaultSettings::try_get_string(key),
+            },
         }
     }
 
@@ -173,14 +179,6 @@ impl Settings {
 
     pub fn set_max_memory_usage(&self, val: u64) -> Result<()> {
         self.try_set_u64("max_memory_usage", val)
-    }
-
-    pub fn set_retention_period(&self, hours: u64) -> Result<()> {
-        self.try_set_u64("retention_period", hours)
-    }
-
-    pub fn get_retention_period(&self) -> Result<u64> {
-        self.try_get_u64("retention_period")
     }
 
     pub fn set_data_retention_time_in_days(&self, days: u64) -> Result<()> {

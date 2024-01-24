@@ -136,7 +136,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         for data_type in self.group_data_types.iter() {
             let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
-            for (_, key) in keys.iter_mut().enumerate() {
+            for key in keys.iter_mut() {
                 column.push_binary(key)?;
             }
             res.push(column.build());
@@ -200,7 +200,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
             } else {
                 let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
-                for (_, key) in other_type_keys.iter_mut().enumerate() {
+                for key in other_type_keys.iter_mut() {
                     column.push_binary(key)?;
                 }
 

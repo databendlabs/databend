@@ -162,7 +162,7 @@ async fn test_join() -> anyhow::Result<()> {
     let client0 = tc0.grpc_client().await?;
     let client1 = tc1.grpc_client().await?;
 
-    let clients = vec![client0, client1];
+    let clients = [client0, client1];
 
     info!("--- upsert kv to every nodes");
     {
