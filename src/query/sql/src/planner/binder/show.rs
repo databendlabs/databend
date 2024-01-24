@@ -48,15 +48,10 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        // rewrite show user functions to select * from system.functions where is_builtin = false ...
-        let limitation = if show_limit.is_empty() {
-            "WHERE is_builtin = false".to_owned()
-        } else {
-            format!("{} AND is_builtin = false", show_limit)
-        };
+        // rewrite show user functions to select * from system.udf_functions ...
         let query = format!(
-            "SELECT name, is_aggregate, definition, description FROM system.functions {} ORDER BY name {}",
-            limitation, limit_str
+            "SELECT name, description, arguments, language FROM system.udf_functions {} ORDER BY name {}",
+            show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
             .await

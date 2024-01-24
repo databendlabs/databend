@@ -59,6 +59,7 @@ use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TracingTable;
+use databend_common_storages_system::UDFFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::VirtualColumnsTable;
 
@@ -129,6 +130,7 @@ impl SystemDatabase {
             LocksTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
+            UDFFunctionsTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();
