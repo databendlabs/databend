@@ -43,7 +43,10 @@ impl Settings {
     unsafe fn unchecked_try_get_u64(&self, key: &str) -> Result<u64> {
         match self.changes.get(key) {
             Some(v) => v.value.as_u64(),
-            None => DefaultSettings::try_get_u64(key),
+            None => match self.configs.get(key) {
+                Some(v) => v.as_u64(),
+                None => DefaultSettings::try_get_u64(key),
+            },
         }
     }
 
@@ -56,7 +59,10 @@ impl Settings {
     unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
-            None => DefaultSettings::try_get_string(key),
+            None => match self.configs.get(key) {
+                Some(v) => Ok(v.as_string()),
+                None => DefaultSettings::try_get_string(key),
+            },
         }
     }
 
@@ -568,5 +574,17 @@ impl Settings {
 
     pub fn set_disable_variant_check(&self, val: bool) -> Result<()> {
         self.try_set_u64("disable_variant_check", u64::from(val))
+    }
+
+    pub fn get_cost_factor_hash_table_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_hash_table_per_row")
+    }
+
+    pub fn get_cost_factor_aggregate_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_aggregate_per_row")
+    }
+
+    pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_network_per_row")
     }
 }

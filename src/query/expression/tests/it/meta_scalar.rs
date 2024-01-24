@@ -90,7 +90,7 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
 
             for row in 0..rows {
                 let scalar = entry.value.index(row).unwrap().to_owned();
-                let simple_scalar: IndexScalar = scalar.clone().into();
+                let simple_scalar: IndexScalar = scalar.clone().try_into().unwrap();
                 simple_scalars.push(simple_scalar.clone());
                 scalars.push(scalar.clone());
 

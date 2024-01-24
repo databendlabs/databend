@@ -402,6 +402,10 @@ impl Scalar {
         }
     }
 
+    pub fn is_nested_scalar(&self) -> bool {
+        matches!(self, Self::Array(_) | Self::Map(_) | Self::Tuple(_))
+    }
+
     pub fn is_positive(&self) -> bool {
         match self {
             Scalar::Number(n) => n.is_positive(),
@@ -581,6 +585,71 @@ impl<'a> ScalarRef<'a> {
                 DataType::Tuple(inner)
             }
             ScalarRef::Variant(_) => DataType::Variant,
+        }
+    }
+
+    /// Infer the common data type of the scalar and the other scalar.
+    ///
+    /// If both of the scalar is Null, the data type is `DataType::Null`,
+    /// and if one of the scalar is Null, the data type is nullable,
+    /// otherwise, the inferred data type is non-nullable.
+    ///
+    /// Auto type cast is not considered in this method. For example,
+    /// `infer_common_type` for a scalar of `UInt8` and a scalar of`UInt16`
+    ///  will return `None`.
+    pub fn infer_common_type(&self, other: &Self) -> Option<DataType> {
+        match (self, other) {
+            (ScalarRef::Null, ScalarRef::Null) => Some(DataType::Null),
+            (ScalarRef::Null, other) | (other, ScalarRef::Null) => {
+                Some(other.infer_data_type().wrap_nullable())
+            }
+            (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(DataType::EmptyArray),
+            (ScalarRef::EmptyMap, ScalarRef::EmptyMap) => Some(DataType::EmptyMap),
+            (ScalarRef::Number(s1), ScalarRef::Number(s2)) => {
+                with_number_type!(|NUM_TYPE| match (s1, s2) {
+                    (NumberScalar::NUM_TYPE(_), NumberScalar::NUM_TYPE(_)) => {
+                        Some(DataType::Number(NumberDataType::NUM_TYPE))
+                    }
+                    _ => None,
+                })
+            }
+            (ScalarRef::Decimal(s1), ScalarRef::Decimal(s2)) => {
+                with_decimal_type!(|DECIMAL_TYPE| match (s1, s2) {
+                    (
+                        DecimalScalar::DECIMAL_TYPE(_, size1),
+                        DecimalScalar::DECIMAL_TYPE(_, size2),
+                    ) => {
+                        if size1 == size2 {
+                            Some(DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size1)))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                })
+            }
+            (ScalarRef::Boolean(_), ScalarRef::Boolean(_)) => Some(DataType::Boolean),
+            (ScalarRef::Binary(_), ScalarRef::Binary(_)) => Some(DataType::Binary),
+            (ScalarRef::String(_), ScalarRef::String(_)) => Some(DataType::String),
+            (ScalarRef::Timestamp(_), ScalarRef::Timestamp(_)) => Some(DataType::Timestamp),
+            (ScalarRef::Date(_), ScalarRef::Date(_)) => Some(DataType::Date),
+            (ScalarRef::Array(s1), ScalarRef::Array(s2)) if s1.data_type() == s2.data_type() => {
+                Some(DataType::Array(Box::new(s1.data_type())))
+            }
+            (ScalarRef::Map(s1), ScalarRef::Map(s2)) if s1.data_type() == s2.data_type() => {
+                Some(DataType::Map(Box::new(s1.data_type())))
+            }
+            (ScalarRef::Bitmap(_), ScalarRef::Bitmap(_)) => Some(DataType::Bitmap),
+            (ScalarRef::Tuple(s1), ScalarRef::Tuple(s2)) => {
+                let inner = s1
+                    .iter()
+                    .zip(s2.iter())
+                    .map(|(s1, s2)| s1.infer_common_type(s2))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(DataType::Tuple(inner))
+            }
+            (ScalarRef::Variant(_), ScalarRef::Variant(_)) => Some(DataType::Variant),
+            _ => None,
         }
     }
 

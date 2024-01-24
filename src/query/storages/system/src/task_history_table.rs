@@ -31,6 +31,7 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::TableIdent;
@@ -59,6 +60,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut scheduled_time: Vec<i64> = Vec::with_capacity(task_runs.len());
     let mut completed_time: Vec<Option<i64>> = Vec::with_capacity(task_runs.len());
     let mut root_task_id: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
         let tr: databend_common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
@@ -79,6 +81,8 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
         root_task_id.push(tr.root_task_id);
+        let serialized_params = serde_json::to_vec(&tr.session_params).unwrap();
+        session_params.push(Some(serialized_params));
     }
     Ok(DataBlock::new_from_columns(vec![
         StringType::from_data(name),
@@ -98,6 +102,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         TimestampType::from_opt_data(completed_time),
         TimestampType::from_data(scheduled_time),
         StringType::from_data(root_task_id),
+        VariantType::from_opt_data(session_params),
     ]))
 }
 
