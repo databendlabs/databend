@@ -97,15 +97,7 @@ impl UserApiProvider {
         // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
         //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
         {
-            let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-            account_admin.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            );
-            user_mgr.add_role(tenant, account_admin, true).await?;
 
-            let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-            user_mgr.add_role(tenant, public, true).await?;
         }
 
         Ok(Arc::new(user_mgr))

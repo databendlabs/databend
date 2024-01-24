@@ -39,6 +39,20 @@ impl UserApiProvider {
         Ok(role_data)
     }
 
+    #[async_backtrace::framed]
+    pub async fn maybe_get_role(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
+        match self.get_role(tenant, role.to_string()).await {
+            Ok(r) => Ok(Some(r)),
+            Err(err) => {
+                if err.code() == ErrorCode::UNKNOWN_ROLE {
+                    Ok(None)
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+
     // Get the tenant all roles list.
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
@@ -50,6 +64,31 @@ impl UserApiProvider {
         let mut roles = seq_roles.into_iter().map(|r| r.data).collect::<Vec<_>>();
         roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(roles)
+    }
+
+    /// Ensure the builtin roles account_admin and public exists. Please note that there's
+    /// a corner case that if we added another privilege type, we should add it to the
+    /// existed account_admin role.
+    #[async_backtrace::framed]
+    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
+        let existed_account_admin = self
+            .maybe_get_role(tenant, BUILTIN_ROLE_ACCOUNT_ADMIN)
+            .await?;
+        if existed_account_admin.is_none() {
+            let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+            account_admin.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_global(),
+            );
+            self.add_role(tenant, account_admin, true).await?;
+            return Ok(());
+        } else if existed_account_admin.unwrap().grants {
+            self.add_role(tenant, account_admin, false).await?;
+        }
+
+        let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+        self.add_role(tenant, public, true).await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]

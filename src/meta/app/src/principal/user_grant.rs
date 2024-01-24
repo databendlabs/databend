@@ -232,14 +232,19 @@ impl UserGrantSet {
         self.roles.remove(role);
     }
 
-    pub fn verify_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
-    ) -> bool {
-        self.entries
-            .iter()
-            .any(|e| e.verify_privilege(object, privilege.clone()))
+    pub fn find_granted_privileges(&self, object: &GrantObject) -> UserPrivilegeSet {
+        let mut privileges = UserPrivilegeSet::empty();
+        for entry in self.entries.iter() {
+            if entry.matches_entry(object) {
+                privileges |= entry.privileges.into();
+            }
+        }
+        privileges
+    }
+
+    pub fn verify_privilege(&self, object: &GrantObject, privs: Vec<UserPrivilegeType>) -> bool {
+        let granted_privs = self.find_granted_privileges(object);
+        return privs.iter().all(|p| granted_privs.has_privilege(*p));
     }
 
     pub fn grant_privileges(&mut self, object: &GrantObject, privileges: UserPrivilegeSet) {
