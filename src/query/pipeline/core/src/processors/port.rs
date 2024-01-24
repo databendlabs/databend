@@ -208,6 +208,7 @@ impl InputPort {
 }
 
 pub struct OutputPort {
+    record_profile: UnSafeCellWrap<bool>,
     shared: UnSafeCellWrap<Arc<SharedStatus>>,
     update_trigger: UnSafeCellWrap<*mut UpdateTrigger>,
 }
@@ -215,6 +216,7 @@ pub struct OutputPort {
 impl OutputPort {
     pub fn create() -> Arc<OutputPort> {
         Arc::new(OutputPort {
+            record_profile: UnSafeCellWrap::create(false),
             shared: UnSafeCellWrap::create(SharedStatus::create()),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
@@ -225,16 +227,17 @@ impl OutputPort {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 
-            if let Ok(data_block) = &data {
-                // TODO: only last output need record
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::OutputRows,
-                    data_block.num_rows(),
-                );
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::OutputBytes,
-                    data_block.memory_size(),
-                );
+            if *self.record_profile {
+                if let Ok(data_block) = &data {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputRows,
+                        data_block.num_rows(),
+                    );
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputBytes,
+                        data_block.memory_size(),
+                    );
+                }
             }
 
             let data = Box::into_raw(Box::new(SharedData(data)));
@@ -284,6 +287,13 @@ impl OutputPort {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
+    }
+
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
+    pub unsafe fn record_profile(&self) {
+        self.record_profile.set_value(true);
     }
 }
 

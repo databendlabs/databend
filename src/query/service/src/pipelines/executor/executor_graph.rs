@@ -207,6 +207,13 @@ impl ExecutingGraph {
                     let output_trigger = graph[source_node].create_trigger(edge_index);
                     graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
 
+                    if graph[source_node].profile.plan_id.is_some()
+                        && graph[target_node].profile.plan_id.is_some()
+                        && graph[source_node].profile.plan_id != graph[target_node].profile.plan_id
+                    {
+                        graph[source_node].outputs_port[source_port].record_profile();
+                    }
+
                     connect(
                         &graph[target_node].inputs_port[target_port],
                         &graph[source_node].outputs_port[source_port],
