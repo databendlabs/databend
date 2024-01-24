@@ -153,7 +153,7 @@ impl MatchedSplitProcessor {
             let update_field_indexes: HashMap<FieldIndex, IndexType> = update_exprs
                 .iter()
                 .map(|item| {
-                    let cast_update_set_expr =
+                    let mut update_set_expr =
                         if let RemoteExpr::FunctionCall { id, args, .. } = &item.1 {
                             assert_eq!(id.name(), "if");
                             // the predcate is always true.
@@ -161,12 +161,13 @@ impl MatchedSplitProcessor {
                         } else {
                             unreachable!()
                         };
-                    let update_set_expr =
-                        if let RemoteExpr::Cast { expr, .. } = cast_update_set_expr {
-                            expr.as_ref()
-                        } else {
-                            unreachable!()
-                        };
+                    // in `generate_update_list` we will do `wrap_cast_expr` to cast `left` into dest_type,
+                    // but after that, we will do a `type_check` in `scalar.as_expr`, if the cast's dest_type
+                    // is the same, we will deref the `cast`.
+                    if let RemoteExpr::Cast { expr, .. } = update_set_expr {
+                        update_set_expr = expr.as_ref();
+                    }
+                    assert!(matches!(update_set_expr, RemoteExpr::ColumnRef { .. }));
                     if let RemoteExpr::ColumnRef { id, .. } = update_set_expr {
                         // (field_index,project_idx)
                         (item.0, *id)
