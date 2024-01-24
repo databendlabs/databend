@@ -88,6 +88,8 @@ impl ColumnStatistics {
         in_memory_size: u64,
         distinct_of_values: Option<u64>,
     ) -> Self {
+        assert!(min.as_ref().infer_common_type(&max.as_ref()).is_some());
+
         Self {
             min,
             max,
