@@ -90,16 +90,8 @@ impl UserApiProvider {
             idm_config,
         };
 
-        // init built-in role
-        // Currently we have two builtin roles:
-        // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
-        //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
-        // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
-        //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-        {
-
-        }
-
+        // create builtin roles account_admin & public if not exists.
+        user_mgr.ensure_builtin_roles(tenant).await?;
         Ok(Arc::new(user_mgr))
     }
 
