@@ -99,12 +99,12 @@ impl ColumnStatistics {
         }
     }
 
-    pub fn min(&self) -> Scalar {
-        self.min.clone()
+    pub fn min(&self) -> &Scalar {
+        &self.min
     }
 
-    pub fn max(&self) -> Scalar {
-        self.max.clone()
+    pub fn max(&self) -> &Scalar {
+        &self.max
     }
 
     pub fn from_v0(
@@ -154,12 +154,12 @@ impl ClusterStatistics {
         }
     }
 
-    pub fn min(&self) -> Vec<Scalar> {
-        self.min.clone()
+    pub fn min(&self) -> &Vec<Scalar> {
+        &self.min
     }
 
-    pub fn max(&self) -> Vec<Scalar> {
-        self.max.clone()
+    pub fn max(&self) -> &Vec<Scalar> {
+        &self.max
     }
 
     pub fn is_const(&self) -> bool {

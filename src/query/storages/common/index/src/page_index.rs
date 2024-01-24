@@ -96,7 +96,7 @@ impl PageIndex {
             None => return Ok((true, None)),
         };
 
-        let max_value = Scalar::Tuple(stats.max());
+        let max_value = Scalar::Tuple(stats.max().clone());
 
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));
