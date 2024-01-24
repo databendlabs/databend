@@ -143,7 +143,7 @@ pub struct BloomIndex {
 /// FilterExprEvalResult represents the evaluation result of an expression by a filter.
 ///
 /// For example, expression of 'age = 12' should return false is the filter are sure
-/// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Maybe'.
+/// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Uncertain'.
 ///
 /// If the column is not applicable for a filter, like TypeID::struct, Uncertain is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
