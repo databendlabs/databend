@@ -294,6 +294,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         table_entry.database(),
         table_entry.name(),
     ));
+
     let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
         && !merge_into.columns_set.contains(&merge_into.row_id_index);
     let target_build_optimization_format = FormatTreeNode::new(FormatContext::Text(format!(
@@ -304,7 +305,10 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         "distributed: {}",
         merge_into.distributed
     )));
-
+    let update_column_only_optimization_format = FormatTreeNode::new(FormatContext::Text(format!(
+        "update_column_only_optimization: {}",
+        merge_into.is_update_column_only
+    )));
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
     let taregt_schema = table_entry.table().schema();
@@ -368,6 +372,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],
+        vec![update_column_only_optimization_format],
         matched_children,
         unmatched_children,
         vec![input_format_child],

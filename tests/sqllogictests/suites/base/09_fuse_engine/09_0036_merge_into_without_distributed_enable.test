@@ -1213,5 +1213,74 @@ when not matched then insert *;
 ----
 0 4000000
 
+## test update column only optimization
+statement ok
+drop table if exists column_only_optimization_target;
+
+statement ok
+drop table if exists column_only_optimization_source;
+
+statement ok
+create table column_only_optimization_target(a int,b string);
+
+statement ok
+create table column_only_optimization_source(a int,b string);
+
+statement ok
+insert into column_only_optimization_target values(1,'a1'),(2,'a2');
+
+statement ok
+insert into column_only_optimization_target values(3,'a3'),(4,'a4');
+
+statement ok
+insert into column_only_optimization_target values(5,'a5'),(6,'a6');
+
+statement ok
+insert into column_only_optimization_target values(7,'a7'),(8,'a8');
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 a1
+2 a2
+3 a3
+4 a4
+5 a5
+6 a6
+7 a7
+8 a8
+
+statement ok
+insert into column_only_optimization_source values(1,'b1'),(2,'b2');
+
+statement ok
+insert into column_only_optimization_source values(3,'b3'),(4,'b4');
+
+query TT
+select * from column_only_optimization_source order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+
+query TT
+merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
+t1.a = t2.a when matched then update t1.b = t2.b when not macted then insert *;
+----
+0 4
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+5 a5
+6 a6
+7 a7
+8 a8
+
 statement ok
 set enable_experimental_merge_into = 0;

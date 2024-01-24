@@ -143,6 +143,7 @@ impl MergeIntoInterpreter {
             change_join_order,
             split_idx,
             row_id_index,
+            is_update_column_only,
             ..
         } = &self.plan;
         let mut columns_set = columns_set.clone();
@@ -364,6 +365,10 @@ impl MergeIntoInterpreter {
                 None
             };
 
+            if *is_update_column_only {
+                assert!(condition.is_none());
+            }
+
             // update
             let update_list = if let Some(update_list) = &item.update {
                 // use update_plan to get exprs
@@ -412,6 +417,7 @@ impl MergeIntoInterpreter {
                         )
                     })
                     .collect_vec();
+                //
                 Some(update_list)
             } else {
                 // delete
@@ -456,6 +462,7 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization,
+                is_update_column_only: *is_update_column_only,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -482,6 +489,7 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now..
+                is_update_column_only: *is_update_column_only,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation

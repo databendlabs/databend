@@ -395,6 +395,7 @@ impl PipelineBuilder {
             distributed,
             merge_type,
             change_join_order,
+            is_update_column_only,
             ..
         } = merge_into;
 
@@ -475,6 +476,7 @@ impl PipelineBuilder {
                     input.output_schema()?,
                     Arc::new(DataSchema::from(tbl.schema())),
                     merge_into.target_build_optimization,
+                    *is_update_column_only,
                 )?;
                 pipe_items.push(matched_split_processor.into_pipe_item());
             }
