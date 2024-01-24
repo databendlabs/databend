@@ -8,6 +8,10 @@ query TIITI
 copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
 ----
 
+## test gbk
+statement error 1046
+copy into it from @data/csv/gbk.csv file_format = (type = CSV)
+
 statement ok
 drop table if exists t1
 
