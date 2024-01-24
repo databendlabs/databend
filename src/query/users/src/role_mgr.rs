@@ -223,7 +223,7 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &str,
-        role: &String,
+        role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -268,7 +268,7 @@ impl UserApiProvider {
     pub async fn revoke_role_from_role(
         &self,
         tenant: &str,
-        role: &String,
+        role: &str,
         revoke_role: &String,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;

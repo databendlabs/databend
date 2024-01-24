@@ -119,12 +119,7 @@ impl Settings {
         let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
 
         if key == "sandbox_tenant" {
-            let config = GlobalConfig::instance();
-            let tenant = value.as_string();
-            if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
-                UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
-                    .await?;
-            }
+            log::info!("switch sandbox tenant to {}", value);
         }
 
         self.changes.insert(key, ChangeValue {
