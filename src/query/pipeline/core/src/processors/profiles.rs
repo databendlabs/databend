@@ -34,57 +34,31 @@ pub enum ProfileStatisticsName {
     ScanCacheBytes,
     ScanPartitions,
     PartitionTotal,
+    SpillWriteCount,
+    SpillWriteBytes,
+    SpillWriteTime,
+    SpillReadCount,
+    SpillReadBytes,
+    SpillReadTime,
 }
 
 impl Display for ProfileStatisticsName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProfileStatisticsName::CpuTime => write!(f, "CpuTime"),
-            ProfileStatisticsName::WaitTime => write!(f, "WaitTime"),
-            ProfileStatisticsName::ExchangeRows => write!(f, "ExchangeRows"),
-            ProfileStatisticsName::ExchangeBytes => write!(f, "ExchangeBytes"),
-            ProfileStatisticsName::OutputRows => write!(f, "OutputRows"),
-            ProfileStatisticsName::OutputBytes => write!(f, "OutputBytes"),
-            ProfileStatisticsName::ScanBytes => write!(f, "ScanBytes"),
-            ProfileStatisticsName::ScanCacheBytes => write!(f, "ScanCacheBytes"),
-            ProfileStatisticsName::ScanPartitions => write!(f, "ScanPartitions"),
-            ProfileStatisticsName::PartitionTotal => write!(f, "PartitionTotal"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
 impl From<usize> for ProfileStatisticsName {
     fn from(value: usize) -> Self {
-        match value {
-            _ if value == ProfileStatisticsName::CpuTime as usize => ProfileStatisticsName::CpuTime,
-            _ if value == ProfileStatisticsName::WaitTime as usize => {
-                ProfileStatisticsName::WaitTime
-            }
-            _ if value == ProfileStatisticsName::ExchangeRows as usize => {
-                ProfileStatisticsName::ExchangeRows
-            }
-            _ if value == ProfileStatisticsName::ExchangeBytes as usize => {
-                ProfileStatisticsName::ExchangeBytes
-            }
-            _ if value == ProfileStatisticsName::OutputRows as usize => {
-                ProfileStatisticsName::OutputRows
-            }
-            _ if value == ProfileStatisticsName::OutputBytes as usize => {
-                ProfileStatisticsName::OutputBytes
-            }
-            _ if value == ProfileStatisticsName::ScanBytes as usize => {
-                ProfileStatisticsName::ScanBytes
-            }
-            _ if value == ProfileStatisticsName::ScanCacheBytes as usize => {
-                ProfileStatisticsName::ScanCacheBytes
-            }
-            _ if value == ProfileStatisticsName::ScanPartitions as usize => {
-                ProfileStatisticsName::ScanPartitions
-            }
-            _ if value == ProfileStatisticsName::PartitionTotal as usize => {
-                ProfileStatisticsName::PartitionTotal
-            }
-            _ => panic!("logical error"),
+        let statistics_index = get_statistics_name_index();
+
+        if value > statistics_index.len() {
+            panic!("logical error");
+        }
+
+        match &statistics_index[value] {
+            None => panic!("logical error"),
+            Some(statistics_name) => statistics_name.clone(),
         }
     }
 }
@@ -96,11 +70,31 @@ pub struct ProfileDesc {
     index: usize,
 }
 
-pub static PROFILES_DESC_NEW: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
+pub static PROFILES_DESC: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
     OnceCell::new();
 
+pub static PROFILES_INDEX: OnceCell<
+    Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]>,
+> = OnceCell::new();
+
+fn get_statistics_name_index()
+-> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
+    PROFILES_INDEX
+        .get_or_init(|| {
+            let statistics_desc = get_statistics_desc();
+            let mut statistics_index = std::array::from_fn(|_v| None);
+
+            for (k, v) in statistics_desc.iter() {
+                statistics_index[v.index] = Some(k.clone());
+            }
+
+            Arc::new(statistics_index)
+        })
+        .clone()
+}
+
 pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>> {
-    PROFILES_DESC_NEW.get_or_init(|| {
+    PROFILES_DESC.get_or_init(|| {
         Arc::new(HashMap::from([
             (ProfileStatisticsName::CpuTime, ProfileDesc {
                 display_name: "cpu time",
@@ -151,6 +145,16 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 display_name: "partitions total",
                 desc: "The partitions total of table",
                 index: ProfileStatisticsName::PartitionTotal as usize,
+            }),
+            (ProfileStatisticsName::SpillWriteCount, ProfileDesc {
+                display_name: "numbers spilled",
+                desc: "The number of spilled",
+                index: ProfileStatisticsName::SpillWriteCount as usize,
+            }),
+            (ProfileStatisticsName::SpillWriteBytes, ProfileDesc {
+                display_name: "bytes spilled",
+                desc: "The bytes spilled of query",
+                index: ProfileStatisticsName::SpillWriteBytes as usize,
             }),
         ]))
     }).clone()
