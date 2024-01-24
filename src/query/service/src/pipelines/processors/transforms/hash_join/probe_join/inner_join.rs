@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
@@ -25,6 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -52,7 +54,20 @@ impl HashJoinProbeState {
         let pointers = probe_state.hashes.as_slice();
 
         // Build states.
-        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let outer_scan_map = &mut build_state.outer_scan_map;
+        let mut right_single_scan_map = if let Some(JoinType::RightSingle) =
+            self.hash_join_state.hash_join_desc.original_join_type
+        {
+            outer_scan_map
+                .iter_mut()
+                .map(|sp| unsafe {
+                    std::mem::transmute::<*mut bool, *mut AtomicBool>(sp.as_mut_ptr())
+                })
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
 
         // Results.
         let mut matched_idx = 0;
@@ -72,6 +87,18 @@ impl HashJoinProbeState {
                     continue;
                 }
 
+                let mut total_probe_matched = 0;
+                if let Some(JoinType::LeftSingle) =
+                    self.hash_join_state.hash_join_desc.original_join_type
+                {
+                    total_probe_matched += match_count;
+                    if total_probe_matched > 1 {
+                        return Err(ErrorCode::Internal(
+                            "Scalar subquery can't return more than one row",
+                        ));
+                    }
+                }
+
                 // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
@@ -86,6 +113,7 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        &mut right_single_scan_map,
                     )?);
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -95,9 +123,21 @@ impl HashJoinProbeState {
                         matched_idx,
                         max_block_size,
                     );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
-                        matched_idx += 1;
+                    if match_count > 0 {
+                        total_probe_matched += match_count;
+                        if let Some(JoinType::LeftSingle) =
+                            self.hash_join_state.hash_join_desc.original_join_type
+                        {
+                            if total_probe_matched > 1 {
+                                return Err(ErrorCode::Internal(
+                                    "Scalar subquery can't return more than one row",
+                                ));
+                            }
+                        }
+                        for _ in 0..match_count {
+                            unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                            matched_idx += 1;
+                        }
                     }
                 }
             }
@@ -111,6 +151,18 @@ impl HashJoinProbeState {
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
+                }
+
+                let mut total_probe_matched = 0;
+                if let Some(JoinType::LeftSingle) =
+                    self.hash_join_state.hash_join_desc.original_join_type
+                {
+                    total_probe_matched += match_count;
+                    if total_probe_matched > 1 {
+                        return Err(ErrorCode::Internal(
+                            "Scalar subquery can't return more than one row",
+                        ));
+                    }
                 }
 
                 // Fill `probe_indexes`.
@@ -127,6 +179,7 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        &mut right_single_scan_map,
                     )?);
                     matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
@@ -136,9 +189,21 @@ impl HashJoinProbeState {
                         matched_idx,
                         max_block_size,
                     );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
+                    if match_count > 0 {
+                        total_probe_matched += match_count;
+                        if let Some(JoinType::LeftSingle) =
+                            self.hash_join_state.hash_join_desc.original_join_type
+                        {
+                            if total_probe_matched > 1 {
+                                return Err(ErrorCode::Internal(
+                                    "Scalar subquery can't return more than one row",
+                                ));
+                            }
+                        }
+                        for _ in 0..match_count {
+                            unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                            matched_idx += 1;
+                        }
                     }
                 }
             }
@@ -152,6 +217,7 @@ impl HashJoinProbeState {
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
+                &mut right_single_scan_map,
             )?);
         }
 
@@ -196,6 +262,7 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
+        right_single_scan_map: &mut [*mut AtomicBool],
     ) -> Result<DataBlock> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -241,6 +308,15 @@ impl HashJoinProbeState {
                 };
                 result_block.add_column(entry);
             }
+        }
+
+        if let Some(JoinType::RightSingle) = self.hash_join_state.hash_join_desc.original_join_type
+        {
+            self.update_right_single_scan_map(
+                &build_indexes[0..matched_idx],
+                right_single_scan_map,
+                None,
+            )?;
         }
         Ok(result_block)
     }

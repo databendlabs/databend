@@ -541,7 +541,7 @@ pub trait HashJoinHashtableLike {
     // the ptr is the link header.
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
-    /// 1. `key` is the serialize build key from one row
+    /// 1. `key` is the serialize probe key from one row
     /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
     /// we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
     /// for key

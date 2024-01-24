@@ -177,7 +177,7 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    fn update_right_single_scan_map(
+    pub(crate) fn update_right_single_scan_map(
         &self,
         build_indexes: &[RowPtr],
         right_single_scan_map: &[*mut AtomicBool],

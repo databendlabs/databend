@@ -219,6 +219,9 @@ impl HashJoinState {
                 | JoinType::RightSingle
                 | JoinType::RightSemi
                 | JoinType::RightAnti
+        ) || matches!(
+            self.hash_join_desc.original_join_type,
+            Some(JoinType::RightSingle)
         )
     }
 

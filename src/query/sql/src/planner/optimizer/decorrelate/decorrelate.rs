@@ -230,6 +230,7 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             broadcast: false,
             is_lateral: false,
+            original_join_type: None,
         };
 
         // Rewrite plan to semi-join.
@@ -306,6 +307,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -355,6 +357,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -419,6 +422,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 }
                 .into();
                 Ok((
