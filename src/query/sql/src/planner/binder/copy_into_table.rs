@@ -400,7 +400,7 @@ impl<'a> Binder {
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 
-        // disalbe variant check to allow copy invalid JSON into tables
+        // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
             .stage_table_info
             .stage_info
