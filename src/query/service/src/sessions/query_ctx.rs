@@ -71,6 +71,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -112,12 +113,26 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
+struct PartitionQueue {
+    pub total_size: usize,
+    pub queue: VecDeque<PartInfoPtr>,
+}
+
+impl PartitionQueue {
+    pub fn create(queue: VecDeque<PartInfoPtr>) -> PartitionQueue {
+        PartitionQueue {
+            total_size: queue.len(),
+            queue,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
     mysql_version: String,
     clickhouse_version: String,
-    partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
+    partition_queue: Arc<RwLock<PartitionQueue>>,
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
@@ -136,7 +151,7 @@ impl QueryContext {
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
-            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
+            partition_queue: Arc::new(RwLock::new(PartitionQueue::create(VecDeque::new()))),
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
@@ -406,23 +421,44 @@ impl TableContext for QueryContext {
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {
-        self.partition_queue.write().pop_front()
+        let mut queue_guard = self.partition_queue.write();
+        if let Some(part) = queue_guard.queue.pop_front() {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+            if queue_guard.total_size == queue_guard.queue.len() + 1 {
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::PartitionTotal,
+                    queue_guard.total_size,
+                )
+            }
+
+            return Some(part);
+        }
+
+        None
     }
 
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
-        let mut partition_queue = self.partition_queue.write();
+        let mut queue_guard = self.partition_queue.write();
 
         for _index in 0..num {
-            match partition_queue.pop_front() {
+            match queue_guard.queue.pop_front() {
                 None => {
                     break;
                 }
                 Some(part) => {
+                    if queue_guard.total_size == queue_guard.queue.len() + 1 {
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::PartitionTotal,
+                            queue_guard.total_size,
+                        )
+                    }
                     res.push(part);
                 }
             };
         }
+
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
 
         res
     }
@@ -431,15 +467,16 @@ impl TableContext for QueryContext {
     fn set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
 
-        partition_queue.clear();
+        partition_queue.queue.clear();
+        partition_queue.total_size = partitions.partitions.len();
         for part in partitions.partitions {
-            partition_queue.push_back(part);
+            partition_queue.queue.push_back(part);
         }
         Ok(())
     }
 
     fn partition_num(&self) -> usize {
-        self.partition_queue.read().len()
+        self.partition_queue.read().total_size
     }
 
     fn add_partitions_sha(&self, s: String) {
