@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_types::MatchSeq;
+use log::info;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -40,7 +41,7 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn maybe_get_role(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
+    pub async fn get_role_optional(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
         match self.get_role(tenant, role.to_string()).await {
             Ok(r) => Ok(Some(r)),
             Err(err) => {
@@ -69,25 +70,49 @@ impl UserApiProvider {
     /// Ensure the builtin roles account_admin and public exists. Please note that there's
     /// a corner case that if we added another privilege type, we should add it to the
     /// existed account_admin role.
+    ///
+    /// This function have two calling places:
+    /// 1. when the server starts
+    /// 2. when the user is authenticated
     #[async_backtrace::framed]
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
-        let existed_account_admin = self
-            .maybe_get_role(tenant, BUILTIN_ROLE_ACCOUNT_ADMIN)
-            .await?;
-        if existed_account_admin.is_none() {
-            let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-            account_admin.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            );
-            self.add_role(tenant, account_admin, true).await?;
-            return Ok(());
-        } else if existed_account_admin.unwrap().grants {
-            self.add_role(tenant, account_admin, false).await?;
-        }
-
+        // CREATE ROLE IF NOT EXISTS public;
         let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         self.add_role(tenant, public, true).await?;
+
+        // if not exists, create account_admin.
+        // if new privilege type on Global added, grant it to account_admin.
+        let existed_account_admin = self
+            .get_role_optional(tenant, BUILTIN_ROLE_ACCOUNT_ADMIN)
+            .await?;
+        if existed_account_admin.is_none() {
+            let account_admin = {
+                let mut r = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+                r.grants.grant_privileges(
+                    &GrantObject::Global,
+                    UserPrivilegeSet::available_privileges_on_global(),
+                );
+                r
+            };
+            self.add_role(tenant, account_admin, true).await?;
+        } else if existed_account_admin
+            .unwrap()
+            .grants
+            .find_granted_privileges(&GrantObject::Global)
+            != UserPrivilegeSet::available_privileges_on_global()
+        {
+            info!(
+                "new privilege type on GrantObject::Global detected, sync it to role account_admin"
+            );
+            self.grant_privileges_to_role(
+                tenant,
+                BUILTIN_ROLE_ACCOUNT_ADMIN,
+                GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_global(),
+            )
+            .await?;
+        }
+
         Ok(())
     }
 
@@ -181,7 +206,7 @@ impl UserApiProvider {
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
-        role: &String,
+        role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {

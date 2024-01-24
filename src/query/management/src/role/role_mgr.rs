@@ -249,7 +249,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn update_role_with<F>(
         &self,
-        role: &String,
+        role: &str,
         seq: MatchSeq,
         f: F,
     ) -> Result<Option<u64>, ErrorCode>
@@ -260,7 +260,7 @@ impl RoleApi for RoleMgr {
             seq,
             data: mut role_info,
             ..
-        } = self.get_role(role, seq).await?;
+        } = self.get_role(&role.to_string(), seq).await?;
 
         f(&mut role_info);
 
