@@ -126,7 +126,7 @@ pub struct MatchedSplitProcessor {
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
     target_build_optimization: bool,
-    can_try_update_column_only: bool,
+    enable_update_column_only: bool,
 }
 
 impl MatchedSplitProcessor {
@@ -255,7 +255,7 @@ impl MatchedSplitProcessor {
             update_projections,
             target_table_schema,
             target_build_optimization,
-            can_try_update_column_only,
+            enable_update_column_only,
         })
     }
 
@@ -350,12 +350,12 @@ impl Processor for MatchedSplitProcessor {
                 return Ok(());
             }
             // insert-only, we need to remove this pipeline according to strategy.
-            if self.ops.is_empty() && !self.can_try_update_column_only {
+            if self.ops.is_empty() && !self.enable_update_column_only {
                 return Ok(());
             }
             let start = Instant::now();
             let mut current_block = data_block;
-            if !self.can_try_update_column_only {
+            if !self.enable_update_column_only {
                 for op in self.ops.iter() {
                     match op {
                         MutationKind::Update(update_mutation) => {
