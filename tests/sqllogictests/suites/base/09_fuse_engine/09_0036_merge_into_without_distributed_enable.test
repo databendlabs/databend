@@ -1266,7 +1266,7 @@ select * from column_only_optimization_source order by a,b;
 
 query TT
 merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
-t1.a = t2.a when matched then update set t1.b = t2.b when not macted then insert *;
+t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
 ----
 0 4
 
