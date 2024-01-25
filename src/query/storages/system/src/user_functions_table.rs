@@ -18,6 +18,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::utils::FromData;
@@ -51,12 +52,12 @@ fn encode_arguments(udf_definition: &UDFDefinition) -> jsonb::Value {
     }
 }
 
-pub struct UDFFunctionsTable {
+pub struct UserFunctionsTable {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for UDFFunctionsTable {
+impl AsyncSystemTable for UserFunctionsTable {
     const NAME: &'static str = "system.user_functions";
 
     fn get_table_info(&self) -> &TableInfo {
@@ -73,12 +74,12 @@ impl AsyncSystemTable for UDFFunctionsTable {
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let udfs = if enable_experimental_rbac_check {
             let visibility_checker = ctx.get_visibility_checker().await?;
-            let udfs = UDFFunctionsTable::get_udfs(ctx).await?;
+            let udfs = UserFunctionsTable::get_udfs(ctx).await?;
             udfs.into_iter()
                 .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
                 .collect::<Vec<_>>()
         } else {
-            UDFFunctionsTable::get_udfs(ctx).await?
+            UserFunctionsTable::get_udfs(ctx).await?
         };
 
         let names: Vec<&str> = udfs
@@ -86,6 +87,8 @@ impl AsyncSystemTable for UDFFunctionsTable {
             .map(|udf| &udf.name)
             .map(|x| x.as_str())
             .collect();
+
+        let is_aggregate: Vec<Option<bool>> = (0..names.len()).map(|_| None).collect();
 
         let languages: Vec<&str> = (0..names.len())
             .map(|i| {
@@ -116,6 +119,7 @@ impl AsyncSystemTable for UDFFunctionsTable {
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
+            BooleanType::from_opt_data(is_aggregate),
             StringType::from_data(descriptions),
             VariantType::from_data(arguments),
             StringType::from_data(languages),
@@ -124,10 +128,14 @@ impl AsyncSystemTable for UDFFunctionsTable {
     }
 }
 
-impl UDFFunctionsTable {
+impl UserFunctionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
+            TableField::new(
+                "is_aggregate",
+                TableDataType::Nullable(Box::new(TableDataType::Boolean)),
+            ),
             TableField::new("description", TableDataType::String),
             TableField::new("arguments", TableDataType::Variant),
             TableField::new("language", TableDataType::String),
@@ -135,19 +143,19 @@ impl UDFFunctionsTable {
         ]);
 
         let table_info = TableInfo {
-            desc: "'system'.'udf_functions'".to_string(),
-            name: "udf_functions".to_string(),
+            desc: "'system'.'user_functions'".to_string(),
+            name: "user_functions".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
-                engine: "SystemUDFFunctions".to_string(),
+                engine: "SystemUserFunctions".to_string(),
 
                 ..Default::default()
             },
             ..Default::default()
         };
 
-        AsyncOneBlockSystemTable::create(UDFFunctionsTable { table_info })
+        AsyncOneBlockSystemTable::create(UserFunctionsTable { table_info })
     }
 
     #[async_backtrace::framed]
