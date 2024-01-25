@@ -76,8 +76,6 @@ pub async fn build_local_pipeline(
         ctx.get_function_context()?,
         ctx.get_settings(),
         ctx.clone(),
-        enable_profiling,
-        SharedProcessorProfiles::default(),
         vec![],
     );
     let mut build_res = pipeline.finalize(plan)?;

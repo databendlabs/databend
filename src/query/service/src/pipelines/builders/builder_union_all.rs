@@ -53,8 +53,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             union_ctx,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();

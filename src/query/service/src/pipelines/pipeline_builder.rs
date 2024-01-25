@@ -51,8 +51,6 @@ pub struct PipelineBuilder {
     // Cte -> state, each cte has it's own state
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
-    pub(crate) enable_profiling: bool,
-    pub(crate) proc_profs: SharedProcessorProfiles,
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
@@ -61,18 +59,14 @@ impl PipelineBuilder {
         func_ctx: FunctionContext,
         settings: Arc<Settings>,
         ctx: Arc<QueryContext>,
-        enable_profiling: bool,
-        prof_span_set: SharedProcessorProfiles,
         scopes: Vec<PlanScope>,
     ) -> PipelineBuilder {
         PipelineBuilder {
-            enable_profiling,
             ctx,
             func_ctx,
             settings,
             pipelines: vec![],
             main_pipeline: Pipeline::with_scopes(scopes),
-            proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             cte_state: HashMap::new(),
             merge_into_probe_data_fields: None,
@@ -94,7 +88,6 @@ impl PipelineBuilder {
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
-            prof_span_set: self.proc_profs,
             exchange_injector: self.exchange_injector,
             builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,

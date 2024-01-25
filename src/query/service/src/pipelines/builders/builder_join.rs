@@ -81,8 +81,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             right_side_context,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
@@ -146,8 +144,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             build_side_context,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
@@ -281,8 +277,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             left_side_ctx,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         left_side_builder.cte_state = self.cte_state.clone();
