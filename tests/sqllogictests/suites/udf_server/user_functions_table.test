@@ -1,0 +1,94 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/udf/udf_server.py
+#
+
+# DROP FUNCTIONS
+statement ok
+DROP FUNCTION IF EXISTS add_signed;
+
+statement ok
+DROP FUNCTION IF EXISTS add_unsigned;
+
+statement ok
+DROP FUNCTION IF EXISTS add_float;
+
+statement ok
+DROP FUNCTION IF EXISTS a_plus_3;
+
+statement ok
+DROP FUNCTION IF EXISTS cal1;
+
+statement ok
+DROP FUNCTION IF EXISTS notnull1;
+
+# CREATE SQL UDF
+
+statement ok
+CREATE FUNCTION a_plus_3 AS (a) -> a+3
+
+statement ok
+CREATE FUNCTION cal1 AS (a,b,c,d,e) -> a + c * (e / b) - d
+
+statement ok
+CREATE FUNCTION notnull1 AS (p) -> not(is_null(p))
+
+statement ok
+CREATE FUNCTION add_signed (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815'
+
+statement ok
+CREATE FUNCTION add_unsigned (TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED) RETURNS BIGINT UNSIGNED LANGUAGE python HANDLER = 'add_unsigned' ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+CREATE FUNCTION add_float (FLOAT, DOUBLE) RETURNS DOUBLE LANGUAGE python HANDLER = 'add_float' ADDRESS = 'http://0.0.0.0:8815';
+
+# TEST: SHOW USER FUNCTIONS
+query 
+SHOW USER FUNCTIONS LIKE 'add%';
+----
+add_float NULL (empty) {"arg_types":["Float32 NULL","Float64 NULL"],"return_type":"Float64 NULL"} python
+add_signed NULL (empty) {"arg_types":["Int8 NULL","Int16 NULL","Int32 NULL","Int64 NULL"],"return_type":"Int64 NULL"} python
+add_unsigned NULL (empty) {"arg_types":["UInt8 NULL","UInt16 NULL","UInt32 NULL","UInt64 NULL"],"return_type":"UInt64 NULL"} python
+
+
+query 
+SHOW USER FUNCTIONS WHERE LANGUAGE = 'SQL';
+----
+a_plus_3 NULL (empty) {"parameters":["a"]} SQL
+cal1 NULL (empty) {"parameters":["a","b","c","d","e"]} SQL
+isnotempty NULL (empty) {"parameters":["p"]} SQL
+notnull1 NULL (empty) {"parameters":["p"]} SQL
+
+
+# TEST： SYSTEM.USER_FUNCTIONS
+query 
+SELECT definition FROM SYSTEM.USER_FUNCTIONS ORDER BY name;
+----
+ (a) -> (a + 3)
+ (Float32 NULL, Float64 NULL) RETURNS Float64 NULL LANGUAGE python HANDLER = add_float ADDRESS = http://0.0.0.0:8815
+ (Int8 NULL, Int16 NULL, Int32 NULL, Int64 NULL) RETURNS Int64 NULL LANGUAGE python HANDLER = add_signed ADDRESS = http://0.0.0.0:8815
+ (UInt8 NULL, UInt16 NULL, UInt32 NULL, UInt64 NULL) RETURNS UInt64 NULL LANGUAGE python HANDLER = add_unsigned ADDRESS = http://0.0.0.0:8815
+ (Binary NULL) RETURNS Binary NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+ (a, b, c, d, e) -> ((a + (c * (e / b))) - d)
+ (String NULL) RETURNS String NULL LANGUAGE python HANDLER = echo ADDRESS = http://0.0.0.0:8815
+ (p) -> (NOT is_null(p))
+ (p) -> (NOT is_null(p))
+
+
+# DROP FUNCTIONS
+statement ok
+DROP FUNCTION IF EXISTS add_signed;
+
+statement ok
+DROP FUNCTION IF EXISTS add_unsigned;
+
+statement ok
+DROP FUNCTION IF EXISTS add_float;
+
+statement ok
+DROP FUNCTION IF EXISTS a_plus_3;
+
+statement ok
+DROP FUNCTION IF EXISTS cal1;
+
+statement ok
+DROP FUNCTION IF EXISTS notnull1;
