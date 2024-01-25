@@ -219,7 +219,11 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Run default rewrite rules
@@ -246,8 +250,13 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+            let rules = if opt_ctx.enable_join_reorder {
+                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
+            } else {
+                [RuleID::EliminateEvalScalar].as_slice()
+            };
+
+            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
 
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
@@ -285,7 +294,11 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Run default rewrite rules
@@ -340,6 +353,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         Arc::new(right_source),
     ]));
 
+    let join_op = Join::try_from(join_sexpr.plan().clone())?;
+    let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
     // before, we think source table is always the small table.
     // 1. for matched only, we use inner join
     // 2. for insert only, we use right anti join
@@ -400,7 +415,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     {
         // distributed execution stargeties:
         // I. change join order is true, we use the `optimize_distributed_query`'s result.
-        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // II. change join order is false and match_pattern and not enable spill and not non-equal-join, we use right outer join with rownumber distributed strategies.
         // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
         // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
         // input is a Join_SExpr
@@ -416,6 +431,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             == 0
             && !change_join_order
             && merge_into_join_sexpr.match_pattern(&merge_source_optimizer.merge_source_pattern)
+            && !non_equal_join
         {
             (
                 merge_source_optimizer.optimize(&merge_into_join_sexpr)?,

@@ -39,6 +39,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
@@ -251,6 +253,10 @@ impl Processor for DeserializeDataTransform {
                         bytes: block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        block.memory_size(),
+                    );
 
                     self.output_data = Some(block);
                 }
@@ -299,6 +305,10 @@ impl Processor for DeserializeDataTransform {
                         bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
 
                     let mut data_block =
                         data_block.resort(&self.src_schema, &self.output_schema)?;

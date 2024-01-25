@@ -32,8 +32,8 @@ pub struct BasicColumnStatistics {
 impl From<ColumnStatistics> for BasicColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
         Self {
-            min: Datum::from_simple_scalar(value.min),
-            max: Datum::from_simple_scalar(value.max),
+            min: Datum::from_scalar(value.min),
+            max: Datum::from_scalar(value.max),
             ndv: value.distinct_of_values,
             null_count: value.null_count,
         }

@@ -134,11 +134,11 @@ impl ReclusterMutator {
             for (i, meta) in block_metas.iter().enumerate() {
                 if let Some(stats) = &meta.cluster_stats {
                     points_map
-                        .entry(stats.min())
+                        .entry(stats.min().clone())
                         .and_modify(|v| v.0.push(i))
                         .or_insert((vec![i], vec![]));
                     points_map
-                        .entry(stats.max())
+                        .entry(stats.max().clone())
                         .and_modify(|v| v.1.push(i))
                         .or_insert((vec![], vec![i]));
                 }
@@ -287,11 +287,11 @@ impl ReclusterMutator {
                 blocks_num += compact_segment.summary.block_count as usize;
                 indices.insert(i);
                 points_map
-                    .entry(stats.min())
+                    .entry(stats.min().clone())
                     .and_modify(|v| v.0.push(i))
                     .or_insert((vec![i], vec![]));
                 points_map
-                    .entry(stats.max())
+                    .entry(stats.max().clone())
                     .and_modify(|v| v.1.push(i))
                     .or_insert((vec![], vec![i]));
             }

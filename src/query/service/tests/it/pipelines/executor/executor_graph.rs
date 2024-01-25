@@ -492,7 +492,6 @@ async fn create_executor_with_simple_pipeline(
     pipeline.add_pipe(sink_pipe);
     pipeline.set_max_threads(size);
     let settings = ExecutorSettings {
-        enable_profiling: false,
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
     };
