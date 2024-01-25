@@ -132,7 +132,7 @@ EvalScalar
     │       │               ├── table: default.default.t2
     │       │               ├── output columns: [c (#9)]
     │       │               ├── read rows: 4
-    │       │               ├── read bytes: 49
+    │       │               ├── read bytes: 48
     │       │               ├── partitions total: 1
     │       │               ├── partitions scanned: 1
     │       │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -146,7 +146,7 @@ EvalScalar
     │               ├── table: default.default.t1
     │               ├── output columns: [a (#3)]
     │               ├── read rows: 3
-    │               ├── read bytes: 45
+    │               ├── read bytes: 44
     │               ├── partitions total: 1
     │               ├── partitions scanned: 1
     │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -156,7 +156,7 @@ EvalScalar
         ├── table: default.default.t2
         ├── output columns: [c (#0)]
         ├── read rows: 4
-        ├── read bytes: 49
+        ├── read bytes: 48
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
