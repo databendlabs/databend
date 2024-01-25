@@ -269,14 +269,17 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             root = TASK_DB[root.after[0]]
             l.insert(0, root)
         return task_pb2.GetTaskDependentsResponse(task=l)
+
     def EnableTaskDependents(self, request, context):
         print("EnableTaskDependents", request)
         task_name = request.task_name
         if task_name not in TASK_DB:
-           return task_pb2.EnableTaskDependentsResponse()
+            return task_pb2.EnableTaskDependentsResponse()
         task = TASK_DB[task_name]
         task.status = task_pb2.Task.Started
         return task_pb2.EnableTaskDependentsResponse()
+
+
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     task_pb2_grpc.add_TaskServiceServicer_to_server(TaskService(), server)
