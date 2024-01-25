@@ -160,8 +160,10 @@ impl DataType {
             | DataType::Timestamp
             | DataType::Date
             | DataType::Bitmap
-            | DataType::Variant => false,
+            | DataType::Variant
+            | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
+            DataType::Nullable(ty) => ty.has_nested_nullable(),
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
