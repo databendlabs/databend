@@ -31,6 +31,7 @@ use crate::plans::WindowFuncType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
+// The PullUpFilterOptimizer will pull up filters to the top of the plan tree and infer new filters.
 pub struct PullUpFilterOptimizer {
     pub predicates: Vec<ScalarExpr>,
     pub metadata: MetadataRef,
