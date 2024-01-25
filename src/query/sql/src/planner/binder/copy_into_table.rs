@@ -21,7 +21,10 @@ use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -57,6 +60,7 @@ use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
 use log::debug;
+use log::warn;
 use parking_lot::RwLock;
 
 use crate::binder::location::parse_uri_location;
@@ -185,6 +189,7 @@ impl<'a> Binder {
             let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
             let stage_info = plan.stage_table_info.stage_info.clone();
             let files_info = plan.stage_table_info.files_info.clone();
+
             let read_options = ParquetReadOptions::default();
             let table = if use_parquet2 {
                 Parquet2Table::create(table_ctx, stage_info, files_info, read_options, None).await?
@@ -394,6 +399,34 @@ impl<'a> Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+
+        // disable variant check to allow copy invalid JSON into tables
+        let disable_variant_check = plan
+            .stage_table_info
+            .stage_info
+            .copy_options
+            .disable_variant_check;
+        if disable_variant_check {
+            let hints = Hint {
+                hints_list: vec![HintItem {
+                    name: Identifier::from_name("disable_variant_check"),
+                    expr: Expr::Literal {
+                        span: None,
+                        lit: Literal::UInt64(1),
+                    },
+                }],
+            };
+            if let Some(e) = self
+                .opt_hints_set_var(&mut output_context, &hints)
+                .await
+                .err()
+            {
+                warn!(
+                    "In COPY resolve optimize hints {:?} failed, err: {:?}",
+                    hints, e
+                );
+            }
+        }
 
         plan.query = Some(Box::new(Plan::Query {
             s_expr: Box::new(s_expr),

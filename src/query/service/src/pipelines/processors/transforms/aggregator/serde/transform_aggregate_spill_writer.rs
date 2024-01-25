@@ -30,6 +30,8 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -258,6 +260,13 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
             metrics_inc_aggregate_spill_write_count();
             metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
             metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillWriteTime,
+                instant.elapsed().as_millis() as usize,
+            );
         }
 
         {

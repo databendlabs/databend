@@ -63,6 +63,7 @@ impl CreateTaskInterpreter {
             if_not_exist: plan.if_not_exists,
             after: plan.after,
             when_condition: plan.when_condition,
+            session_parameters: plan.session_parameters,
         }
     }
 }

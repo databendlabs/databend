@@ -122,8 +122,8 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
 
     Some(ClusterStatistics::new(
         cluster_key_id,
-        min,
-        max,
+        min.clone(),
+        max.clone(),
         level,
         None,
     ))

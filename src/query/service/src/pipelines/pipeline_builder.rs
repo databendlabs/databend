@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_pipeline_core::PlanScopeGuard;
@@ -102,18 +103,30 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Option<PlanScopeGuard> {
+    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
-            PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => None,
+            PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
             _ => {
-                let scope = PlanScope::create(plan.get_id(), plan.name());
-                Some(self.main_pipeline.add_plan_scope(scope))
+                let desc = plan.get_desc()?;
+                let plan_labels = plan.get_labels()?;
+                let mut profile_labels = Vec::with_capacity(plan_labels.len());
+                for (name, value) in plan_labels {
+                    profile_labels.push(ProfileLabel::create(name, value));
+                }
+
+                let scope = PlanScope::create(
+                    plan.get_id(),
+                    plan.name(),
+                    Arc::new(desc),
+                    Arc::new(profile_labels),
+                );
+                Ok(Some(self.main_pipeline.add_plan_scope(scope)))
             }
         }
     }
 
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
-        let _guard = self.add_plan_scope(plan);
+        let _guard = self.add_plan_scope(plan)?;
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),

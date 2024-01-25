@@ -271,8 +271,8 @@ impl FuseTable {
         let mut block_metas = block_metas.to_vec();
         if let Some((top_k, default)) = &top_k {
             let default_stats = ColumnStatistics {
-                min: default.clone().into(),
-                max: default.clone().into(),
+                min: default.clone(),
+                max: default.clone(),
                 // These fields will not be used in the following sorting.
                 null_count: 0,
                 in_memory_size: 0,

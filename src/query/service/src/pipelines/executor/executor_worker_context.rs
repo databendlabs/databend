@@ -14,15 +14,18 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::intrinsics::assume;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::processors::ProcessorPtr;
 
@@ -70,35 +73,33 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task<const ENABLE_PROFILING: bool>(
-        &mut self,
-    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
+    pub unsafe fn execute_task(&mut self, graph: &RunningGraph) -> Result<NodeIndex> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task::<ENABLE_PROFILING>(processor),
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor, graph),
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok((task.id, true, task.elapsed)),
+                Ok(_) => Ok(task.id),
                 Err(cause) => Err(cause),
             },
         }
     }
 
     /// # Safety
-    unsafe fn execute_sync_task<const ENABLE_PROFILING: bool>(
+    unsafe fn execute_sync_task(
         &mut self,
         proc: ProcessorPtr,
-    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
-        match ENABLE_PROFILING {
-            true => {
-                let instant = Instant::now();
-                proc.process()?;
-                Ok((proc.id(), false, Some(instant.elapsed())))
-            }
-            false => {
-                proc.process()?;
-                Ok((proc.id(), false, None))
-            }
-        }
+        graph: &RunningGraph,
+    ) -> Result<NodeIndex> {
+        Profile::track_profile(graph.get_node_profile(proc.id()));
+
+        let instant = Instant::now();
+
+        proc.process()?;
+
+        let nanos = instant.elapsed().as_nanos();
+        assume(nanos < 18446744073709551615_u128);
+        Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+        Ok(proc.id())
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {
