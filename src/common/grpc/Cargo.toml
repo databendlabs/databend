@@ -25,7 +25,7 @@ log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-trust-dns-resolver = { version = "0.22.0", features = ["system-config"] }
+hickory-resolver = "0.24"
 
 [build-dependencies]
 

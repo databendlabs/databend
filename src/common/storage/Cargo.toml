@@ -38,5 +38,6 @@ regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+reqwest-hickory-resolver = {workspace = true}
 
 [dev-dependencies]
