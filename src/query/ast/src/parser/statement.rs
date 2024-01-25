@@ -355,6 +355,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
+    let show_user_functions = map(
+        rule! {
+            SHOW ~ USER ~ FUNCTIONS ~ #show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowUserFunctions { show_options },
+    );
     let show_table_functions = map(
         rule! {
             SHOW ~ TABLE_FUNCTIONS ~ #show_options?
@@ -1874,6 +1880,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>

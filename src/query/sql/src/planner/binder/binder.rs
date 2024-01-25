@@ -237,6 +237,10 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, show_options).await?
             }
 
+            Statement::ShowUserFunctions { show_options } => {
+                self.bind_show_user_functions(bind_context, show_options).await?
+            }
+
             Statement::ShowTableFunctions { show_options } => {
                 self.bind_show_table_functions(bind_context, show_options).await?
             }
