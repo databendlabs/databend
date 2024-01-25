@@ -55,6 +55,15 @@ pub struct Config {
     #[clap(long)]
     pub export: bool,
 
+    /// The N.O. json strings in a export stream item.
+    ///
+    /// Set this to a smaller value if you get gRPC message body too large error.
+    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
+    ///
+    /// By default it is 32.
+    #[clap(long)]
+    pub export_chunk_size: Option<u64>,
+
     #[clap(
         long,
         env = "METASRV_GRPC_API_ADDRESS",

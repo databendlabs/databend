@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
@@ -167,6 +168,13 @@ impl EstablishedClient {
         request: impl tonic::IntoRequest<Empty>,
     ) -> Result<Response<Streaming<ExportedChunk>>, Status> {
         self.client.export(request).await.update_client(self)
+    }
+
+    pub async fn export_v1(
+        &mut self,
+        request: impl tonic::IntoRequest<pb::ExportRequest>,
+    ) -> Result<Response<Streaming<ExportedChunk>>, Status> {
+        self.client.export_v1(request).await.update_client(self)
     }
 
     pub async fn watch(
