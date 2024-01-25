@@ -27,6 +27,7 @@ use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropTableByIdReq;
