@@ -499,15 +499,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
         },
     );
-    let create_database = map(
+
+    let create_database = map_res(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ (OR ~ REPLACE)? ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
         },
-        |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
-            match create_database_option {
+        |(_, opt_or_replace, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            let statement = match create_database_option {
                 Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option: CreateOption::CreateIfNotExists(opt_if_not_exists.is_some()),
+                        create_option,
                         catalog,
                         database,
                         engine: Some(engine),
@@ -517,7 +521,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 }
                 Some(CreateDatabaseOption::FromShare(share_name)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option: CreateOption::CreateIfNotExists(opt_if_not_exists.is_some()),
+                        create_option,
                         catalog,
                         database,
                         engine: None,
@@ -526,49 +530,16 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
-                    create_option: CreateOption::CreateIfNotExists(opt_if_not_exists.is_some()),
+                    create_option,
                     catalog,
                     database,
                     engine: None,
                     options: vec![],
                     from_share: None,
                 }),
-            }
-        },
-    );
-    let create_or_replace_database = map(
-        rule! {
-            CREATE ~ OR ~ REPLACE ~ ( DATABASE | SCHEMA ) ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
-        },
-        |(_, _, _, _, (catalog, database), create_database_option)| match create_database_option {
-            Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
-                Statement::CreateDatabase(CreateDatabaseStmt {
-                    create_option: CreateOption::CreateOrReplace,
-                    catalog,
-                    database,
-                    engine: Some(engine),
-                    options: vec![],
-                    from_share: None,
-                })
-            }
-            Some(CreateDatabaseOption::FromShare(share_name)) => {
-                Statement::CreateDatabase(CreateDatabaseStmt {
-                    create_option: CreateOption::CreateOrReplace,
-                    catalog,
-                    database,
-                    engine: None,
-                    options: vec![],
-                    from_share: Some(share_name),
-                })
-            }
-            None => Statement::CreateDatabase(CreateDatabaseStmt {
-                create_option: CreateOption::CreateOrReplace,
-                catalog,
-                database,
-                engine: None,
-                options: vec![],
-                from_share: None,
-            }),
+            };
+
+            Ok(statement)
         },
     );
 
@@ -1822,8 +1793,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
-            | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
-            | #create_or_replace_database : "`CREATE OR REPLACE DATABASE <database> [ENGINE = <engine>]`"
+            | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
@@ -2003,6 +1973,23 @@ AS
             format: opt_format.map(|(_, format)| format.name),
         },
     )(i)
+}
+
+fn parse_create_option(
+    opt_or_replace: bool,
+    opt_if_not_exists: bool,
+) -> Result<CreateOption, nom::Err<ErrorKind>> {
+    if opt_or_replace && opt_if_not_exists {
+        return Err(nom::Err::Failure(ErrorKind::Other(
+            "option IF NOT EXISTS and OR REPLACE are incompatible.",
+        )));
+    }
+
+    if opt_or_replace {
+        Ok(CreateOption::CreateOrReplace)
+    } else {
+        Ok(CreateOption::CreateIfNotExists(opt_if_not_exists))
+    }
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
