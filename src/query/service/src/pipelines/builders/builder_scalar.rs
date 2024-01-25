@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::TransformProfileWrapper;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;

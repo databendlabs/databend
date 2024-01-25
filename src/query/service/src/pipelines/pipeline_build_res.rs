@@ -21,7 +21,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::OneBlockSource;
-use databend_common_profile::SharedProcessorProfiles;
 
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;

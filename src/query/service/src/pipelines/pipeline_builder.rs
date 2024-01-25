@@ -23,7 +23,6 @@ use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_pipeline_core::PlanScopeGuard;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;

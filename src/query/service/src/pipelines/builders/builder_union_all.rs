@@ -17,7 +17,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::UnionReceiveSink;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlan;
 
@@ -28,7 +27,7 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
         self.build_pipeline(&union_all.left)?;
-        let union_all_receiver = self.expand_union_all(&union_all.right, union_all)?;
+        let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 Ok(ProcessorPtr::create(TransformMergeBlock::try_create(
@@ -43,11 +42,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn expand_union_all(
-        &mut self,
-        input: &PhysicalPlan,
-        union_plan: &UnionAll,
-    ) -> Result<Receiver<DataBlock>> {
+    fn expand_union_all(&mut self, input: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let mut pipeline_builder = PipelineBuilder::create(
             self.func_ctx.clone(),

@@ -312,7 +312,7 @@ impl ExplainInterpreter {
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), false);
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
@@ -327,7 +327,7 @@ impl ExplainInterpreter {
         let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
             let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
-            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone(), false);
+            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
             root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
 
             let ident = fragments_actions.display_indent(&update.metadata);

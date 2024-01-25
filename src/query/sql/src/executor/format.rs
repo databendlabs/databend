@@ -21,7 +21,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_pipeline_core::processors::ProfileStatisticsName;
-use databend_common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
 use time::Duration;
 

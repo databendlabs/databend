@@ -25,9 +25,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use databend_common_pipeline_transforms::processors::ProfileStub;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::AggregateExpand;
 use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -238,14 +235,7 @@ impl PipelineBuilder {
 
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                        self.enable_profiling,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )
+                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
             false => with_hash_method!(|T| match method {
@@ -260,14 +250,7 @@ impl PipelineBuilder {
                     }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                        self.enable_profiling,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )
+                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
         }

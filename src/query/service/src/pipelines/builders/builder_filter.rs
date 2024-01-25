@@ -19,7 +19,6 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::executor::physical_plans::Filter;
 
 use crate::pipelines::processors::transforms::TransformFilter;

@@ -31,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::processors::profile::Profile;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_sql::executor::PhysicalPlan;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
@@ -231,9 +230,7 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 packet.query_id
             ))),
-            Some(query_coordinator) => {
-                query_coordinator.prepare_pipeline(ctx, packet.enable_profiling, packet)
-            }
+            Some(query_coordinator) => query_coordinator.prepare_pipeline(ctx, packet),
         }
     }
 
@@ -300,7 +297,6 @@ impl DataExchangeManager {
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
-        enable_profiling: bool,
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
@@ -588,7 +584,6 @@ impl QueryCoordinator {
     pub fn prepare_pipeline(
         &mut self,
         ctx: &Arc<QueryContext>,
-        enable_profiling: bool,
         packet: &QueryFragmentsPlanPacket,
     ) -> Result<()> {
         self.info = Some(QueryInfo {

@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Instant;
-
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::OneBlockSource;
-use databend_common_pipeline_transforms::processors::ProfileStub;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;

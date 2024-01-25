@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::executor::physical_plans::Limit;
 
 use crate::pipelines::processors::TransformLimit;
