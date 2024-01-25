@@ -140,7 +140,7 @@ EvalScalar
     │       │               └── estimated rows: 0.00
     │       └── Filter(Probe)
     │           ├── output columns: [t1.a (#3)]
-    │           ├── filters: [is_true(t1.a (#3) = a (#3))]
+    │           ├── filters: [is_true(a (#3) = a (#3))]
     │           ├── estimated rows: 0.60
     │           └── TableScan
     │               ├── table: default.default.t1
