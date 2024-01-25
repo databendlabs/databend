@@ -98,7 +98,7 @@ impl UserApiProvider {
         } else if existed_account_admin
             .unwrap()
             .grants
-            .find_granted_privileges(&GrantObject::Global)
+            .find_object_granted_privileges(&GrantObject::Global)
             != UserPrivilegeSet::available_privileges_on_global()
         {
             info!(
