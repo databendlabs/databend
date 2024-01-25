@@ -176,7 +176,7 @@ impl HashJoinProbeState {
 
     pub fn probe_join(
         &self,
-        input: DataBlock,
+        mut input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let input_num_rows = input.num_rows();
@@ -259,7 +259,9 @@ impl HashJoinProbeState {
             *ty = ty.remove_nullable();
         }
 
-        let input = input.project(&self.probe_projections);
+        if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
+            input = input.project(&self.probe_projections);
+        }
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
         if self.hash_join_state.fast_return.load(Ordering::Relaxed)

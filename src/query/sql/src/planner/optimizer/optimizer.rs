@@ -250,8 +250,13 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+            let rules = if opt_ctx.enable_join_reorder {
+                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
+            } else {
+                [RuleID::EliminateEvalScalar].as_slice()
+            };
+
+            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
 
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
