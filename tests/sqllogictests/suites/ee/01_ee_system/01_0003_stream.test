@@ -22,6 +22,9 @@ statement ok
 USE test_stream
 
 statement ok
+set enable_table_lock = 0
+
+statement ok
 drop table if exists t
 
 statement ok
@@ -385,6 +388,9 @@ create transient table t5(a int)
 
 statement error 2733
 create stream s5 on table t5
+
+statement ok
+set enable_table_lock = 1
 
 statement ok
 drop stream s3

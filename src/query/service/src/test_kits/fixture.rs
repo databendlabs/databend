@@ -48,6 +48,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -454,7 +455,7 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
             tenant,
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),

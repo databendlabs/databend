@@ -152,7 +152,7 @@ select * from target_build_optimization order by a,b,c;
 11 b11 c_11
 12 b12 c_12
 
-### test with conjunct 
+### test with conjunct
 #### we need to make sure the blocks count and layout, so we should truncate and insert again.
 statement ok
 truncate table target_build_optimization;
