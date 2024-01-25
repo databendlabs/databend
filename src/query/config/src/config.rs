@@ -1304,6 +1304,66 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SettingValue {
+    UInt64(u64),
+    String(String),
+}
+
+impl Serialize for SettingValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        match self {
+            SettingValue::UInt64(v) => serializer.serialize_u64(*v),
+            SettingValue::String(v) => serializer.serialize_str(v),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SettingValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        deserializer.deserialize_any(SettingVisitor)
+    }
+}
+
+impl From<SettingValue> for UserSettingValue {
+    fn from(v: SettingValue) -> Self {
+        match v {
+            SettingValue::UInt64(v) => UserSettingValue::UInt64(v),
+            SettingValue::String(v) => UserSettingValue::String(v),
+        }
+    }
+}
+
+struct SettingVisitor;
+
+impl<'de> serde::de::Visitor<'de> for SettingVisitor {
+    type Value = SettingValue;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "integer or string")
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        Ok(SettingValue::UInt64(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        if value < 0 {
+            return Err(E::custom("setting value must be positive"));
+        }
+        Ok(SettingValue::UInt64(value as u64))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        Ok(SettingValue::String(value.to_string()))
+    }
+}
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
@@ -1586,7 +1646,7 @@ pub struct QueryConfig {
     pub cloud_control_grpc_server_address: Option<String>,
 
     #[clap(skip)]
-    pub settings: HashMap<String, UserSettingValue>,
+    pub settings: HashMap<String, SettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -1665,7 +1725,11 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
-            settings: self.settings,
+            settings: self
+                .settings
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         })
     }
 }
