@@ -32,7 +32,7 @@ use crate::ScalarExpr;
 //       Join: [t1.id = t2.id]
 //       /  \
 //      t1  t2
-// 
+//
 // Join condition `t2.id = t3.id` is duplicate, so we can remove it.
 pub struct DeduplicateJoinConditionOptimizer {
     pub scalar_expr_index: HashMap<ScalarExpr, usize>,
