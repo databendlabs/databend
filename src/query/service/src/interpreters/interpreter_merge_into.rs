@@ -92,8 +92,7 @@ impl Interpreter for MergeIntoInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Add table lock before execution.
         // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.

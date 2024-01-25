@@ -33,10 +33,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use databend_common_pipeline_transforms::processors::ProfileStub;
-use databend_common_pipeline_transforms::processors::Transformer;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -443,9 +439,6 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
-    enable_profiling: bool,
-    prof_id: u32,
-    proc_profs: SharedProcessorProfiles,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
@@ -471,36 +464,23 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     })?;
 
     pipeline.add_transform(|input, output| {
-        let transform = match params.aggregate_functions.is_empty() {
-            true => {
-                TransformFinalGroupBy::try_create(input, output, method.clone(), params.clone())?
-            }
-            false => {
-                TransformFinalAggregate::try_create(input, output, method.clone(), params.clone())?
-            }
-        };
-        if enable_profiling {
-            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                transform,
-                prof_id,
-                proc_profs.clone(),
-            )))
-        } else {
-            Ok(ProcessorPtr::create(transform))
-        }
+        Ok(ProcessorPtr::create(
+            match params.aggregate_functions.is_empty() {
+                true => TransformFinalGroupBy::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+                false => TransformFinalAggregate::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+            },
+        ))
     })?;
-    // Append a profile stub to record the output rows and bytes
-    if enable_profiling {
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Transformer::create(
-                input,
-                output,
-                ProfileStub::new(prof_id, proc_profs.clone())
-                    .accumulate_output_rows()
-                    .accumulate_output_bytes(),
-            )))
-        })?;
-    }
 
     Ok(())
 }

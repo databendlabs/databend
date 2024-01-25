@@ -292,7 +292,7 @@ impl Interpreter for RefreshIndexInterpreter {
         query_plan = replace_read_source.replace(&query_plan)?;
 
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &query_plan, false).await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &query_plan).await?;
 
         let input_schema = query_plan.output_schema()?;
 
