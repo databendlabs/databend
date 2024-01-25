@@ -15,6 +15,7 @@
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
@@ -43,7 +44,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     // create database should failed
     let create_db_req = CreateDatabaseReq {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         name_ident: DatabaseNameIdent {
             tenant: tenant.to_string(),
             db_name: "system".to_string(),

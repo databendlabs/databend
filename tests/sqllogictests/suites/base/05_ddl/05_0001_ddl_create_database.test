@@ -62,3 +62,28 @@ DROP SCHEMA system
 statement error 1119
 CREATE SCHEMA catalog_not_exist.t
 
+statement ok
+create database test;
+
+statement ok
+create table test.a (a int);
+
+statement ok
+insert into test.a values(1);
+
+query I
+select * from test.a;
+----
+1
+
+statement ok
+create or replace database test;
+
+statement error 1025
+select * from test.a;
+
+statement error 1005
+create or replace database if not exists test;
+
+statement ok
+drop database test;

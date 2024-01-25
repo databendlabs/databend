@@ -59,6 +59,7 @@ impl HashJoinProbeState {
                 .write();
             *has_null = true;
         }
+
         let mutable_indexes = &mut probe_state.mutable_indexes;
         let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
@@ -150,6 +151,16 @@ impl HashJoinProbeState {
                         max_block_size,
                     );
                     matched_idx += match_count;
+                }
+            }
+        }
+
+        if matched_idx > 0 {
+            for probed_row in build_indexes[0..matched_idx].iter() {
+                unsafe {
+                    *mark_scan_map
+                        .get_unchecked_mut(probed_row.chunk_index as usize)
+                        .get_unchecked_mut(probed_row.row_index as usize) = MARKER_KIND_TRUE;
                 }
             }
         }
