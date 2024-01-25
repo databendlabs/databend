@@ -1719,7 +1719,9 @@ CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Identifier {
             name: "a",
@@ -1742,7 +1744,9 @@ CREATE DATABASE ctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: Some(
             Identifier {
                 name: "ctl",
@@ -1775,7 +1779,9 @@ CREATE DATABASE t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Identifier {
             name: "t",
@@ -1800,7 +1806,9 @@ CREATE DATABASE t FROM SHARE a.s
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Identifier {
             name: "t",
@@ -1817,6 +1825,29 @@ CreateDatabase(
                 share_name: "s",
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+create or replace database a;
+---------- Output ---------
+CREATE OR REPLACE DATABASE a
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                27..28,
+            ),
+        },
+        engine: None,
+        options: [],
+        from_share: None,
     },
 )
 

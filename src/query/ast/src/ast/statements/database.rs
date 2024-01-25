@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareNameIdent;
 
 use crate::ast::statements::show::ShowLimit;
@@ -63,7 +64,7 @@ impl Display for ShowCreateDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateDatabaseStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Identifier,
     pub engine: Option<DatabaseEngine>,
@@ -73,10 +74,18 @@ pub struct CreateDatabaseStmt {
 
 impl Display for CreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE DATABASE ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        match self.create_option {
+            CreateOption::CreateIfNotExists(if_not_exists) => {
+                write!(f, "CREATE DATABASE ")?;
+                if if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+            }
+            CreateOption::CreateOrReplace => {
+                write!(f, "CREATE OR REPLACE DATABASE ")?;
+            }
         }
+
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
@@ -88,6 +97,7 @@ impl Display for CreateDatabaseStmt {
                 from_share.tenant, from_share.share_name
             )?;
         }
+
         // TODO(leiysky): display rest information
         Ok(())
     }

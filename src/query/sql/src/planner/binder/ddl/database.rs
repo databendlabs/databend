@@ -206,7 +206,7 @@ impl Binder {
         stmt: &CreateDatabaseStmt,
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             engine,
@@ -230,7 +230,7 @@ impl Binder {
         let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
-            if_not_exists: *if_not_exists,
+            create_option: create_option.clone(),
             tenant,
             catalog,
             database,

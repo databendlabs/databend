@@ -22,6 +22,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use super::CreateOption;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 
@@ -191,24 +192,36 @@ impl Display for DbIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
-        )
+        match self.create_option {
+            CreateOption::CreateIfNotExists(if_not_exists) => {
+                write!(
+                    f,
+                    "create_db(if_not_exists={}):{}/{}={:?}",
+                    if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_db:{}/{}={:?}",
+                    self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+        }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
