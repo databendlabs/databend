@@ -93,11 +93,14 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   client: remove using MetaGrpcReq::GetKV/MGetKV/ListKV;
 ///   client: remove falling back kv_read_v1(Streamed(List)) to kv_api(List), added in `2023-10-20: since 1.2.176`;
 ///
-/// - 2024-01-17: since TODO:
+/// - 2024-01-17: since 1.2.304:
 ///   server: do not use TxnPutRequest.prev_value;
 ///   server: do not use TxnDeleteRequest.prev_value;
 ///           Always return the previous value;
 ///           field index is reserved, no compatibility changes.
+///
+/// - 2024-01-25: since TODO:
+///   server: add export_v1() to let client specify export chunk size;
 ///
 /// Server feature set:
 /// ```yaml
