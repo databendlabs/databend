@@ -27,12 +27,10 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::TypeChecker;
-use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -52,7 +50,7 @@ impl AsyncSystemTable for FunctionsTable {
     #[async_backtrace::framed]
     async fn get_full_data(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let mut scalar_func_names: Vec<String> = BUILTIN_FUNCTIONS.registered_names();
@@ -120,11 +118,5 @@ impl FunctionsTable {
         };
 
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })
-    }
-
-    #[async_backtrace::framed]
-    async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
-        let tenant = ctx.get_tenant();
-        UserApiProvider::instance().get_udfs(&tenant).await
     }
 }

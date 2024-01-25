@@ -27,7 +27,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'catalog'                         | 'system'             | 'tables'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'tables_with_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog_name'                    | 'information_schema' | 'schemata'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'category'                        | 'system'             | 'functions'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'character_maximum_length'        | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'character_octet_length'          | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'character_set_catalog'           | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -114,7 +113,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'default_expression'              | 'system'             | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default_kind'                    | 'system'             | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default_role'                    | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'definition'                      | 'system'             | 'functions'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'indexes'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'task_history'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'tasks'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -177,7 +175,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'invalid_reason'                  | 'system'             | 'streams'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_aggregate'                    | 'system'             | 'functions'           | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_aggregate'                    | 'system'             | 'user_functions'      | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       |
-| 'is_builtin'                      | 'system'             | 'functions'           | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_configured'                   | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'              | 'information_schema' | 'views'               | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                     | 'information_schema' | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
