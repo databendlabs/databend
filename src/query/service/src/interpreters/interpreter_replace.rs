@@ -86,8 +86,7 @@ impl Interpreter for ReplaceInterpreter {
         // replace
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // purge
         if let Some((files, stage_info)) = purge_info {

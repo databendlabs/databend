@@ -130,7 +130,11 @@ impl Spiller {
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         let mut write_bytes = 0;
 
-        let mut writer = self.operator.writer(&location).await?;
+        let mut writer = self
+            .operator
+            .writer_with(&location)
+            .buffer(8 * 1024 * 1024)
+            .await?;
         let columns = data.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
         for column in columns.into_iter() {

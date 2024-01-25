@@ -907,7 +907,16 @@ impl MetaGrpcClient {
         );
 
         let mut client = self.make_established_client().await?;
-        let res = client.export(Empty {}).await?;
+        // TODO: since 1.2.315, export_v1() is added, via which chunk size can be specified.
+        let res = if client.server_protocol_version() >= 1002315 {
+            client
+                .export_v1(pb::ExportRequest {
+                    chunk_size: export_request.chunk_size,
+                })
+                .await?
+        } else {
+            client.export(Empty {}).await?
+        };
         Ok(res.into_inner())
     }
 

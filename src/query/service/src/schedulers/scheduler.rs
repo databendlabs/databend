@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_profile::SharedProcessorProfiles;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -36,9 +35,7 @@ pub async fn build_query_pipeline(
     plan: &PhysicalPlan,
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
-    let enable_profile = ctx.get_settings().get_enable_query_profiling()?;
-    let mut build_res =
-        build_query_pipeline_without_render_result_set(ctx, plan, enable_profile).await?;
+    let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
 
     let input_schema = plan.output_schema()?;
     PipelineBuilder::build_result_projection(
@@ -55,12 +52,11 @@ pub async fn build_query_pipeline(
 pub async fn build_query_pipeline_without_render_result_set(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
-    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let build_res = if !plan.is_distributed_plan() {
-        build_local_pipeline(ctx, plan, enable_profiling).await
+        build_local_pipeline(ctx, plan).await
     } else {
-        build_distributed_pipeline(ctx, plan, false).await
+        build_distributed_pipeline(ctx, plan).await
     }?;
     Ok(build_res)
 }
@@ -70,14 +66,11 @@ pub async fn build_query_pipeline_without_render_result_set(
 pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
-    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let pipeline = PipelineBuilder::create(
         ctx.get_function_context()?,
         ctx.get_settings(),
         ctx.clone(),
-        enable_profiling,
-        SharedProcessorProfiles::default(),
         vec![],
     );
     let mut build_res = pipeline.finalize(plan)?;
@@ -92,18 +85,17 @@ pub async fn build_local_pipeline(
 pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
-    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
 
     let root_fragment = fragmenter.build_fragment(plan)?;
-    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), enable_profiling);
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
 
     let exchange_manager = ctx.get_exchange_manager();
 
     let mut build_res = exchange_manager
-        .commit_actions(ctx.clone(), enable_profiling, fragments_actions)
+        .commit_actions(ctx.clone(), fragments_actions)
         .await?;
 
     let settings = ctx.get_settings();

@@ -24,6 +24,7 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
@@ -346,6 +347,34 @@ impl MetaService for MetaServiceImpl {
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
+        // - Convert Vec<String> to ExportedChunk;
+        // - Convert TryChunkError<_, io::Error> to Status;
+        let s = strm
+            .try_chunks(chunk_size)
+            .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
+            .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
+
+        Ok(Response::new(Box::pin(s)))
+    }
+
+    type ExportV1Stream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
+
+    /// Export all meta data.
+    ///
+    /// Including header, raft state, logs and state machine.
+    /// The exported data is a series of JSON encoded strings of `RaftStoreEntry`.
+    async fn export_v1(
+        &self,
+        request: Request<pb::ExportRequest>,
+    ) -> Result<Response<Self::ExportV1Stream>, Status> {
+        let _guard = RequestInFlight::guard();
+
+        let meta_node = &self.meta_node;
+        let strm = meta_node.sto.inner().export();
+
+        let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
+        // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
         // - Convert Vec<String> to ExportedChunk;
         // - Convert TryChunkError<_, io::Error> to Status;
         let s = strm

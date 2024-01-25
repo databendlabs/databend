@@ -19,7 +19,6 @@ mod physical_plan_builder;
 mod physical_plan_display;
 mod physical_plan_visitor;
 pub mod physical_plans;
-mod profile;
 mod util;
 
 pub mod table_read_plan;
@@ -27,5 +26,4 @@ pub mod table_read_plan;
 pub use physical_plan::PhysicalPlan;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use profile::*;
 pub use util::*;
