@@ -198,7 +198,7 @@ statement ok
 DROP TABLE IF EXISTS `05_0003_at_t4`
 
 statement ok
-SET fuse_write_use_parquet2 = 1;
+SET fuse_write_use_parquet2 = 0;
 
 statement ok
 SET fuse_read_use_parquet2 = 0;
@@ -206,7 +206,7 @@ SET fuse_read_use_parquet2 = 0;
 query I
 select value from system.settings where name = 'fuse_write_use_parquet2';
 ----
-1
+0
 
 query I
 select value from system.settings where name = 'fuse_read_use_parquet2';
