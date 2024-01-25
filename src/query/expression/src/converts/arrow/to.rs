@@ -62,9 +62,9 @@ impl From<&TableSchema> for ArrowSchema {
 }
 
 /// Parquet2 can't dealing with nested type like Tuple(int not null,int null) null, but for type like Tuple(int null,int null) null, it can work.
-/// 
+///
 /// So when casting from TableSchema to Arrow2 schema, the inner type inherit the nullable property from outer type.
-/// 
+///
 /// But when casting from TableSchema to Arrow-rs schema, there is no such problem, so the inside nullable is ignored.
 pub fn table_schema_to_arrow_schema_ignore_inside_nullable(schema: &TableSchema) -> ArrowSchema {
     let fields = schema
