@@ -44,6 +44,8 @@ use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
@@ -313,6 +315,13 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
                 metrics_inc_group_by_spill_write_count();
                 metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
                 metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillWriteTime,
+                    instant.elapsed().as_millis() as usize,
+                );
             }
 
             {

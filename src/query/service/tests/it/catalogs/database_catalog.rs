@@ -22,6 +22,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
@@ -72,7 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     // Create.
     {
         let mut req = CreateDatabaseReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "db1".to_string(),

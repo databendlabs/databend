@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(once_cell_try)]
+#![feature(variant_count)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::useless_asref)]
 
@@ -34,5 +36,7 @@ pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
+pub use processors::get_statistics_desc;
 pub use processors::PlanScope;
 pub use processors::PlanScopeGuard;
+pub use processors::ProfileLabel;

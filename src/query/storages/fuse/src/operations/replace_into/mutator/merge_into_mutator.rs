@@ -576,9 +576,9 @@ impl AggregationContext {
         if let Some(stats) = column_stats {
             let max = stats.max();
             let min = stats.min();
-            std::cmp::min(key_max, &max) >= std::cmp::max(key_min,& min)
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min,min)
                 || // coincide overlap
-                (&max == key_max && &min == key_min)
+                (max == key_max && min == key_min)
         } else {
             false
         }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTaskOptions;
@@ -47,6 +48,7 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 
@@ -69,6 +71,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
         DataField::new("root_task_id", DataType::String),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 
@@ -82,6 +85,7 @@ pub struct CreateTaskPlan {
     pub after: Vec<String>,
     pub when_condition: Option<String>,
     pub suspend_task_after_num_failures: Option<u64>,
+    pub session_parameters: BTreeMap<String, String>,
     pub sql: String,
     pub comment: String,
 }

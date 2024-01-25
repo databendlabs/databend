@@ -29,6 +29,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::TableIdent;
@@ -55,7 +56,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
-
+    let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     for task in tasks {
         let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
         created_on.push(tsk.created_at.timestamp_micros());
@@ -74,6 +75,8 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
+        let serialized_params = serde_json::to_vec(&tsk.session_params).unwrap();
+        session_params.push(Some(serialized_params));
     }
 
     Ok(DataBlock::new_from_columns(vec![
@@ -92,6 +95,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),
         TimestampType::from_opt_data(last_suspended_on),
+        VariantType::from_opt_data(session_params),
     ]))
 }
 

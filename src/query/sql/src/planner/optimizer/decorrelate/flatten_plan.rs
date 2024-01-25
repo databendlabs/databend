@@ -83,7 +83,7 @@ impl SubqueryRewriter {
                     metadata.add_derived_column(name.to_string(), data_type),
                 );
             }
-            let logical_get = SExpr::create_leaf(Arc::new(
+            let mut logical_get = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
@@ -91,38 +91,40 @@ impl SubqueryRewriter {
                 }
                 .into(),
             ));
-            // Wrap logical get with distinct to eliminate duplicates rows.
-            let mut group_items = Vec::with_capacity(self.derived_columns.len());
-            for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
-                group_items.push(ScalarItem {
-                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: ColumnBindingBuilder::new(
-                            "".to_string(),
-                            column_index,
-                            Box::new(data_types[index].clone()),
-                            Visibility::Visible,
-                        )
-                        .table_index(Some(table_index))
-                        .build(),
-                    }),
-                    index: column_index,
-                });
+            if self.ctx.get_cluster().is_empty() {
+                // Wrap logical get with distinct to eliminate duplicates rows.
+                let mut group_items = Vec::with_capacity(self.derived_columns.len());
+                for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
+                    group_items.push(ScalarItem {
+                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ColumnBindingBuilder::new(
+                                "".to_string(),
+                                column_index,
+                                Box::new(data_types[index].clone()),
+                                Visibility::Visible,
+                            )
+                            .table_index(Some(table_index))
+                            .build(),
+                        }),
+                        index: column_index,
+                    });
+                }
+                logical_get = SExpr::create_unary(
+                    Arc::new(
+                        Aggregate {
+                            mode: AggregateMode::Initial,
+                            group_items,
+                            aggregate_functions: vec![],
+                            from_distinct: false,
+                            limit: None,
+                            grouping_sets: None,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(logical_get),
+                );
             }
-            let duplicate_delete_get = SExpr::create_unary(
-                Arc::new(
-                    Aggregate {
-                        mode: AggregateMode::Initial,
-                        group_items,
-                        aggregate_functions: vec![],
-                        from_distinct: false,
-                        limit: None,
-                        grouping_sets: None,
-                    }
-                    .into(),
-                ),
-                Arc::new(logical_get),
-            );
 
             let cross_join = Join {
                 left_conditions: vec![],
@@ -138,7 +140,7 @@ impl SubqueryRewriter {
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(duplicate_delete_get),
+                Arc::new(logical_get),
                 Arc::new(plan.clone()),
             ));
         }

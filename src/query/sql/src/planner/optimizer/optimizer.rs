@@ -219,7 +219,11 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Run default rewrite rules
@@ -246,8 +250,13 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+            let rules = if opt_ctx.enable_join_reorder {
+                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
+            } else {
+                [RuleID::EliminateEvalScalar].as_slice()
+            };
+
+            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
 
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
@@ -285,7 +294,11 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Run default rewrite rules

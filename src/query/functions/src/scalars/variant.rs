@@ -120,7 +120,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     value.write_to_vec(&mut output.data);
                 }
                 Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
+                    if ctx.func_ctx.disable_variant_check {
+                        output.put_str(&val);
+                    } else {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
                 }
             }
             output.commit_row();
@@ -142,7 +146,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     value.write_to_vec(&mut output.data);
                 }
                 Err(err) => {
-                    ctx.set_error(output.len(), err.to_string());
+                    if ctx.func_ctx.disable_variant_check {
+                        output.put_str(s);
+                    } else {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
                 }
             }
             output.commit_row();
