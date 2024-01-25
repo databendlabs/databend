@@ -90,7 +90,7 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | CHANGE_ACTION_COL_NAME
             | CHANGE_IS_UPDATE_COL_NAME
             | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended 
+            // change$row_id might be expended
             // to the computation of the two following internal columns
             | ORIGIN_BLOCK_ROW_NUM_COL_NAME
             | BASE_ROW_ID_COL_NAME
@@ -557,7 +557,9 @@ impl TableSchema {
                         )
                     });
                 }
+                Scalar::Map(_) | Scalar::Array(_) => {}
                 _ => {
+                    debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
                     *index += 1;
                 }

@@ -656,7 +656,9 @@ impl QueryCoordinator {
                     .pipeline_build_res
                     .as_ref()
                     .map(|x| x.exchange_injector.clone())
-                    .unwrap(),
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                    })?,
             )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
@@ -706,7 +708,9 @@ impl QueryCoordinator {
                         .pipeline_build_res
                         .as_ref()
                         .map(|x| x.exchange_injector.clone())
-                        .unwrap(),
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                        })?,
                 )?,
             );
         }

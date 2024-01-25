@@ -48,6 +48,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -174,11 +175,6 @@ impl TestFixture {
         user_info.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
-        );
-
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
         );
 
         let dummy_session = SessionManager::instance()
@@ -432,7 +428,7 @@ impl TestFixture {
         let create_table_plan = self.default_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -440,7 +436,7 @@ impl TestFixture {
         let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -448,7 +444,7 @@ impl TestFixture {
         let create_table_plan = self.variant_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -459,7 +455,7 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
             tenant,
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -481,7 +477,7 @@ impl TestFixture {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 

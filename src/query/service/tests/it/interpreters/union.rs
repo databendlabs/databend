@@ -85,8 +85,8 @@ async fn test_simple_union_output_type() -> Result<()> {
     {
         let fixture = TestFixture::setup().await?;
 
-        execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
-        execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
+        let _ = execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
+        let _ = execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
         let (_, schema) = get_interpreter(
             fixture.new_query_ctx().await?,
             "select * from a union all select * from b",
@@ -167,10 +167,10 @@ async fn test_union_output_type() -> Result<()> {
     // Prepare tables
     let sql1 = create_all_types_table_sql("t1");
     let plan1 = plan_sql(fixture.new_query_ctx().await?, &sql1).await?;
-    execute_plan(fixture.new_query_ctx().await?, &plan1).await?;
+    let _ = execute_plan(fixture.new_query_ctx().await?, &plan1).await?;
     let sql2 = create_all_types_table_sql("t2");
     let plan2 = plan_sql(fixture.new_query_ctx().await?, &sql2).await?;
-    execute_plan(fixture.new_query_ctx().await?, &plan2).await?;
+    let _ = execute_plan(fixture.new_query_ctx().await?, &plan2).await?;
 
     let table_schema = table_schema(&plan1);
     let table_fields = table_schema.fields();

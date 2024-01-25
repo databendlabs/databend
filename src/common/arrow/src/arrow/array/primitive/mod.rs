@@ -35,7 +35,6 @@ mod ffi;
 pub(super) mod fmt;
 mod from_natural;
 mod iterator;
-pub use iterator::*;
 mod mutable;
 pub use mutable::*;
 

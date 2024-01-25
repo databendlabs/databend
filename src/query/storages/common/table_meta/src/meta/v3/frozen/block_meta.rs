@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::converts::meta::LegacyScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
@@ -173,24 +172,13 @@ pub struct ClusterStatistics {
 
 impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
     fn from(value: ClusterStatistics) -> Self {
-        let min: Vec<_> = value
-            .min
-            .iter()
-            .map(|c| IndexScalar::from(Scalar::from(c.clone())))
-            .collect();
+        let min: Vec<_> = value.min.iter().map(|c| Scalar::from(c.clone())).collect();
 
-        let max: Vec<_> = value
-            .max
-            .iter()
-            .map(|c| IndexScalar::from(Scalar::from(c.clone())))
-            .collect();
+        let max: Vec<_> = value.max.iter().map(|c| Scalar::from(c.clone())).collect();
 
-        let pages = value.pages.map(|pages| {
-            pages
-                .into_iter()
-                .map(|c| IndexScalar::from(Scalar::from(c)))
-                .collect()
-        });
+        let pages = value
+            .pages
+            .map(|pages| pages.into_iter().map(Scalar::from).collect());
 
         Self {
             cluster_key_id: value.cluster_key_id,

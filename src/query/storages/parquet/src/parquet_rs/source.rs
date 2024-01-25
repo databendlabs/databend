@@ -28,6 +28,8 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 
@@ -136,6 +138,10 @@ impl Processor for ParquetSource {
                     bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytes,
+                    data_block.memory_size(),
+                );
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }

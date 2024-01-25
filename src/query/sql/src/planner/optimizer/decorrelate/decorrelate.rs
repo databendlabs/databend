@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
@@ -52,8 +53,12 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(metadata);
+pub fn decorrelate_subquery(
+    ctx: Arc<dyn TableContext>,
+    metadata: MetadataRef,
+    s_expr: SExpr,
+) -> Result<SExpr> {
+    let mut rewriter = SubqueryRewriter::new(ctx, metadata);
     rewriter.rewrite(&s_expr)
 }
 

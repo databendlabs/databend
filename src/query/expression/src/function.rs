@@ -95,6 +95,7 @@ pub enum FunctionEval {
 pub struct FunctionContext {
     pub tz: TzLUT,
     pub rounding_mode: bool,
+    pub disable_variant_check: bool,
 
     pub openai_api_chat_base_url: String,
     pub openai_api_embedding_base_url: String,

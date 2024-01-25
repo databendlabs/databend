@@ -27,7 +27,6 @@ mod data;
 mod ffi;
 pub(super) mod fmt;
 mod iterator;
-pub use iterator::*;
 
 /// An array representing a (key, value), both of arbitrary logical types.
 #[derive(Clone)]

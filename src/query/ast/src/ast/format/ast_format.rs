@@ -933,6 +933,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_show_options(show_options, "ShowFunctions".to_string());
     }
 
+    fn visit_show_user_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowUserFunctions".to_string());
+    }
+
     fn visit_show_table_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
         self.visit_show_options(show_options, "ShowTableFunctions".to_string());
     }

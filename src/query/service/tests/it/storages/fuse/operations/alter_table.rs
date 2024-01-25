@@ -85,8 +85,8 @@ async fn check_segment_column_ids(
     if let Some(expected_column_min_max) = expected_column_min_max {
         for (column_id, (min, max)) in &expected_column_min_max {
             if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
-                assert_eq!(min, &stat.min());
-                assert_eq!(max, &stat.max());
+                assert_eq!(min, stat.min());
+                assert_eq!(max, stat.max());
             }
         }
     }
@@ -164,7 +164,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     };
     let ctx = fixture.new_query_ctx().await?;
     let interpreter = DropTableColumnInterpreter::try_create(ctx.clone(), drop_table_column_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // add a column of uint64 with default value `(1,15.0)`
     let field = TableField::new("b", TableDataType::Tuple {
@@ -186,7 +186,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         option: AddColumnOption::End,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // insert values for new schema
     let block = {

@@ -84,6 +84,7 @@ impl Rule for RuleCommuteJoin {
                     | JoinType::LeftAnti
                     | JoinType::RightAnti
                     | JoinType::LeftMark
+                    | JoinType::RightMark
             )
         } else if left_card == right_card {
             matches!(

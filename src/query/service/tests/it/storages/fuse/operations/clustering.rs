@@ -61,7 +61,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     // create test table
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -73,7 +73,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -109,7 +109,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;

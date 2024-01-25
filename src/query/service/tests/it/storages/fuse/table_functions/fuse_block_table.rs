@@ -53,9 +53,9 @@ async fn test_fuse_block_table() -> Result<()> {
 
     {
         let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
         let qry = format!("insert into {}.{} values(7, (8, 9))", db, tbl);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
             "+----------+",
             "| Column 0 |",
@@ -80,7 +80,7 @@ async fn test_fuse_block_table() -> Result<()> {
     {
         // incompatible table engine
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!("select * from fuse_block('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;

@@ -3159,6 +3159,7 @@ dependencies = [
  "databend-common-expression",
  "futures",
  "minitrace",
+ "once_cell",
  "petgraph",
  "serde",
  "serde_json",

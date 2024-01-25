@@ -22,7 +22,6 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -47,8 +46,6 @@ pub trait AsyncSink: Send {
     fn details_status(&self) -> Option<String> {
         None
     }
-
-    fn record_profile(&self, _profile: &Profile) {}
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
@@ -172,9 +169,5 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
 
     fn details_status(&self) -> Option<String> {
         self.inner.as_ref().and_then(|x| x.details_status())
-    }
-
-    fn record_profile(&self, profile: &Profile) {
-        self.inner.as_ref().unwrap().record_profile(profile);
     }
 }

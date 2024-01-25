@@ -356,7 +356,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_tuple(&self, fields: &mut Vec<ColumnBuilder>, value: &Value) -> Result<()> {
+    fn read_tuple(&self, fields: &mut [ColumnBuilder], value: &Value) -> Result<()> {
         match value {
             Value::Object(obj) => {
                 if fields.len() != obj.len() {

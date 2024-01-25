@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_asref)]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(variant_count)]
 
 extern crate core;
 
@@ -58,6 +60,7 @@ mod task_history_table;
 mod tasks_table;
 mod temp_files_table;
 mod tracing_table;
+mod user_functions_table;
 mod users_table;
 mod util;
 mod virtual_columns_table;
@@ -114,5 +117,6 @@ pub use tasks_table::parse_tasks_to_datablock;
 pub use tasks_table::TasksTable;
 pub use temp_files_table::TempFilesTable;
 pub use tracing_table::TracingTable;
+pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;
 pub use virtual_columns_table::VirtualColumnsTable;

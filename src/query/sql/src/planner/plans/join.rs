@@ -528,7 +528,7 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
         ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
@@ -595,7 +595,7 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
                 | JoinType::RightSingle
         ) {
             // (Any, Broadcast)

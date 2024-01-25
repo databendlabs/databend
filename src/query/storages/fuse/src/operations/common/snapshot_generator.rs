@@ -399,6 +399,14 @@ impl SnapshotGenerator for AppendGenerator {
                         .for_each(|(col_id, default_value)| {
                             if let Some(data_type) = column_data_types.get(col_id) {
                                 if !summary.col_stats.contains_key(col_id) {
+                                    assert!(
+                                        default_value
+                                            .as_ref()
+                                            .is_value_of_type(&DataType::from(*data_type)),
+                                        "default value: {:?} is not of type: {:?}",
+                                        default_value,
+                                        data_type
+                                    );
                                     if let Some((min, max)) = crate::statistics::scalar_min_max(
                                         &DataType::from(*data_type),
                                         default_value.clone(),

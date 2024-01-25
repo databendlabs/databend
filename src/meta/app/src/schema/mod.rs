@@ -15,6 +15,7 @@
 //! Schema types
 
 mod catalog;
+mod create_option;
 mod database;
 mod index;
 mod least_visible_time;
@@ -23,6 +24,7 @@ mod ownership;
 mod table;
 mod virtual_column;
 pub use catalog::*;
+pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;

@@ -336,11 +336,11 @@ mod tests {
         let op = Operator::new(services::Memory::default()).unwrap().finish();
         let object_store = Arc::new(OpendalStore::new(op));
 
-        let path: Path = "data/test.txt".try_into().unwrap();
+        let path: Path = "data/test.txt".into();
         let bytes = Bytes::from_static(b"hello, world!");
         object_store.put(&path, bytes).await.unwrap();
 
-        let path: Path = "data/nested/test.txt".try_into().unwrap();
+        let path: Path = "data/nested/test.txt".into();
         let bytes = Bytes::from_static(b"hello, world! I am nested.");
         object_store.put(&path, bytes).await.unwrap();
 
@@ -353,7 +353,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(op));
 
         // Retrieve a specific file
-        let path: Path = "data/test.txt".try_into().unwrap();
+        let path: Path = "data/test.txt".into();
 
         let bytes = Bytes::from_static(b"hello, world!");
         object_store.put(&path, bytes.clone()).await.unwrap();
@@ -377,7 +377,7 @@ mod tests {
     #[tokio::test]
     async fn test_list() {
         let object_store = create_test_object_store().await;
-        let path: Path = "data/".try_into().unwrap();
+        let path: Path = "data/".into();
         let results = object_store
             .list(Some(&path))
             .await
@@ -398,7 +398,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_with_delimiter() {
         let object_store = create_test_object_store().await;
-        let path: Path = "data/".try_into().unwrap();
+        let path: Path = "data/".into();
         let result = object_store.list_with_delimiter(Some(&path)).await.unwrap();
         assert_eq!(result.objects.len(), 1);
         assert_eq!(result.common_prefixes.len(), 1);
@@ -409,8 +409,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_with_offset() {
         let object_store = create_test_object_store().await;
-        let path: Path = "data/".try_into().unwrap();
-        let offset: Path = "data/nested/test.txt".try_into().unwrap();
+        let path: Path = "data/".into();
+        let offset: Path = "data/nested/test.txt".into();
         let result = object_store
             .list_with_offset(Some(&path), &offset)
             .await

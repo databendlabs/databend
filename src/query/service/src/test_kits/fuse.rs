@@ -276,13 +276,13 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
     let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
-    delete_interpreter.execute(ctx).await?;
+    let _ = delete_interpreter.execute(ctx).await?;
     Ok(())
 }
 
 pub async fn do_update(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<()> {
     let update_interpreter = UpdateInterpreter::try_create(ctx.clone(), plan)?;
-    update_interpreter.execute(ctx).await?;
+    let _ = update_interpreter.execute(ctx).await?;
     Ok(())
 }
 
