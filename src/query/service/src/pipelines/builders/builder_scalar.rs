@@ -46,25 +46,15 @@ impl PipelineBuilder {
         let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![op.clone()],
-                self.func_ctx.clone(),
-                num_input_columns,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
-                    transform,
-                    input,
-                    output,
-                    eval_scalar.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input, output, transform,
-                )))
-            }
+            Ok(ProcessorPtr::create(Transformer::create(
+                input,
+                output,
+                CompoundBlockOperator::new(
+                    vec![op.clone()],
+                    self.func_ctx.clone(),
+                    num_input_columns,
+                ),
+            )))
         })?;
 
         Ok(())

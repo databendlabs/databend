@@ -25,21 +25,12 @@ impl PipelineBuilder {
         self.build_pipeline(&udf.input)?;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformUdf::try_create(
+            Ok(ProcessorPtr::create(TransformUdf::try_create(
                 self.func_ctx.clone(),
                 udf.udf_funcs.clone(),
                 input,
                 output,
-            )?;
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    udf.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )?))
         })
     }
 }

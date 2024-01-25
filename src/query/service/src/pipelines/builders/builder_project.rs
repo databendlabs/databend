@@ -90,24 +90,14 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()? as usize;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformSRF::try_create(
+            Ok(ProcessorPtr::create(TransformSRF::try_create(
                 input,
                 output,
                 self.func_ctx.clone(),
                 project_set.projections.clone(),
                 srf_exprs.clone(),
                 max_block_size,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    project_set.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )))
         })
     }
 }

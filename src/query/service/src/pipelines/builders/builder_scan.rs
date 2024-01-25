@@ -44,31 +44,6 @@ impl PipelineBuilder {
             true,
         )?;
 
-        if self.enable_profiling {
-            self.main_pipeline.add_transform(|input, output| {
-                // shared timer between `on_start` and `on_finish`
-                let start_timer = Arc::new(Mutex::new(Instant::now()));
-                let finish_timer = Arc::new(Mutex::new(Instant::now()));
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(scan.plan_id, self.proc_profs.clone())
-                        .on_start(move |v| {
-                            *start_timer.lock().unwrap() = Instant::now();
-                            *v
-                        })
-                        .on_finish(move |prof| {
-                            let elapsed = finish_timer.lock().unwrap().elapsed();
-                            let mut prof = *prof;
-                            prof.wait_time = elapsed;
-                            prof
-                        })
-                        .accumulate_output_bytes()
-                        .accumulate_output_rows(),
-                )))
-            })?;
-        }
-
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
             self.main_pipeline.add_transform(|input, output| {

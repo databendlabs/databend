@@ -114,18 +114,13 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.try_resize(max_threads)?;
         }
-        let prof_info = if self.enable_profiling {
-            Some((plan_id, self.proc_profs.clone()))
-        } else {
-            None
-        };
 
         let mut builder =
             SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
                 .with_partial_block_size(block_size)
                 .with_final_block_size(block_size)
                 .with_limit(limit)
-                .with_prof_info(prof_info.clone());
+                .with_prof_info(None);
 
         match after_exchange {
             Some(true) => {
@@ -140,7 +135,7 @@ impl PipelineBuilder {
                         block_size,
                         limit,
                         sort_desc,
-                        prof_info,
+                        None,
                         true,
                     )
                 } else {

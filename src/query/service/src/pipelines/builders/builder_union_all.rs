@@ -31,24 +31,14 @@ impl PipelineBuilder {
         let union_all_receiver = self.expand_union_all(&union_all.right, union_all)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
-                let transform = TransformMergeBlock::try_create(
+                Ok(ProcessorPtr::create(TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
                     union_all.left.output_schema()?,
                     union_all.right.output_schema()?,
                     union_all.pairs.clone(),
                     union_all_receiver.clone(),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        union_all.plan_id,
-                        self.proc_profs.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                )?))
             })?;
         Ok(())
     }
@@ -76,18 +66,11 @@ impl PipelineBuilder {
         let (tx, rx) = async_channel::unbounded();
 
         build_res.main_pipeline.add_sink(|input_port| {
-            let transform =
-                UnionReceiveSink::create(Some(tx.clone()), input_port, self.ctx.clone());
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    union_plan.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(UnionReceiveSink::create(
+                Some(tx.clone()),
+                input_port,
+                self.ctx.clone(),
+            )))
         })?;
 
         self.pipelines.push(build_res.main_pipeline.finalize());

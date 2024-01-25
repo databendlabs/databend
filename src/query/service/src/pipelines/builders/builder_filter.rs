@@ -47,7 +47,7 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()? as usize;
         let (select_expr, has_or) = build_select_expr(&predicate).into();
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformFilter::create(
+            Ok(ProcessorPtr::create(TransformFilter::create(
                 input,
                 output,
                 select_expr.clone(),
@@ -55,17 +55,7 @@ impl PipelineBuilder {
                 filter.projections.clone(),
                 self.func_ctx.clone(),
                 max_block_size,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    filter.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )))
         })?;
 
         Ok(())
