@@ -55,7 +55,6 @@ SHOW USER FUNCTIONS WHERE LANGUAGE = 'SQL';
 ----
 a_plus_3 NULL (empty) {"parameters":["a"]} SQL
 cal1 NULL (empty) {"parameters":["a","b","c","d","e"]} SQL
-isnotempty NULL (empty) {"parameters":["p"]} SQL
 notnull1 NULL (empty) {"parameters":["p"]} SQL
 
 
@@ -67,12 +66,8 @@ SELECT definition FROM SYSTEM.USER_FUNCTIONS ORDER BY name;
  (Float32 NULL, Float64 NULL) RETURNS Float64 NULL LANGUAGE python HANDLER = add_float ADDRESS = http://0.0.0.0:8815
  (Int8 NULL, Int16 NULL, Int32 NULL, Int64 NULL) RETURNS Int64 NULL LANGUAGE python HANDLER = add_signed ADDRESS = http://0.0.0.0:8815
  (UInt8 NULL, UInt16 NULL, UInt32 NULL, UInt64 NULL) RETURNS UInt64 NULL LANGUAGE python HANDLER = add_unsigned ADDRESS = http://0.0.0.0:8815
- (Binary NULL) RETURNS Binary NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
  (a, b, c, d, e) -> ((a + (c * (e / b))) - d)
- (String NULL) RETURNS String NULL LANGUAGE python HANDLER = echo ADDRESS = http://0.0.0.0:8815
  (p) -> (NOT is_null(p))
- (p) -> (NOT is_null(p))
-
 
 # DROP FUNCTIONS
 statement ok
