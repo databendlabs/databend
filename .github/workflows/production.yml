@@ -17,9 +17,9 @@ jobs:
       build_profile: release
       runner_provider: gcp
 
-  macos:
-    needs: linux
-    uses: ./.github/workflows/reuse.macos.yml
-    secrets: inherit
-    with:
-      build_profile: release
+  # macos:
+  #   needs: linux
+  #   uses: ./.github/workflows/reuse.macos.yml
+  #   secrets: inherit
+  #   with:
+  #     build_profile: release
