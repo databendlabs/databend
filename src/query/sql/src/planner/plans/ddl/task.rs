@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_ast::ast::AlterTaskOptions;
-use common_ast::ast::ScheduleOptions;
-use common_ast::ast::ShowLimit;
-use common_ast::ast::WarehouseOptions;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType::Int32;
-use common_expression::types::NumberDataType::Int64;
-use common_expression::types::NumberDataType::UInt64;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::WarehouseOptions;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType::Int32;
+use databend_common_expression::types::NumberDataType::Int64;
+use databend_common_expression::types::NumberDataType::UInt64;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 pub fn task_schema() -> DataSchemaRef {
     Arc::new(DataSchema::new(vec![
@@ -38,6 +39,8 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("schedule", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
+        DataField::new("condition_text", DataType::String),
+        DataField::new("after", DataType::String),
         DataField::new(
             "suspend_task_after_num_failures",
             DataType::Number(UInt64).wrap_nullable(),
@@ -45,6 +48,7 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 
@@ -58,6 +62,7 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("warehouse", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
+        DataField::new("condition_text", DataType::String),
         DataField::new("run_id", DataType::String),
         DataField::new("query_id", DataType::String),
         DataField::new("exception_code", DataType::Number(Int64)),
@@ -65,6 +70,8 @@ pub fn task_run_schema() -> DataSchemaRef {
         DataField::new("attempt_number", DataType::Number(Int32)),
         DataField::new("completed_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("scheduled_time", DataType::Timestamp),
+        DataField::new("root_task_id", DataType::String),
+        DataField::new("session_parameters", DataType::Variant.wrap_nullable()),
     ]))
 }
 
@@ -74,8 +81,11 @@ pub struct CreateTaskPlan {
     pub tenant: String,
     pub task_name: String,
     pub warehouse_opts: WarehouseOptions,
-    pub schedule_opts: ScheduleOptions,
+    pub schedule_opts: Option<ScheduleOptions>,
+    pub after: Vec<String>,
+    pub when_condition: Option<String>,
     pub suspend_task_after_num_failures: Option<u64>,
+    pub session_parameters: BTreeMap<String, String>,
     pub sql: String,
     pub comment: String,
 }

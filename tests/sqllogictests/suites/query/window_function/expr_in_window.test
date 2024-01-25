@@ -288,6 +288,20 @@ sales 1 4
 sales 3 5
 sales 4 NULL
 
+# lag from array
+query T
+SELECT lag([456],8,[123]) OVER (PARTITION BY 10)
+----
+[123]
+
+query T
+SELECT lag([456],8,['123']) OVER (PARTITION BY 10)
+----
+[123]
+
+statement error 1006
+SELECT lag([456],8,['abc']) OVER (PARTITION BY 10)
+
 statement ok
 USE default
 

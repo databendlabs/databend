@@ -19,15 +19,15 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use ahash::HashMap;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
-use common_catalog::plan::InternalColumn;
-use common_catalog::table::Table;
-use common_expression::types::DataType;
-use common_expression::ComputedExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::table::Table;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -236,18 +236,30 @@ impl Metadata {
         source_column_index: IndexType,
         column_name: String,
         data_type: TableDataType,
-        paths: Vec<Scalar>,
+        key_paths: Scalar,
+        old_index: Option<IndexType>,
     ) -> IndexType {
-        let column_index = self.columns.len();
-        self.columns.push(ColumnEntry::VirtualColumn(VirtualColumn {
+        // If the function that generates the virtual column already has an index,
+        // we can use that index and avoid generate a new one.
+        let column_index = if let Some(old_index) = old_index {
+            old_index
+        } else {
+            self.columns.len()
+        };
+        let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,
             source_column_index,
             column_index,
             column_name,
             data_type,
-            paths,
-        }));
+            key_paths,
+        });
+        if old_index.is_some() {
+            self.columns[column_index] = column;
+        } else {
+            self.columns.push(column);
+        }
         column_index
     }
 
@@ -262,6 +274,7 @@ impl Metadata {
         self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,
         catalog: String,
@@ -270,6 +283,7 @@ impl Metadata {
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_index: bool,
+        source_of_stage: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
 
@@ -284,11 +298,13 @@ impl Metadata {
             alias_name: table_alias_name,
             source_of_view,
             source_of_index,
+            source_of_stage,
         };
         self.tables.push(table_entry);
+        let table_schema = table_meta.schema_with_stream();
         let mut index = 0;
-        let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
-        for field in table_meta.schema().fields().iter() {
+        let mut fields = VecDeque::with_capacity(table_schema.fields().len());
+        for field in table_schema.fields().iter() {
             if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
                 fields.push_back((vec![], field.clone()));
             } else {
@@ -393,6 +409,7 @@ pub struct TableEntry {
     /// If this table is bound to an index.
     source_of_index: bool,
 
+    source_of_stage: bool,
     table: Arc<dyn Table>,
 }
 
@@ -425,6 +442,7 @@ impl TableEntry {
             alias_name,
             source_of_view: false,
             source_of_index: false,
+            source_of_stage: false,
         }
     }
 
@@ -461,6 +479,11 @@ impl TableEntry {
     /// Return true if it is source from view.
     pub fn is_source_of_view(&self) -> bool {
         self.source_of_view
+    }
+
+    /// Return true if it is source from stage.
+    pub fn is_source_of_stage(&self) -> bool {
+        self.source_of_stage
     }
 
     /// Return true if it is bound for an index.
@@ -511,7 +534,7 @@ pub struct VirtualColumn {
     pub data_type: TableDataType,
 
     /// Paths to generate virtual column from source column
-    pub paths: Vec<Scalar>,
+    pub key_paths: Scalar,
 }
 
 #[derive(Clone, Debug)]

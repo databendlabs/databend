@@ -16,9 +16,9 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Debug;
 
-use common_exception::Result;
-use common_expression::arithmetics_type::ResultTypeOfUnary;
-use common_storage::Datum;
+use databend_common_exception::Result;
+use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_storage::Datum;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
@@ -68,9 +68,7 @@ impl Histogram {
     }
 
     /// Get iterator of buckets
-    pub fn buckets_iter(
-        &self,
-    ) -> impl Iterator<Item = &HistogramBucket> + DoubleEndedIterator<Item = &HistogramBucket> {
+    pub fn buckets_iter(&self) -> impl DoubleEndedIterator<Item = &HistogramBucket> {
         self.buckets.iter()
     }
 }

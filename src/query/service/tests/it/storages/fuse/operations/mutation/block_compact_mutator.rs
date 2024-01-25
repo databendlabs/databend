@@ -15,39 +15,39 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_storages_fuse::io::SegmentsIO;
-use common_storages_fuse::operations::BlockCompactMutator;
-use common_storages_fuse::operations::CompactOptions;
-use common_storages_fuse::operations::CompactPartInfo;
-use common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::operations::BlockCompactMutator;
+use databend_common_storages_fuse::operations::CompactOptions;
+use databend_common_storages_fuse::operations::CompactPartInfo;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert
@@ -100,12 +100,13 @@ async fn test_compact() -> Result<()> {
         expected,
     )
     .await?;
+
     Ok(())
 }
 
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let settings = ctx.get_settings();
-    let mut pipeline = common_pipeline_core::Pipeline::create();
+    let mut pipeline = databend_common_pipeline_core::Pipeline::create();
     let res = table.compact_blocks(ctx.clone(), None).await?;
 
     let table_info = table.get_table_info().clone();
@@ -121,7 +122,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         )?;
 
         let build_res =
-            build_query_pipeline_without_render_result_set(&ctx, &physical_plan, false).await?;
+            build_query_pipeline_without_render_result_set(&ctx, &physical_plan).await?;
         pipeline = build_res.main_pipeline;
     };
 
@@ -140,7 +141,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_data_operator()?.operator();
     let settings = ctx.get_settings();
@@ -218,7 +219,7 @@ async fn test_safety() -> Result<()> {
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
             block_per_seg: 10,
-            limit: Some(limit),
+            num_segment_limit: Some(limit),
         };
 
         eprintln!("running target select");

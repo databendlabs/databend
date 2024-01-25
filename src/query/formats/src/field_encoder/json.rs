@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_LOWER;
-use common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_LOWER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderValues;
@@ -42,6 +42,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
+                    binary_format: Default::default(),
                 },
                 quote_char: 0,
             },
@@ -55,9 +56,14 @@ impl FieldEncoderJSON {
     pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
         match &column {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
-            Column::String(c) => {
+
+            Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.write_string(buf, out_buf);
+            }
+            Column::String(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                self.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {
@@ -75,8 +81,12 @@ impl FieldEncoderJSON {
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
 
-            // null, bool, number
-            _ => self.simple.write_field(column, row_index, out_buf, false),
+            Column::Null { .. }
+            | Column::EmptyArray { .. }
+            | Column::EmptyMap { .. }
+            | Column::Number(_)
+            | Column::Decimal(_)
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
     }
 

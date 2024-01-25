@@ -14,9 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_core::Pipeline;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::FlightCompression;
 
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
@@ -42,12 +43,14 @@ pub trait ExchangeInjector: Send + Sync + 'static {
     fn apply_merge_serializer(
         &self,
         params: &MergeExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 
     fn apply_shuffle_serializer(
         &self,
         params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 
@@ -98,20 +101,22 @@ impl ExchangeInjector for DefaultExchangeInjector {
     fn apply_merge_serializer(
         &self,
         params: &MergeExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformExchangeSerializer::create(input, output, params)
+            TransformExchangeSerializer::create(input, output, params, compression)
         })
     }
 
     fn apply_shuffle_serializer(
         &self,
         params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformScatterExchangeSerializer::create(input, output, params)
+            TransformScatterExchangeSerializer::create(input, output, compression, params)
         })
     }
 

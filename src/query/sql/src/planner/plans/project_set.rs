@@ -15,7 +15,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContext;
 
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -48,25 +48,58 @@ impl Operator for ProjectSet {
         RelOp::ProjectSet
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,
-    ) -> common_exception::Result<Arc<RelationalProperty>> {
-        let mut child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
+    ) -> databend_common_exception::Result<Arc<RelationalProperty>> {
+        let child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
+
+        // Derive output columns
+        let mut output_columns = child_prop.output_columns.clone();
         for srf in &self.srfs {
-            child_prop.output_columns.insert(srf.index);
+            output_columns.insert(srf.index);
         }
-        Ok(Arc::new(child_prop))
+
+        // Derive used columns
+        let mut used_columns = child_prop.used_columns.clone();
+        for srf in &self.srfs {
+            used_columns.extend(srf.scalar.used_columns());
+        }
+
+        // Derive outer columns
+        let mut outer_columns = child_prop.outer_columns.clone();
+        for srf in &self.srfs {
+            outer_columns.extend(
+                srf.scalar
+                    .used_columns()
+                    .difference(&child_prop.output_columns)
+                    .cloned(),
+            );
+        }
+
+        // Derive orderings
+        let orderings = vec![];
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings,
+        }))
     }
 
     fn derive_physical_prop(
         &self,
         rel_expr: &RelExpr,
-    ) -> common_exception::Result<PhysicalProperty> {
+    ) -> databend_common_exception::Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
         // ProjectSet is set-returning functions, precise_cardinality set None
         input_stat.statistics.precise_cardinality = None;
@@ -79,7 +112,7 @@ impl Operator for ProjectSet {
         _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
-    ) -> common_exception::Result<RequiredProperty> {
+    ) -> databend_common_exception::Result<RequiredProperty> {
         Ok(required.clone())
     }
 }

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::*;
-use common_arrow::arrow::types::days_ms;
-use common_arrow::arrow::types::months_days_ns;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::*;
+use databend_common_arrow::arrow::types::days_ms;
+use databend_common_arrow::arrow::types::months_days_ns;
 
 #[test]
 fn debug_int32() {

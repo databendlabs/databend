@@ -14,16 +14,17 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature::Vacuum;
-use common_license::license_manager::get_license_manager;
-use common_sql::plans::VacuumTablePlan;
-use common_storages_fuse::FuseTable;
-use vacuum_handler::get_vacuum_handler;
+use chrono::Duration;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::VacuumTablePlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -66,11 +67,9 @@ impl Interpreter for VacuumTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let hours = match self.plan.option.retain_hours {
-            Some(hours) => hours as i64,
-            None => ctx.get_settings().get_retention_period()? as i64,
-        };
-        let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
+        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+
+        let retention_time = chrono::Utc::now() - duration;
         let ctx = self.ctx.clone();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -86,16 +85,9 @@ impl Interpreter for VacuumTableInterpreter {
 
         match purge_files_opt {
             None => return Ok(PipelineBuildResult::create()),
-            Some(purge_files) => {
-                let mut files: Vec<Vec<u8>> = Vec::with_capacity(purge_files.len());
-                for file in purge_files.into_iter() {
-                    files.push(file.as_bytes().to_vec());
-                }
-
-                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                    StringType::from_data(files),
-                ])])
-            }
+            Some(purge_files) => PipelineBuildResult::from_blocks(vec![
+                DataBlock::new_from_columns(vec![StringType::from_data(purge_files)]),
+            ]),
         }
     }
 }

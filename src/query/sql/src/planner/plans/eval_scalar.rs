@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
@@ -54,6 +54,10 @@ impl EvalScalar {
 impl Operator for EvalScalar {
     fn rel_op(&self) -> RelOp {
         RelOp::EvalScalar
+    }
+
+    fn arity(&self) -> usize {
+        1
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -95,14 +99,18 @@ impl Operator for EvalScalar {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
 
+        // Derive orderings
+        let orderings = input_prop.orderings.clone();
+
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+            orderings,
         }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 }

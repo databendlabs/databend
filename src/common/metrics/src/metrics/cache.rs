@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
+
 use prometheus_client::encoding::EncodeLabelSet;
 
 use crate::register_counter_family;
@@ -26,20 +27,18 @@ struct CacheLabels {
     cache_name: String,
 }
 
-lazy_static! {
-    static ref CACHE_ACCESS_COUNT: Family<CacheLabels, Counter> =
-        register_counter_family("cache_access_count");
-    static ref CACHE_MISS_COUNT: Family<CacheLabels, Counter> =
-        register_counter_family("cache_miss_count");
-    static ref CACHE_MISS_LOAD_MILLISECOND: Family<CacheLabels, Histogram> =
-        register_histogram_family_in_milliseconds("cache_miss_load_millisecond");
-    static ref CACHE_HIT_COUNT: Family<CacheLabels, Counter> =
-        register_counter_family("cache_hit_count");
-    static ref CACHE_POPULATION_PENDING_COUNT: Family<CacheLabels, Counter> =
-        register_counter_family("cache_population_pending_count");
-    static ref CACHE_POPULATION_OVERFLOW_COUNT: Family<CacheLabels, Counter> =
-        register_counter_family("cache_population_overflow_count");
-}
+static CACHE_ACCESS_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("cache_access_count"));
+static CACHE_MISS_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("cache_miss_count"));
+static CACHE_MISS_LOAD_MILLISECOND: LazyLock<Family<CacheLabels, Histogram>> =
+    LazyLock::new(|| register_histogram_family_in_milliseconds("cache_miss_load_millisecond"));
+static CACHE_HIT_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("cache_hit_count"));
+static CACHE_POPULATION_PENDING_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("cache_population_pending_count"));
+static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("cache_population_overflow_count"));
 
 pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
     CACHE_ACCESS_COUNT

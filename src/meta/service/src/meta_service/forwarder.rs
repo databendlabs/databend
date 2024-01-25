@@ -14,17 +14,17 @@
 
 //! Forward request to another node
 
-use common_meta_api::reply::reply_to_api_result;
-use common_meta_client::MetaGrpcReadReq;
-use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::ConnectionError;
-use common_meta_types::Endpoint;
-use common_meta_types::ForwardRPCError;
-use common_meta_types::GrpcConfig;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::NodeId;
+use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::ConnectionError;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::ForwardRPCError;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::NodeId;
 use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::transport::Channel;
@@ -60,7 +60,7 @@ impl<'a> MetaForwarder<'a> {
 
         let endpoint = self
             .sto
-            .get_node_endpoint(target)
+            .get_node_raft_endpoint(target)
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
@@ -86,7 +86,7 @@ impl<'a> Forwarder<ForwardRequestBody> for MetaForwarder<'a> {
         &self,
         target: NodeId,
         req: ForwardRequest<ForwardRequestBody>,
-    ) -> Result<ForwardResponse, ForwardRPCError> {
+    ) -> Result<(Endpoint, ForwardResponse), ForwardRPCError> {
         debug!("forward ForwardRequest to: {} {:?}", target, req);
 
         let (endpoint, mut client) = self.new_raft_client(&target).await?;
@@ -99,7 +99,8 @@ impl<'a> Forwarder<ForwardRequestBody> for MetaForwarder<'a> {
 
         let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(raft_mes);
         let resp = res?;
-        Ok(resp)
+
+        Ok((endpoint, resp))
     }
 }
 
@@ -110,7 +111,7 @@ impl<'a> Forwarder<MetaGrpcReadReq> for MetaForwarder<'a> {
         &self,
         target: NodeId,
         req: ForwardRequest<MetaGrpcReadReq>,
-    ) -> Result<BoxStream<StreamItem>, ForwardRPCError> {
+    ) -> Result<(Endpoint, BoxStream<StreamItem>), ForwardRPCError> {
         debug!("forward ReadRequest to: {} {:?}", target, req);
 
         let (endpoint, mut client) = self.new_raft_client(&target).await?;
@@ -121,6 +122,6 @@ impl<'a> Forwarder<MetaGrpcReadReq> for MetaForwarder<'a> {
         })?;
 
         let strm = strm.into_inner();
-        Ok(Box::pin(strm))
+        Ok((endpoint, Box::pin(strm)))
     }
 }

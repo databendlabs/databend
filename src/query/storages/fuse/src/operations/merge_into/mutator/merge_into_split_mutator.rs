@@ -14,34 +14,29 @@
 
 use std::ops::Not;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataBlock;
 
 pub struct MergeIntoSplitMutator {
-    pub row_id_idx: u32,
+    pub split_idx: u32,
 }
 
 impl MergeIntoSplitMutator {
-    #[allow(dead_code)]
-    pub fn try_create(row_id_idx: u32) -> Self {
-        Self { row_id_idx }
+    pub fn try_create(split_idx: u32) -> Self {
+        Self { split_idx }
     }
 
     // (matched_block,not_matched_block)
     pub fn split_data_block(&mut self, block: &DataBlock) -> Result<(DataBlock, DataBlock)> {
-        let row_id_column = &block.columns()[self.row_id_idx as usize];
-        assert_eq!(
-            row_id_column.data_type,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        );
+        let split_column = &block.columns()[self.split_idx as usize];
+        assert!(matches!(split_column.data_type, DataType::Nullable(_)),);
 
         // get row_id do check duplicate and get filter
-        let filter: Bitmap = match &row_id_column.value {
-            common_expression::Value::Scalar(scalar) => {
+        let filter: Bitmap = match &split_column.value {
+            databend_common_expression::Value::Scalar(scalar) => {
                 // fast judge
                 if scalar.is_null() {
                     return Ok((DataBlock::empty(), block.clone()));
@@ -49,8 +44,8 @@ impl MergeIntoSplitMutator {
                     return Ok((block.clone(), DataBlock::empty()));
                 }
             }
-            common_expression::Value::Column(column) => match column {
-                common_expression::Column::Nullable(nullable_column) => {
+            databend_common_expression::Value::Column(column) => match column {
+                databend_common_expression::Column::Nullable(nullable_column) => {
                     nullable_column.validity.clone()
                 }
                 _ => {

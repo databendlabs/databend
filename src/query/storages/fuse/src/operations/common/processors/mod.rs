@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fill_internal_columns;
 mod sink_commit;
 mod transform_mutation_aggregator;
 mod transform_serialize_block;
 mod transform_serialize_segment;
-pub use fill_internal_columns::FillInternalColumnProcessor;
+
 pub use sink_commit::CommitSink;
 pub use transform_mutation_aggregator::TableMutationAggregator;
 pub use transform_serialize_block::TransformSerializeBlock;

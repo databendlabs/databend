@@ -34,6 +34,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 2.222>2.11
+raw expr       : gt(2.222, 2.11)
+checked expr   : gt<Decimal(4, 3), Decimal(4, 3)>(2.222_d128(4,3), to_decimal<Decimal(3, 2)>(4, 3)(2.11_d128(3,2)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : true=null
 raw expr       : eq(true, NULL)
 checked expr   : eq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
@@ -301,7 +310,7 @@ output         : true
 
 ast            : 1.1!=1.1
 raw expr       : noteq(1.1, 1.1)
-checked expr   : noteq<Float32, Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+checked expr   : noteq<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.1_d128(2,1))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1008,6 +1017,28 @@ evaluation (internal):
 | rhs    | StringColumn { data: 0x6e756c6c74727565393232333337323033363835343737353830362d3332373638313233342e35363738, offsets: [0, 4, 8, 27, 33, 42] } |
 | Output | Boolean([0b___00100])                                                                                                                         |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : col > 'efg'
+raw expr       : gt(col::String, 'efg')
+checked expr   : gt<String, String>(col, "efg")
+optimized expr : false
+evaluation:
++--------+-----------------+---------+
+|        | col             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"bcd"..="efg"} | {FALSE} |
+| Row 0  | 'bcd'           | false   |
+| Row 1  | 'efg'           | false   |
++--------+-----------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------+
+| Column | Data                                                      |
++--------+-----------------------------------------------------------+
+| col    | StringColumn { data: 0x626364656667, offsets: [0, 3, 6] } |
+| Output | Boolean([0b______00])                                     |
++--------+-----------------------------------------------------------+
 
 
 ast            : '2'>='1'

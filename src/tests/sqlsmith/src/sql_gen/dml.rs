@@ -15,42 +15,41 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_ast::ast::AddColumnOption;
-use common_ast::ast::AlterTableAction;
-use common_ast::ast::AlterTableStmt;
-use common_ast::ast::ColumnDefinition;
-use common_ast::ast::DeleteStmt;
-use common_ast::ast::Hint;
-use common_ast::ast::HintItem;
-use common_ast::ast::Identifier;
-use common_ast::ast::InsertOperation;
-use common_ast::ast::InsertSource;
-use common_ast::ast::InsertStmt;
-use common_ast::ast::MatchOperation;
-use common_ast::ast::MatchedClause;
-use common_ast::ast::MergeIntoStmt;
-use common_ast::ast::MergeOption;
-use common_ast::ast::MergeSource;
-use common_ast::ast::MergeUpdateExpr;
-use common_ast::ast::NullableConstraint;
-use common_ast::ast::ReplaceStmt;
-use common_ast::ast::TableReference;
-use common_ast::ast::UnmatchedClause;
-use common_ast::ast::UpdateExpr;
-use common_ast::ast::UpdateStmt;
-use common_exception::Span;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ScalarRef;
-use common_expression::TableField;
-use common_formats::field_encoder::FieldEncoderValues;
-use common_formats::OutputCommonSettings;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_UPPER;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_sql::resolve_type_name;
+use databend_common_ast::ast::AddColumnOption;
+use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::AlterTableStmt;
+use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::DeleteStmt;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::HintItem;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::InsertOperation;
+use databend_common_ast::ast::InsertSource;
+use databend_common_ast::ast::InsertStmt;
+use databend_common_ast::ast::MatchOperation;
+use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::MergeIntoStmt;
+use databend_common_ast::ast::MergeOption;
+use databend_common_ast::ast::MergeSource;
+use databend_common_ast::ast::MergeUpdateExpr;
+use databend_common_ast::ast::ReplaceStmt;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UnmatchedClause;
+use databend_common_ast::ast::UpdateExpr;
+use databend_common_ast::ast::UpdateStmt;
+use databend_common_exception::Span;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableField;
+use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::OutputCommonSettings;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_sql::resolve_type_name;
 use itertools::join;
 use rand::Rng;
 use roaring::RoaringTreemap;
@@ -286,14 +285,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    fn is_column_not_null(column: &ColumnDefinition) -> bool {
-        match column.nullable_constraint {
-            Some(NullableConstraint::NotNull) => true,
-            Some(NullableConstraint::Null) => false,
-            None => true,
-        }
-    }
-
     fn random_select_table(&mut self) -> (Table, TableReference) {
         let idx = self.rng.gen_range(0..self.tables.len());
         let table = self.tables[idx].clone();
@@ -346,8 +337,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     }
 
     fn from_column_to_field(column: &ColumnDefinition) -> TableField {
-        let not_null = Self::is_column_not_null(column);
-        let data_type = resolve_type_name(&column.data_type, not_null).unwrap();
+        let data_type = resolve_type_name(&column.data_type, true).unwrap();
         TableField::new(&column.name.name, data_type)
     }
 
@@ -446,17 +436,16 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             3 => {
                 let field = self.random_select_field(table);
                 let name = Identifier::from_name(field.name);
-                let (data_type, nullable_constraint) = self.gen_data_type_name(None);
+                let data_type = self.gen_data_type_name(None);
                 let new_column = ColumnDefinition {
                     name,
                     data_type,
                     expr: None,
                     comment: None,
-                    nullable_constraint,
                 };
                 (
                     AlterTableAction::ModifyColumn {
-                        action: common_ast::ast::ModifyColumnAction::SetDataType(vec![
+                        action: databend_common_ast::ast::ModifyColumnAction::SetDataType(vec![
                             new_column.clone(),
                         ]),
                     },
@@ -481,10 +470,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         Self::mut_table(&mut new_table, mut_action);
 
         let insert_stmt_opt = if let Some(new_column) = new_column {
-            let not_null = Self::is_column_not_null(&new_column);
             let table_name = Identifier::from_name(table.name.clone());
             let columns = vec![new_column.name.clone()];
-            let data_type = resolve_type_name(&new_column.data_type, not_null).unwrap();
+            let data_type = resolve_type_name(&new_column.data_type, true).unwrap();
             let data_types = vec![(&data_type).into()];
             let source = self.gen_insert_source(&data_types, row_count);
 
@@ -536,6 +524,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
+                        binary_format: Default::default(),
                     },
                     quote_char: b'\'',
                 };

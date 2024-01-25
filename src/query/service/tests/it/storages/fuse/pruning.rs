@@ -14,27 +14,27 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Engine;
-use common_base::base::tokio;
-use common_catalog::plan::PushDownInfo;
-use common_exception::Result;
-use common_expression::types::number::Int64Type;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::ArgType;
-use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::RemoteExpr;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use common_sql::parse_to_filters;
-use common_sql::plans::CreateTablePlan;
-use common_sql::BloomIndexColumns;
-use common_storages_fuse::pruning::create_segment_location_vector;
-use common_storages_fuse::pruning::FusePruner;
-use common_storages_fuse::FuseTable;
+use databend_common_ast::ast::Engine;
+use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_sql::parse_to_filters;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::pruning::FusePruner;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -42,14 +42,14 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
@@ -70,8 +70,10 @@ async fn apply_block_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
+
+    fixture.create_default_database().await?;
 
     let test_tbl_name = "test_index_helper";
     let test_schema = TableSchemaRefExt::create(vec![
@@ -92,6 +94,7 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),

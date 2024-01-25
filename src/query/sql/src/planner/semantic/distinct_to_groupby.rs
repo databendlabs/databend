@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::ColumnID;
-use common_ast::ast::Expr;
-use common_ast::ast::GroupBy;
-use common_ast::ast::Identifier;
-use common_ast::ast::Query;
-use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
-use common_ast::ast::SetExpr;
-use common_ast::ast::TableAlias;
-use common_ast::ast::TableReference;
-use common_ast::VisitorMut;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::VisitorMut;
 
 #[derive(Debug, Clone, Default)]
 pub struct DistinctToGroupBy {}
@@ -36,11 +36,12 @@ impl VisitorMut for DistinctToGroupBy {
             group_by,
             having,
             window_list,
+            qualify,
             ..
         } = stmt;
 
         if group_by.is_none() && select_list.len() == 1 && from.len() == 1 {
-            if let common_ast::ast::SelectTarget::AliasedExpr {
+            if let databend_common_ast::ast::SelectTarget::AliasedExpr {
                 expr:
                     box Expr::FunctionCall {
                         span,
@@ -76,6 +77,7 @@ impl VisitorMut for DistinctToGroupBy {
                             group_by: Some(GroupBy::Normal(args.clone())),
                             having: None,
                             window_list: None,
+                            qualify: None,
                         })),
                         order_by: vec![],
                         limit: vec![],
@@ -87,7 +89,7 @@ impl VisitorMut for DistinctToGroupBy {
                         span: None,
                         hints: None,
                         distinct: false,
-                        select_list: vec![common_ast::ast::SelectTarget::AliasedExpr {
+                        select_list: vec![databend_common_ast::ast::SelectTarget::AliasedExpr {
                             expr: Box::new(Expr::FunctionCall {
                                 span: None,
                                 distinct: false,
@@ -121,6 +123,7 @@ impl VisitorMut for DistinctToGroupBy {
                         group_by: None,
                         having: having.clone(),
                         window_list: window_list.clone(),
+                        qualify: qualify.clone(),
                     };
 
                     *stmt = new_stmt;

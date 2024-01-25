@@ -30,7 +30,7 @@ error:
   --> SQL:1:14
   |
 1 | CAST(col1 AS foo)
-  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `JSON`, `DOUBLE`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, or `NULLABLE`
+  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `LONGBLOB`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
   | |             
   | while parsing `CAST(... AS ...)`
   | while parsing expression
@@ -53,10 +53,38 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ unexpected `)`, expecting `AS`, `,`, `(`, `.`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, or 26 more ...
+  | ----     ^ unexpected `)`, expecting `AS`, `,`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, or 28 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression
+
+
+---------- Input ----------
+a.add(b)
+---------- Output ---------
+error: 
+  --> SQL:1:2
+  |
+1 | a.add(b)
+  | -^
+  | ||
+  | |chain function only works in experimental dialect, try `set sql_dialect = experimental`
+  | |while parsing x.function(...)
+  | while parsing expression
+
+
+---------- Input ----------
+[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | [ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
+  | ^
+  | |
+  | list comprehension only works in experimental dialect, try `set sql_dialect = experimental`
+  | while parsing expression
+  | while parsing [expr for x in ... [if ...]]
 
 
 ---------- Input ----------

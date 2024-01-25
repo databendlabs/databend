@@ -12,40 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicU64;
+use std::cell::RefCell;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-#[derive(Default)]
-pub struct Profile {
-    /// The id of processor
-    pub pid: usize,
-    /// The name of processor
-    pub p_name: String,
+use crate::processors::profiles::ProfileStatisticsName;
 
-    pub plan_id: Option<u32>,
-    pub plan_name: Option<String>,
-    pub plan_parent_id: Option<u32>,
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlanProfile {
+    pub id: Option<u32>,
+    pub name: Option<String>,
+    pub parent_id: Option<u32>,
+    pub title: Arc<String>,
+    pub labels: Arc<Vec<ProfileLabel>>,
 
     /// The time spent to process in nanoseconds
-    pub cpu_time: AtomicU64,
+    pub cpu_time: usize,
     /// The time spent to wait in nanoseconds, usually used to
     /// measure the time spent on waiting for I/O
-    pub wait_time: AtomicU64,
+    pub wait_time: usize,
+
+    pub exchange_rows: usize,
+    pub exchange_bytes: usize,
+
+    pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
 }
 
-impl Profile {
-    pub fn create(pid: usize, p_name: String, scope: Option<PlanScope>) -> Profile {
-        Profile {
-            pid,
-            p_name,
-            cpu_time: AtomicU64::new(0),
-            wait_time: AtomicU64::new(0),
-            plan_id: scope.as_ref().map(|x| x.id),
-            plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_parent_id: scope.as_ref().map(|x| x.parent_id),
+impl PlanProfile {
+    pub fn create(profile: &Profile) -> PlanProfile {
+        PlanProfile {
+            id: profile.plan_id,
+            name: profile.plan_name.clone(),
+            parent_id: profile.plan_parent_id,
+            title: profile.title.clone(),
+            labels: profile.labels.clone(),
+            cpu_time: profile.load_profile(ProfileStatisticsName::CpuTime),
+            wait_time: profile.load_profile(ProfileStatisticsName::WaitTime),
+            exchange_rows: profile.load_profile(ProfileStatisticsName::ExchangeRows),
+            exchange_bytes: profile.load_profile(ProfileStatisticsName::ExchangeBytes),
+            statistics: std::array::from_fn(|index| {
+                profile.statistics[index].load(Ordering::SeqCst)
+            }),
         }
+    }
+
+    pub fn accumulate(&mut self, profile: &Profile) {
+        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
+            self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
+        }
+
+        self.cpu_time += profile.load_profile(ProfileStatisticsName::CpuTime);
+        self.wait_time += profile.load_profile(ProfileStatisticsName::WaitTime);
+        self.exchange_rows += profile.load_profile(ProfileStatisticsName::ExchangeRows);
+        self.exchange_bytes += profile.load_profile(ProfileStatisticsName::ExchangeBytes);
+    }
+
+    pub fn merge(&mut self, profile: &PlanProfile) {
+        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
+            self.statistics[index] += profile.statistics[index];
+        }
+
+        self.cpu_time += profile.cpu_time;
+        self.wait_time += profile.wait_time;
+        self.exchange_rows += profile.exchange_rows;
+        self.exchange_bytes += profile.exchange_bytes;
     }
 }
 
@@ -74,15 +105,96 @@ impl Drop for PlanScopeGuard {
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
-    pub parent_id: u32,
+    pub parent_id: Option<u32>,
+    pub title: Arc<String>,
+    pub labels: Arc<Vec<ProfileLabel>>,
 }
 
 impl PlanScope {
-    pub fn create(id: u32, name: String) -> PlanScope {
+    pub fn create(
+        id: u32,
+        name: String,
+        title: Arc<String>,
+        labels: Arc<Vec<ProfileLabel>>,
+    ) -> PlanScope {
         PlanScope {
             id,
-            parent_id: 0,
+            labels,
+            title,
+            parent_id: None,
             name,
         }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ProfileLabel {
+    pub name: String,
+    pub value: Vec<String>,
+}
+
+impl ProfileLabel {
+    pub fn create(name: String, value: Vec<String>) -> ProfileLabel {
+        ProfileLabel { name, value }
+    }
+}
+
+pub struct Profile {
+    /// The id of processor
+    pub pid: usize,
+    /// The name of processor
+    pub p_name: String,
+
+    pub plan_id: Option<u32>,
+    pub plan_name: Option<String>,
+    pub plan_parent_id: Option<u32>,
+    pub labels: Arc<Vec<ProfileLabel>>,
+    pub title: Arc<String>,
+
+    pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
+}
+
+thread_local! {
+    static CURRENT_PROFILE: RefCell<Option<Arc<Profile>>> = const { RefCell::new(None) };
+}
+
+impl Profile {
+    fn create_items() -> [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()] {
+        std::array::from_fn(|_| AtomicUsize::new(0))
+    }
+    pub fn create(pid: usize, p_name: String, scope: Option<PlanScope>) -> Profile {
+        Profile {
+            pid,
+            p_name,
+            plan_id: scope.as_ref().map(|x| x.id),
+            plan_name: scope.as_ref().map(|x| x.name.clone()),
+            plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
+            statistics: Self::create_items(),
+            labels: scope
+                .as_ref()
+                .map(|x| x.labels.clone())
+                .unwrap_or(Arc::new(vec![])),
+            title: scope
+                .as_ref()
+                .map(|x| x.title.clone())
+                .unwrap_or(Arc::new(String::new())),
+        }
+    }
+
+    pub fn track_profile(profile: &Arc<Profile>) {
+        CURRENT_PROFILE.set(Some(profile.clone()))
+    }
+
+    pub fn record_usize_profile(name: ProfileStatisticsName, value: usize) {
+        CURRENT_PROFILE.with(|x| match x.borrow().as_ref() {
+            None => {}
+            Some(profile) => {
+                profile.statistics[name as usize].fetch_add(value, Ordering::SeqCst);
+            }
+        });
+    }
+
+    pub fn load_profile(&self, name: ProfileStatisticsName) -> usize {
+        self.statistics[name as usize].load(Ordering::SeqCst)
     }
 }

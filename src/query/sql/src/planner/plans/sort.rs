@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -33,7 +33,8 @@ pub struct Sort {
     pub limit: Option<usize>,
 
     /// If the sort plan is after the exchange plan.
-    pub after_exchange: bool,
+    /// It's [None] if the sorting plan is in single node mode.
+    pub after_exchange: Option<bool>,
 
     /// The columns needed by the plan after the sort plan.
     /// It's used to build a projection operation before building the sort operator.
@@ -52,6 +53,10 @@ impl Operator for Sort {
         RelOp::Sort
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -68,11 +73,36 @@ impl Operator for Sort {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        rel_expr.derive_relational_prop_child(0)
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        let output_columns = input_prop.output_columns.clone();
+        let outer_columns = input_prop.outer_columns.clone();
+        let used_columns = input_prop.used_columns.clone();
+
+        // Derive orderings
+        let orderings = self.items.clone();
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings,
+        }))
+    }
+
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 }

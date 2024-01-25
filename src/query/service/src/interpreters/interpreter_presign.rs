@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_storages_stage::StageTable;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_storages_stage::StageTable;
 use jsonb::Value as JsonbValue;
 use log::debug;
 
@@ -95,9 +95,7 @@ impl Interpreter for PresignInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        presigned_req.method().as_str().as_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(presigned_req.method().as_str().to_string())),
                 ),
                 BlockEntry::new(
                     DataType::Variant,
@@ -105,9 +103,7 @@ impl Interpreter for PresignInterpreter {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        presigned_req.uri().to_string().as_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(presigned_req.uri().to_string())),
                 ),
             ],
             1,

@@ -18,14 +18,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio;
-use common_base::base::tokio::sync::Mutex as TokioMutex;
-use common_base::base::tokio::sync::RwLock;
-use common_base::runtime::GlobalQueryRuntime;
-use common_base::runtime::TrySpawn;
-use common_catalog::table_context::StageAttachment;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use super::RemoveReason;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -161,6 +162,7 @@ pub struct ResponseState {
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
     pub error: Option<ErrorCode>,
+    pub warnings: Vec<String>,
 }
 
 pub struct HttpQueryResponseInternal {
@@ -219,7 +221,9 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     } else {
-                        http_query_manager.remove_query(&query_id).await;
+                        let _ = http_query_manager
+                            .remove_query(&query_id, RemoveReason::Canceled)
+                            .await;
                     }
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
@@ -232,7 +236,8 @@ impl HttpQuery {
             }
             session
         } else {
-            ctx.get_session(SessionType::HTTPQuery)
+            ctx.upgrade_session(SessionType::HTTPQuery)
+                .map_err(|err| ErrorCode::Internal(format!("{err}")))?
         };
 
         // Read the session variables in the request, and set them to the current session.
@@ -257,6 +262,7 @@ impl HttpQuery {
                 for (k, v) in conf_settings {
                     settings
                         .set_setting(k.to_string(), v.to_string())
+                        .await
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
                                 warn!(
@@ -289,7 +295,11 @@ impl HttpQuery {
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
-            ctx.get_settings().set_deduplicate_label(label.clone())?;
+            unsafe {
+                ctx.get_settings()
+                    .set_deduplicate_label(label.clone())
+                    .await?;
+            }
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
@@ -310,7 +320,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: attachment.file_format_options.clone(),
+                file_format_options: attachment.file_format_options.as_ref().map(|v| {
+                    v.iter()
+                        .map(|(k, v)| (k.to_lowercase(), v.to_owned()))
+                        .collect::<BTreeMap<_, _>>()
+                }),
                 copy_options: attachment.copy_options.clone(),
             }),
             None => {}
@@ -358,6 +372,7 @@ impl HttpQuery {
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
+                        warnings: ctx_clone.pop_warnings(),
                     };
                     info!(
                         "{}: http query change state to Stopped, fail to start {:?}",
@@ -433,6 +448,7 @@ impl HttpQuery {
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
+            warnings: state.get_warnings(),
             affect: state.get_affect(),
         }
     }
@@ -456,8 +472,10 @@ impl HttpQuery {
 
         let settings = session_state
             .settings
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .as_ref()
+            .into_iter()
+            .filter(|item| item.default_value != item.user_value)
+            .map(|item| (item.name.to_string(), item.user_value.as_string()))
             .collect::<BTreeMap<_, _>>();
         let database = session_state.current_database.clone();
         let role = session_state.current_role.clone();
@@ -486,16 +504,11 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn kill(&self) {
+    pub async fn kill(&self, reason: &str) {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(
-            &self.state,
-            Err(ErrorCode::AbortedQuery("killed by http")),
-            true,
-        )
-        .await;
+        Executor::stop(&self.state, Err(ErrorCode::AbortedQuery(reason)), true).await;
     }
 
     #[async_backtrace::framed]

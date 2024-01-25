@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::type_check::ALL_SIMPLE_CAST_FUNCTIONS;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::ALL_INTEGER_TYPES;
-use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::AutoCastRules;
-use common_expression::FunctionRegistry;
+use databend_common_expression::type_check::ALL_SIMPLE_CAST_FUNCTIONS;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::AutoCastRules;
+use databend_common_expression::FunctionRegistry;
 
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 
@@ -68,6 +68,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 /// The cast rules for any situation, including comparison functions, joins, etc.
 pub const GENERAL_CAST_RULES: AutoCastRules = &[
+    (DataType::String, DataType::Binary),
     (DataType::String, DataType::Timestamp),
     (DataType::String, DataType::Date),
     (DataType::String, DataType::Boolean),

@@ -14,29 +14,25 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::FieldIndex;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::AccumulatingTransformer;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::physical_plans::OnConflictField;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::BlockSlotDescription;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use rand::prelude::SliceRandom;
-use storages_common_index::BloomIndex;
-use storages_common_table_meta::meta::BlockSlotDescription;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::TableSnapshot;
 
-use super::common::TransformMergeCommitMeta;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
-use crate::operations::common::CommitSink;
-use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::mutator::MergeIntoOperationAggregator;
@@ -176,65 +172,16 @@ impl FuseTable {
         })
     }
 
-    pub fn chain_mutation_pipes(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        base_snapshot: Arc<TableSnapshot>,
-        mutation_kind: MutationKind,
-        merge_meta: bool,
-        need_lock: bool,
-    ) -> Result<()> {
-        let cluster_key_id = self.cluster_key_id();
-        pipeline.try_resize(1)?;
-        if merge_meta {
-            pipeline.add_transform(|input, output| {
-                let merger = TransformMergeCommitMeta::create(cluster_key_id);
-                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                    input, output, merger,
-                )))
-            })?;
-        } else {
-            pipeline.add_transform(|input, output| {
-                let base_segments = if matches!(mutation_kind, MutationKind::Compact) {
-                    vec![]
-                } else {
-                    base_snapshot.segments.clone()
-                };
-                let mutation_aggregator =
-                    TableMutationAggregator::new(self, ctx.clone(), base_segments, mutation_kind);
-                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                    input,
-                    output,
-                    mutation_aggregator,
-                )))
-            })?;
-        }
-
-        let snapshot_gen = MutationGenerator::new(base_snapshot);
-        pipeline.add_sink(|input| {
-            CommitSink::try_create(
-                self,
-                ctx.clone(),
-                None,
-                snapshot_gen.clone(),
-                input,
-                None,
-                need_lock,
-                None,
-            )
-        })
-    }
-
     // choose the bloom filter columns (from on-conflict fields).
     // columns with larger number of number-of-distinct-values, will be kept, is their types
     // are supported by bloom index.
     pub async fn choose_bloom_filter_columns(
         &self,
+        ctx: Arc<dyn TableContext>,
         on_conflicts: &[OnConflictField],
         max_num_columns: u64,
     ) -> Result<Vec<FieldIndex>> {
-        let col_stats_provider = self.column_statistics_provider().await?;
+        let col_stats_provider = self.column_statistics_provider(ctx).await?;
         let mut cols = on_conflicts
             .iter()
             .enumerate()

@@ -17,12 +17,12 @@ use std::slice::Iter;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_expression::types::number::Number;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringIterator;
-use common_hashtable::DictionaryKeys;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryIterator;
+use databend_common_expression::types::number::Number;
+use databend_common_hashtable::DictionaryKeys;
 
 use super::large_number::LargeNumber;
 
@@ -74,11 +74,11 @@ impl<T: LargeNumber> KeysColumnIter<T> for LargeFixedKeysColumnIter<T> {
 }
 
 pub struct SerializedKeysColumnIter {
-    column: StringColumn,
+    column: BinaryColumn,
 }
 
 impl SerializedKeysColumnIter {
-    pub fn create(column: &StringColumn) -> Result<SerializedKeysColumnIter> {
+    pub fn create(column: &BinaryColumn) -> Result<SerializedKeysColumnIter> {
         Ok(SerializedKeysColumnIter {
             column: column.clone(),
         })
@@ -86,7 +86,7 @@ impl SerializedKeysColumnIter {
 }
 
 impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
-    type Iterator<'a> = StringIterator<'a> where Self: 'a;
+    type Iterator<'a> = BinaryIterator<'a> where Self: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()
@@ -95,7 +95,7 @@ impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
 
 pub struct DictionarySerializedKeysColumnIter {
     #[allow(dead_code)]
-    column: StringColumn,
+    column: BinaryColumn,
     #[allow(dead_code)]
     points: Vec<NonNull<[u8]>>,
     inner: Vec<DictionaryKeys>,
@@ -104,7 +104,7 @@ pub struct DictionarySerializedKeysColumnIter {
 impl DictionarySerializedKeysColumnIter {
     pub fn create(
         dict_keys: usize,
-        column: &StringColumn,
+        column: &BinaryColumn,
     ) -> Result<DictionarySerializedKeysColumnIter> {
         let mut inner = Vec::with_capacity(column.len());
         let mut points = Vec::with_capacity(column.len() * dict_keys);

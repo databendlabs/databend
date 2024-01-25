@@ -19,27 +19,23 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::PartitionedPayload;
-use common_expression::PayloadFlushState;
-use common_hashtable::hash2bucket;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_profile::SharedProcessorProfiles;
-use common_storage::DataOperator;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
+use databend_common_expression::PayloadFlushState;
+use databend_common_hashtable::hash2bucket;
+use databend_common_hashtable::HashtableLike;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -516,9 +512,6 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
-    enable_profiling: bool,
-    prof_id: u32,
-    proc_profs: SharedProcessorProfiles,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
@@ -544,36 +537,23 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     })?;
 
     pipeline.add_transform(|input, output| {
-        let transform = match params.aggregate_functions.is_empty() {
-            true => {
-                TransformFinalGroupBy::try_create(input, output, method.clone(), params.clone())?
-            }
-            false => {
-                TransformFinalAggregate::try_create(input, output, method.clone(), params.clone())?
-            }
-        };
-        if enable_profiling {
-            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                transform,
-                prof_id,
-                proc_profs.clone(),
-            )))
-        } else {
-            Ok(ProcessorPtr::create(transform))
-        }
+        Ok(ProcessorPtr::create(
+            match params.aggregate_functions.is_empty() {
+                true => TransformFinalGroupBy::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+                false => TransformFinalAggregate::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+            },
+        ))
     })?;
-    // Append a profile stub to record the output rows and bytes
-    if enable_profiling {
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Transformer::create(
-                input,
-                output,
-                ProfileStub::new(prof_id, proc_profs.clone())
-                    .accumulate_output_rows()
-                    .accumulate_output_bytes(),
-            )))
-        })?;
-    }
 
     Ok(())
 }

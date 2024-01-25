@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use common_expression::TableSchema;
-use common_storages_fuse::operations::common::ConflictResolveContext;
-use common_storages_fuse::operations::common::MutationGenerator;
-use common_storages_fuse::operations::common::SnapshotChanges;
-use common_storages_fuse::operations::common::SnapshotGenerator;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_expression::TableSchema;
+use databend_common_storages_fuse::operations::common::ConflictResolveContext;
+use databend_common_storages_fuse::operations::common::MutationGenerator;
+use databend_common_storages_fuse::operations::common::SnapshotChanges;
+use databend_common_storages_fuse::operations::common::SnapshotGenerator;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 #[test]
 /// base snapshot contains segments 1, 2, 3,

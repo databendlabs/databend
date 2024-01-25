@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::block_debug::box_render;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
+use databend_common_expression::block_debug::box_render;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use pyo3::prelude::*;
 
 use crate::dataframe::PyBoxSize;

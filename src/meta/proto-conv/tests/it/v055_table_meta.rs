@@ -1,3 +1,7 @@
+// Copyright 2023 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -13,12 +17,11 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ce;
-use common_expression::types::NumberDataType;
-use common_expression::ComputedExpr;
-use common_meta_app::schema as mt;
-use common_meta_app::schema::Ownership;
-use common_meta_app::share;
+use databend_common_expression as ce;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::share;
 use maplit::btreemap;
 use maplit::btreeset;
 use minitrace::func_name;
@@ -90,10 +93,6 @@ fn test_decode_v55_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
-        owner: Some(Ownership {
-            owner_role_name: "role2".to_string(),
-            updated_on: Default::default(),
-        }),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 55, want())?;
@@ -126,10 +125,6 @@ fn test_decode_v51_database_meta() -> anyhow::Result<()> {
         from_share: Some(share::ShareNameIdent {
             tenant: "tenant".to_string(),
             share_name: "share".to_string(),
-        }),
-        owner: Some(Ownership {
-            owner_role_name: "role1".to_string(),
-            updated_on: Default::default(),
         }),
     };
 

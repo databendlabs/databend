@@ -194,6 +194,141 @@ SELECT json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? 
 1
 
 query T
+SELECT NULL @? '$.a'
+----
+NULL
+
+query T
+SELECT parse_json('{"a": 1, "b": 2}') @? NULL
+----
+NULL
+
+query T
+SELECT parse_json('{"a": 1, "b": 2}') @? '$.a'
+----
+1
+
+query T
+SELECT parse_json('{"a": 1, "b": 2}') @? '$.c'
+----
+0
+
+query T
+SELECT parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ == 1)'
+----
+1
+
+query T
+SELECT parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ > 1)'
+----
+0
+
+query T
+SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[0]'
+----
+1
+
+query T
+SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[3]'
+----
+0
+
+query T
+SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3)'
+----
+1
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
+----
+1
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
+----
+0
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
+----
+0
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
+----
+0
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
+----
+1
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
+----
+0
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
+----
+0
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
+----
+1
+
+query T 
+SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
+----
+1
+
+query T 
+SELECT parse_json('{"a":1,"b":2}') @@ '$.a == 1'
+----
+1
+
+query T 
+SELECT parse_json('{"a":1,"b":2}') @@ '$.a > 1'
+----
+0
+
+query T 
+SELECT parse_json('{"a":1,"b":2}') @@ '$.c > 0'
+----
+0
+
+query T 
+SELECT parse_json('{"a":1,"b":2}') @@ '$.b < 2'
+----
+0
+
+query T 
+SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'
+----
+1
+
+query T 
+SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'
+----
+0
+
+query T 
+SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'
+----
+0
+
+query T 
+SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'
+----
+1
+
+query T 
+SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'
+----
+1
+
+query T
 SELECT json_each(NULL)
 ----
 
@@ -221,6 +356,13 @@ SELECT json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k
 ('c','true')
 ('d','{"k1":1,"k2":2}')
 
+query TT
+SELECT * FROM json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
+----
+a 1
+b [1,2,3]
+c true
+d {"k1":1,"k2":2}
 
 query T
 SELECT json_array_elements(NULL)
@@ -257,6 +399,13 @@ SELECT json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
 true
 {"k1":1,"k2":2}
 
+query T
+SELECT * FROM json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
+----
+1
+[1,2,3]
+true
+{"k1":1,"k2":2}
 
 query T
 select parse_json('["1","2","3"]') ? NULL
@@ -382,6 +531,23 @@ select id, v ?& ['a','c'] from t2 order by id
 1 0
 2 1
 3 0
+4 NULL
+
+
+query T
+select id, v @? '$.b' from t2 order by id
+----
+1 0
+2 1
+3 0
+4 NULL
+
+query T
+select id, v @@ '$[*] == "b"' from t2 order by id
+----
+1 0
+2 0
+3 1
 4 NULL
 
 statement ok
@@ -583,8 +749,142 @@ select parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}');
 ----
 0
 
-
 query T
 select parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}');
 ----
 1
+
+query T
+select parse_json('[1,2,3]') || NULL;
+----
+NULL
+
+query T
+select parse_json('[1,2,3]') || parse_json('10');
+----
+[1,2,3,10]
+
+query T
+select parse_json('"asd"') || parse_json('[1,2,3]');
+----
+["asd",1,2,3]
+
+query T
+select parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"');
+----
+[1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]
+
+query T
+select parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]');
+----
+[1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]
+
+query T
+select parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]');
+----
+[1,[1,2,3],3,[10,20,30]]
+
+query T
+select parse_json('{"a":1,"b":2}') || parse_json('true');
+----
+[{"a":1,"b":2},true]
+
+query T
+select parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}');
+----
+[1,2,3,{"a":1,"b":2}]
+
+query T
+select parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]');
+----
+[{"a":1,"b":2},1,2,3]
+
+query T
+select parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}');
+----
+{"a":1,"b":2,"c":3,"d":4}
+
+query T
+select parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}');
+----
+{"a":3,"b":4,"d":10}
+
+query T
+select parse_json('[1,2,3]') - NULL;
+----
+NULL
+
+query T
+select parse_json('[1,2,3]') - '1';
+----
+[1,2,3]
+
+query T
+select parse_json('["1","2","3"]') - '0';
+----
+["1","2","3"]
+
+query T
+select parse_json('["1","2","3"]') - '1';
+----
+["2","3"]
+
+query T
+select parse_json('["1","2","3",{"a":1,"b":2}]') - '1';
+----
+["2","3",{"a":1,"b":2}]
+
+query T
+select parse_json('{"a":1,"b":2}') - 'c';
+----
+{"a":1,"b":2}
+
+query T
+select parse_json('{"a":1,"b":2}') - 'a';
+----
+{"b":2}
+
+query T
+select parse_json('{"b":2}') - 'b';
+----
+{}
+
+query T
+select parse_json('[1,2,3]') - 0;
+----
+[2,3]
+
+query T
+select parse_json('[1,2,3]') - 1;
+----
+[1,3]
+
+query T
+select parse_json('[1,2,3]') - 2;
+----
+[1,2]
+
+query T
+select parse_json('[1,2,3]') - -1;
+----
+[1,2]
+
+query T
+select parse_json('[1,2,3]') - -2;
+----
+[1,3]
+
+query T
+select parse_json('[1,2,3]') - -3;
+----
+[2,3]
+
+query T
+select parse_json('[1,2,3]') - -4;
+----
+[1,2,3]
+
+query T
+select parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2;
+----
+[1,2]

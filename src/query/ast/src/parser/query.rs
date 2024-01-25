@@ -32,6 +32,7 @@ use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
+use crate::ErrorKind;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(
@@ -41,7 +42,7 @@ pub fn query(i: Input) -> IResult<Query> {
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
     let iter = &mut set_operation_elements.into_iter();
     run_pratt_parser(SetOperationParser, iter, rest, i)
 }
@@ -52,12 +53,13 @@ pub enum SetOperationElement {
     SelectStmt {
         hints: Option<Hint>,
         distinct: bool,
-        select_list: Box<Vec<SelectTarget>>,
-        from: Box<Vec<TableReference>>,
-        selection: Box<Option<Expr>>,
+        select_list: Vec<SelectTarget>,
+        from: Vec<TableReference>,
+        selection: Option<Expr>,
         group_by: Option<GroupBy>,
-        having: Box<Option<Expr>>,
+        having: Option<Expr>,
         window_list: Option<Vec<WindowDefinition>>,
+        qualify: Option<Expr>,
     },
     SetOperation {
         op: SetOperator,
@@ -96,42 +98,53 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
-    let select_stmt = map(
+    let select_stmt = map_res(
         rule! {
-             SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
-                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
-                ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
-                ~ ( HAVING ~ ^#expr )?
-                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+            ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ ( WHERE ~ ^#expr )?
+            ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
+            ~ ( HAVING ~ ^#expr )?
+            ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+            ~ ( QUALIFY ~ ^#expr )?
         },
         |(
+            opt_from_block_first,
             _select,
             opt_hints,
             opt_distinct,
             select_list,
-            opt_from_block,
+            opt_from_block_second,
             opt_where_block,
             opt_group_by_block,
             opt_having_block,
             opt_window_block,
+            opt_qualify_block,
         )| {
-            SetOperationElement::SelectStmt {
+            if opt_from_block_first.is_some() && opt_from_block_second.is_some() {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "duplicated FROM clause",
+                )));
+            }
+
+            Ok(SetOperationElement::SelectStmt {
                 hints: opt_hints,
                 distinct: opt_distinct.is_some(),
-                select_list: Box::new(select_list),
-                from: Box::new(
-                    opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                ),
-                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
+                select_list,
+                from: opt_from_block_first
+                    .or(opt_from_block_second)
+                    .map(|(_, table_refs)| table_refs)
+                    .unwrap_or_default(),
+                selection: opt_where_block.map(|(_, selection)| selection),
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
-                having: Box::new(opt_having_block.map(|(_, having)| having)),
+                having: opt_having_block.map(|(_, having)| having),
                 window_list: opt_window_block.map(|(_, windows)| windows),
-            }
+                qualify: opt_qualify_block.map(|(_, qualify)| qualify),
+            })
         },
     );
+
     let values = map(
         rule! {
             VALUES ~ ^#comma_separated_list1(row_values)
@@ -222,16 +235,18 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 group_by,
                 having,
                 window_list,
+                qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
                 hints,
                 distinct,
-                select_list: *select_list,
-                from: *from,
-                selection: *selection,
+                select_list,
+                from,
+                selection,
                 group_by,
-                having: *having,
+                having,
                 window_list,
+                qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
                 span: transform_span(input.span.0),
@@ -354,16 +369,16 @@ pub fn with(i: Input) -> IResult<With> {
     )(i)
 }
 
-pub fn exclude_col(i: Input) -> IResult<Vec<ColumnID>> {
+pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
     let var = map(
         rule! {
-            #column_id
+            #ident
         },
         |col| vec![col],
     );
     let vars = map(
         rule! {
-             "(" ~ ^#comma_separated_list1(column_id) ~ ^")"
+             "(" ~ ^#comma_separated_list1(ident) ~ ^")"
         },
         |(_, cols, _)| cols,
     );
@@ -375,35 +390,95 @@ pub fn exclude_col(i: Input) -> IResult<Vec<ColumnID>> {
 }
 
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
-    let qualified_wildcard = map(
+    fn qualified_wildcard_transform(
+        res: Option<(Identifier, &Token<'_>, Option<(Identifier, &Token<'_>)>)>,
+        star: &Token<'_>,
+        opt_exclude: Option<(&Token<'_>, Vec<Identifier>)>,
+    ) -> SelectTarget {
+        let column_filter = opt_exclude.map(|(_, exclude)| ColumnFilter::Excludes(exclude));
+        match res {
+            Some((fst, _, Some((snd, _)))) => SelectTarget::StarColumns {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Identifier(snd),
+                    Indirection::Star(Some(star.span)),
+                ],
+                column_filter,
+            },
+            Some((fst, _, None)) => SelectTarget::StarColumns {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Star(Some(star.span)),
+                ],
+                column_filter,
+            },
+            None => SelectTarget::StarColumns {
+                qualified: vec![Indirection::Star(Some(star.span))],
+                column_filter,
+            },
+        }
+    }
+
+    let qualified_wildcard = alt((
+        // select * exclude ...
+        map(
+            rule! {
+               ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
+            },
+            |(res, star, opt_exclude)| qualified_wildcard_transform(res, star, opt_exclude),
+        ),
+        // select columns(* exclude ...)
+        map(
+            rule! {
+              COLUMNS ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )? ~ ")"
+            },
+            |(_, _, res, star, opt_exclude, _)| {
+                qualified_wildcard_transform(res, star, opt_exclude)
+            },
+        ),
+    ));
+
+    // columns('.*abc.*')
+    let columns_regexp = map(
         rule! {
-            ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
+            COLUMNS ~ "(" ~ #literal_string ~ ")"
         },
-        |(res, star, opt_exclude)| {
-            let exclude = opt_exclude.map(|(_, exclude)| exclude);
-            match res {
-                Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
-                    qualified: vec![
-                        Indirection::Identifier(fst),
-                        Indirection::Identifier(snd),
-                        Indirection::Star(Some(star.span)),
-                    ],
-                    exclude,
-                },
-                Some((fst, _, None)) => SelectTarget::QualifiedName {
-                    qualified: vec![
-                        Indirection::Identifier(fst),
-                        Indirection::Star(Some(star.span)),
-                    ],
-                    exclude,
-                },
-                None => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Star(Some(star.span))],
-                    exclude,
-                },
-            }
+        |(t, _, s, _)| SelectTarget::StarColumns {
+            qualified: vec![Indirection::Star(Some(t.span))],
+            column_filter: Some(ColumnFilter::Lambda(Lambda {
+                params: vec![Identifier::from_name("_t")],
+                expr: Box::new(Expr::BinaryOp {
+                    span: Some(t.span),
+                    op: BinaryOperator::Regexp,
+                    left: Box::new(Expr::ColumnRef {
+                        span: None,
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name("_t")),
+                    }),
+                    right: Box::new(Expr::Literal {
+                        span: Some(t.span),
+                        lit: Literal::String(s),
+                    }),
+                }),
+            })),
         },
     );
+
+    // columns(a -> filter)
+    let columns_lambda = map(
+        rule! {
+            COLUMNS ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+        },
+        |(t, _, ident, _, expr, _)| SelectTarget::StarColumns {
+            qualified: vec![Indirection::Star(Some(t.span))],
+            column_filter: Some(ColumnFilter::Lambda(Lambda {
+                params: vec![ident],
+                expr: Box::new(expr),
+            })),
+        },
+    );
+
     let projection = map(
         rule! {
             #expr ~ #alias_name?
@@ -416,6 +491,8 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 
     rule!(
         #qualified_wildcard
+        | #columns_regexp
+        | #columns_lambda
         | #projection
     )(i)
 }
@@ -515,7 +592,7 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule!(#table_reference_element+)(i)?;
+    let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
     let iter = &mut table_reference_elements.into_iter();
     run_pratt_parser(TableReferenceParser, iter, rest, i)
 }
@@ -913,7 +990,7 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
             rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
             |(_, s, _, e)| (s, e),
         ),
-        map(rule! {#window_frame_bound}, |s| {
+        map(rule! { #window_frame_bound }, |s| {
             (s, WindowFrameBound::CurrentRow)
         }),
     ))(i)

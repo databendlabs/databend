@@ -16,20 +16,22 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::GlobalUniqName;
-use common_base::base::ProgressValues;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::arrow::serialize_column;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_hashtable::HashtableLike;
-use common_metrics::transform::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
+use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::HashtableLike;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -258,6 +260,13 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
             metrics_inc_aggregate_spill_write_count();
             metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
             metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillWriteTime,
+                instant.elapsed().as_millis() as usize,
+            );
         }
 
         {

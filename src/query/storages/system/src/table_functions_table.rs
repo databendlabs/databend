@@ -14,18 +14,20 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -43,7 +45,16 @@ impl SyncSystemTable for TableFunctionsTable {
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let func_names = ctx.get_default_catalog()?.list_table_functions();
-        let names = func_names.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+        let mut names = func_names.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+        // srf functions can also used as table functions
+        let mut srf_func_names = BUILTIN_FUNCTIONS
+            .properties
+            .iter()
+            .filter(|(_, property)| property.kind == FunctionKind::SRF)
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        names.append(&mut srf_func_names);
+
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(
             names,
         )]))

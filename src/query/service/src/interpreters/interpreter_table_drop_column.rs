@@ -14,20 +14,22 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_types::MatchSeq;
-use common_sql::plans::DropTableColumnPlan;
-use common_sql::BloomIndexColumns;
-use common_storages_share::save_share_table_info;
-use common_storages_view::view_table::VIEW_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::DropTableColumnPlan;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_share::save_share_table_info;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_add_column::generate_new_snapshot;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -66,10 +68,11 @@ impl Interpreter for DropTableColumnInterpreter {
         table.check_mutable()?;
 
         let table_info = table.get_table_info();
-        if table_info.engine() == VIEW_ENGINE {
+        let engine = table_info.engine();
+        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is VIEW that doesn't support alter",
-                &self.plan.database, &self.plan.table
+                "{}.{} engine is {} that doesn't support alter",
+                &self.plan.database, &self.plan.table, engine
             )));
         }
         if table_info.db_type != DatabaseType::NormalDB {
@@ -111,12 +114,15 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
+        generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
+
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: None,
             deduplicated_label: None,
+            update_stream_meta: vec![],
         };
 
         let res = catalog.update_table_meta(table_info, req).await?;

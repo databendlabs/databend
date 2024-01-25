@@ -14,12 +14,13 @@
 
 use std::fmt::Debug;
 
-use common_expression::types::DataType;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;
 use crate::plan::Projection;
@@ -34,7 +35,7 @@ pub struct VirtualColumnInfo {
     /// Virtual column name
     pub name: String,
     /// Paths to generate virtual column from source column
-    pub paths: Vec<Scalar>,
+    pub key_paths: Scalar,
     /// Virtual column data type
     pub data_type: Box<TableDataType>,
 }
@@ -93,6 +94,8 @@ pub struct PushDownInfo {
     pub lazy_materialization: bool,
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
+    /// Identifies the type of data change we are looking for
+    pub change_type: Option<ChangeType>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -117,10 +120,23 @@ pub struct TopK {
     pub leaf_id: usize,
 }
 
+impl TopK {
+    fn support_type(data_type: &DataType) -> bool {
+        matches!(
+            data_type,
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        )
+    }
+}
+
 pub const TOPK_PUSHDOWN_THRESHOLD: usize = 1000;
 
 impl PushDownInfo {
-    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
+    pub fn top_k(&self, schema: &TableSchema) -> Option<TopK> {
         if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
@@ -131,7 +147,7 @@ impl PushDownInfo {
 
             if let RemoteExpr::<String>::ColumnRef { id, data_type, .. } = &order.0 {
                 // TODO: support sub column of nested type.
-                if !support(data_type) {
+                if !TopK::support_type(data_type) {
                     return None;
                 }
 

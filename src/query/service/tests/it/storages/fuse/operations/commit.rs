@@ -17,116 +17,127 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::catalog::Catalog;
-use common_catalog::cluster_info::Cluster;
-use common_catalog::database::Database;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table::Table;
-use common_catalog::table_context::MaterializedCtesBlocks;
-use common_catalog::table_context::ProcessInfo;
-use common_catalog::table_context::StageAttachment;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::FunctionContext;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserDefinedConnection;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::CountTablesReply;
-use common_meta_app::schema::CountTablesReq;
-use common_meta_app::schema::CreateDatabaseReply;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateIndexReply;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateLockRevReply;
-use common_meta_app::schema::CreateLockRevReq;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::CreateVirtualColumnReply;
-use common_meta_app::schema::CreateVirtualColumnReq;
-use common_meta_app::schema::DeleteLockRevReq;
-use common_meta_app::schema::DropDatabaseReply;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropIndexReply;
-use common_meta_app::schema::DropIndexReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropVirtualColumnReply;
-use common_meta_app::schema::DropVirtualColumnReq;
-use common_meta_app::schema::ExtendLockRevReq;
-use common_meta_app::schema::GetIndexReply;
-use common_meta_app::schema::GetIndexReq;
-use common_meta_app::schema::GetTableCopiedFileReply;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexesByIdReq;
-use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::LockMeta;
-use common_meta_app::schema::RenameDatabaseReply;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::RenameTableReply;
-use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::SetTableColumnMaskPolicyReply;
-use common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TruncateTableReply;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UndropDatabaseReply;
-use common_meta_app::schema::UndropDatabaseReq;
-use common_meta_app::schema::UndropTableReply;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::schema::UpdateIndexReply;
-use common_meta_app::schema::UpdateIndexReq;
-use common_meta_app::schema::UpdateTableMetaReply;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateVirtualColumnReply;
-use common_meta_app::schema::UpdateVirtualColumnReq;
-use common_meta_app::schema::UpsertTableOptionReply;
-use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_types::MetaId;
-use common_pipeline_core::processors::profile::Profile;
-use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
-use common_settings::Settings;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::FileStatus;
-use common_storage::StageFileInfo;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
+use databend_common_base::base::tokio;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::database::Database;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::MaterializedCtesBlocks;
+use databend_common_catalog::table_context::ProcessInfo;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CountTablesReply;
+use databend_common_meta_app::schema::CountTablesReq;
+use databend_common_meta_app::schema::CreateDatabaseReply;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateIndexReply;
+use databend_common_meta_app::schema::CreateIndexReq;
+use databend_common_meta_app::schema::CreateLockRevReply;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateVirtualColumnReply;
+use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DropDatabaseReply;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropIndexReply;
+use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropVirtualColumnReply;
+use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetIndexReply;
+use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::LockInfo;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RenameDatabaseReply;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameTableReply;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TruncateTableReply;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UndropDatabaseReply;
+use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableReply;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateIndexReply;
+use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateTableMetaReply;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateVirtualColumnReply;
+use databend_common_meta_app::schema::UpdateVirtualColumnReq;
+use databend_common_meta_app::schema::UpsertTableOptionReply;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::FileStatus;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 use walkdir::WalkDir;
+use xorf::BinaryFuse16;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     fixture.create_default_table().await?;
@@ -176,14 +187,15 @@ async fn test_fuse_occ_retry() -> Result<()> {
         "| 5        | (10, 15) |",
         "+----------+----------+",
     ];
-    common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
+    databend_common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -229,8 +241,10 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
     impl Case {
         async fn run(&self) -> Result<()> {
-            let fixture = TestFixture::new().await?;
+            let fixture = TestFixture::setup().await?;
+            fixture.create_default_database().await?;
             fixture.create_default_table().await?;
+
             let ctx = fixture.new_query_ctx().await?;
             let catalog = ctx.get_catalog("default").await?;
 
@@ -297,6 +311,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 "case name {}",
                 self.case_name
             );
+
             Ok(())
         }
     }
@@ -489,6 +504,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn push_warning(&self, _warn: String) {
+        todo!()
+    }
+
     fn get_current_database(&self) -> String {
         self.ctx.get_current_database()
     }
@@ -501,6 +520,9 @@ impl TableContext for CtxDelegation {
         todo!()
     }
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
 
@@ -581,14 +603,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
-        todo!()
-    }
-
-    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        todo!()
-    }
-
     fn get_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_data_operator()
     }
@@ -643,7 +657,19 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn clear_segment_locations(&self) -> Result<()> {
+        todo!()
+    }
+
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        todo!()
+    }
+
+    fn set_need_compact_after_write(&self, _enable: bool) {
+        todo!()
+    }
+
+    fn get_need_compact_after_write(&self) -> bool {
         todo!()
     }
 
@@ -660,6 +686,53 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+        todo!()
+    }
+
+    fn add_merge_status(&self, _merge_status: MergeStatus) {
+        todo!()
+    }
+
+    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn add_query_profiles(&self, _: &[PlanProfile]) {
+        todo!()
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
+
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        todo!()
+    }
+
+    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
+        todo!()
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
+        todo!()
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
+        todo!()
+    }
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
         todo!()
     }
 }
@@ -710,6 +783,14 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
+        self.cat.get_table_name_by_id(table_id).await
+    }
+
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
+        self.cat.get_db_name_by_id(db_id).await
     }
 
     async fn get_table(
@@ -873,18 +954,22 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        todo!()
+        unimplemented!()
     }
 
     async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        todo!()
+        unimplemented!()
     }
 
     async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
     }
 
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
-        todo!()
+        unimplemented!()
+    }
+
+    async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
     }
 }

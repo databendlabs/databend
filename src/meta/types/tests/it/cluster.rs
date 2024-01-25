@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::NodeInfo;
+use databend_common_meta_types::NodeInfo;
 
 #[test]
 fn test_node_info_ip_port() -> anyhow::Result<()> {

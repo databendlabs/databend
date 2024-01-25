@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_expression::types::DataType;
-use common_expression::types::NumberScalar;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_sql::binder::ColumnBindingBuilder;
-use common_sql::plans::Join;
-use common_sql::plans::Scan;
+use databend_common_base::base::GlobalInstance;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_sql::plans::Join;
+use databend_common_sql::plans::Scan;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::planner::Metadata;
@@ -83,6 +83,7 @@ fn test_format() {
         "database".to_string(),
         Arc::new(DummyTable::new("table".to_string())),
         None,
+        false,
         false,
         false,
     );
@@ -151,8 +152,8 @@ fn test_format() {
                 join_type: JoinType::Inner,
                 marker_index: None,
                 from_correlated_subquery: false,
-                contain_runtime_filter: false,
                 need_hold_hash_table: false,
+                broadcast: false,
             }
             .into(),
         ),

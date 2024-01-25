@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio::time::sleep;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::Empty;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf as pb;
 use log::info;
 use pretty_assertions::assert_eq;
 use regex::Regex;
@@ -56,15 +56,21 @@ async fn test_export() -> anyhow::Result<()> {
     // Wait for snapshot to be ready
     sleep(Duration::from_secs(2)).await;
 
-    let (mut grpc_client, _server_version) = client.make_client().await?;
+    let mut grpc_client = client.make_established_client().await?;
 
-    let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
+    let exported = grpc_client
+        .export_v1(tonic::Request::new(pb::ExportRequest {
+            chunk_size: Some(1),
+        }))
+        .await?;
 
     let mut stream = exported.into_inner();
 
     let mut lines = vec![];
     while let Some(chunk_res) = stream.next().await {
         let chunk = chunk_res?;
+
+        assert_eq!(chunk.data.len(), 1);
 
         lines.extend_from_slice(&chunk.data);
     }

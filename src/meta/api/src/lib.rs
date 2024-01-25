@@ -14,17 +14,17 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
-extern crate common_meta_types;
+#![feature(const_fn_floating_point_arithmetic)]
+
+extern crate databend_common_meta_types;
 
 mod background_api;
 mod background_api_impl;
 mod background_api_keys;
 mod background_api_test_suite;
-pub mod compat_errors;
 mod data_mask_api;
 mod data_mask_api_impl;
 mod data_mask_api_keys;
-mod id;
 mod id_generator;
 pub mod kv_app_error;
 pub mod reply;
@@ -37,12 +37,12 @@ mod share_api_impl;
 mod share_api_keys;
 mod share_api_test_suite;
 pub(crate) mod testing;
+pub mod txn_backoff;
 pub(crate) mod util;
 
 pub use background_api::BackgroundApi;
 pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;
-pub use id::Id;
 pub(crate) use id_generator::IdGenerator;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;
@@ -76,4 +76,3 @@ pub use util::txn_op_del;
 pub use util::txn_op_put;
 pub use util::txn_op_put_with_expire;
 pub use util::DEFAULT_MGET_SIZE;
-pub use util::TXN_MAX_RETRY_TIMES;

@@ -184,8 +184,95 @@ SELECT * FROM t JOIN t1, t as t2 JOIN t1 as t3;
 2 3 d 2 1 c
 2 3 d 2 3 d
 
+statement error 1065
+SELECT * FROM t JOIN t1 on t.id = max(t1.id)
+
+statement error 1065
+SELECT * FROM t JOIN t1 on last(t1.id) over(partition by 10)
+
 statement ok
 drop table t;
 
 statement ok
 drop table t1;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+insert into t1 values(1, 1),(2, 2),(3, 3);
+
+statement ok
+create table t2(a int, b int);
+
+statement ok
+insert into t2 values(1, 1),(2, 2);
+
+statement error 1065
+SELECT t1.a FROM t1 RIGHT ANTI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t1.a FROM t1 RIGHT SEMI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t2.a FROM t1 LEFT ANTI JOIN t2 ON t1.a = t2.a;
+---
+
+statement error 1065
+SELECT t2.a FROM t1 LEFT SEMI JOIN t2 ON t1.a = t2.a;
+---
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int, b int, c int, d int);
+
+statement ok
+insert into t1 values(1, 2, 3, 4);
+
+statement ok
+create table t2(a int, b int, c int, d int);
+
+statement ok
+insert into t2 values(1, 2, 3, 4);
+
+statement error 1065
+SELECT tt1.d FROM t1 RIGHT SEMI JOIN t2 USING(b);
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1),(2),(3);
+
+query ITI
+select * from (select a, 'A' as name from t) t1 full outer join (select number from numbers(5)) t2 on t1.a = t2.number where t1.name is not null order by a;
+----
+1 A 1
+2 A 2
+3 A 3
+
+query ITI
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number where t1.name is not null order by a;
+----
+1 1 A
+2 2 A
+3 3 A
+
+statement ok
+drop table if exists t;

@@ -188,7 +188,7 @@ WHERE
         AND (b < 10)
     )
 
-skipif clickhouse
+
 query T
 explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
@@ -205,7 +205,7 @@ SIZE_LIMIT = 10
 PURGE = false
 DISABLE_VARIANT_CHECK = false
 
-skipif clickhouse
+
 query T
 explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
@@ -443,7 +443,7 @@ Delete (children 2)
         ├── ColumnIdentifier b
         └── Literal UInt64(10)
 
-skipif clickhouse
+
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----

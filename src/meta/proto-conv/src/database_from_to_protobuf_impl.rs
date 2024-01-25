@@ -19,9 +19,9 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::schema as mt;
-use common_meta_app::share;
-use common_protos::pb;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::share;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -79,10 +79,6 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(from_share) => Some(share::ShareNameIdent::from_pb(from_share)?),
                 None => None,
             },
-            owner: match p.owner {
-                Some(o) => Some(mt::Ownership::from_pb(o)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -104,10 +100,6 @@ impl FromToProto for mt::DatabaseMeta {
             shared_by: Vec::from_iter(self.shared_by.clone()),
             from_share: match &self.from_share {
                 Some(from_share) => Some(from_share.to_pb()?),
-                None => None,
-            },
-            owner: match &self.owner {
-                Some(o) => Some(o.to_pb()?),
                 None => None,
             },
         };

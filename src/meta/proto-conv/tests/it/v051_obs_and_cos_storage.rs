@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::storage::StorageCosConfig;
-use common_meta_app::storage::StorageObsConfig;
-use common_meta_app::storage::StorageParams;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::storage::StorageCosConfig;
+use databend_common_meta_app::storage::StorageObsConfig;
+use databend_common_meta_app::storage::StorageParams;
 use minitrace::func_name;
 
 use crate::common;
@@ -29,7 +29,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v51_obs_stage() -> anyhow::Result<()> {
     let bytes = vec![
@@ -71,6 +71,7 @@ fn test_decode_v51_obs_stage() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: false,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -120,6 +121,7 @@ fn test_decode_v51_cos_stage() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: false,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         ..Default::default()

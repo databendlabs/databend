@@ -12,21 +12,22 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use databend_query::test_kits::table_test_fixture::*;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_query::test_kits::*;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_block_table() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.new_query_ctx().await?;
 
     // test db & table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     {
@@ -52,9 +53,9 @@ async fn test_fuse_block_table() -> Result<()> {
 
     {
         let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
         let qry = format!("insert into {}.{} values(7, (8, 9))", db, tbl);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
             "+----------+",
             "| Column 0 |",
@@ -79,7 +80,7 @@ async fn test_fuse_block_table() -> Result<()> {
     {
         // incompatible table engine
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
-        execute_query(ctx.clone(), qry.as_str()).await?;
+        let _ = execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!("select * from fuse_block('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;

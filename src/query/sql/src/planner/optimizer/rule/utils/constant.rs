@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 use crate::plans::BoundColumnRef;
@@ -204,7 +204,7 @@ pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarE
                                 (**argument).clone(),
                                 ScalarExpr::ConstantExpr(ConstantExpr {
                                     span: *span,
-                                    value: Scalar::Number(NumberScalar::Int64(v)),
+                                    value: Scalar::Number(v.into()),
                                 }),
                             );
                         }

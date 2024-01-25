@@ -19,11 +19,11 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -49,7 +49,7 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
 pub trait FunctionFactory =
-    Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
+    Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -95,6 +95,7 @@ pub enum FunctionEval {
 pub struct FunctionContext {
     pub tz: TzLUT,
     pub rounding_mode: bool,
+    pub disable_variant_check: bool,
 
     pub openai_api_chat_base_url: String,
     pub openai_api_embedding_base_url: String,
@@ -131,7 +132,7 @@ pub enum FunctionID {
     Factory {
         name: String,
         id: usize,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         args_type: Vec<DataType>,
     },
 }
@@ -327,7 +328,7 @@ impl FunctionRegistry {
     pub fn search_candidates<Index: ColumnIndex>(
         &self,
         name: &str,
-        params: &[usize],
+        params: &[Scalar],
         args: &[Expr<Index>],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
@@ -391,12 +392,7 @@ impl FunctionRegistry {
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
         if self.contains(&func_name) {
-            Some(
-                self.properties
-                    .get(&func_name.to_lowercase())
-                    .cloned()
-                    .unwrap_or_default(),
-            )
+            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
         } else {
             None
         }
@@ -527,7 +523,7 @@ impl FunctionID {
         }
     }
 
-    pub fn params(&self) -> &[usize] {
+    pub fn params(&self) -> &[Scalar] {
         match self {
             FunctionID::Builtin { .. } => &[],
             FunctionID::Factory { params, .. } => params.as_slice(),
@@ -563,20 +559,31 @@ impl<'a> EvalContext<'a> {
     pub fn render_error(
         &self,
         span: Span,
-        params: &[usize],
+        params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
+                let first_error_row = if let Some(selection) = selection {
+                    if let Some(first_invalid) =
+                        selection.iter().find(|idx| !valids.get(**idx as usize))
+                    {
+                        *first_invalid as usize
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    valids
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, valid)| !valid)
+                        .take(1)
+                        .next()
+                        .unwrap()
+                        .0
+                };
                 let args = args
                     .iter()
                     .map(|arg| {
@@ -655,8 +662,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
                         let validity = bitmap.into();
-                        let validity =
-                            common_arrow::arrow::bitmap::and(&nullable_column.validity, &validity);
+                        let validity = databend_common_arrow::arrow::bitmap::and(
+                            &nullable_column.validity,
+                            &validity,
+                        );
                         Column::Nullable(Box::new(NullableColumn {
                             column: nullable_column.column,
                             validity,

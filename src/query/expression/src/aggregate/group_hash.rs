@@ -17,6 +17,7 @@ use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::ArgType;
+use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -62,9 +63,8 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
             }
         },
         DataType::Boolean => combine_group_hash_type_column::<IS_FIRST, BooleanType>(c, values),
-
         DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
-
+        DataType::Binary => combine_group_hash_string_column::<IS_FIRST, BinaryType>(c, values),
         DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
         DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
 

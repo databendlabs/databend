@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::cell::Cell;
+use std::rc::Rc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 pub use self::apply_rule::ApplyRuleTask;
 pub use self::explore_expr::ExploreExprTask;
@@ -32,28 +33,40 @@ mod optimize_group;
 
 #[derive(Debug)]
 pub struct SharedCounter {
-    count: RefCell<usize>,
+    count: Rc<Cell<usize>>,
 }
 
 impl SharedCounter {
     fn new() -> Self {
         Self {
-            count: RefCell::new(0),
-        }
-    }
-
-    fn inc(&self) {
-        *self.count.borrow_mut() += 1;
-    }
-
-    fn dec(&self) {
-        if *self.count.borrow() > 0 {
-            *self.count.borrow_mut() -= 1;
+            count: Rc::new(Cell::new(0)),
         }
     }
 
     fn get(&self) -> usize {
-        *self.count.borrow()
+        self.count.get()
+    }
+}
+
+impl Clone for SharedCounter {
+    fn clone(&self) -> Self {
+        if self.count.get() == usize::MAX {
+            panic!("SharedCounter overflow");
+        }
+        self.count.set(self.count.get() + 1);
+        Self {
+            count: self.count.clone(),
+        }
+    }
+}
+
+impl Drop for SharedCounter {
+    fn drop(&mut self) {
+        if self.count.get() == 0 {
+            debug_assert_eq!(Rc::strong_count(&self.count), 1);
+            return;
+        }
+        self.count.set(self.count.get() - 1);
     }
 }
 
@@ -67,13 +80,17 @@ pub enum Task {
 }
 
 impl Task {
+    /// Execute the task, return the next task if any.
     pub fn execute(
         self,
         optimizer: &mut CascadesOptimizer,
         scheduler: &mut Scheduler,
-    ) -> Result<()> {
+    ) -> Result<Option<Self>> {
         match self {
-            Task::ApplyRule(task) => task.execute(optimizer),
+            Task::ApplyRule(task) => {
+                task.execute(optimizer)?;
+                Ok(None)
+            }
             Task::OptimizeGroup(task) => task.execute(optimizer, scheduler),
             Task::OptimizeExpr(task) => task.execute(optimizer, scheduler),
             Task::ExploreGroup(task) => task.execute(optimizer, scheduler),

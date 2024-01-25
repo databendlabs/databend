@@ -15,24 +15,21 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 
-use common_proto_conv::FromToProto;
-use common_proto_conv::VER;
 use convert_case::Casing;
+use databend_common_proto_conv::FromToProto;
+use databend_common_proto_conv::VER;
 use pretty_assertions::assert_eq;
 
 /// Tests converting rust types from/to protobuf defined types.
 /// It also print out encoded protobuf message as data for backward compatibility test.
 pub(crate) fn test_pb_from_to<MT>(name: impl Display, m: MT) -> anyhow::Result<()>
-where
-    MT: FromToProto + PartialEq + Debug,
-    MT::PB: common_protos::prost::Message,
-{
+where MT: FromToProto + PartialEq + Debug {
     let p = m.to_pb()?;
 
     let n = std::any::type_name::<MT>();
 
     let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf)?;
+    prost::Message::encode(&p, &mut buf)?;
 
     let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatability test.
@@ -61,9 +58,8 @@ pub(crate) fn test_load_old<MT>(
 ) -> anyhow::Result<()>
 where
     MT: FromToProto + PartialEq + Debug,
-    MT::PB: common_protos::prost::Message + Default,
 {
-    let p: MT::PB = common_protos::prost::Message::decode(buf).map_err(print_err)?;
+    let p: MT::PB = prost::Message::decode(buf).map_err(print_err)?;
     assert_eq!(want_msg_ver, MT::get_pb_ver(&p), "loading {}", name);
 
     let got = MT::from_pb(p).map_err(print_err)?;

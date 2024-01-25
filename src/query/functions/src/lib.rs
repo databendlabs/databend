@@ -14,15 +14,19 @@
 
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::ptr_arg)]
+#![allow(internal_features)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
+#![feature(lazy_cell)]
+#![feature(str_internals)]
 
 use aggregates::AggregateFunctionFactory;
-use common_expression::FunctionRegistry;
 use ctor::ctor;
+use databend_common_expression::FunctionRegistry;
 
 pub mod aggregates;
 mod cast_rules;
@@ -55,7 +59,13 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 3] = ["array_transform", "array_apply", "array_filter"];
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
+    "array_transform",
+    "array_apply",
+    "array_map",
+    "array_filter",
+    "array_reduce",
+];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

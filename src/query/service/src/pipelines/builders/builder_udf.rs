@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_sql::executor::physical_plans::Udf;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::Udf;
 
 use crate::pipelines::processors::transforms::TransformUdf;
 use crate::pipelines::PipelineBuilder;
@@ -25,21 +24,12 @@ impl PipelineBuilder {
         self.build_pipeline(&udf.input)?;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformUdf::try_create(
+            Ok(ProcessorPtr::create(TransformUdf::try_create(
                 self.func_ctx.clone(),
                 udf.udf_funcs.clone(),
                 input,
                 output,
-            )?;
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    udf.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )?))
         })
     }
 }

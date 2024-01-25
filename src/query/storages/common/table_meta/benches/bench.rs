@@ -19,22 +19,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_expression::types::NumberScalar;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use criterion::black_box;
 use criterion::Criterion;
-use storages_common_table_meta::meta::testing::MetaEncoding;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::Compression;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SingleColumnMeta;
-use storages_common_table_meta::meta::Statistics;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use databend_storages_common_table_meta::meta::testing::MetaEncoding;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::Statistics;
 
 fn bench_encode(c: &mut Criterion) {
     let mut grp = c.benchmark_group("encoding");
@@ -147,7 +147,9 @@ fn bench_decode(c: &mut Criterion) {
     );
 }
 
-fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Result<SegmentInfo> {
+fn build_test_segment_info(
+    num_blocks_per_seg: usize,
+) -> databend_common_exception::Result<SegmentInfo> {
     let col_meta = ColumnMeta::Parquet(SingleColumnMeta {
         offset: 0,
         len: 0,
@@ -155,8 +157,8 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
     });
 
     let col_stat = ColumnStatistics::new(
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
         0,
         0,
         None,

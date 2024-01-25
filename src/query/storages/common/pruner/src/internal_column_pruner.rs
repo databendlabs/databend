@@ -15,15 +15,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_expression::types::string::StringDomain;
-use common_expression::ConstantFolder;
-use common_expression::Domain;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::BLOCK_NAME_COL_NAME;
-use common_expression::SEGMENT_NAME_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 /// Only support `_segment_name` and `_block_name` now.
 pub struct InternalColumnPruner {
@@ -59,10 +59,9 @@ impl InternalColumnPruner {
     pub fn should_keep(&self, col_name: &str, value: &str) -> bool {
         if self.input_domains.contains_key(col_name) {
             let mut input_domains = self.input_domains.clone();
-            let bytes = value.as_bytes().to_vec();
             let domain = Domain::String(StringDomain {
-                min: bytes.clone(),
-                max: Some(bytes),
+                min: value.to_string(),
+                max: Some(value.to_string()),
             });
             input_domains.insert(col_name.to_string(), domain);
 

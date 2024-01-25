@@ -21,17 +21,17 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_base::base::GlobalInstance;
-use common_base::base::SignalStream;
-use common_catalog::table_context::ProcessInfoState;
-use common_config::GlobalConfig;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_metrics::session::*;
-use common_pipeline_core::processors::profile::Profile;
-use common_settings::Settings;
+use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::SignalStream;
+use databend_common_catalog::table_context::ProcessInfoState;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_metrics::session::*;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
 use log::info;
@@ -89,13 +89,33 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        self.load_config_changes(&settings)?;
+        self.load_config_changes(&settings).await?;
         settings.load_global_changes().await?;
 
         self.create_with_settings(typ, settings)
     }
 
-    pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
+    pub fn try_upgrade_session(&self, session: Arc<Session>, typ_to: SessionType) -> Result<()> {
+        let typ_from = session.get_type();
+        if typ_from != SessionType::Dummy {
+            return Err(ErrorCode::Internal("bug: can only upgrade Dummy session"));
+        }
+        session.set_type(typ_to.clone());
+        self.try_add_session(session, typ_to)
+    }
+
+    pub fn try_add_session(&self, session: Arc<Session>, typ: SessionType) -> Result<()> {
+        let mut sessions = self.active_sessions.write();
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+            sessions.insert(session.get_id(), Arc::downgrade(&session));
+            set_session_active_connections(sessions.len());
+        }
+        incr_session_connect_numbers();
+        Ok(())
+    }
+
+    pub async fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
         if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
             settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
@@ -106,7 +126,11 @@ impl SessionManager {
         }
 
         if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
-            settings.set_enterprise_license(enterprise_license_key)?;
+            unsafe {
+                settings
+                    .set_enterprise_license(enterprise_license_key)
+                    .await?;
+            }
         }
         Ok(())
     }
@@ -125,19 +149,7 @@ impl SessionManager {
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
-        {
-            let mut sessions = self.active_sessions.write();
-            if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-                self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-            }
-
-            incr_session_connect_numbers();
-            set_session_active_connections(sessions.len());
-
-            if !matches!(typ, SessionType::FlightRPC) {
-                sessions.insert(session.get_id(), Arc::downgrade(&session));
-            }
-        }
+        self.try_add_session(session.clone(), typ.clone())?;
 
         if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();

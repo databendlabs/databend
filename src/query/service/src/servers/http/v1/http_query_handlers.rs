@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::mask_connection_info;
-use common_exception::ErrorCode;
-use common_expression::DataSchemaRef;
-use common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_base::base::mask_connection_info;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataSchemaRef;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
 use log::error;
 use log::info;
+use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use poem::error::Error as PoemError;
@@ -38,6 +39,7 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use super::query::RemoveReason;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
@@ -122,6 +124,7 @@ pub struct QueryResponse {
     pub error: Option<QueryError>,
     pub stats: QueryStats,
     pub affect: Option<QueryAffect>,
+    pub warnings: Vec<String>,
     pub stats_uri: Option<String>,
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
@@ -185,6 +188,7 @@ impl QueryResponse {
             session: r.session,
             stats,
             affect: state.affect,
+            warnings: r.state.warnings,
             id: id.clone(),
             next_uri,
             stats_uri: Some(make_state_uri(&id)),
@@ -207,6 +211,7 @@ impl QueryResponse {
             data: vec![],
             schema: vec![],
             session_id: None,
+            warnings: vec![],
             node_id: "".to_string(),
             session: None,
             next_uri: None,
@@ -228,12 +233,16 @@ async fn query_final_handler(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("{}: final http query", query_id);
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.remove_query(&query_id).await {
-            Some(query) => {
+        match http_query_manager
+            .remove_query(&query_id, RemoveReason::Finished)
+            .await
+        {
+            Ok(query) => {
                 let mut response = query.get_response_state_only().await;
                 if response.state.state == ExecuteStateKind::Running {
                     return Err(PoemError::from_string(
@@ -243,7 +252,11 @@ async fn query_final_handler(
                 }
                 Ok(QueryResponse::from_internal(query_id, response, true))
             }
-            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
+            Err(reason) => Err(query_id_not_found_or_removed(
+                &query_id,
+                &ctx.node_id,
+                reason,
+            )),
         }
     }
     .in_span(root)
@@ -253,25 +266,33 @@ async fn query_final_handler(
 // currently implementation only support kill http query
 #[poem::handler]
 async fn query_cancel_handler(
-    _ctx: &HttpQueryContext,
+    ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
-) -> impl IntoResponse {
+) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("{}: http query is killed", query_id);
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id).await {
-            Some(query) => {
-                query.kill().await;
-                http_query_manager.remove_query(&query_id).await;
-                StatusCode::OK
+        match http_query_manager.try_get_query(&query_id).await {
+            Ok(query) => {
+                query.kill("http query cancel by handler").await;
+                http_query_manager
+                    .remove_query(&query_id, RemoveReason::Canceled)
+                    .await
+                    .ok();
+                Ok(StatusCode::OK)
             }
-            None => StatusCode::NOT_FOUND,
+            Err(reason) => Err(query_id_not_found_or_removed(
+                &query_id,
+                &ctx.node_id,
+                reason,
+            )),
         }
     }
     .in_span(root)
@@ -291,12 +312,16 @@ async fn query_state_handler(
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id).await {
-            Some(query) => {
+        match http_query_manager.try_get_query(&query_id).await {
+            Ok(query) => {
                 let response = query.get_response_state_only().await;
                 Ok(QueryResponse::from_internal(query_id, response, false))
             }
-            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
+            Err(reason) => Err(query_id_not_found_or_removed(
+                &query_id,
+                &ctx.node_id,
+                reason,
+            )),
         }
     }
     .in_span(root)
@@ -313,11 +338,12 @@ async fn query_page_handler(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id).await {
-            Some(query) => {
+        match http_query_manager.try_get_query(&query_id).await {
+            Ok(query) => {
                 query.update_expire_time(true).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
                     poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
@@ -325,7 +351,11 @@ async fn query_page_handler(
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query_id, resp, false))
             }
-            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
+            Err(reason) => Err(query_id_not_found_or_removed(
+                &query_id,
+                &ctx.node_id,
+                reason,
+            )),
         }
     }
     .in_span(root)
@@ -340,6 +370,7 @@ pub(crate) async fn query_handler(
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&ctx.query_id);
     let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
+    let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
@@ -402,9 +433,17 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
+fn query_id_not_found_or_removed(
+    query_id: &str,
+    node_id: &str,
+    reason: Option<RemoveReason>,
+) -> PoemError {
+    let error = match reason {
+        Some(reason) => reason.to_string(),
+        None => "not found".to_string(),
+    };
     PoemError::from_string(
-        format!("query id {} not found on {}", query_id, node_id),
+        format!("query id {query_id} {error} on {node_id}"),
         StatusCode::NOT_FOUND,
     )
 }
@@ -412,4 +451,40 @@ fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
 fn query_id_to_trace_id(query_id: &str) -> TraceId {
     let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
     TraceId(((hash_high as u128) << 64) + (hash_low as u128))
+}
+
+/// The HTTP query endpoints are expected to be responses within 60 seconds.
+/// If it exceeds far of 60 seconds, there might be something wrong, we should
+/// log it.
+struct SlowRequestLogTracker {
+    started_at: std::time::Instant,
+    query_id: String,
+    method: String,
+    uri: String,
+}
+
+impl SlowRequestLogTracker {
+    fn new(ctx: &HttpQueryContext) -> Self {
+        Self {
+            started_at: std::time::Instant::now(),
+            query_id: ctx.query_id.clone(),
+            method: ctx.http_method.clone(),
+            uri: ctx.uri.clone(),
+        }
+    }
+}
+
+impl Drop for SlowRequestLogTracker {
+    fn drop(&mut self) {
+        let elapsed = self.started_at.elapsed();
+        if elapsed.as_secs_f64() > 60.0 {
+            warn!(
+                "{}: slow http query request on {} {}, elapsed: {:.2}s",
+                self.query_id,
+                self.method,
+                self.uri,
+                elapsed.as_secs_f64()
+            );
+        }
+    }
 }

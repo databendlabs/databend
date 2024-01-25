@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use ethnum::I256;
 use parquet::data_type::AsBytes;
 use parquet::data_type::ByteArray;
@@ -25,7 +26,6 @@ use parquet::data_type::FixedLenByteArray;
 use parquet::data_type::Int96;
 use parquet::file::page_index::index::Index;
 use parquet::file::page_index::index::PageIndex;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use super::utils::decode_decimal128_from_bytes;
 use super::utils::decode_decimal256_from_bytes;
@@ -42,7 +42,7 @@ pub fn convert_index_to_column_statistics(
             index
                 .indexes
                 .iter()
-                .map(|index| convert_page_index_boolean(index, typ))
+                .map(|index| convert_page_index_bool(index, typ))
                 .collect()
         }
         Index::INT32(index) => {
@@ -104,22 +104,6 @@ pub fn convert_index_to_column_statistics(
     }
 }
 
-fn convert_page_index_boolean(
-    index: &PageIndex<bool>,
-    _typ: &TableDataType,
-) -> Option<ColumnStatistics> {
-    match (index.min, index.max, index.null_count) {
-        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics {
-            min: Scalar::Boolean(min),
-            max: Scalar::Boolean(max),
-            null_count: null_count as u64,
-            in_memory_size: 0, // not needed,
-            distinct_of_values: None,
-        }),
-        _ => None,
-    }
-}
-
 fn convert_page_index_int32(
     index: &PageIndex<i32>,
     typ: &TableDataType,
@@ -151,18 +135,12 @@ fn convert_page_index_int32(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max as i64), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min as i64), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                 ),
                 _ => unreachable!(),
             };
-            Some(ColumnStatistics {
-                min,
-                max,
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
+            Some(ColumnStatistics::new(min, max, null_count as u64, 0, None))
         }
         _ => None,
     }
@@ -187,18 +165,12 @@ fn convert_page_index_int64(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                 ),
                 _ => unreachable!(),
             };
-            Some(ColumnStatistics {
-                min,
-                max,
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
+            Some(ColumnStatistics::new(min, max, null_count as u64, 0, None))
         }
         _ => None,
     }
@@ -209,15 +181,13 @@ fn convert_page_index_int96(
     _typ: &TableDataType,
 ) -> Option<ColumnStatistics> {
     match (&index.min, &index.max, index.null_count) {
-        (Some(min), Some(max), Some(null_count)) => {
-            Some(ColumnStatistics {
-                min: Scalar::Timestamp(min.to_i64()),
-                max: Scalar::Timestamp(max.to_i64()),
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
-        }
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::Timestamp(min.to_i64()),
+            Scalar::Timestamp(max.to_i64()),
+            null_count as u64,
+            0,
+            None,
+        )),
         _ => None,
     }
 }
@@ -227,15 +197,29 @@ fn convert_page_index_float(
     _typ: &TableDataType,
 ) -> Option<ColumnStatistics> {
     match (index.min, index.max, index.null_count) {
-        (Some(min), Some(max), Some(null_count)) => {
-            Some(ColumnStatistics {
-                min: Scalar::from(min),
-                max: Scalar::from(max),
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
-        }
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::from(min),
+            Scalar::from(max),
+            null_count as u64,
+            0,
+            None,
+        )),
+        _ => None,
+    }
+}
+
+fn convert_page_index_bool(
+    index: &PageIndex<bool>,
+    _typ: &TableDataType,
+) -> Option<ColumnStatistics> {
+    match (index.min, index.max, index.null_count) {
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::Boolean(min),
+            Scalar::Boolean(max),
+            null_count as u64,
+            0,
+            None,
+        )),
         _ => None,
     }
 }
@@ -245,15 +229,13 @@ fn convert_page_index_double(
     _typ: &TableDataType,
 ) -> Option<ColumnStatistics> {
     match (index.min, index.max, index.null_count) {
-        (Some(min), Some(max), Some(null_count)) => {
-            Some(ColumnStatistics {
-                min: Scalar::from(min),
-                max: Scalar::from(max),
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
-        }
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::from(min),
+            Scalar::from(max),
+            null_count as u64,
+            0,
+            None,
+        )),
         _ => None,
     }
 }
@@ -263,15 +245,13 @@ fn convert_page_index_byte_array(
     _typ: &TableDataType,
 ) -> Option<ColumnStatistics> {
     match (&index.min, &index.max, index.null_count) {
-        (Some(min), Some(max), Some(null_count)) => {
-            Some(ColumnStatistics {
-                min: Scalar::String(min.as_bytes().to_vec()),
-                max: Scalar::String(max.as_bytes().to_vec()),
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
-        }
+        (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
+            Scalar::String(String::from_utf8(min.as_bytes().to_vec()).ok()?),
+            Scalar::String(String::from_utf8(max.as_bytes().to_vec()).ok()?),
+            null_count as u64,
+            0,
+            None,
+        )),
         _ => None,
     }
 }
@@ -293,13 +273,8 @@ fn convert_page_index_fixed_len_byte_array(
                 ),
                 _ => unreachable!(),
             };
-            Some(ColumnStatistics {
-                min,
-                max,
-                null_count: null_count as u64,
-                in_memory_size: 0, // not needed,
-                distinct_of_values: None,
-            })
+
+            Some(ColumnStatistics::new(min, max, null_count as u64, 0, None))
         }
         _ => None,
     }

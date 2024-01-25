@@ -14,17 +14,17 @@
 
 use std::io::Write;
 
-use common_expression::types::decimal::Decimal128Type;
-use common_expression::types::number::Int64Type;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::BitmapType;
-use common_expression::types::BooleanType;
-use common_expression::types::DecimalSize;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::Column;
-use common_expression::FromData;
-use common_functions::aggregates::eval_aggr;
+use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::BitmapType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
+use databend_common_functions::aggregates::eval_aggr;
 use goldenfile::Mint;
 use itertools::Itertools;
 use roaring::RoaringTreemap;
@@ -204,6 +204,7 @@ fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_avg(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "avg(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "avg(dec)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(x_null)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(all_null)", get_example().as_slice(), simulator);
 }
@@ -402,6 +403,12 @@ fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) 
     run_agg_ast(file, "stddev(x_null)", get_example().as_slice(), simulator);
 
     run_agg_ast(file, "stddev_samp(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "stddev_samp(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
     run_agg_ast(
         file,
         "stddev_samp(x_null)",

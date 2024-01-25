@@ -16,10 +16,15 @@ use std::sync::Arc;
 
 use arrow_schema::ArrowError;
 use bytes::Bytes;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_metrics::storage::metrics_inc_omit_filter_rowgroups;
-use common_metrics::storage::metrics_inc_omit_filter_rows;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
+use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
+use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use futures::StreamExt;
 use opendal::Operator;
 use opendal::Reader;
@@ -40,6 +45,7 @@ use crate::ParquetRSPruner;
 /// The reader to read a whole parquet file.
 pub struct ParquetRSFullReader {
     pub(super) op: Operator,
+    pub(super) output_schema: TableSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
     /// Columns to output.
@@ -62,7 +68,17 @@ pub struct ParquetRSFullReader {
 }
 
 impl ParquetRSFullReader {
-    pub async fn prepare_data_stream(&self, loc: &str) -> Result<ParquetRecordBatchStream<Reader>> {
+    // partition_fields is only used for delta table engine.
+    pub async fn prepare_data_stream(
+        &self,
+        loc: &str,
+        partition_fields: Option<&[(TableField, Scalar)]>,
+    ) -> Result<ParquetRecordBatchStream<Reader>> {
+        let partition_values_map = partition_fields.map(|arr| {
+            arr.iter()
+                .map(|(f, v)| (f.name().to_string(), v.clone()))
+                .collect::<std::collections::HashMap<String, Scalar>>()
+        });
         let reader: Reader = self.op.reader(loc).await?;
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
@@ -74,18 +90,23 @@ impl ParquetRSFullReader {
         .with_projection(self.projection.clone())
         .with_batch_size(self.batch_size);
 
-        let mut full_match = false;
+        let mut all_pruned = false;
 
         let file_meta = builder.metadata().clone();
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
-            full_match = omits.iter().all(|x| *x);
+            let (selected_row_groups, omits) =
+                pruner.prune_row_groups(&file_meta, None, partition_values_map.as_ref())?;
+            all_pruned = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
-            if !full_match {
-                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+            if !all_pruned {
+                let row_selection = pruner.prune_pages(
+                    &file_meta,
+                    &selected_row_groups,
+                    partition_values_map.as_ref(),
+                )?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -96,13 +117,20 @@ impl ParquetRSFullReader {
             }
         }
 
-        if !full_match {
+        if !all_pruned {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
+                let partition_block_entries = partition_fields.map(|arr| {
+                    arr.iter()
+                        .map(|(f, v)| {
+                            BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
+                        })
+                        .collect::<Vec<_>>()
+                });
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch)
+                        .evaluate(&batch, partition_block_entries.clone())
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
@@ -122,7 +150,11 @@ impl ParquetRSFullReader {
         let record_batch = stream.next().await.transpose()?;
 
         if let Some(batch) = record_batch {
-            let blocks = transform_record_batch(&batch, &self.field_paths)?;
+            let blocks = transform_record_batch(
+                &self.output_schema.as_ref().into(),
+                &batch,
+                &self.field_paths,
+            )?;
             Ok(Some(blocks))
         } else {
             Ok(None)
@@ -144,13 +176,13 @@ impl ParquetRSFullReader {
 
         let mut full_match = false;
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
+            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None, None)?;
 
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !full_match {
-                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups, None)?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -167,7 +199,7 @@ impl ParquetRSFullReader {
                 let predicate = predicate.clone();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch)
+                        .evaluate(&batch, None)
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
@@ -175,7 +207,6 @@ impl ParquetRSFullReader {
                 )]));
             }
         }
-
         let reader = builder.build()?;
         // Write `if` outside iteration to reduce branches.
         if let Some(field_paths) = self.field_paths.as_ref() {
@@ -191,7 +222,10 @@ impl ParquetRSFullReader {
                 .into_iter()
                 .map(|batch| {
                     let batch = batch?;
-                    Ok(DataBlock::from_record_batch(&batch)?.0)
+                    Ok(
+                        DataBlock::from_record_batch(&self.output_schema.as_ref().into(), &batch)?
+                            .0,
+                    )
                 })
                 .collect()
         }

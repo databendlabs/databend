@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Utf8Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_arrow::arrow::array::Utf8Array;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::offset::OffsetsBuffer;
 
 #[test]
 fn not_shared() {

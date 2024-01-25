@@ -14,17 +14,15 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
-use storages_common_pruner::RangePrunerCreator;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
 use super::Parquet2Table;
@@ -57,11 +55,6 @@ impl Parquet2Table {
             Projection::Columns(indices)
         };
 
-        let top_k = push_down
-            .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
-            .unwrap_or_default();
-
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
         // Therefore, if there is inner fields in projection, we skip the row group pruning.
         let skip_pruning = matches!(projection, Projection::InnerColumns(_));
@@ -91,15 +84,6 @@ impl Parquet2Table {
                 .filters
                 .as_ref()
                 .map(|f| f.inverted_filter.as_expr(&BUILTIN_FUNCTIONS))
-        });
-
-        let top_k = top_k.map(|top_k| {
-            let offset = projected_column_nodes
-                .column_nodes
-                .iter()
-                .position(|node| node.leaf_indices[0] == top_k.leaf_id)
-                .unwrap();
-            (top_k, offset)
         });
 
         let func_ctx = ctx.get_function_context()?;
@@ -135,7 +119,6 @@ impl Parquet2Table {
             columns_to_read,
             column_nodes: projected_column_nodes,
             skip_pruning,
-            top_k,
             parquet_fast_read_bytes,
             compression_ratio: self.compression_ratio,
             max_memory_usage: settings.get_max_memory_usage()?,

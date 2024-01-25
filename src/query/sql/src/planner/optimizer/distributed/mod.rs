@@ -15,7 +15,8 @@
 #[allow(clippy::module_inception)]
 mod distributed;
 mod distributed_merge;
-mod topn;
+mod sort_and_limit;
 
 pub use distributed::optimize_distributed_query;
 pub use distributed_merge::MergeSourceOptimizer;
+pub use sort_and_limit::SortAndLimitPushDownOptimizer;

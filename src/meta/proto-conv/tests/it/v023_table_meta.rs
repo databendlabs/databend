@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ex;
-use common_expression::types::NumberDataType;
-use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
+use databend_common_expression as ex;
+use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::storage::StorageParams;
 use maplit::btreemap;
 use minitrace::func_name;
 
@@ -35,7 +35,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v23_table_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -147,7 +147,6 @@ fn test_decode_v23_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: BTreeSet::new(),
         column_mask_policy: None,
-        owner: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

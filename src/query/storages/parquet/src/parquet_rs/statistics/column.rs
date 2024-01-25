@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
-use common_expression::TableDataType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use ethnum::I256;
 use parquet::data_type::AsBytes;
 use parquet::file::statistics::Statistics;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use super::utils::decode_decimal128_from_bytes;
 use super::utils::decode_decimal256_from_bytes;
 
 /// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnStatistics {
+pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<ColumnStatistics> {
     let (max, min) = if s.has_min_max_set() {
         match s {
             Statistics::Boolean(s) => (Scalar::Boolean(*s.max()), Scalar::Boolean(*s.min())),
@@ -58,14 +58,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(max as i64),
-                            *size,
-                        )),
-                        Scalar::Decimal(DecimalScalar::Decimal256(
-                            I256::from_i64(min as i64),
-                            *size,
-                        )),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }
@@ -95,8 +89,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
                     _ => (Scalar::Null, Scalar::Null),
                 }
@@ -116,8 +110,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
             Statistics::Float(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::Double(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::ByteArray(s) => (
-                Scalar::String(s.max().as_bytes().to_vec()),
-                Scalar::String(s.min().as_bytes().to_vec()),
+                Scalar::String(String::from_utf8(s.max().as_bytes().to_vec()).ok()?),
+                Scalar::String(String::from_utf8(s.min().as_bytes().to_vec()).ok()?),
             ),
             Statistics::FixedLenByteArray(s) => {
                 let (max, min) = (s.max(), s.min());
@@ -137,11 +131,11 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
     } else {
         (Scalar::Null, Scalar::Null)
     };
-    ColumnStatistics::new(
+    Some(ColumnStatistics::new(
         min,
         max,
         s.null_count(),
         0, // this field is not used.
         s.distinct_count(),
-    )
+    ))
 }

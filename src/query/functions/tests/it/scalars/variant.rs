@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -56,6 +56,12 @@ fn test_variant() {
     test_exists_all_keys_op(file);
     test_contains_in_left_op(file);
     test_contains_in_right_op(file);
+    test_json_path_match(file);
+    test_json_path_match_op(file);
+    test_json_path_exists_op(file);
+    test_concat_op(file);
+    test_delete_by_name_op(file);
+    test_delete_by_index_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1017,6 +1023,144 @@ fn test_json_path_exists(file: &mut impl Write) {
     );
 }
 
+fn test_json_path_exists_op(file: &mut impl Write) {
+    run_ast(file, "NULL @? '$.a'", &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? NULL"#, &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? '$.a'"#, &[]);
+    run_ast(file, r#"parse_json('{"a": 1, "b": 2}') @? '$.c'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ == 1)'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ > 1)'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[0]'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[3]'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3)'"#,
+        &[],
+    );
+}
+
+fn test_json_path_match(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')"#,
+        &[],
+    );
+    run_ast(file, "json_path_match(parse_json(s), p)", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                vec!["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$.a > 0", "$[*].k == 1", "$[*] > 1", "$[*] > 2"]),
+        ),
+    ]);
+}
+
+fn test_json_path_match_op(file: &mut impl Write) {
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.a == 1'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.a > 1'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.c > 0'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') @@ '$.b < 2'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'"#,
+        &[],
+    );
+    run_ast(file, "parse_json(s) @@ p", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                vec!["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$.a > 0", "$[*].k == 1", "$[*] > 1", "$[*] > 2"]),
+        ),
+    ]);
+}
+
 fn test_get_by_keypath_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '1'"#, &[]);
     run_ast(file, "NULL #> NULL", &[]);
@@ -1291,6 +1435,83 @@ fn test_contains_in_right_op(file: &mut impl Write) {
     run_ast(
         file,
         r#"parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')"#,
+        &[],
+    );
+}
+
+fn test_concat_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('[1,2,3]') || NULL", &[]);
+    run_ast(file, "parse_json('[1,2,3]') || parse_json('10')", &[]);
+    run_ast(file, r#"parse_json('"asd"') || parse_json('[1,2,3]')"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('true')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')"#,
+        &[],
+    );
+}
+
+fn test_delete_by_name_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('true') - '1'", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - '1'", &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') - '0'"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') - '1'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('["1","2","3",{"a":1,"b":2}]') - '1'"#,
+        &[],
+    );
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') - 'c'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') - 'a'"#, &[]);
+    run_ast(file, r#"parse_json('{"b":2}') - 'b'"#, &[]);
+}
+
+fn test_delete_by_index_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('true') - 1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 0", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 2", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -2", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -3", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -4", &[]);
+    run_ast(
+        file,
+        r#"parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2"#,
         &[],
     );
 }

@@ -22,27 +22,27 @@ use std::io::Seek;
 use std::mem;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read::read_columns;
-use common_arrow::arrow::io::parquet::read::to_deserializer;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::read::read_metadata;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::TableSchemaRef;
-use common_meta_app::principal::StageInfo;
-use common_pipeline_core::Pipeline;
-use common_settings::Settings;
-use common_storage::infer_schema_with_extension;
-use common_storage::StageFileInfo;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::io::parquet::read::read_columns;
+use databend_common_arrow::arrow::io::parquet::read::to_deserializer;
+use databend_common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use databend_common_arrow::parquet::metadata::ColumnChunkMetaData;
+use databend_common_arrow::parquet::metadata::RowGroupMetaData;
+use databend_common_arrow::parquet::read::read_metadata;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::Settings;
+use databend_common_storage::infer_schema_with_extension;
+use databend_common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use futures::AsyncSeek;
@@ -336,8 +336,8 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
             let fields: Vec<DataField> = rg
                 .fields_to_read
                 .iter()
-                .map(DataField::from)
-                .collect::<Vec<_>>();
+                .map(DataField::try_from)
+                .collect::<Result<Vec<_>>>()?;
 
             let input_schema = DataSchema::new(fields);
             let block = DataBlock::from_arrow_chunk(&chunk, &input_schema)?;
@@ -399,7 +399,7 @@ impl AligningStateTrait for ParquetAligningState {
     }
 }
 
-fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
+fn get_used_fields(fields: &[Field], schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
         if let Some(m) = fields

@@ -154,6 +154,8 @@ build_exceptions! {
 
     /// ParquetFileInvalid is used when given parquet file is invalid.
     ParquetFileInvalid(1201),
+    /// InvalidUtf8String is used when given string is not a valid utf8 string.
+    InvalidUtf8String(1202),
 
     // Table related errors starts here.
 
@@ -225,6 +227,13 @@ build_exceptions! {
     NetworkPolicyAlreadyExists(2208),
     IllegalNetworkPolicy(2209),
     NetworkPolicyIsUsedByUser(2210),
+    UnknownPasswordPolicy(2211),
+    PasswordPolicyAlreadyExists(2212),
+    IllegalPasswordPolicy(2213),
+    PasswordPolicyIsUsedByUser(2214),
+    InvalidPassword(2215),
+    RoleAlreadyExists(2216),
+    IllegalRole(2217),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -307,6 +316,7 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+    ShareStorageError(2719),
 
     // Index error codes.
     CreateIndexWithDropTime(2720),
@@ -314,6 +324,13 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+
+    // Stream error codes.
+    UnknownStream(2730),
+    UnknownStreamId(2731),
+    StreamAlreadyExists(2732),
+    IllegalStream(2733),
+    StreamVersionMismatched(2734),
 
     // Variable error codes.
     UnknownVariable(2801),

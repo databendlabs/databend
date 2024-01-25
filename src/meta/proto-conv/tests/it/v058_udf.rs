@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_meta_app::principal::UDFDefinition;
-use common_meta_app::principal::UDFServer;
-use common_meta_app::principal::UserDefinedFunction;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use minitrace::func_name;
 
 use crate::common;
@@ -30,7 +30,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v57_udf() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![

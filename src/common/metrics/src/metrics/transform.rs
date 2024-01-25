@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter;
 use crate::register_counter_family;
@@ -22,37 +22,44 @@ use crate::Family;
 use crate::Histogram;
 use crate::VecLabels;
 
-lazy_static! {
-    static ref AGGREGATE_PARTIAL_SPILL_CELL_COUNT: Counter =
-        register_counter("transform_aggregate_partial_spill_cell_count");
-    static ref AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: Counter =
-        register_counter("transform_aggregate_partial_hashtable_allocated_bytes");
-    static ref SPILL_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("transform_spill_count");
-    static ref SPILL_WRITE_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("transform_spill_write_count");
-    static ref SPILL_WRITE_BYTES: Family<VecLabels, Counter> =
-        register_counter_family("transform_spill_write_bytes");
-    static ref SPILL_WRITE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds("transform_spill_write_milliseconds");
-    static ref SPILL_READ_COUNT: Family<VecLabels, Counter> =
-        register_counter_family("transform_spill_read_count");
-    static ref SPILL_READ_BYTES: Family<VecLabels, Counter> =
-        register_counter_family("transform_spill_read_bytes");
-    static ref SPILL_READ_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds("transform_spill_read_milliseconds");
-    static ref SPILL_DATA_DESERIALIZE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds("transform_spill_data_deserialize_milliseconds");
-    static ref SPILL_DATA_SERIALIZE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_family_in_milliseconds("transform_spill_data_serialize_milliseconds");
+pub static AGGREGATE_PARTIAL_SPILL_CELL_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_aggregate_partial_spill_cell_count"));
+pub static AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_aggregate_partial_hashtable_allocated_bytes"));
+pub static SPILL_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("transform_spill_count"));
+pub static SPILL_WRITE_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("transform_spill_write_count"));
+pub static SPILL_WRITE_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("transform_spill_write_bytes"));
+pub static SPILL_WRITE_MILLISECONDS: LazyLock<Family<VecLabels, Histogram>> = LazyLock::new(|| {
+    register_histogram_family_in_milliseconds("transform_spill_write_milliseconds")
+});
+pub static SPILL_READ_COUNT: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("transform_spill_read_count"));
+pub static SPILL_READ_BYTES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("transform_spill_read_bytes"));
+pub static SPILL_READ_MILLISECONDS: LazyLock<Family<VecLabels, Histogram>> = LazyLock::new(|| {
+    register_histogram_family_in_milliseconds("transform_spill_read_milliseconds")
+});
+pub static SPILL_DATA_DESERIALIZE_MILLISECONDS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| {
+        register_histogram_family_in_milliseconds("transform_spill_data_deserialize_milliseconds")
+    });
+pub static SPILL_DATA_SERIALIZE_MILLISECONDS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| {
+        register_histogram_family_in_milliseconds("transform_spill_data_serialize_milliseconds")
+    });
 
-
-    // Cluster exchange metrics.
-    static ref EXCHANGE_WRITE_COUNT: Counter = register_counter("transform_exchange_write_count");
-    static ref EXCHANGE_WRITE_BYTES: Counter = register_counter("transform_exchange_write_bytes");
-    static ref EXCHANGE_READ_COUNT: Counter = register_counter("transform_exchange_read_count");
-    static ref EXCHANGE_READ_BYTES: Counter = register_counter("transform_exchange_read_bytes");
-}
+// Cluster exchange metrics.
+pub static EXCHANGE_WRITE_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_exchange_write_count"));
+pub static EXCHANGE_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_exchange_write_bytes"));
+pub static EXCHANGE_READ_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_exchange_read_count"));
+pub static EXCHANGE_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_exchange_read_bytes"));
 
 pub fn metrics_inc_aggregate_partial_spill_count() {
     let labels = &vec![("spill", "aggregate_partial_spill".to_string())];
@@ -147,4 +154,44 @@ pub fn metrics_inc_exchange_read_count(v: usize) {
 
 pub fn metrics_inc_exchange_read_bytes(c: usize) {
     EXCHANGE_READ_BYTES.inc_by(c as u64);
+}
+
+// Sort spill metrics
+pub fn metrics_inc_sort_spill_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_write_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_write_bytes(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_BYTES.get_or_create(labels).inc_by(c);
+}
+
+pub fn metrics_inc_sort_spill_write_milliseconds(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_WRITE_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64)
+}
+
+pub fn metrics_inc_sort_spill_read_count() {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_sort_spill_read_bytes(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_BYTES.get_or_create(labels).inc_by(c);
+}
+
+pub fn metrics_inc_sort_spill_read_milliseconds(c: u64) {
+    let labels = &vec![("spill", "sort_spill".to_string())];
+    SPILL_READ_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64);
 }

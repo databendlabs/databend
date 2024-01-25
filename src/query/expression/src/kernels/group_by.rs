@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::group_by_hash::HashMethodKeysU16;
 use super::group_by_hash::HashMethodKeysU32;
@@ -20,7 +20,7 @@ use super::group_by_hash::HashMethodKeysU64;
 use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
-use super::group_by_hash::HashMethodSingleString;
+use super::group_by_hash::HashMethodSingleBinary;
 use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodDictionarySerializer;
@@ -52,11 +52,11 @@ impl DataBlock {
         if hash_key_types.len() == 1
             && matches!(
                 hash_key_types[0],
-                DataType::String | DataType::Variant | DataType::Bitmap
+                DataType::Binary | DataType::String | DataType::Variant | DataType::Bitmap
             )
         {
-            return Ok(HashMethodKind::SingleString(
-                HashMethodSingleString::default(),
+            return Ok(HashMethodKind::SingleBinary(
+                HashMethodSingleBinary::default(),
             ));
         }
 
@@ -74,27 +74,14 @@ impl DataBlock {
                 if hash_key_type.is_nullable() {
                     group_key_len += 1;
                 }
+            } else if !efficiently_memory || hash_key_types.len() == 1 {
+                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             } else {
-                return Ok(match !efficiently_memory || hash_key_types.len() == 1 {
-                    true => HashMethodKind::Serializer(HashMethodSerializer::default()),
-                    false => {
-                        let mut dict_keys = 0;
-                        let mut hash_other_type = false;
-                        for data_type in hash_key_types {
-                            let non_null_type = data_type.remove_nullable();
-
-                            if non_null_type.is_string() || non_null_type.is_variant() {
-                                dict_keys += 1;
-                            } else if !hash_other_type {
-                                hash_other_type = true;
-                                dict_keys += 1;
-                            }
-                        }
-                        HashMethodKind::DictionarySerializer(HashMethodDictionarySerializer {
-                            dict_keys,
-                        })
-                    }
-                });
+                return Ok(HashMethodKind::DictionarySerializer(
+                    HashMethodDictionarySerializer {
+                        dict_keys: hash_key_types.len(),
+                    },
+                ));
             }
         }
 

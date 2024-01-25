@@ -46,16 +46,15 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
-    "src/query/profile",
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
-    "src/query/storages/common/locks",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
+    "src/query/storages/delta",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
@@ -66,6 +65,7 @@ members = [
     "src/query/storages/random",
     "src/query/storages/share",
     "src/query/storages/stage",
+    "src/query/storages/stream",
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
@@ -76,6 +76,7 @@ members = [
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
+    "src/query/ee_features/stream_handler",
     # databend-query
     "src/query/service",
     # enterprise
@@ -106,108 +107,108 @@ members = [
 ]
 
 [workspace.dependencies]
-# databend maintains:
-sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.42", features = [
+# databend maintains
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "e21b273" }
+
+opendal = { version = "0.44.2", features = [
     "layers-minitrace",
     "layers-prometheus-client",
+    "layers-async-backtrace",
     "services-ipfs",
     "services-moka",
+    "services-huggingface",
     "trust-dns",
 ] }
-ethnum = { version = "1.3.2" }
-ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "1d7a3e9" }
+sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
-# openraft = { version = "0.8.2", features = ["compat-07"] }
-# For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.10", features = [
+# openraft for debugging
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.1", features = [
     "compat-07",
     "tracing-log",
-    # allows to remove all data from a follower and restore from the leader.
-    "loosen-follower-log-revert",
+    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 
-# type helper
-derive_more = "0.99.17"
-itertools = "0.10.5"
-lazy_static = "1.4.0"
-once_cell = "1.15.0"
-
-# future and async
-futures = "0.3.24"
-futures-util = "0.3.24"
-futures-async-stream = { version = "0.2.7" }
-stream-more = "0.1.3"
+# Core crates and utilities
+async-backtrace = "0.2"
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
+bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
+borsh = { version = "1.2.1", features = ["derive"] }
 bytes = "1.5.0"
-
-# error
-anyhow = { version = "1.0.65" }
-anyerror = { version = "=0.1.10" }
-thiserror = { version = "1" }
-
-# versioning
-semver = "1.0.14"
-
-# CLI
-clap = { version = "4.4.2", features = ["derive"] }
-
-# server
-tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tonic-reflection = { version = "0.10.2" }
-
-# Crates from arrow-rs
-arrow = { version = "47.0.0", features = ["pyarrow"] }
-arrow-select = { version = "47.0.0" }
-arrow-array = { version = "47.0.0" }
-arrow-buffer = { version = "47.0.0" }
-arrow-data = { version = "47.0.0" }
-arrow-flight = { version = "47.0.0", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "47.0.0" }
-arrow-schema = { version = "47.0.0", features = ["serde"] }
-arrow-ord = { version = "47.0.0" }
-arrow-cast = { version = "47.0.0", features = ["prettyprint"] }
-parquet = { version = "47.0.0", features = ["async"] }
-parquet_rs = { package = "parquet", version = "47.0.0" }
-arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-
-# serialization
-prost = { version = "0.12.1" }
-prost-build = { version = "0.12.1" }
-serde = { version = "1.0.164", features = ["derive", "rc"] }
-serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
-tonic-build = { version = "0.10.2" }
-
-# chrono
+byteorder = "1.4.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
-
-# memory
-bumpalo = "3.12.0"
-tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
-
-# http
+clap = { version = "4.4.2", features = ["derive"] }
+dashmap = "5.4.0"
+derive_more = "0.99.17"
+enumflags2 = { version = "0.7.7", features = ["serde"] }
+ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+feature-set = { version = "0.1.1" }
+itertools = "0.10.5"
+log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
+logcall = "0.1.5"
+match-template = "0.0.1"
+metrics = "0.20.1"
+minitrace = { version = "0.6", features = ["enable"] }
+mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
+once_cell = "1.15.0"
+ordered-float = { version = "4.1.0", default-features = false }
+parking_lot = "0.12.1"
+poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
+prometheus-client = "0.22"
+rand = { version = "0.8.5", features = ["small_rng"] }
+regex = "1.8.1"
 reqwest = { version = "0.11.19", default-features = false, features = [
     "json",
     "rustls-tls",
     "rustls-tls-native-roots",
     "trust-dns",
 ] }
+semver = "1.0.14"
+serfig = "0.1.0"
+tokio = { version = "1.35.0", features = ["full"] }
+tokio-stream = "0.1.11"
+tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic-reflection = { version = "0.10.2" }
+typetag = "0.2.3"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
+walkdir = "2.3.2"
 
-# runtime
-tokio = { version = "1.26.0", features = ["full"] }
+# Future and async
+futures = "0.3.24"
+futures-async-stream = { version = "0.2.7" }
+futures-util = "0.3.24"
+stream-more = "0.1.3"
 
-# backtrace
-async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
+# Error handling
+anyerror = { version = "=0.1.10" }
+anyhow = { version = "1.0.65" }
+thiserror = { version = "1" }
 
-# observability
-logcall = "0.1.5"
-log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
-minitrace = { version = "0.6", features = ["enable"] }
-prometheus-client = "0.21.2"
+# Crates from arrow-rs
+arrow = { version = "47.0.0" }
+arrow-array = { version = "47.0.0" }
+arrow-buffer = { version = "47.0.0" }
+arrow-cast = { version = "47.0.0", features = ["prettyprint"] }
+arrow-data = { version = "47.0.0" }
+arrow-flight = { version = "47.0.0", features = ["flight-sql-experimental", "tls"] }
+arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
+arrow-ipc = { version = "47.0.0" }
+arrow-ord = { version = "47.0.0" }
+arrow-schema = { version = "47.0.0", features = ["serde"] }
+arrow-select = { version = "47.0.0" }
+parquet = { version = "47.0.0", features = ["async"] }
+parquet_rs = { package = "parquet", version = "47.0.0" }
 
-# test
-mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
+# Serialization
+prost = { version = "0.12.1" }
+prost-build = { version = "0.12.1" }
+serde = { version = "1.0.164", features = ["derive", "rc"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
+tonic-build = { version = "0.10.2" }
+
+# Memory management
+bumpalo = "3.12.0"
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 
 [profile.release]
 debug = 1
@@ -215,7 +216,7 @@ lto = "thin"
 overflow-checks = false
 incremental = false
 opt-level = "s"
-# codegen-units = 1       # Reduce number of codegen units to increase optimizations.
+# codegen-units = 1 # Reduce number of codegen units to increase optimizations.
 
 # [profile.release.package]
 # arrow2 = { codegen-units = 4 }
@@ -257,3 +258,5 @@ parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545"
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
+micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
+async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }

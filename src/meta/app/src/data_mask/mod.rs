@@ -123,7 +123,7 @@ pub struct MaskpolicyTableIdList {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use super::DatamaskId;
     use super::DatamaskNameIdent;
@@ -131,10 +131,14 @@ mod kvapi_key_impl {
     use super::PREFIX_DATAMASK;
     use super::PREFIX_DATAMASK_BY_ID;
     use super::PREFIX_DATAMASK_ID_LIST;
+    use crate::data_mask::DatamaskMeta;
+    use crate::data_mask::MaskpolicyTableIdList;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {
         const PREFIX: &'static str = PREFIX_DATAMASK;
+
+        type ValueType = DatamaskId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -158,6 +162,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatamaskId {
         const PREFIX: &'static str = PREFIX_DATAMASK_BY_ID;
 
+        type ValueType = DatamaskMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.id)
@@ -176,6 +182,8 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for MaskpolicyTableIdListKey {
         const PREFIX: &'static str = PREFIX_DATAMASK_ID_LIST;
+
+        type ValueType = MaskpolicyTableIdList;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_meta_types::Endpoint;
-use common_meta_types::KVMeta;
-use common_meta_types::Membership;
-use common_meta_types::Node;
-use common_meta_types::StoredMembership;
-use common_meta_types::UpsertKV;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::Membership;
+use databend_common_meta_types::Node;
+use databend_common_meta_types::StoredMembership;
+use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use maplit::btreemap;
 use openraft::testing::log_id;
@@ -98,27 +98,15 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_with_meta(
-                4,
-                b("a1"),
-                Some(KVMeta {
-                    expire_at: Some(15)
-                })
-            )
+            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expire(15)))
         ),
         (
             s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expire(5)))
         ),
         (
             s("c"),
-            Marked::new_with_meta(
-                3,
-                b("c0"),
-                Some(KVMeta {
-                    expire_at: Some(20)
-                })
-            )
+            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expire(20)))
         ),
     ]);
 
@@ -292,7 +280,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 ///
 ///    | kv             | expire
 ///    | ---            | ---
-/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
+/// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
 async fn build_sm_with_expire() -> anyhow::Result<SMV002> {

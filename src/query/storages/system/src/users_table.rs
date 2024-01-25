@@ -14,21 +14,21 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_users::UserApiProvider;
-use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -54,35 +54,25 @@ impl AsyncSystemTable for UsersTable {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
 
-        let mut names: Vec<Vec<u8>> = users.iter().map(|x| x.name.as_bytes().to_vec()).collect();
-        let mut hostnames: Vec<Vec<u8>> = users
+        let mut names: Vec<String> = users.iter().map(|x| x.name.clone()).collect();
+        let mut hostnames: Vec<String> = users.iter().map(|x| x.hostname.clone()).collect();
+        let mut auth_types: Vec<String> = users
             .iter()
-            .map(|x| x.hostname.as_bytes().to_vec())
+            .map(|x| x.auth_info.get_type().to_str().to_string())
             .collect();
-        let mut auth_types: Vec<Vec<u8>> = users
+        let mut default_roles: Vec<String> = users
             .iter()
-            .map(|x| x.auth_info.get_type().to_str().as_bytes().to_vec())
+            .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
-        let mut default_roles: Vec<Vec<u8>> = users
-            .iter()
-            .map(|x| {
-                x.option
-                    .default_role()
-                    .cloned()
-                    .unwrap_or_default()
-                    .as_bytes()
-                    .to_vec()
-            })
-            .collect();
-        let mut is_configureds: Vec<Vec<u8>> = vec!["NO".as_bytes().to_vec(); users.len()];
+        let mut is_configureds: Vec<String> = vec!["NO".to_string(); users.len()];
 
         let configured_users = UserApiProvider::instance().get_configured_users();
         for (name, auth_info) in configured_users {
-            names.push(name.as_bytes().to_vec());
-            hostnames.push("%".as_bytes().to_vec());
-            auth_types.push(auth_info.get_type().to_str().as_bytes().to_vec());
-            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.as_bytes().to_vec());
-            is_configureds.push("YES".as_bytes().to_vec());
+            names.push(name.clone());
+            hostnames.push("%".to_string());
+            auth_types.push(auth_info.get_type().to_str().to_string());
+            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            is_configureds.push("YES".to_string());
         }
 
         // please note that do NOT display the auth_string field in the result, because there're risks of

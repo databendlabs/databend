@@ -14,47 +14,49 @@
 
 use std::sync::Arc;
 
-use common_base::base::ProgressValues;
-use common_catalog::plan::Filters;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PruningStatistics;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ComputedExpr;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::Evaluator;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableDataType;
-use common_expression::TableSchema;
-use common_expression::Value;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_metrics::storage::*;
-use common_pipeline_core::Pipeline;
-use common_sql::evaluator::BlockOperator;
-use storages_common_index::RangeIndex;
-use storages_common_pruner::RangePruner;
-use storages_common_table_meta::meta::StatisticsOfColumns;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PruningStatistics;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
+use databend_common_expression::Value;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
+use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
+use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
@@ -169,7 +171,9 @@ impl FuseTable {
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
 
-        let block_reader = self.create_block_reader(ctx.clone(), projection, false, false)?;
+        let update_stream_columns = self.change_tracking_enabled();
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(
@@ -186,11 +190,15 @@ impl FuseTable {
         ));
 
         let all_column_indices = self.all_column_indices();
+        let row_num_index = all_column_indices.len();
         let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
             .filter(|index| !col_indices.contains(index))
             .collect();
         let mut source_col_indices = col_indices;
+        if update_stream_columns {
+            source_col_indices.push(row_num_index);
+        }
         let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
         } else {
@@ -200,6 +208,7 @@ impl FuseTable {
                     ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
+                    self.change_tracking_enabled(),
                     false,
                 )?)
                 .clone(),
@@ -235,14 +244,48 @@ impl FuseTable {
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        self.table_info
-            .schema()
+        self.schema_with_stream()
             .fields()
             .iter()
             .enumerate()
             .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .map(|(i, _)| i)
             .collect::<Vec<FieldIndex>>()
+    }
+
+    pub async fn mutation_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        col_indices: Vec<FieldIndex>,
+        filters: Option<Filters>,
+        is_lazy: bool,
+        is_delete: bool,
+    ) -> Result<Partitions> {
+        let partitions = if is_lazy {
+            let mut segments = Vec::with_capacity(snapshot.segments.len());
+            for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+            }
+            Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+        } else {
+            let projection = Projection::Columns(col_indices.clone());
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
+                block_count: Some(snapshot.summary.block_count as usize),
+            };
+            let (partitions, info) = self
+                .do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
+                .await?;
+            if is_delete {
+                log::info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+            }
+            partitions
+        };
+        Ok(partitions)
     }
 
     #[async_backtrace::framed]
@@ -269,7 +312,7 @@ impl FuseTable {
         let mut pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
-            self.table_info.schema(),
+            self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
         )?;
@@ -324,7 +367,7 @@ impl FuseTable {
 
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
-            self.table_info.schema(),
+            self.schema_with_stream(),
             None,
             &range_block_metas,
             block_count.unwrap_or_default(),

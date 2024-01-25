@@ -12,21 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
+use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
+use crate::plans::SubqueryExpr;
+use crate::plans::UDFLambdaCall;
+use crate::plans::UDFServerCall;
+use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -173,7 +180,7 @@ impl SExpr {
     pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
         Self {
             plan,
-            original_group: self.original_group,
+            original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
@@ -197,6 +204,175 @@ impl SExpr {
             return self.children.iter().any(|child| child.contain_subquery());
         }
         true
+    }
+
+    pub fn get_udfs(&self) -> Result<HashSet<&String>> {
+        let mut udfs = HashSet::new();
+
+        match self.plan.as_ref() {
+            RelOperator::Scan(scan) => {
+                let Scan {
+                    push_down_predicates,
+                    prewhere,
+                    agg_index,
+                    ..
+                } = scan;
+
+                if let Some(push_down_predicates) = push_down_predicates {
+                    for push_down_predicate in push_down_predicates {
+                        get_udf_names(push_down_predicate)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                    }
+                }
+                if let Some(prewhere) = prewhere {
+                    for predicate in &prewhere.predicates {
+                        get_udf_names(predicate)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                    }
+                }
+                if let Some(agg_index) = agg_index {
+                    for predicate in &agg_index.predicates {
+                        for udf in get_udf_names(predicate)? {
+                            udfs.insert(udf);
+                        }
+                    }
+                    for selection in &agg_index.selection {
+                        get_udf_names(&selection.scalar)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                    }
+                }
+            }
+            RelOperator::Exchange(exchange) => {
+                if let Exchange::Hash(hash) = exchange {
+                    for hash in hash {
+                        for udf in get_udf_names(hash)? {
+                            udfs.insert(udf);
+                        }
+                    }
+                }
+            }
+            RelOperator::Join(op) => {
+                for left in &op.left_conditions {
+                    get_udf_names(left)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+                for right in &op.right_conditions {
+                    get_udf_names(right)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+                for non in &op.non_equi_conditions {
+                    get_udf_names(non)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::EvalScalar(op) => {
+                for item in &op.items {
+                    get_udf_names(&item.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::Filter(op) => {
+                for predicate in &op.predicates {
+                    get_udf_names(predicate)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::Aggregate(op) => {
+                for group_items in &op.group_items {
+                    get_udf_names(&group_items.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+                for agg_func in &op.aggregate_functions {
+                    get_udf_names(&agg_func.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::Window(op) => {
+                match &op.function {
+                    WindowFuncType::Aggregate(agg) => {
+                        for arg in &agg.args {
+                            get_udf_names(arg)?.iter().for_each(|udf| {
+                                udfs.insert(*udf);
+                            });
+                        }
+                    }
+                    WindowFuncType::LagLead(lag_lead) => {
+                        // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
+                        get_udf_names(&lag_lead.arg)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                        if let Some(default) = &lag_lead.default {
+                            get_udf_names(default)?.iter().for_each(|udf| {
+                                udfs.insert(*udf);
+                            });
+                        }
+                    }
+                    WindowFuncType::NthValue(nth) => {
+                        get_udf_names(&nth.arg)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                    }
+                    _ => {}
+                }
+                for arg in &op.arguments {
+                    get_udf_names(&arg.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+                for order_by in &op.order_by {
+                    get_udf_names(&order_by.order_by_item.scalar)?
+                        .iter()
+                        .for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                }
+                for partition_by in &op.partition_by {
+                    get_udf_names(&partition_by.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::ProjectSet(op) => {
+                for srf in &op.srfs {
+                    get_udf_names(&srf.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::Udf(udf) => {
+                for item in &udf.items {
+                    get_udf_names(&item.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
+            RelOperator::Limit(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::Sort(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::AddRowNumber(_)
+            | RelOperator::Pattern(_)
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::ConstantTableScan(_) => {}
+        };
+        for child in &self.children {
+            let udf = child.get_udfs()?;
+            udf.iter().for_each(|udf| {
+                udfs.insert(*udf);
+            })
+        }
+        Ok(udfs)
     }
 
     // Add (table_index, column_index) into `Scan` node recursively.
@@ -252,7 +428,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
         | RelOperator::AddRowNumber(_)
-        | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_)
         | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_) => false,
@@ -292,10 +467,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .srfs
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::Lambda(op) => op
-            .items
-            .iter()
-            .any(|expr| find_subquery_in_expr(&expr.scalar)),
         RelOperator::Udf(op) => op
             .items
             .iter()
@@ -304,21 +475,49 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 }
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
-    match expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
-        ScalarExpr::WindowFunction(expr) => {
-            let flag = match &expr.func {
-                WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
-                _ => false,
-            };
-            flag || expr.partition_by.iter().any(find_subquery_in_expr)
-                || expr.order_by.iter().any(|o| find_subquery_in_expr(&o.expr))
-        }
-        ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
-        ScalarExpr::LambdaFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
-        ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
-        ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
-        ScalarExpr::SubqueryExpr(_) => true,
-        ScalarExpr::UDFServerCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
+    struct HasSubqueryVisitor {
+        has_subquery: bool,
     }
+
+    impl<'a> Visitor<'a> for HasSubqueryVisitor {
+        fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+            self.has_subquery = true;
+            Ok(())
+        }
+    }
+
+    let mut has_subquery = HasSubqueryVisitor {
+        has_subquery: false,
+    };
+    has_subquery.visit(expr).unwrap();
+    has_subquery.has_subquery
+}
+
+pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
+    struct FindUdfNamesVisitor<'a> {
+        udfs: HashSet<&'a String>,
+    }
+
+    impl<'a> Visitor<'a> for FindUdfNamesVisitor<'a> {
+        fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) -> Result<()> {
+            for expr in &udf.arguments {
+                self.visit(expr)?;
+            }
+
+            self.udfs.insert(&udf.name);
+            Ok(())
+        }
+
+        fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
+            self.visit(&udf.scalar)?;
+            self.udfs.insert(&udf.func_name);
+            Ok(())
+        }
+    }
+
+    let mut find_udfs = FindUdfNamesVisitor {
+        udfs: HashSet::new(),
+    };
+    find_udfs.visit(scalar)?;
+    Ok(find_udfs.udfs)
 }

@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::CreateUDFPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_sql::plans::CreateUDFPlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -53,6 +56,20 @@ impl Interpreter for CreateUserUDFInterpreter {
         let _ = UserApiProvider::instance()
             .add_udf(&tenant, udf, plan.if_not_exists)
             .await?;
+
+        // Grant ownership as the current role
+        if let Some(current_role) = self.ctx.get_current_role() {
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .grant_ownership(
+                    &OwnershipObject::UDF {
+                        name: self.plan.udf.name.clone(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         Ok(PipelineBuildResult::create())
     }

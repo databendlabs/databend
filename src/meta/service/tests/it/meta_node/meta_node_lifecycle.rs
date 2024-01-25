@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,17 +15,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio::time::sleep;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::ServerState;
-use common_meta_types::new_log_id;
-use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::Cmd;
-use common_meta_types::Endpoint;
-use common_meta_types::LogEntry;
-use common_meta_types::NodeId;
-use common_meta_types::UpsertKV;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_sled_store::openraft::LogIdOptionExt;
+use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::UpsertKV;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
@@ -179,7 +179,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
     let mn3 = MetaNode::open_create(&tc3.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn1, mn2, mn3];
+    let all = [mn0, mn1, mn2, mn3];
 
     info!("--- check reopened memberships");
 
@@ -473,7 +473,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let mn0 = MetaNode::open_create(&tc0.config.raft_config, Some(()), None).await?;
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn2];
+    let all = [mn0, mn2];
 
     info!("--- check reopened memberships");
 
@@ -784,7 +784,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     }
 
     // Assert applied index on every node
-    for (_i, mn) in meta_nodes.iter().enumerate() {
+    for mn in meta_nodes.iter() {
         mn.raft
             .wait(timeout())
             .log(

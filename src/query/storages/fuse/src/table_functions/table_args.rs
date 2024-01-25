@@ -14,23 +14,22 @@
 
 use std::cmp::Ordering;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Expr;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
 
 use crate::table_functions::TableArgs;
 
 pub fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val.clone())
-            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        Scalar::String(val) => Ok(val.clone()),
         _ => Err(ErrorCode::BadArguments("invalid string.")),
     }
 }
 
 pub fn string_literal(val: &str) -> Scalar {
-    Scalar::String(val.as_bytes().to_vec())
+    Scalar::String(val.to_string())
 }
 
 pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
@@ -73,15 +72,10 @@ pub fn parse_db_tb_ssid_args(
     }
 }
 
-pub fn parse_db_tb_col_args(
-    table_args: &TableArgs,
-    func_name: &str,
-) -> Result<(String, String, String)> {
-    let args = table_args.expect_all_positioned(func_name, Some(3))?;
+pub fn parse_db_tb_col_args(table_args: &TableArgs, func_name: &str) -> Result<String> {
+    let args = table_args.expect_all_positioned(func_name, Some(1))?;
     let db = string_value(&args[0])?;
-    let tbl = string_value(&args[1])?;
-    let col = string_value(&args[2])?;
-    Ok((db, tbl, col))
+    Ok(db)
 }
 
 pub fn unwrap_tuple(expr: &Expr) -> Option<Vec<Expr>> {

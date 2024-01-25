@@ -16,20 +16,21 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_app::share::*;
-use common_meta_kvapi::kvapi;
-use common_meta_types::MetaError;
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::share::*;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::MetaError;
 use enumflags2::BitFlags;
 use log::info;
 
@@ -718,7 +719,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_name, share_name_ret);
 
             let plan = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -745,7 +746,7 @@ impl ShareApiTestSuite {
             table_id = res.table_id;
 
             let plan = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db2_name.to_string(),
@@ -1166,7 +1167,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1319,7 +1320,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: DatabaseNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: db_name.to_string(),
@@ -1428,7 +1429,7 @@ impl ShareApiTestSuite {
 
             // tenant2 create a database from share1
             let req = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: db_name2.clone(),
                 meta: DatabaseMeta {
                     from_share: Some(share_name1.clone()),
@@ -1569,7 +1570,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1705,7 +1706,9 @@ impl ShareApiTestSuite {
             let plan = DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                table_name: tbl_name.to_string(),
                 tb_id: table_id,
+                db_id,
             };
             let _res = mt.drop_table_by_id(plan).await;
 

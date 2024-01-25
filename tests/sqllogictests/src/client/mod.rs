@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse_client;
 mod http_client;
 mod mysql_client;
 
 use std::borrow::Cow;
 use std::fmt;
 
-pub use clickhouse_client::ClickhouseHttpClient;
 pub use http_client::HttpClient;
 pub use mysql_client::MySQLClient;
 use rand::distributions::Alphanumeric;
@@ -34,7 +32,6 @@ use crate::error::Result;
 pub enum ClientType {
     MySQL,
     Http,
-    Clickhouse,
 }
 
 impl fmt::Display for ClientType {
@@ -46,7 +43,6 @@ impl fmt::Display for ClientType {
 pub enum Client {
     MySQL(MySQLClient),
     Http(HttpClient),
-    Clickhouse(ClickhouseHttpClient),
 }
 
 impl Client {
@@ -55,7 +51,6 @@ impl Client {
         match self {
             Client::MySQL(client) => client.query(&sql).await,
             Client::Http(client) => client.query(&sql).await,
-            Client::Clickhouse(client) => client.query(&sql).await,
         }
     }
 
@@ -63,7 +58,6 @@ impl Client {
         match self {
             Client::MySQL(client) => client.debug = true,
             Client::Http(client) => client.debug = true,
-            Client::Clickhouse(client) => client.debug = true,
         }
     }
 
@@ -84,7 +78,6 @@ impl Client {
         match self {
             Client::MySQL(_) => "mysql",
             Client::Http(_) => "http",
-            Client::Clickhouse(_) => "clickhouse",
         }
     }
 }

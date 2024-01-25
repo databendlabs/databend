@@ -14,31 +14,31 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_meta_api::SchemaApi;
-use common_meta_app::schema::CreateTableReply;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::GetTableCopiedFileReply;
-use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::ListTableReq;
-use common_meta_app::schema::RenameTableReply;
-use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::SetTableColumnMaskPolicyReply;
-use common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TruncateTableReply;
-use common_meta_app::schema::TruncateTableReq;
-use common_meta_app::schema::UndropTableReply;
-use common_meta_app::schema::UndropTableReq;
-use common_meta_app::schema::UpdateTableMetaReply;
-use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableOptionReply;
-use common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::RenameTableReply;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TruncateTableReply;
+use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UndropTableReply;
+use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateTableMetaReply;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpsertTableOptionReply;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -64,8 +64,26 @@ impl DefaultDatabase {
             Ok(acc)
         })
     }
-}
 
+    async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
+        let table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .await?;
+
+        let mut refreshed = Vec::with_capacity(table_infos.len());
+        for table_info in table_infos {
+            refreshed.push(
+                self.ctx
+                    .storage_factory
+                    .refresh_table_info(table_info)
+                    .await?,
+            );
+        }
+        Ok(refreshed)
+    }
+}
 #[async_trait::async_trait]
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
@@ -77,7 +95,7 @@ impl Database for DefaultDatabase {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let storage = self.ctx.storage_factory.clone();
+        let storage = &self.ctx.storage_factory;
         storage.get_table(table_info)
     }
 
@@ -93,17 +111,19 @@ impl Database for DefaultDatabase {
                 table_name,
             ))
             .await?;
-        self.get_table_by_info(table_info.as_ref())
+
+        let table_info_refreshed = self
+            .ctx
+            .storage_factory
+            .refresh_table_info(table_info)
+            .await?;
+
+        self.get_table_by_info(table_info_refreshed.as_ref())
     }
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
-
+        let table_infos = self.list_table_infos().await?;
         self.load_tables(table_infos)
     }
 
@@ -112,6 +132,8 @@ impl Database for DefaultDatabase {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
         // thus, only the table-infos of dropped tables are used.
+        //
+        // For dropped tables, we do not bother refreshing the table info.
         let mut dropped = self
             .ctx
             .meta
@@ -121,11 +143,7 @@ impl Database for DefaultDatabase {
             .filter(|i| i.meta.drop_on.is_some())
             .collect::<Vec<_>>();
 
-        let mut table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
+        let mut table_infos = self.list_table_infos().await?;
 
         table_infos.append(&mut dropped);
 

@@ -1,5 +1,5 @@
 [package]
-name = "common-grpc"
+name = "databend-common-grpc"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,8 +12,8 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
+databend-common-base = { path = "../base" }
+databend-common-exception = { path = "../exception" }
 
 # GitHub dependencies
 
@@ -22,7 +22,6 @@ anyerror = { workspace = true }
 hyper = "0.14.20"
 jwt-simple = "0.11.0"
 log = { workspace = true }
-once_cell = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }

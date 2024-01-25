@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -39,6 +39,10 @@ impl Operator for Limit {
         RelOp::Limit
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -55,11 +59,22 @@ impl Operator for Limit {
         Ok(required)
     }
 
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = match self.limit {
             Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,

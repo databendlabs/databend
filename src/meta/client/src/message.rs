@@ -15,29 +15,25 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use common_base::base::tokio::sync::oneshot::Sender;
-use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::GetKVReq;
-use common_meta_kvapi::kvapi::ListKVReply;
-use common_meta_kvapi::kvapi::ListKVReq;
-use common_meta_kvapi::kvapi::MGetKVReply;
-use common_meta_kvapi::kvapi::MGetKVReq;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::ClientInfo;
-use common_meta_types::protobuf::ClusterStatus;
-use common_meta_types::protobuf::ExportedChunk;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
+use databend_common_base::base::tokio::sync::oneshot::Sender;
+use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf::ClientInfo;
+use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use minitrace::Span;
 use tonic::codegen::BoxStream;
 
-use crate::grpc_client::RealClient;
+use crate::established_client::EstablishedClient;
 
 /// A request that is sent by a meta-client handle to its worker.
 pub struct ClientWorkerRequest {
@@ -75,18 +71,6 @@ impl<T> Streamed<T> {
 /// Meta-client handle-to-worker request body
 #[derive(Debug, Clone, derive_more::From)]
 pub enum Request {
-    /// Get KV
-    Get(GetKVReq),
-
-    /// Get multiple KV
-    MGet(MGetKVReq),
-
-    /// List KVs by key prefix
-    List(ListKVReq),
-
-    /// Get KV, returning a stream
-    StreamGet(Streamed<GetKVReq>),
-
     /// Get multiple KV, returning a stream.
     StreamMGet(Streamed<MGetKVReq>),
 
@@ -106,7 +90,7 @@ pub enum Request {
     Export(ExportReq),
 
     /// Get a initialized grpc-client
-    MakeClient(MakeClient),
+    MakeEstablishedClient(MakeEstablishedClient),
 
     /// Get endpoints, for test
     GetEndpoints(GetEndpoints),
@@ -121,17 +105,13 @@ pub enum Request {
 impl Request {
     pub fn name(&self) -> &'static str {
         match self {
-            Request::Get(_) => "Get",
-            Request::MGet(_) => "MGet",
-            Request::List(_) => "List",
-            Request::StreamGet(_) => "StreamGet",
             Request::StreamMGet(_) => "StreamMGet",
             Request::StreamList(_) => "StreamList",
             Request::Upsert(_) => "Upsert",
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",
             Request::Export(_) => "Export",
-            Request::MakeClient(_) => "MakeClient",
+            Request::MakeEstablishedClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
             Request::GetClusterStatus(_) => "GetClusterStatus",
             Request::GetClientInfo(_) => "GetClientInfo",
@@ -142,17 +122,13 @@ impl Request {
 /// Meta-client worker-to-handle response body
 #[derive(derive_more::TryInto)]
 pub enum Response {
-    Get(Result<GetKVReply, MetaError>),
-    MGet(Result<MGetKVReply, MetaError>),
-    List(Result<ListKVReply, MetaError>),
-    StreamGet(Result<BoxStream<StreamItem>, MetaError>),
     StreamMGet(Result<BoxStream<StreamItem>, MetaError>),
     StreamList(Result<BoxStream<StreamItem>, MetaError>),
     Upsert(Result<UpsertKVReply, MetaError>),
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
-    MakeClient(Result<(RealClient, u64), MetaClientError>),
+    MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
     GetClusterStatus(Result<ClusterStatus, MetaError>),
     GetClientInfo(Result<ClientInfo, MetaError>),
@@ -161,18 +137,6 @@ pub enum Response {
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Response::Get(x) => {
-                write!(f, "Get({:?})", x)
-            }
-            Response::MGet(x) => {
-                write!(f, "MGet({:?})", x)
-            }
-            Response::List(x) => {
-                write!(f, "List({:?})", x)
-            }
-            Response::StreamGet(x) => {
-                write!(f, "StreamGet({:?})", x.as_ref().map(|_s| "<stream>"))
-            }
             Response::StreamMGet(x) => {
                 write!(f, "StreamMGet({:?})", x.as_ref().map(|_s| "<stream>"))
             }
@@ -191,7 +155,7 @@ impl fmt::Debug for Response {
             Response::Export(x) => {
                 write!(f, "Export({:?})", x)
             }
-            Response::MakeClient(x) => {
+            Response::MakeEstablishedClient(x) => {
                 write!(f, "MakeClient({:?})", x)
             }
             Response::GetEndpoints(x) => {
@@ -210,22 +174,6 @@ impl fmt::Debug for Response {
 impl Response {
     pub fn err(&self) -> Option<&(dyn std::error::Error + 'static)> {
         let e = match self {
-            Response::Get(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::MGet(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::List(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::StreamGet(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
             Response::StreamMGet(res) => res
                 .as_ref()
                 .err()
@@ -250,7 +198,7 @@ impl Response {
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::MakeClient(res) => res
+            Response::MakeEstablishedClient(res) => res
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
@@ -273,13 +221,18 @@ impl Response {
 
 /// Export all data stored in metasrv
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct ExportReq {}
+pub struct ExportReq {
+    /// Number of json strings contained in a export stream item.
+    ///
+    /// By default meta-service use 32 for this field.
+    pub chunk_size: Option<u64>,
+}
 
 /// Get a grpc-client that is initialized and has passed handshake
 ///
 /// This request is only used internally or for testing purpose.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct MakeClient {}
+pub struct MakeEstablishedClient {}
 
 /// Get all meta server endpoints
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

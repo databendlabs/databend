@@ -19,38 +19,38 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
-use common_catalog::lock::Lock;
-use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::LockGuard;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::LockGuard;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use storages_common_locks::set_backoff;
-use storages_common_locks::LockManager;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::SnapshotGenerator;
+use crate::operations::set_backoff;
 use crate::FuseTable;
 
 enum State {
@@ -92,9 +92,13 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     lock_guard: Option<LockGuard>,
-    need_lock: bool,
+    lock: Option<Arc<dyn Lock>>,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
+
+    change_tracking: bool,
+    update_stream_meta: Vec<UpdateStreamMetaReq>,
+    deduplicated_label: Option<String>,
 }
 
 impl<F> CommitSink<F>
@@ -105,11 +109,13 @@ where F: SnapshotGenerator + Send + 'static
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
-        need_lock: bool,
+        lock: Option<Arc<dyn Lock>>,
         prev_snapshot_id: Option<SnapshotId>,
+        deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -126,9 +132,12 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
-            need_lock,
+            lock,
             start_time: Instant::now(),
             prev_snapshot_id,
+            change_tracking: table.change_tracking_enabled(),
+            update_stream_meta,
+            deduplicated_label,
         })))
     }
 
@@ -153,12 +162,12 @@ where F: SnapshotGenerator + Send + 'static
             .unwrap()?
             .get_meta()
             .cloned()
-            .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
 
         self.input.finish();
 
         let meta = CommitMeta::downcast_from(input_meta)
-            .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
         self.abort_operation = meta.abort_operation;
 
@@ -166,7 +175,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context);
-        if self.need_lock {
+        if self.lock.is_some() {
             self.state = State::TryLock;
         } else {
             self.state = State::FillDefault;
@@ -228,24 +237,32 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
                 table_info,
             } => {
-                let schema = self.table.schema().as_ref().clone();
-                match self
-                    .snapshot_gen
-                    .generate_new_snapshot(schema, cluster_key_meta, previous)
-                {
-                    Ok(snapshot) => {
-                        self.state = State::TryCommit {
-                            data: snapshot.to_bytes()?,
-                            snapshot,
-                            table_info,
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            "commit mutation failed after {} retries, error: {:?}",
-                            self.retries, e,
-                        );
-                        self.state = State::AbortOperation;
+                if !self.change_tracking && self.table.change_tracking_enabled() {
+                    // If change tracing is disabled when the txn start, but is enabled when commit,
+                    // then the txn should be aborted.
+                    error!("commit mutation failed cause change tracking is enabled when commit");
+                    self.state = State::AbortOperation;
+                } else {
+                    let schema = self.table.schema().as_ref().clone();
+                    match self.snapshot_gen.generate_new_snapshot(
+                        schema,
+                        cluster_key_meta,
+                        previous,
+                    ) {
+                        Ok(snapshot) => {
+                            self.state = State::TryCommit {
+                                data: snapshot.to_bytes()?,
+                                snapshot,
+                                table_info,
+                            };
+                        }
+                        Err(e) => {
+                            error!(
+                                "commit mutation failed after {} retries, error: {:?}",
+                                self.retries, e,
+                            );
+                            self.state = State::AbortOperation;
+                        }
                     }
                 }
             }
@@ -287,23 +304,19 @@ where F: SnapshotGenerator + Send + 'static
                     };
                 }
             }
-            State::TryLock => {
-                let table_lock =
-                    LockManager::create_table_lock(self.table.get_table_info().clone())?;
-                match table_lock.try_lock(self.ctx.clone()).await {
-                    Ok(guard) => {
-                        self.lock_guard = guard;
-                        self.state = State::FillDefault;
-                    }
-                    Err(e) => {
-                        error!(
-                            "commit mutation failed cause get lock failed, error: {:?}",
-                            e
-                        );
-                        self.state = State::AbortOperation;
-                    }
+            State::TryLock => match self.lock.as_ref().unwrap().try_lock(self.ctx.clone()).await {
+                Ok(guard) => {
+                    self.lock_guard = guard;
+                    self.state = State::FillDefault;
                 }
-            }
+                Err(e) => {
+                    error!(
+                        "commit mutation failed cause get lock failed, error: {:?}",
+                        e
+                    );
+                    self.state = State::AbortOperation;
+                }
+            },
             State::TryCommit {
                 data,
                 snapshot,
@@ -322,7 +335,9 @@ where F: SnapshotGenerator + Send + 'static
                     snapshot,
                     location,
                     &self.copied_files,
+                    &self.update_stream_meta,
                     &self.dal,
+                    self.deduplicated_label.clone(),
                 )
                 .await
                 {
@@ -390,7 +405,7 @@ where F: SnapshotGenerator + Send + 'static
                                     name.as_str(),
                                     table_info.ident
                                 );
-                                common_base::base::tokio::time::sleep(d).await;
+                                databend_common_base::base::tokio::time::sleep(d).await;
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }

@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::UserSettingValue;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use snailquote::escape;
 
 use crate::SyncOneBlockSystemTable;
@@ -49,21 +49,29 @@ impl SyncSystemTable for SettingsTable {
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut defaults: Vec<String> = vec![];
+        let mut ranges: Vec<String> = vec![];
         let mut levels: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         for item in settings.into_iter() {
-            if !item.display_in_show_settings {
-                continue;
-            }
             // Name.
             names.push(item.name);
+
             // Value.
             values.push(escape(format!("{:?}", item.user_value).as_str()).to_string());
+
             // Default Value.
             defaults.push(escape(format!("{:?}", item.default_value).as_str()).to_string());
+
+            // Range Value.
+            match item.range {
+                Some(range) => ranges.push(format!("{}", range)),
+                None => ranges.push("None".to_string()),
+            }
+
             // Scope level.
             levels.push(format!("{:?}", item.level));
+
             // Desc.
             descs.push(item.desc.to_string());
 
@@ -75,17 +83,11 @@ impl SyncSystemTable for SettingsTable {
             types.push(typename.to_string());
         }
 
-        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let defaults: Vec<Vec<u8>> = defaults.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let levels: Vec<Vec<u8>> = levels.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(values),
             StringType::from_data(defaults),
+            StringType::from_data(ranges),
             StringType::from_data(levels),
             StringType::from_data(descs),
             StringType::from_data(types),
@@ -99,6 +101,7 @@ impl SettingsTable {
             TableField::new("name", TableDataType::String),
             TableField::new("value", TableDataType::String),
             TableField::new("default", TableDataType::String),
+            TableField::new("range", TableDataType::String),
             TableField::new("level", TableDataType::String),
             TableField::new("description", TableDataType::String),
             TableField::new("type", TableDataType::String),

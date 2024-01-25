@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-app"
+name = "databend-common-meta-app"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -14,23 +14,24 @@ test = true
 storage-hdfs = []
 
 [dependencies]
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../../query/expression" }
-common-io = { path = "../../common/io" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-types = { path = "../types" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../../query/expression" }
+databend-common-io = { path = "../../common/io" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-types = { path = "../types" }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cron = "0.12.0"
-enumflags2 = { version = "0.7.7", features = ["serde"] }
+enumflags2 = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }
 maplit = "1.0.2"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 opendal = { workspace = true }
+paste = "1.0.9"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = "0.10.5"
@@ -44,6 +45,6 @@ anyhow = { workspace = true }
 ignored = ["num-traits"]
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }
 
 tonic-build = { workspace = true }

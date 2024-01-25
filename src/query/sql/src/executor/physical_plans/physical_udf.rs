@@ -14,13 +14,13 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -99,33 +99,27 @@ impl PhysicalPlanBuilder {
                     let arg_indices = func
                         .arguments
                         .iter()
-                        .map(|arg| {
-                            match arg {
-                                ScalarExpr::BoundColumnRef(col) => {
-                                    let index = input_schema
-                                        .index_of(&col.column.index.to_string())
-                                        .unwrap();
-                                    Ok(index)
-                                }
-                                ScalarExpr::UDFServerCall(inner_udf) => {
-                                    // nested udf function as an argument of parent udf function
-                                    let index = udf_index_map.get(&inner_udf.display_name).unwrap();
-                                    Ok(*index)
-                                }
-                                _ => {
-                                    Err(ErrorCode::Internal(
-                                        "udf function's argument must be a BoundColumnRef or UDFServerCall"
-                                            .to_string(),
-                                    ))
-                                }
+                        .map(|arg| match arg {
+                            ScalarExpr::BoundColumnRef(col) => {
+                                let index =
+                                    match input_schema.index_of(&col.column.index.to_string()) {
+                                        Ok(index) => index,
+                                        Err(_) => {
+                                            return Err(ErrorCode::Internal(format!(
+                                                "Unable to get udf function's argument \"{}\".",
+                                                col.column.column_name
+                                            )));
+                                        }
+                                    };
+                                Ok(index)
                             }
+                            _ => Err(ErrorCode::Internal(
+                                "Udf function's argument must be a BoundColumnRef".to_string(),
+                            )),
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    udf_index_map.insert(
-                        func.display_name.clone(),
-                        index,
-                    );
+                    udf_index_map.insert(func.display_name.clone(), index);
                     index += 1;
 
                     let arg_exprs = func

@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::AccountMgrLevel;
-use common_ast::ast::AccountMgrSource;
-use common_ast::ast::AlterUserStmt;
-use common_ast::ast::CreateUserStmt;
-use common_ast::ast::GrantStmt;
-use common_ast::ast::RevokeStmt;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserOption;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_users::UserApiProvider;
+use chrono::Utc;
+use databend_common_ast::ast::AccountMgrLevel;
+use databend_common_ast::ast::AccountMgrSource;
+use databend_common_ast::ast::AlterUserStmt;
+use databend_common_ast::ast::CreateUserStmt;
+use databend_common_ast::ast::GrantStmt;
+use databend_common_ast::ast::RevokeStmt;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_users::UserApiProvider;
 
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
@@ -53,8 +54,8 @@ impl Binder {
             AccountMgrSource::ALL { level } => {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
-                let grant_object = self.convert_to_grant_object(level);
-                let priv_types = grant_object.available_privileges();
+                let grant_object = self.convert_to_grant_object(level).await?;
+                let priv_types = grant_object.available_privileges(false);
                 let plan = GrantPrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,
@@ -63,7 +64,7 @@ impl Binder {
                 Ok(Plan::GrantPriv(Box::new(plan)))
             }
             AccountMgrSource::Privs { privileges, level } => {
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let mut priv_types = UserPrivilegeSet::empty();
                 for x in privileges {
                     priv_types.set_privilege(*x);
@@ -96,8 +97,8 @@ impl Binder {
             AccountMgrSource::ALL { level } => {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
-                let grant_object = self.convert_to_grant_object(level);
-                let priv_types = grant_object.available_privileges();
+                let grant_object = self.convert_to_grant_object(level).await?;
+                let priv_types = grant_object.available_privileges(false);
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,
@@ -106,7 +107,7 @@ impl Binder {
                 Ok(Plan::RevokePriv(Box::new(plan)))
             }
             AccountMgrSource::Privs { privileges, level } => {
-                let grant_object = self.convert_to_grant_object(level);
+                let grant_object = self.convert_to_grant_object(level).await?;
                 let mut priv_types = UserPrivilegeSet::empty();
                 for x in privileges {
                     priv_types.set_privilege(*x);
@@ -121,28 +122,46 @@ impl Binder {
         }
     }
 
-    pub(in crate::planner::binder) fn convert_to_grant_object(
+    pub(in crate::planner::binder) async fn convert_to_grant_object(
         &self,
         source: &AccountMgrLevel,
-    ) -> GrantObject {
+    ) -> Result<GrantObject> {
         // TODO fetch real catalog
         let catalog_name = self.ctx.get_current_catalog();
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
         match source {
-            AccountMgrLevel::Global => GrantObject::Global,
+            AccountMgrLevel::Global => Ok(GrantObject::Global),
             AccountMgrLevel::Table(database_name, table_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                GrantObject::Table(catalog_name, database_name, table_name.clone())
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                let table_id = catalog
+                    .get_table(&tenant, &database_name, table_name)
+                    .await?
+                    .get_id();
+                Ok(GrantObject::TableById(catalog_name, db_id, table_id))
             }
             AccountMgrLevel::Database(database_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
-                GrantObject::Database(catalog_name, database_name)
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                Ok(GrantObject::DatabaseById(catalog_name, db_id))
             }
-            AccountMgrLevel::UDF(udf) => GrantObject::UDF(udf.clone()),
-            AccountMgrLevel::Stage(stage) => GrantObject::Stage(stage.clone()),
+            AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
+            AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
         }
     }
 
@@ -161,11 +180,22 @@ impl Binder {
         for option in user_options {
             option.apply(&mut user_option);
         }
+        UserApiProvider::instance()
+            .verify_password(
+                &self.ctx.get_tenant(),
+                &user_option,
+                auth_option,
+                None,
+                None,
+            )
+            .await?;
+
         let plan = CreateUserPlan {
+            if_not_exists: *if_not_exists,
             user: user.clone(),
             auth_info: AuthInfo::create2(&auth_option.auth_type, &auth_option.password)?,
             user_option,
-            if_not_exists: *if_not_exists,
+            password_update_on: Some(Utc::now()),
         };
         Ok(Plan::CreateUser(Box::new(plan)))
     }
@@ -189,11 +219,26 @@ impl Binder {
                 .await?
         };
 
+        let mut user_option = user_info.option.clone();
+        for option in user_options {
+            option.apply(&mut user_option);
+        }
+
         // None means no change to make
         let new_auth_info = if let Some(auth_option) = &auth_option {
             let auth_info = user_info
                 .auth_info
                 .alter2(&auth_option.auth_type, &auth_option.password)?;
+            // verify the password if changed
+            UserApiProvider::instance()
+                .verify_password(
+                    &self.ctx.get_tenant(),
+                    &user_option,
+                    auth_option,
+                    Some(&user_info),
+                    Some(&auth_info),
+                )
+                .await?;
             if user_info.auth_info == auth_info {
                 None
             } else {
@@ -203,10 +248,6 @@ impl Binder {
             None
         };
 
-        let mut user_option = user_info.option.clone();
-        for option in user_options {
-            option.apply(&mut user_option);
-        }
         let new_user_option = if user_option == user_info.option {
             None
         } else {

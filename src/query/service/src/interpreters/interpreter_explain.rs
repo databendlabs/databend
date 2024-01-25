@@ -12,26 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_ast::ast::FormatTreeNode;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_profile::QueryProfileManager;
-use common_profile::SharedProcessorProfiles;
-use common_sql::executor::ProfileHelper;
-use common_sql::optimizer::ColumnSet;
-use common_sql::MetadataRef;
-use common_storages_result_cache::gen_result_cache_key;
-use common_storages_result_cache::ResultCacheReader;
-use common_users::UserApiProvider;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::plans::UpdatePlan;
+use databend_common_sql::BindContext;
+use databend_common_sql::InsertInputSource;
+use databend_common_sql::MetadataRef;
+use databend_common_storages_result_cache::gen_result_cache_key;
+use databend_common_storages_result_cache::ResultCacheReader;
+use databend_common_users::UserApiProvider;
 
 use super::InterpreterFactory;
+use super::UpdateInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -71,17 +74,48 @@ impl Interpreter for ExplainInterpreter {
                     formatted_ast,
                     ..
                 } => {
-                    let ctx = self.ctx.clone();
-                    // If `formatted_ast` is Some, it means we may use query result cache.
-                    // If we use result cache for this query,
-                    // we should not use `dry_run` mode to build the physical plan.
-                    // It's because we need to get the same partitions as the original selecting plan.
-                    let mut builder =
-                        PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-                    self.explain_physical_plan(&plan, metadata, formatted_ast)
+                    self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
+                Plan::Insert(insert_plan) => {
+                    let mut res = self.explain_plan(&self.plan)?;
+                    if let InsertInputSource::SelectPlan(plan) = &insert_plan.source {
+                        if let Plan::Query {
+                            s_expr,
+                            metadata,
+                            bind_context,
+                            formatted_ast,
+                            ..
+                        } = &**plan
+                        {
+                            let query = self
+                                .explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?;
+                            res.extend(query);
+                        }
+                    }
+                    vec![DataBlock::concat(&res)?]
+                }
+                Plan::CreateTable(plan) => match &plan.as_select {
+                    Some(box Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        formatted_ast,
+                        ..
+                    }) => {
+                        let mut res =
+                            vec![DataBlock::new_from_columns(vec![StringType::from_data(
+                                vec!["CreateTableAsSelect:", ""],
+                            )])];
+                        res.extend(
+                            self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?,
+                        );
+                        vec![DataBlock::concat(&res)?]
+                    }
+                    _ => self.explain_plan(&self.plan)?,
+                },
                 _ => self.explain_plan(&self.plan)?,
             },
 
@@ -152,6 +186,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
+                Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
@@ -224,7 +259,7 @@ impl ExplainInterpreter {
         }
 
         let result = plan
-            .format(metadata.clone(), SharedProcessorProfiles::default())?
+            .format(metadata.clone(), Default::default())?
             .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -247,7 +282,7 @@ impl ExplainInterpreter {
         // Format root pipeline
         let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
             .lines()
-            .map(|s| s.as_bytes().to_vec())
+            .map(|l| l.to_string())
             .collect::<Vec<_>>();
         let column = StringType::from_data(line_split_result);
         blocks.push(DataBlock::new_from_columns(vec![column]));
@@ -255,7 +290,7 @@ impl ExplainInterpreter {
         for pipeline in build_res.sources_pipelines.iter() {
             let line_split_result = format!("\n{}", pipeline.display_indent())
                 .lines()
-                .map(|s| s.as_bytes().to_vec())
+                .map(|l| l.to_string())
                 .collect::<Vec<_>>();
             let column = StringType::from_data(line_split_result);
             blocks.push(DataBlock::new_from_columns(vec![column]));
@@ -277,14 +312,30 @@ impl ExplainInterpreter {
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), false);
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
-        let line_split_result = display_string
-            .lines()
-            .map(|s| s.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    #[async_backtrace::framed]
+    async fn explain_update_fragments(&self, update: &UpdatePlan) -> Result<Vec<DataBlock>> {
+        let interpreter = UpdateInterpreter::try_create(self.ctx.clone(), update.clone())?;
+        let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
+            let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+
+            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
+            root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+            let ident = fragments_actions.display_indent(&update.metadata);
+            ident.to_string()
+        } else {
+            "Nothing to update".to_string()
+        };
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
@@ -299,45 +350,85 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr, required).await?;
-        let mut build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
-        let prof_span_set = build_res.prof_span_set.clone();
+        // Drain the data
+        let query_profiles = self.execute_and_get_profiles(build_res)?;
 
+        let result = plan
+            .format(metadata.clone(), query_profiles)?
+            .format_pretty()?;
+        let line_split_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    fn execute_and_get_profiles(
+        &self,
+        mut build_res: PipelineBuildResult,
+    ) -> Result<HashMap<u32, PlanProfile>> {
         let settings = self.ctx.get_settings();
         let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(&settings, query_id.clone())?;
 
-        // Drain the data
-        if build_res.main_pipeline.is_complete_pipeline()? {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
+        match build_res.main_pipeline.is_complete_pipeline()? {
+            true => {
+                let mut pipelines = build_res.sources_pipelines;
+                pipelines.push(build_res.main_pipeline);
 
-            let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-            complete_executor.execute()?;
-        } else {
-            let mut pulling_executor =
-                PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-            pulling_executor.start();
-            while (pulling_executor.pull_data()?).is_some() {}
+                let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                executor.execute()?;
+                self.ctx.add_query_profiles(
+                    &executor
+                        .get_inner()
+                        .get_profiles()
+                        .iter()
+                        .filter(|x| x.plan_id.is_some())
+                        .map(|x| PlanProfile::create(x))
+                        .collect::<Vec<_>>(),
+                );
+            }
+            false => {
+                let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+                executor.start();
+                while (executor.pull_data()?).is_some() {}
+                self.ctx.add_query_profiles(
+                    &executor
+                        .get_inner()
+                        .get_profiles()
+                        .iter()
+                        .filter(|x| x.plan_id.is_some())
+                        .map(|x| PlanProfile::create(x))
+                        .collect::<Vec<_>>(),
+                );
+            }
         }
 
-        let profile = ProfileHelper::build_query_profile(
-            &query_id,
-            metadata,
-            &plan,
-            &prof_span_set.lock().unwrap(),
-        )?;
+        Ok(self
+            .ctx
+            .get_query_profiles()
+            .into_iter()
+            .filter(|x| x.id.is_some())
+            .map(|x| (x.id.unwrap(), x))
+            .collect::<HashMap<_, _>>())
+    }
 
-        // Record the query profile
-        let prof_mgr = QueryProfileManager::instance();
-        prof_mgr.insert(Arc::new(profile));
-
-        let result = plan
-            .format(metadata.clone(), prof_span_set)?
-            .format_pretty()?;
-        let line_split_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    async fn explain_query(
+        &self,
+        s_expr: &SExpr,
+        metadata: &MetadataRef,
+        bind_context: &BindContext,
+        formatted_ast: &Option<String>,
+    ) -> Result<Vec<DataBlock>> {
+        let ctx = self.ctx.clone();
+        // If `formatted_ast` is Some, it means we may use query result cache.
+        // If we use result cache for this query,
+        // we should not use `dry_run` mode to build the physical plan.
+        // It's because we need to get the same partitions as the original selecting plan.
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
+        let plan = builder.build(s_expr, bind_context.column_set()).await?;
+        self.explain_physical_plan(&plan, metadata, formatted_ast)
+            .await
     }
 }

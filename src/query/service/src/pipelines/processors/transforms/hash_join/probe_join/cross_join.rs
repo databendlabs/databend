@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Value;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -26,7 +26,8 @@ impl HashJoinProbeState {
         input: DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let build_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let build_blocks = &build_state.generation_state.chunks;
         let build_num_rows = build_blocks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());

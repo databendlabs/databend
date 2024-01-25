@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::Plan;
-use common_sql::Planner;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[test]
@@ -39,7 +39,9 @@ pub fn test_format_field_name() {
 
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_consistency() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let tbl = fixture.default_table_name();
     let db = fixture.default_db_name();
@@ -103,22 +105,26 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             let fuse_table0 = table0
                 .as_any()
                 .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support",
-                    table0.name(),
-                    table0.get_table_info().engine(),
-                )))
+                .ok_or_else(|| {
+                    ErrorCode::Unimplemented(format!(
+                        "table {}, engine type {}, does not support",
+                        table0.name(),
+                        table0.get_table_info().engine(),
+                    ))
+                })
                 .unwrap();
             let snapshot0 = fuse_table0.read_table_snapshot().await?;
 
             let fuse_table1 = table1
                 .as_any()
                 .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support",
-                    table1.name(),
-                    table1.get_table_info().engine(),
-                )))
+                .ok_or_else(|| {
+                    ErrorCode::Unimplemented(format!(
+                        "table {}, engine type {}, does not support",
+                        table1.name(),
+                        table1.get_table_info().engine(),
+                    ))
+                })
                 .unwrap();
             let snapshot1 = fuse_table1.read_table_snapshot().await?;
 
@@ -134,6 +140,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         } else {
             return Err(ErrorCode::BadArguments("query bad plan"));
         }
+
         Ok::<(), ErrorCode>(())
     };
 
@@ -145,7 +152,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         if let Plan::OptimizeTable(plan) = compact_plan {
             let optimize_interpreter =
                 OptimizeTableInterpreter::try_create(ctx.clone(), *plan.clone())?;
-            optimize_interpreter.execute(ctx).await?;
+            let _ = optimize_interpreter.execute(ctx).await?;
         }
         Ok::<(), ErrorCode>(())
     };

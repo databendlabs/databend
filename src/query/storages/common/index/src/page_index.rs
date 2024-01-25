@@ -16,20 +16,20 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::Domain;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnStatistics;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::range_index::statistics_to_domain;
 
@@ -91,12 +91,12 @@ impl PageIndex {
             Some(stats) => stats,
             None => return Ok((true, None)),
         };
-        let min_values = match stats.pages {
-            Some(ref pages) => pages,
+        let min_values: Vec<Scalar> = match stats.pages {
+            Some(ref pages) => pages.clone(),
             None => return Ok((true, None)),
         };
 
-        let max_value = Scalar::Tuple(stats.max());
+        let max_value = Scalar::Tuple(stats.max().clone());
 
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));

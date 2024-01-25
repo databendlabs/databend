@@ -15,23 +15,23 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::convert_byte_size;
-use common_base::base::convert_number_size;
-use common_base::base::tokio::io::AsyncWrite;
-use common_base::runtime::TrySpawn;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::SendableDataBlockStream;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::UserIdentity;
-use common_metrics::mysql::*;
-use common_sql::Planner;
-use common_users::CertifiedInfo;
-use common_users::UserApiProvider;
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
+use databend_common_base::base::tokio::io::AsyncWrite;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_metrics::mysql::*;
+use databend_common_sql::Planner;
+use databend_common_users::CertifiedInfo;
+use databend_common_users::UserApiProvider;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
@@ -260,10 +260,18 @@ impl InteractiveWorkerBase {
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
         let user_info = UserApiProvider::instance()
-            .get_user_with_client_ip(&ctx.get_tenant(), identity, Some(client_ip))
+            .get_user_with_client_ip(&ctx.get_tenant(), identity.clone(), Some(client_ip))
+            .await?;
+
+        // Check password policy for login
+        UserApiProvider::instance()
+            .check_login_password(&ctx.get_tenant(), identity.clone(), &user_info)
             .await?;
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
+        UserApiProvider::instance()
+            .update_user_login_result(&ctx.get_tenant(), identity, authed)
+            .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;
         }

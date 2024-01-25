@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::utils::get_not;
 use crate::operations::merge_into::mutator::utils::expr2prdicate;
@@ -32,6 +32,8 @@ pub struct DeleteByExprMutator {
     row_id_idx: usize,
     func_ctx: FunctionContext,
     origin_input_columns: usize,
+    // if use target_build_optimization, we don't need to give row ids to `matched mutator`
+    target_build_optimization: bool,
 }
 
 impl DeleteByExprMutator {
@@ -40,12 +42,14 @@ impl DeleteByExprMutator {
         func_ctx: FunctionContext,
         row_id_idx: usize,
         origin_input_columns: usize,
+        target_build_optimization: bool,
     ) -> Self {
         Self {
             expr,
             row_id_idx,
             func_ctx,
             origin_input_columns,
+            target_build_optimization,
         }
     }
 
@@ -72,16 +76,20 @@ impl DeleteByExprMutator {
     }
 
     pub(crate) fn get_row_id_block(&self, block: DataBlock) -> DataBlock {
-        DataBlock::new(
-            vec![block.get_by_offset(self.row_id_idx).clone()],
-            block.num_rows(),
-        )
+        if self.target_build_optimization {
+            DataBlock::empty()
+        } else {
+            DataBlock::new(
+                vec![block.get_by_offset(self.row_id_idx).clone()],
+                block.num_rows(),
+            )
+        }
     }
 
     fn get_result_block(
         &self,
         predicate: &Value<BooleanType>,
-        predicate_not: &Value<BooleanType>,
+        predicate_not: &Value<BooleanType>, // the rows which can be processed at this time.
         data_block: DataBlock,
     ) -> Result<(DataBlock, DataBlock)> {
         let res_block = data_block.clone().filter_boolean_value(predicate)?;
@@ -121,6 +129,7 @@ impl DeleteByExprMutator {
                     &self.func_ctx,
                     data_block.num_rows(),
                 )?;
+                // the rows can be processed by this time
                 let res: Value<BooleanType> = res.try_downcast().unwrap();
                 let (res_not, _) = get_not(res.clone(), &self.func_ctx, data_block.num_rows())?;
 
@@ -137,7 +146,7 @@ impl DeleteByExprMutator {
 
                 let const_expr = Expr::Constant {
                     span: None,
-                    scalar: common_expression::Scalar::Boolean(false),
+                    scalar: databend_common_expression::Scalar::Boolean(false),
                     data_type: DataType::Boolean,
                 };
 

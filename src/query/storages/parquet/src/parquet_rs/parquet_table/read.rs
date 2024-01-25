@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
-use common_pipeline_core::Pipeline;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_common_pipeline_core::Pipeline;
 
 use super::ParquetRSTable;
 use crate::parquet_rs::source::ParquetSource;
@@ -55,6 +53,7 @@ impl ParquetRSTable {
                 self.leaf_fields.clone(),
                 &plan.push_downs,
                 self.read_options,
+                vec![],
             )?)
         } else {
             None
@@ -65,7 +64,7 @@ impl ParquetRSTable {
         let topk = plan
             .push_downs
             .as_ref()
-            .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
+            .and_then(|p| p.top_k(&self.schema()));
 
         let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),

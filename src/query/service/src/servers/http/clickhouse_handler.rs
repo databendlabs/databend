@@ -16,26 +16,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::tokio::task::JoinHandle;
-use common_base::runtime::TrySpawn;
-use common_compress::CompressAlgorithm;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_expression::infer_table_schema;
-use common_expression::DataSchemaRef;
-use common_formats::ClickhouseFormatType;
-use common_formats::FileFormatOptionsExt;
-use common_formats::FileFormatTypeExt;
-use common_pipeline_sources::input_formats::InputContext;
-use common_pipeline_sources::input_formats::StreamingReadBatch;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_formats::ClickhouseFormatType;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_formats::FileFormatTypeExt;
+use databend_common_pipeline_sources::input_formats::InputContext;
+use databend_common_pipeline_sources::input_formats::StreamingReadBatch;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use futures::StreamExt;
 use http::HeaderMap;
+use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
@@ -231,9 +232,8 @@ pub async fn clickhouse_handler_get(
     headers: &HeaderMap,
 ) -> PoemResult<WithContentType<Body>> {
     let root = Span::root(full_name!(), SpanContext::random());
-
     async {
-        let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+        let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
             session.set_current_database(db.clone());
         }
@@ -245,7 +245,18 @@ pub async fn clickhouse_handler_get(
         let settings = session.get_settings();
         settings
             .set_batch_settings(&params.settings)
+            .await
             .map_err(BadRequest)?;
+
+        if !settings
+            .get_enable_clickhouse_handler()
+            .map_err(InternalServerError)?
+        {
+            return Err(poem::Error::from_string(
+                "default settings: enable_clickhouse_handler is 0".to_string(),
+                StatusCode::METHOD_NOT_ALLOWED,
+            ));
+        }
 
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
@@ -287,7 +298,7 @@ pub async fn clickhouse_handler_post(
             sanitize_request_headers(headers),
             params,
         );
-        let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
+        let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
             session.set_current_database(db.clone());
         }
@@ -299,7 +310,18 @@ pub async fn clickhouse_handler_post(
         let settings = session.get_settings();
         settings
             .set_batch_settings(&params.settings)
+            .await
             .map_err(BadRequest)?;
+
+        if !settings
+            .get_enable_clickhouse_handler()
+            .map_err(InternalServerError)?
+        {
+            return Err(poem::Error::from_string(
+                "default settings: enable_clickhouse_handler is 0".to_string(),
+                StatusCode::METHOD_NOT_ALLOWED,
+            ));
+        }
 
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let mut sql = params.query();

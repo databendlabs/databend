@@ -17,41 +17,42 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Value;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::Sink;
-use common_pipeline_sinks::Sinker;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
-use common_storage::StorageMetrics;
-use once_cell::sync::Lazy;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sinks::Sink;
+use databend_common_pipeline_sinks::Sinker;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_storage::StorageMetrics;
+use databend_storages_common_table_meta::meta::SnapshotId;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::SnapshotId;
 
 use crate::memory_part::MemoryPartInfo;
 
@@ -60,8 +61,8 @@ use crate::memory_part::MemoryPartInfo;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
-    Lazy::new(|| Arc::new(Default::default()));
+static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
+    LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Clone)]
 pub struct MemoryTable {
@@ -247,8 +248,10 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 

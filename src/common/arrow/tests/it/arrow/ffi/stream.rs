@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::error::Error;
-use common_arrow::arrow::error::Result;
-use common_arrow::arrow::ffi;
+use databend_common_arrow::arrow::array::*;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::error::Error;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::arrow::ffi;
 
 fn _test_round_trip(arrays: Vec<Box<dyn Array>>) -> Result<()> {
     let field = Field::new("a", arrays[0].data_type().clone(), true);

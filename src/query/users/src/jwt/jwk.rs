@@ -19,8 +19,8 @@ use std::time::Instant;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use p256::EncodedPoint;
@@ -152,13 +152,9 @@ impl JwkKeyStore {
         self.maybe_reload_keys().await?;
         let keys = self.keys.read();
         match key_id {
-            Some(kid) => keys
-                .get(&kid)
-                .cloned()
-                .ok_or(ErrorCode::AuthenticateFailure(format!(
-                    "key id {} not found",
-                    &kid
-                ))),
+            Some(kid) => keys.get(&kid).cloned().ok_or_else(|| {
+                ErrorCode::AuthenticateFailure(format!("key id {} not found", &kid))
+            }),
             None => {
                 if keys.len() != 1 {
                     Err(ErrorCode::AuthenticateFailure(

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi;
 
 use crate::background_api_keys::ID_GEN_BACKGROUND_JOB;
 use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
@@ -99,6 +99,8 @@ impl IdGenerator {
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = PREFIX_ID_GEN;
 
+    type ValueType = ();
+
     fn to_string_key(&self) -> String {
         kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
             .push_raw(&self.resource)
@@ -119,7 +121,7 @@ impl kvapi::Key for IdGenerator {
 
 #[cfg(test)]
 mod t {
-    use common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::id_generator::IdGenerator;
 

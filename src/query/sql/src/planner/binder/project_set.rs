@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::Lambda;
-use common_ast::ast::Literal;
-use common_ast::ast::Window;
-use common_ast::Visitor;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::FunctionKind;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Window;
+use databend_common_ast::Visitor;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
@@ -51,7 +51,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         distinct: bool,
         name: &'a Identifier,
         args: &'a [Expr],
-        params: &'a [Literal],
+        params: &'a [Expr],
         over: &'a Option<Window>,
         lambda: &'a Option<Lambda>,
     ) {
@@ -73,6 +73,9 @@ impl<'a> Visitor<'a> for SrfCollector {
         } else {
             for arg in args.iter() {
                 self.visit_expr(arg);
+            }
+            for param in params.iter() {
+                self.visit_expr(param);
             }
         }
     }
@@ -148,12 +151,6 @@ impl Binder {
             let srf_expr = srf_scalar.as_expr()?;
             let return_types = srf_expr.data_type().as_tuple().unwrap();
 
-            if return_types.len() > 1 {
-                return Err(ErrorCode::Unimplemented(
-                    "set-returning functions with more than one return type are not supported yet",
-                ));
-            }
-
             // Add result column to metadata
             let column_index = self
                 .metadata
@@ -173,20 +170,27 @@ impl Binder {
             };
             items.push(item);
 
-            // Flatten the tuple fields of the srfs to the top level columns
-            // TODO(andylokandy/leisky): support multiple return types
-            let flatten_result = ScalarExpr::FunctionCall(FunctionCall {
-                span: srf.span(),
-                func_name: "get".to_string(),
-                params: vec![1],
-                arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+            // If tuple has more than one field, return the tuple column,
+            // otherwise, extract the tuple field to top level column.
+            let result_column = if return_types.len() > 1 {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: srf.span(),
                     column,
-                })],
-            });
+                })
+            } else {
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: srf.span(),
+                    func_name: "get".to_string(),
+                    params: vec![Scalar::Number(NumberScalar::Int64(1))],
+                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: srf.span(),
+                        column,
+                    })],
+                })
+            };
 
             // Add the srf to bind context, so we can replace the srfs later.
-            bind_context.srfs.insert(srf.to_string(), flatten_result);
+            bind_context.srfs.insert(srf.to_string(), result_column);
         }
 
         let project_set = ProjectSet { srfs: items };

@@ -202,9 +202,9 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName {
+        SelectTarget::StarColumns {
             qualified: names,
-            exclude,
+            column_filter,
         } => {
             for indirection in names {
                 match indirection {
@@ -214,9 +214,16 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                     Indirection::Star(_) => {}
                 }
             }
-            if let Some(cols) = exclude {
-                for ident in cols.iter() {
-                    visitor.visit_column_id(ident);
+            if let Some(col_filter) = column_filter {
+                match col_filter {
+                    ColumnFilter::Excludes(excludes) => {
+                        for ident in excludes.iter() {
+                            visitor.visit_identifier(ident);
+                        }
+                    }
+                    ColumnFilter::Lambda(lambda) => {
+                        visitor.visit_expr(&lambda.expr);
+                    }
                 }
             }
         }
@@ -284,6 +291,18 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
+    }
+}
+
+pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
+    match point {
+        StreamPoint::AtStream { database, name } => {
+            if let Some(database) = database {
+                visitor.visit_identifier(database);
+            }
+
+            visitor.visit_identifier(name);
+        }
     }
 }
 
@@ -355,10 +374,14 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowMetrics { show_options } => visitor.visit_show_metrics(show_options),
         Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
         Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
+        Statement::ShowUserFunctions { show_options } => {
+            visitor.visit_show_user_functions(show_options)
+        }
         Statement::ShowTableFunctions { show_options } => {
             visitor.visit_show_table_functions(show_options)
         }
         Statement::ShowIndexes { show_options } => visitor.visit_show_indexes(show_options),
+        Statement::ShowLocks(stmt) => visitor.visit_show_locks(stmt),
         Statement::KillStmt {
             kill_target,
             object_id,
@@ -405,6 +428,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
+        Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
+        Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
+        Statement::DescribeStream(stmt) => visitor.visit_describe_stream(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
@@ -412,6 +439,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
         Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),
         Statement::RefreshVirtualColumn(stmt) => visitor.visit_refresh_virtual_column(stmt),
+        Statement::ShowVirtualColumns(stmt) => visitor.visit_show_virtual_columns(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),
@@ -479,6 +507,13 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
         Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
+        Statement::CreatePasswordPolicy(stmt) => visitor.visit_create_password_policy(stmt),
+        Statement::AlterPasswordPolicy(stmt) => visitor.visit_alter_password_policy(stmt),
+        Statement::DropPasswordPolicy(stmt) => visitor.visit_drop_password_policy(stmt),
+        Statement::DescPasswordPolicy(stmt) => visitor.visit_desc_password_policy(stmt),
+        Statement::ShowPasswordPolicies { show_options } => {
+            visitor.visit_show_password_policies(show_options)
+        }
         Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
         Statement::ExecuteTask(stmt) => visitor.visit_execute_task(stmt),
         Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),

@@ -15,20 +15,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_ast::ast::Expr as AExpr;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
-use common_expression::Evaluator;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::Expr as AExpr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Evaluator;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use indexmap::IndexMap;
 
 use crate::binder::wrap_cast_scalar;
@@ -49,7 +49,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         span: Span,
-        values: &Vec<Vec<AExpr>>,
+        values: &[Vec<AExpr>],
     ) -> Result<(SExpr, BindContext)> {
         bind_values(
             self.ctx.clone(),
@@ -69,7 +69,7 @@ pub async fn bind_values(
     metadata: MetadataRef,
     bind_context: &mut BindContext,
     span: Span,
-    values: &Vec<Vec<AExpr>>,
+    values: &[Vec<AExpr>],
 ) -> Result<(SExpr, BindContext)> {
     if values.is_empty() {
         return Err(ErrorCode::SemanticError(

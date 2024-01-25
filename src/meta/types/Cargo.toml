@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-types"
+name = "databend-common-meta-types"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,15 +11,17 @@ doctest = false
 test = true
 
 [dependencies]
-common-meta-stoerr = { path = "../stoerr" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-stoerr = { path = "../stoerr" }
+databend-common-tracing = { path = "../../common/tracing" }
 
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
 derive_more = { workspace = true }
+log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-once_cell = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,13 +30,13 @@ tokio = { workspace = true }
 tonic = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }
 prost-build = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-regex = "1.8.1"
+regex = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "prost"]

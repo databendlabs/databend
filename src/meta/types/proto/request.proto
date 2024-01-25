@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,10 @@ message SeqV {
   optional KVMeta meta = 3;
 }
 
-// Get request and response
-message TxnGetRequest { string key = 1; }
+// Request to get the seq and value by key
+message TxnGetRequest {
+  string key = 1;
+}
 
 message TxnGetResponse {
   string key = 1;
@@ -38,11 +40,21 @@ message TxnGetResponse {
 // Put request and response
 message TxnPutRequest {
   string key = 1;
+
   bytes value = 2;
-  // if or not return the prev value
+
+  // Whether or not to return the prev value
+  // Not used anymore
   bool prev_value = 3;
-  // expire time
+
+  // Absolute expire time
   optional uint64 expire_at = 4;
+
+  // Time to last in milliseconds.
+  //
+  // TTL is the relative expire time, since the raft-log applied.
+  // If `ttl_ms` is set, `expire_at` is ignored.
+  optional uint64 ttl_ms = 5;
 }
 
 message TxnPutResponse {
@@ -53,7 +65,9 @@ message TxnPutResponse {
 // Delete request and response
 message TxnDeleteRequest {
   string key = 1;
+
   // if or not return the prev value
+  // Not used anymore
   bool prev_value = 2;
 
   // Delete only if the `seq` matches the specified value.

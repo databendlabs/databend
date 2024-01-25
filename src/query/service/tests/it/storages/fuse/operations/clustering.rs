@@ -12,27 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Engine;
-use common_base::base::tokio;
-use common_sql::plans::AlterTableClusterKeyPlan;
-use common_sql::plans::CreateTablePlan;
-use common_sql::plans::DropTableClusterKeyPlan;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::FuseTable;
+use databend_common_ast::ast::Engine;
+use databend_common_base::base::tokio;
+use databend_common_sql::plans::AlterTableClusterKeyPlan;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::DropTableClusterKeyPlan;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await?;
+async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {
@@ -43,6 +45,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         table: fixture.default_table_name(),
         schema: TestFixture::default_table_schema(),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),
@@ -58,7 +61,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
 
     // create test table
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -70,7 +73,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -106,7 +109,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;

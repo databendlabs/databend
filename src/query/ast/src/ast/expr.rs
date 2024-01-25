@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_io::display_decimal_256;
-use common_io::escape_string_with_quote;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_io::display_decimal_256;
+use databend_common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
@@ -192,7 +192,7 @@ pub enum Expr {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        params: Vec<Literal>,
+        params: Vec<Expr>,
         window: Option<Window>,
         lambda: Option<Lambda>,
     },
@@ -274,7 +274,6 @@ pub enum Literal {
     // Quoted string literal value
     String(String),
     Boolean(bool),
-    CurrentTimestamp,
     Null,
 }
 
@@ -285,8 +284,6 @@ impl Literal {}
 pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
-    /// `.a.b`
-    Dot { key: Identifier },
     /// `.1`
     DotNumber { key: u64 },
     /// `:a:b`
@@ -312,6 +309,7 @@ pub enum TypeName {
     },
     Date,
     Timestamp,
+    Binary,
     String,
     Array(Box<TypeName>),
     Map {
@@ -325,6 +323,7 @@ pub enum TypeName {
     },
     Variant,
     Nullable(Box<TypeName>),
+    NotNull(Box<TypeName>),
 }
 
 impl TypeName {
@@ -337,6 +336,13 @@ impl TypeName {
             Self::Nullable(Box::new(self))
         } else {
             self
+        }
+    }
+
+    pub fn wrap_not_null(self) -> Self {
+        match self {
+            Self::NotNull(_) => self,
+            _ => Self::NotNull(Box::new(self)),
         }
     }
 }
@@ -496,6 +502,10 @@ pub enum JsonOperator {
     AtArrow,
     /// <@ Checks whether right json contains the left json
     ArrowAt,
+    /// @? Checks whether JSON path return any item for the specified JSON value
+    AtQuestion,
+    /// @@ Returns the result of a JSON path predicate check for the specified JSON value.
+    AtAt,
 }
 
 impl JsonOperator {
@@ -510,6 +520,8 @@ impl JsonOperator {
             JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
             JsonOperator::AtArrow => "json_contains_in_left".to_string(),
             JsonOperator::ArrowAt => "json_contains_in_right".to_string(),
+            JsonOperator::AtQuestion => "json_path_exists".to_string(),
+            JsonOperator::AtAt => "json_path_match".to_string(),
         }
     }
 }
@@ -780,6 +792,12 @@ impl Display for JsonOperator {
             JsonOperator::ArrowAt => {
                 write!(f, "<@")
             }
+            JsonOperator::AtQuestion => {
+                write!(f, "@?")
+            }
+            JsonOperator::AtAt => {
+                write!(f, "@@")
+            }
         }
     }
 }
@@ -829,6 +847,9 @@ impl Display for TypeName {
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
+            TypeName::Binary => {
+                write!(f, "BINARY")?;
+            }
             TypeName::String => {
                 write!(f, "STRING")?;
             }
@@ -875,6 +896,9 @@ impl Display for TypeName {
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;
             }
+            TypeName::NotNull(ty) => {
+                write!(f, "{} NOT NULL", ty)?;
+            }
         }
         Ok(())
     }
@@ -911,9 +935,6 @@ impl Display for Literal {
                 } else {
                     write!(f, "FALSE")
                 }
-            }
-            Literal::CurrentTimestamp => {
-                write!(f, "CURRENT_TIMESTAMP")
             }
             Literal::Null => {
                 write!(f, "NULL")
@@ -1251,7 +1272,6 @@ impl Display for Expr {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::Dot { key } => write!(f, ".{key}")?,
                     MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }

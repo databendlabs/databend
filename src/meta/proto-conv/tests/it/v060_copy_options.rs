@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::principal::CopyOptions;
-use common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::CopyOptions;
+use databend_common_meta_app::principal::OnErrorMode;
 use minitrace::func_name;
 
 use crate::common;
@@ -42,6 +42,7 @@ fn test_decode_v60_copy_options() -> anyhow::Result<()> {
         max_file_size: 100,
         disable_variant_check: true,
         return_failed_only: true,
+        detailed_output: false,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), copy_options_v60.as_slice(), 0, want())?;

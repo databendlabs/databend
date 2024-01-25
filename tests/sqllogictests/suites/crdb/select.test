@@ -521,10 +521,10 @@ drop table if exists wide
 statement ok
 CREATE TABLE wide (id INT8 NOT NULL, a INT8 NOT NULL, b TEXT NOT NULL, c INT8 NOT NULL, d TEXT NOT NULL, e TEXT NOT NULL, f INT8 NOT NULL, g TEXT NOT NULL, h TEXT NOT NULL, i TEXT NOT NULL, j TEXT NOT NULL, k INT8 NOT NULL, l FLOAT NOT NULL, m FLOAT NOT NULL, n INT8 NOT NULL)
 
-statement ok
+statement error 1006
 INSERT INTO wide(id, n) VALUES(0, 10)
 
-query IITITTITTTTI??I
-SELECT * FROM wide
+query T
+SELECT count(*) FROM wide
 ----
-0 0 (empty) 0 (empty) (empty) 0 (empty) (empty) (empty) (empty) 0 0.0 0.0 10
+0

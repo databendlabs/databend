@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 license = "Apache-2.0"
-name = "common-arrow"
+name = "databend-common-arrow"
 publish = false
 version = "0.1.0"
 description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."
@@ -88,9 +88,9 @@ parquet-default = [
 
 arrow-format = { workspace = true }
 bitpacking = "0.8.0"
-byteorder = "^1.4"
+byteorder = { workspace = true }
 bytes = "^1"
-log = "0.4.16"
+log = { workspace = true }
 num = { version = "0.4", default-features = false, features = ["std"] }
 ordered-float = "3.7.0"
 ringbuffer = "0.14.2"
@@ -98,7 +98,7 @@ roaring = "0.10.1"
 seq-macro = { version = "0.3", default-features = false }
 
 bytemuck = { version = "1", features = ["derive"] }
-chrono = { version = "0.4.31", default_features = false, features = ["std"] }
+chrono = { workspace = true }
 dyn-clone = "1"
 either = "1.9"
 foreign_vec = "0.1.0"
@@ -106,7 +106,7 @@ num-traits = "0.2"
 parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
 
 # for decimal i256
-ethnum = "1"
+ethnum = { workspace = true }
 
 # For SIMD utf8 validation
 simdutf8 = "0.1.4"
@@ -115,7 +115,7 @@ simdutf8 = "0.1.4"
 hashbrown = { version = "0.14", default-features = false, features = ["ahash"] }
 
 # for timezone support
-chrono-tz = { version = "0.8", optional = true }
+chrono-tz = { workspace = true, optional = true }
 # To efficiently cast numbers to strings
 lexical-core = { version = "0.8", optional = true }
 
@@ -127,11 +127,9 @@ lz4 = { version = "1.24" }
 snap = { version = "1.1.0" }
 zstd = { version = "0.12" }
 
-rand = { version = "0.8" }
-
-itertools = { version = "^0.10", optional = true }
-
 base64 = { version = "0.21.0", optional = true }
+itertools = { workspace = true, optional = true }
+rand = { workspace = true }
 
 # to write to parquet as a stream
 futures = { version = "0.3", optional = true }

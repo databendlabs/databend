@@ -140,9 +140,19 @@ CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b F
 statement error 1006
 CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT a, b, a FROM db1.test1
 
+statement ok
+create table db2.test55(id Int8, created timestamp  not null DEFAULT CURRENT_TIMESTAMP)
 
-statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
+statement ok
+insert into db2.test55(id) select number % 3 from numbers(1000)
+
+statement ok
+insert into db2.test55(id) select number % 3 from numbers(1000)
+
+query I
+select count(distinct created) > 1 from db2.test55;
+----
+1
 
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
@@ -190,7 +200,7 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
 map MAP(INT32, STRING) NO {} (empty)
 variant VARIANT NO null (empty)
 
@@ -216,7 +226,7 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
 map MAP(STRING, DATE) NO {} (empty)
 variant VARIANT NO null (empty)
 
@@ -226,6 +236,25 @@ use db2
 
 statement ok
 create table test9 like test8
+
+statement ok
+create table test10(a int, b tuple(int, int) default (1, 2), c array(int) default [10,20])
+
+query TTTTT
+desc test10
+----
+a INT YES NULL (empty)
+b TUPLE(1 INT32, 2 INT32) YES (1, 2) (empty)
+c ARRAY(INT32) YES [10, 20] (empty)
+
+statement ok
+insert into test10 (a) values (100),(200)
+
+query ITT
+select * from test10
+----
+100 (1,2) [10,20]
+200 (1,2) [10,20]
 
 statement ok
 use default
@@ -343,3 +372,19 @@ alter table t_row_per_block set options(row_per_block = 100000000000);
 
 statement ok
 alter table t_row_per_block set options(row_per_block = 100000);
+
+statement ok
+drop table if exists t_nested
+
+statement ok
+create table t_nested(a int, b array(int not null), c array(int null), d map(string, int null), e map(string, string not null), f tuple(int null, string not null, array(int null), array(string not null)))
+
+query TTTTT
+desc t_nested
+----
+a INT YES NULL (empty)
+b ARRAY(INT32) YES NULL (empty)
+c ARRAY(INT32) YES NULL (empty)
+d MAP(STRING, INT32) YES NULL (empty)
+e MAP(STRING, STRING) YES NULL (empty)
+f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)

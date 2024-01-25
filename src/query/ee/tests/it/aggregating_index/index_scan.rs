@@ -16,21 +16,20 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::block_debug::pretty_format_blocks;
-use common_expression::DataBlock;
-use common_expression::SendableDataBlockStream;
-use common_expression::SortColumnDescription;
-use common_sql::optimizer::SExpr;
-use common_sql::planner::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::DataBlock;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::SortColumnDescription;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::planner::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::Planner;
+use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::TestFixture;
-use enterprise_query::test_kits::context::EESetup;
+use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -94,13 +93,13 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 
 async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
     let sql = format!("DROP AGGREGATING INDEX {index_name}");
-    execute_sql(ctx, &sql).await?;
+    let _ = execute_sql(ctx, &sql).await?;
 
     Ok(())
 }
 
 async fn test_index_scan_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -117,7 +116,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     let index_name = "index1";
 
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -241,7 +240,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -259,7 +258,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     let index_name = "index1";
 
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -361,7 +360,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
 }
 
 async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -378,7 +377,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
     // Create index
     let index_name = "index1";
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
         .await?;
 
@@ -476,7 +475,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -495,7 +494,7 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
 
     fixture
         .execute_command(&format!(
-            "CREATE AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"
+            "CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"
         ))
         .await?;
 
@@ -527,7 +526,7 @@ async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
 }
 
 async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     // Create table
     fixture
@@ -544,7 +543,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
     // Create index
     let index_name = "index1";
     fixture.execute_command(
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
+        &format!("CREATE ASYNC AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
     )
         .await?;
 
@@ -635,9 +634,9 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
 
     // Create agg index
-    execute_sql(
+    let _ = execute_sql(
         ctx.clone(),
-        &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
+        &format!("CREATE ASYNC AGGREGATING INDEX index AS {index_sql}"),
     )
     .await?;
 
@@ -658,7 +657,7 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
 
     // Refresh index
     if num_index_blocks > 0 {
-        execute_sql(
+        let _ = execute_sql(
             ctx.clone(),
             &format!("REFRESH AGGREGATING INDEX index LIMIT {num_index_blocks}"),
         )
@@ -886,12 +885,12 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select sum(a) from t group by b",
-            is_index_scan: false,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",
@@ -966,6 +965,101 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select sum(a), to_string(b) as bs from t group by bs",
             is_index_scan: true,
         },
+        // query: sort-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select to_string(c + 1) as s from t order by s",
+            index: "select c + 1 from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select b, c from t",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select avg(a + 1) from t group by b order by b",
+            index: "select a + 1, b from t",
+            is_index_scan: true,
+        },
+        // query: eval-sort-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select a from t where b > 1 and b < 5 order by b",
+            index: "select a, b from t where b > 0",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a from t where b > 1",
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a, b from t where b > 1",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_index_scan: false,
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t where c > 1 group by b",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t where b > 0 group by b",
+            is_index_scan: true,
+        },
+        // query: eval-sort-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs order by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 
@@ -973,9 +1067,12 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
     let spill_settings = if spill {
         Some(HashMap::from([
-            ("spilling_memory_ratio".to_string(), "100".to_string()),
             (
-                "spilling_bytes_threshold_per_proc".to_string(),
+                "aggregate_spilling_memory_ratio".to_string(),
+                "100".to_string(),
+            ),
+            (
+                "aggregate_spilling_bytes_threshold_per_proc".to_string(),
                 "1".to_string(),
             ),
         ]))
@@ -983,14 +1080,14 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
         None
     };
 
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     for num_blocks in [1, 10] {
         for num_rows_per_block in [1, 50] {
             let session = fixture.default_session();
             if let Some(s) = spill_settings.as_ref() {
                 let settings = session.get_settings();
                 // Make sure the operator will spill the aggregation.
-                settings.set_batch_settings(s)?;
+                settings.set_batch_settings(s).await?;
             }
 
             // Prepare table and data
@@ -1033,5 +1130,6 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
             fixture.execute_command("DROP TABLE t ALL").await?;
         }
     }
+
     Ok(())
 }

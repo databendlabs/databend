@@ -21,10 +21,10 @@ mod sort;
 mod take;
 mod take_chunks;
 mod take_compact;
+mod take_ranges;
 mod topk;
 mod utils;
 
-pub use group_by::*;
 pub use group_by_hash::*;
 pub use sort::*;
 pub use take_chunks::*;

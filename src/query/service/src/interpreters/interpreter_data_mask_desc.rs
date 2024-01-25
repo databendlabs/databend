@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_sql::plans::DescDatamaskPolicyPlan;
-use common_users::UserApiProvider;
-use data_mask_feature::get_datamask_handler;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::DescDatamaskPolicyPlan;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
 use log::warn;
 
 use crate::interpreters::Interpreter;
@@ -71,8 +71,8 @@ impl Interpreter for DescDataMaskInterpreter {
             }
         };
 
-        let name: Vec<Vec<u8>> = vec![self.plan.name.as_bytes().to_vec()];
-        let create_on: Vec<Vec<u8>> = vec![policy.create_on.to_string().as_bytes().to_vec()];
+        let name: Vec<String> = vec![self.plan.name.clone()];
+        let create_on: Vec<String> = vec![policy.create_on.to_string().clone()];
         let args = format!(
             "({})",
             policy
@@ -83,12 +83,12 @@ impl Interpreter for DescDataMaskInterpreter {
                 .collect::<Vec<_>>()
                 .join(",")
         );
-        let signature: Vec<Vec<u8>> = vec![args.as_bytes().to_vec()];
-        let return_type = vec![policy.return_type.as_bytes().to_vec()];
-        let body = vec![policy.body.as_bytes().to_vec()];
+        let signature: Vec<String> = vec![args.clone()];
+        let return_type = vec![policy.return_type.clone()];
+        let body = vec![policy.body.clone()];
         let comment = vec![match policy.comment {
-            Some(comment) => comment.as_bytes().to_vec(),
-            None => "".to_string().as_bytes().to_vec(),
+            Some(comment) => comment.clone(),
+            None => "".to_string().clone(),
         }];
 
         let blocks = vec![DataBlock::new_from_columns(vec![

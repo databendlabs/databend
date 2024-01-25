@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Range;
-use common_exception::Span;
+use databend_common_exception::Range;
+use databend_common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::Offset;
@@ -70,6 +70,18 @@ pub fn any_token(i: Input) -> IResult<&Token> {
             ErrorKind::Other("expected any token but reached the end"),
         ))),
     }
+}
+
+pub fn lambda_params(i: Input) -> IResult<Vec<Identifier>> {
+    let single_param = map(rule! {#ident}, |param| vec![param]);
+    let multi_params = map(
+        rule! { "(" ~ #comma_separated_list1(ident) ~ ")" },
+        |(_, params, _)| params,
+    );
+    rule!(
+        #single_param
+        | #multi_params
+    )(i)
 }
 
 pub fn ident(i: Input) -> IResult<Identifier> {
@@ -161,10 +173,7 @@ fn non_reserved_keyword(
 /// Parse one to two idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `table.column`
-#[allow(clippy::needless_lifetimes)]
-pub fn dot_separated_idents_1_to_2<'a>(
-    i: Input<'a>,
-) -> IResult<'a, (Option<Identifier>, Identifier)> {
+pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Identifier)> {
     map(
         rule! {
            #ident ~ ("." ~ #ident)?
@@ -176,13 +185,12 @@ pub fn dot_separated_idents_1_to_2<'a>(
     )(i)
 }
 
-/// Parse one two three idents separated by a dot, fulfilling from the right.
+/// Parse one to three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
-#[allow(clippy::needless_lifetimes)]
-pub fn dot_separated_idents_1_to_3<'a>(
-    i: Input<'a>,
-) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
+pub fn dot_separated_idents_1_to_3(
+    i: Input,
+) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
     map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
@@ -322,14 +330,16 @@ pub fn map_res<'a, O1, O2, F, G>(
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
 where
     F: nom::Parser<Input<'a>, O1, Error<'a>>,
-    G: FnMut(O1) -> Result<O2, ErrorKind>,
+    G: FnMut(O1) -> Result<O2, nom::Err<ErrorKind>>,
 {
     move |input: Input| {
         let i = input;
         let (input, o1) = parser.parse(input)?;
         match f(o1) {
             Ok(o2) => Ok((input, o2)),
-            Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+            Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+            Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
+            Err(nom::Err::Incomplete(_)) => unimplemented!(),
         }
     }
 }
@@ -409,3 +419,42 @@ where
         Ok((rest, expr))
     }
 }
+
+macro_rules! declare_experimental_feature {
+    ($check_fn_name: ident, $feature_name: literal) => {
+        pub fn $check_fn_name<'a, O, F>(
+            is_exclusive: bool,
+            mut parser: F,
+        ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+        where
+            F: nom::Parser<Input<'a>, O, Error<'a>>,
+        {
+            move |input: Input| {
+                parser.parse(input).and_then(|(i, res)| {
+                    if input.1.is_experimental() {
+                        Ok((i, res))
+                    } else {
+                        i.2.clear();
+                        let error = Error::from_error_kind(
+                            input,
+                            ErrorKind::Other(
+                                concat!(
+                                    $feature_name,
+                                    " only works in experimental dialect, try `set sql_dialect = experimental`"
+                                )
+                            ),
+                        );
+                        if is_exclusive {
+                            Err(nom::Err::Failure(error))
+                        } else {
+                            Err(nom::Err::Error(error))
+                        }
+                    }
+                })
+            }
+        }
+    };
+}
+
+declare_experimental_feature!(check_experimental_chain_function, "chain function");
+declare_experimental_feature!(check_experimental_list_comprehension, "list comprehension");

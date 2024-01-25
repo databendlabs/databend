@@ -17,9 +17,9 @@
 //! One of the known issue is that `flush_async()` in different tokio runtime on different db result in a deadlock.
 
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
 use tempfile::TempDir;
 
 pub(crate) struct GlobalSledDb {
@@ -51,8 +51,8 @@ impl GlobalSledDb {
     }
 }
 
-static GLOBAL_SLED: Lazy<Arc<Mutex<Option<GlobalSledDb>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+static GLOBAL_SLED: LazyLock<Arc<Mutex<Option<GlobalSledDb>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(None)));
 
 /// Open a db at a temp dir. For test purpose only.
 pub fn init_temp_sled_db(temp_dir: TempDir) {

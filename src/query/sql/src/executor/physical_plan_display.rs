@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::executor::physical_plan::PhysicalPlan;
@@ -35,7 +35,6 @@ use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Lambda;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
@@ -51,11 +50,11 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
+use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 use crate::plans::JoinType;
 
@@ -96,8 +95,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
-            PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
-            PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
@@ -114,6 +111,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
         }
 
@@ -436,12 +434,6 @@ impl Display for CopyIntoTable {
     }
 }
 
-impl Display for RuntimeFilterSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RuntimeFilterSource")
-    }
-}
-
 impl Display for ProjectSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let scalars = self
@@ -500,25 +492,6 @@ impl Display for MergeIntoSource {
     }
 }
 
-impl Display for Lambda {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let scalars = self
-            .lambda_funcs
-            .iter()
-            .map(|func| {
-                let arg_exprs = func.arg_exprs.join(", ");
-                let params = func.params.join(", ");
-                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
-                format!(
-                    "{}({}, {} -> {})",
-                    func.func_name, arg_exprs, params, lambda_expr
-                )
-            })
-            .collect::<Vec<String>>();
-        write!(f, "Lambda functions: {}", scalars.join(", "))
-    }
-}
-
 impl Display for ReclusterSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReclusterSource")
@@ -528,6 +501,12 @@ impl Display for ReclusterSource {
 impl Display for ReclusterSink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReclusterSink")
+    }
+}
+
+impl Display for UpdateSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UpdateSource")
     }
 }
 

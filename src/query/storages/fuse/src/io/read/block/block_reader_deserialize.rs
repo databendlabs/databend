@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use storages_common_cache_manager::SizedColumnArray;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::Compression;
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_storages_common_cache_manager::SizedColumnArray;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::Compression;
 
 use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
@@ -58,6 +58,7 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
+
         self.deserialize_chunks(
             &part.location,
             part.nums_rows,

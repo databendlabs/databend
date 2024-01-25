@@ -18,4 +18,6 @@ pub mod config;
 pub mod instance_status;
 pub mod logs;
 pub mod processes;
+pub mod stream_status;
+pub mod system;
 pub mod tenant_tables;

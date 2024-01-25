@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -42,17 +42,17 @@ impl SyncSystemTable for CreditsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let names: Vec<Vec<u8>> = env!("DATABEND_CREDITS_NAMES")
+        let names: Vec<String> = env!("DATABEND_CREDITS_NAMES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
-        let versions: Vec<Vec<u8>> = env!("DATABEND_CREDITS_VERSIONS")
+        let versions: Vec<String> = env!("DATABEND_CREDITS_VERSIONS")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
-        let licenses: Vec<Vec<u8>> = env!("DATABEND_CREDITS_LICENSES")
+        let licenses: Vec<String> = env!("DATABEND_CREDITS_LICENSES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
 
         Ok(DataBlock::new_from_columns(vec![

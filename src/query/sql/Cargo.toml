@@ -1,5 +1,5 @@
 [package]
-name = "common-sql"
+name = "databend-common-sql"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,38 +12,39 @@ test = false
 
 [features]
 default = []
-storage-hdfs = ["common-config/storage-hdfs"]
-z3-prove = ["common-constraint"]
+storage-hdfs = ["databend-common-config/storage-hdfs"]
+z3-prove = ["databend-common-constraint"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-ast = { path = "../ast" }
-common-base = { path = "../../common/base" }
-common-catalog = { path = "../catalog" }
-common-config = { path = "../config" }
-common-constraint = { path = "../constraint", optional = true }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-functions = { path = "../functions" }
-common-license = { path = "../../common/license" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
-common-metrics = { path = "../../common/metrics" }
+databend-common-ast = { path = "../ast" }
+databend-common-base = { path = "../../common/base" }
+databend-common-catalog = { path = "../catalog" }
+databend-common-config = { path = "../config" }
+databend-common-constraint = { path = "../constraint", optional = true }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-functions = { path = "../functions" }
+databend-common-license = { path = "../../common/license" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-metrics = { path = "../../common/metrics" }
 
-common-pipeline-core = { path = "../pipeline/core" }
-common-pipeline-sources = { path = "../pipeline/sources" }
-common-pipeline-transforms = { path = "../pipeline/transforms" }
+databend-common-pipeline-core = { path = "../pipeline/core" }
+databend-common-pipeline-sources = { path = "../pipeline/sources" }
+databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
 
-common-profile = { path = "../profile" }
-common-settings = { path = "../settings" }
-common-storage = { path = "../../common/storage" }
-common-storages-parquet = { path = "../storages/parquet" }
-common-storages-result-cache = { path = "../storages/result_cache" }
-common-storages-stage = { path = "../storages/stage" }
-common-storages-view = { path = "../storages/view" }
-common-users = { path = "../users" }
-data-mask-feature = { path = "../ee_features/data_mask" }
-storages-common-table-meta = { path = "../storages/common/table_meta" }
+databend-common-settings = { path = "../settings" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-storages-delta = { path = "../storages/delta" }
+databend-common-storages-iceberg = { path = "../storages/iceberg" }
+databend-common-storages-parquet = { path = "../storages/parquet" }
+databend-common-storages-result-cache = { path = "../storages/result_cache" }
+databend-common-storages-stage = { path = "../storages/stage" }
+databend-common-storages-view = { path = "../storages/view" }
+databend-common-users = { path = "../users" }
+databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 # GitHub dependencies
 
@@ -52,28 +53,28 @@ ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cidr = { version = "0.2.2" }
 cron = "0.12.0"
 ctor = "0.1.26"
-dashmap = "5.4"
+dashmap = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
 globiter = "0.1"
 indexmap = "2.0.0"
-itertools = "0.10.5"
+itertools = { workspace = true }
+jsonb = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-once_cell = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 percent-encoding = "2"
-regex = "1.8.1"
+regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"

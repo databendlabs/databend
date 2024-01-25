@@ -62,3 +62,8 @@ SELECT INET_NTOA(NULL)
 ----
 NULL
 
+query T
+SELECT array(1);
+----
+[1]
+

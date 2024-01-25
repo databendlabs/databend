@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_sql::plans::RemoveStagePlan;
-use common_storage::StageFilesInfo;
-use common_storages_fuse::io::Files;
-use common_storages_stage::StageTable;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_sql::plans::RemoveStagePlan;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storages_fuse::io::Files;
+use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::error;
 

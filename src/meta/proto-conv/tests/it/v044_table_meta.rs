@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ce;
-use common_expression::types::NumberDataType;
-use common_expression::ComputedExpr;
-use common_meta_app::schema as mt;
+use databend_common_expression as ce;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ComputedExpr;
+use databend_common_meta_app::schema as mt;
 use maplit::btreemap;
 use maplit::btreeset;
 use minitrace::func_name;
@@ -35,7 +35,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v44_table_meta() -> anyhow::Result<()> {
     let bytes = vec![
@@ -100,7 +100,6 @@ fn test_decode_v44_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
-        owner: None,
     };
 
     common::test_load_old(func_name!(), bytes.as_slice(), 44, want())?;

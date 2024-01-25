@@ -16,15 +16,15 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_hashtable::DictionaryKeys;
-use common_hashtable::FastHash;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_hashtable::DictionaryKeys;
+use databend_common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::Decimal;
-use crate::types::string::StringColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
@@ -37,7 +37,7 @@ use crate::HashMethodKeysU32;
 use crate::HashMethodKeysU64;
 use crate::HashMethodKeysU8;
 use crate::HashMethodSerializer;
-use crate::HashMethodSingleString;
+use crate::HashMethodSingleBinary;
 
 #[derive(Debug)]
 pub enum KeysState {
@@ -45,7 +45,7 @@ pub enum KeysState {
     U128(Buffer<u128>),
     U256(Buffer<u256>),
     Dictionary {
-        columns: Vec<StringColumn>,
+        columns: Vec<BinaryColumn>,
         keys_point: Vec<NonNull<[u8]>>,
         dictionaries: Vec<DictionaryKeys>,
     },
@@ -54,6 +54,14 @@ pub enum KeysState {
 unsafe impl Send for KeysState {}
 
 unsafe impl Sync for KeysState {}
+
+pub trait KeyAccessor {
+    type Key: ?Sized;
+
+    /// # Safety
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
+}
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
@@ -71,10 +79,11 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)>;
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>>;
 }
 
 /// These methods are `generic` method to generate hash key,
@@ -83,7 +92,7 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     DictionarySerializer(HashMethodDictionarySerializer),
-    SingleString(HashMethodSingleString),
+    SingleBinary(HashMethodSingleBinary),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
     KeysU32(HashMethodKeysU32),
@@ -96,7 +105,7 @@ pub enum HashMethodKind {
 macro_rules! with_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
-            $t = [Serializer, SingleString, KeysU8, KeysU16,
+            $t = [Serializer, SingleBinary, KeysU8, KeysU16,
             KeysU32, KeysU64, KeysU128, KeysU256, DictionarySerializer],
             $($tail)*
         }
@@ -107,7 +116,7 @@ macro_rules! with_hash_method {
 macro_rules! with_join_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
-            $t = [Serializer, SingleString, KeysU8, KeysU16,
+            $t = [Serializer, SingleBinary, KeysU8, KeysU16,
             KeysU32, KeysU64, KeysU128, KeysU256],
             $($tail)*
         }
@@ -120,7 +129,7 @@ macro_rules! with_mappedhash_method {
         match_template::match_template! {
             $t = [
                 Serializer => HashMethodSerializer,
-                SingleString => HashMethodSingleString,
+                SingleBinary => HashMethodSingleBinary,
                 KeysU8 => HashMethodKeysU8,
                 KeysU16 => HashMethodKeysU16,
                 KeysU32 => HashMethodKeysU32,
@@ -143,8 +152,8 @@ impl HashMethodKind {
 
     pub fn data_type(&self) -> DataType {
         match self {
-            HashMethodKind::Serializer(_) => DataType::String,
-            HashMethodKind::SingleString(_) => DataType::String,
+            HashMethodKind::Serializer(_) => DataType::Binary,
+            HashMethodKind::SingleBinary(_) => DataType::Binary,
             HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
@@ -155,7 +164,7 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => {
                 DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
             }
-            HashMethodKind::DictionarySerializer(_) => DataType::String,
+            HashMethodKind::DictionarySerializer(_) => DataType::Binary,
         }
     }
 }

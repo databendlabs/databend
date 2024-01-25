@@ -26,7 +26,7 @@ AggregateFinal
     └── ProjectSet
         ├── output columns: [unnest (#2)]
         ├── estimated rows: 1.00
-        ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL) NULL))
+        ├── set returning functions: unnest(fold_count.id (#0))
         └── TableScan
             ├── table: default.default.fold_count
             ├── output columns: [id (#0)]
@@ -83,6 +83,54 @@ ProjectSet
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a int, b variant);
+
+query T
+EXPLAIN SELECT t.a, f.seq, f.value FROM t, LATERAL FLATTEN(input => t.b) f
+----
+EvalScalar
+├── output columns: [t.a (#0), seq (#3), value (#7)]
+├── expressions: [get(1)(flatten (#2)), get(5)(flatten (#2))]
+├── estimated rows: 0.00
+└── ProjectSet
+    ├── output columns: [t.a (#0), flatten (#2)]
+    ├── estimated rows: 0.00
+    ├── set returning functions: flatten(1, 5)(t.b (#1))
+    └── TableScan
+        ├── table: default.project_set.t
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+EXPLAIN SELECT json_each(t.b), unnest(t.b) FROM t
+----
+EvalScalar
+├── output columns: [json_each (#2), unnest(t.b) (#4)]
+├── expressions: [get(1)(unnest (#3))]
+├── estimated rows: 0.00
+└── ProjectSet
+    ├── output columns: [json_each (#2), unnest (#3)]
+    ├── estimated rows: 0.00
+    ├── set returning functions: json_each(t.b (#1)), unnest(t.b (#1))
+    └── TableScan
+        ├── table: default.project_set.t
+        ├── output columns: [b (#1)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 statement ok
 drop database project_set

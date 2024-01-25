@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_exception::Span;
+use databend_common_exception::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -60,8 +60,16 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
     FunctionCall {
         span: Span,
         name: String,
-        params: Vec<usize>,
+        params: Vec<Scalar>,
         args: Vec<RawExpr<Index>>,
+    },
+    LambdaFunctionCall {
+        span: Span,
+        name: String,
+        args: Vec<RawExpr<Index>>,
+        lambda_expr: RemoteExpr,
+        lambda_display: String,
+        return_type: DataType,
     },
 }
 
@@ -100,6 +108,15 @@ pub enum Expr<Index: ColumnIndex = usize> {
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
+        return_type: DataType,
+    },
+    LambdaFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        args: Vec<Expr<Index>>,
+        lambda_expr: RemoteExpr,
+        lambda_display: String,
         return_type: DataType,
     },
 }
@@ -141,6 +158,15 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
     },
+    LambdaFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        args: Vec<RemoteExpr<Index>>,
+        lambda_expr: Box<RemoteExpr>,
+        lambda_display: String,
+        return_type: DataType,
+    },
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -151,8 +177,11 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
-                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 RawExpr::Constant { .. } => (),
+                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                RawExpr::LambdaFunctionCall { args, .. } => {
+                    args.iter().for_each(|expr| walk(expr, buf))
+                }
             }
         }
 
@@ -203,6 +232,21 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 params: params.clone(),
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
             },
+            RawExpr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => RawExpr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }
@@ -214,6 +258,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { span, .. } => *span,
             Expr::Cast { span, .. } => *span,
             Expr::FunctionCall { span, .. } => *span,
+            Expr::LambdaFunctionCall { span, .. } => *span,
         }
     }
 
@@ -223,6 +268,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
+            Expr::LambdaFunctionCall { return_type, .. } => return_type,
         }
     }
 
@@ -233,8 +279,11 @@ impl<Index: ColumnIndex> Expr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
-                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 Expr::Constant { .. } => (),
+                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                Expr::LambdaFunctionCall { args, .. } => {
+                    args.iter().for_each(|expr| walk(expr, buf))
+                }
             }
         }
 
@@ -294,6 +343,103 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 return_type: return_type.clone(),
             },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
+        }
+    }
+
+    pub fn fill_const_column(&self, consts: &HashMap<Index, Scalar>) -> Expr<Index> {
+        match self {
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
+            },
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => {
+                if let Some(v) = consts.get(id) {
+                    Expr::Constant {
+                        span: *span,
+                        scalar: v.clone(),
+                        data_type: data_type.clone(),
+                    }
+                } else {
+                    Expr::ColumnRef {
+                        span: *span,
+                        id: id.clone(),
+                        data_type: data_type.clone(),
+                        display_name: display_name.clone(),
+                    }
+                }
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(expr.fill_const_column(consts)),
+                dest_type: dest_type.clone(),
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.fill_const_column(consts))
+                    .collect(),
+                return_type: return_type.clone(),
+            },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.fill_const_column(consts))
+                    .collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -344,6 +490,21 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(Expr::as_remote_expr).collect(),
                 return_type: return_type.clone(),
             },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => RemoteExpr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(Expr::as_remote_expr).collect(),
+                lambda_expr: Box::new(lambda_expr.clone()),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -358,6 +519,9 @@ impl<Index: ColumnIndex> Expr<Index> {
                     .unwrap()
                     .non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic(registry))
+            }
+            Expr::LambdaFunctionCall { args, .. } => {
+                args.iter().all(|arg| arg.is_deterministic(registry))
             }
         }
     }
@@ -414,6 +578,21 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                     return_type: return_type.clone(),
                 }
             }
+            RemoteExpr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
+                lambda_expr: *lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }

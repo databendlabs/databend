@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::block_debug::assert_block_value_eq;
-use common_expression::types::number::*;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Value;
+use core::ops::Range;
+
+use databend_common_expression::block_debug::assert_block_value_eq;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Value;
 use goldenfile::Mint;
 
 use crate::common::*;
@@ -202,13 +204,29 @@ pub fn test_pass() {
     );
 }
 
-/// This test covers take.rs, take_chunks.rs, take_compact.rs, filter.rs, concat.rs.
+// Build a range selection from a selection array.
+pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>> {
+    let mut range_selection = Vec::with_capacity(count);
+    let mut start = selection[0];
+    let mut idx = 1;
+    while idx < count {
+        if selection[idx] != selection[idx - 1] + 1 {
+            range_selection.push(start..selection[idx - 1] + 1);
+            start = selection[idx];
+        }
+        idx += 1;
+    }
+    range_selection.push(start..selection[count - 1] + 1);
+    range_selection
+}
+
+/// This test covers take.rs, take_chunks.rs, take_compact.rs, take_ranges.rs, filter.rs, concat.rs.
 #[test]
-pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
-    use common_expression::types::DataType;
-    use common_expression::Column;
-    use common_expression::DataBlock;
-    use common_hashtable::RowPtr;
+pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_hashtable::RowPtr;
     use itertools::Itertools;
     use rand::Rng;
 
@@ -286,6 +304,10 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         &mut None,
     );
     let block_4 = DataBlock::concat(&filtered_blocks)?;
+    let block_5 = concated_blocks.take_ranges(
+        &build_range_selection(&take_indices, take_indices.len()),
+        take_indices.len(),
+    )?;
 
     assert_eq!(block_1.num_columns(), block_2.num_columns());
     assert_eq!(block_1.num_rows(), block_2.num_rows());
@@ -293,11 +315,14 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     assert_eq!(block_1.num_rows(), block_3.num_rows());
     assert_eq!(block_1.num_columns(), block_4.num_columns());
     assert_eq!(block_1.num_rows(), block_4.num_rows());
+    assert_eq!(block_1.num_columns(), block_5.num_columns());
+    assert_eq!(block_1.num_rows(), block_5.num_rows());
 
     let columns_1 = block_1.columns();
     let columns_2 = block_2.columns();
     let columns_3 = block_3.columns();
     let columns_4 = block_4.columns();
+    let columns_5 = block_5.columns();
     for idx in 0..columns_1.len() {
         assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
         assert_eq!(columns_1[idx].value, columns_2[idx].value);
@@ -305,6 +330,8 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         assert_eq!(columns_1[idx].value, columns_3[idx].value);
         assert_eq!(columns_1[idx].data_type, columns_4[idx].data_type);
         assert_eq!(columns_1[idx].value, columns_4[idx].value);
+        assert_eq!(columns_1[idx].data_type, columns_5[idx].data_type);
+        assert_eq!(columns_1[idx].value, columns_5[idx].value);
     }
 
     Ok(())
@@ -312,7 +339,7 @@ pub fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
 
 /// Add more tests for take_compact.rs.
 #[test]
-pub fn test_take_compact() -> common_exception::Result<()> {
+pub fn test_take_compact() -> databend_common_exception::Result<()> {
     use rand::Rng;
 
     let mut rng = rand::thread_rng();
@@ -353,10 +380,10 @@ pub fn test_take_compact() -> common_exception::Result<()> {
 /// B = A + A + A,  l = A.len()
 /// B.slice(0, l) == B.slice(l, l) == A
 #[test]
-pub fn test_filters() -> common_exception::Result<()> {
-    use common_expression::types::DataType;
-    use common_expression::Column;
-    use common_expression::DataBlock;
+pub fn test_filters() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
     use rand::Rng;
 
     let mut rng = rand::thread_rng();
@@ -416,8 +443,8 @@ pub fn test_filters() -> common_exception::Result<()> {
 }
 
 #[test]
-pub fn test_divide_indices_by_scatter_size() -> common_exception::Result<()> {
-    use common_expression::DataBlock;
+pub fn test_divide_indices_by_scatter_size() -> databend_common_exception::Result<()> {
+    use databend_common_expression::DataBlock;
     use itertools::Itertools;
     use rand::Rng;
 
@@ -456,8 +483,8 @@ pub fn test_divide_indices_by_scatter_size() -> common_exception::Result<()> {
 
 /// This test covers scatter.rs.
 #[test]
-pub fn test_scatter() -> common_exception::Result<()> {
-    use common_expression::DataBlock;
+pub fn test_scatter() -> databend_common_exception::Result<()> {
+    use databend_common_expression::DataBlock;
     use itertools::Itertools;
     use rand::Rng;
 

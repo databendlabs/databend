@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::AuthInfo;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct IDMConfig {

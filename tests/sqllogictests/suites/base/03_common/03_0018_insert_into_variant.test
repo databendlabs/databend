@@ -22,7 +22,7 @@ INSERT INTO t1 (id, var) VALUES(1, '{"a":')
 statement error (?s)1046.*unable to cast type `Array\(UInt8\)` to type `Variant NULL`
 INSERT INTO t1 (id, var) VALUES(1, [1,2,3])
 
-skipif clickhouse
+
 query IT
 select * from t1 order by id asc
 ----
@@ -194,6 +194,26 @@ query IT
 select * from t4 where id >= 1 and 'vv' = m:b:k
 ----
 3 {"a":"v","b":{"k":"vv"},"c":[]}
+
+# auto cast string to json value
+statement ok
+INSERT INTO t4 SELECT 4, parse_json('{"a":"x2"}')
+
+statement ok
+UPDATE t4 SET m = '{"a":"x1"}' WHERE id = 3
+
+statement ok
+REPLACE INTO t4 ON CONFLICT(id) values(5,'{"a":"x3"}'), (6,'{"a":"x4"}')
+
+query ITT
+select id, m, m['a'] from t4 order by id asc
+----
+1 {"a":2,"b":{"k":2},"c":[10,11,12]} 2
+2 {"a":true,"b":{"k":false},"c":[1,2,3]} true
+3 {"a":"x1"} "x1"
+4 {"a":"x2"} "x2"
+5 {"a":"x3"} "x3"
+6 {"a":"x4"} "x4"
 
 statement ok
 DROP DATABASE db1

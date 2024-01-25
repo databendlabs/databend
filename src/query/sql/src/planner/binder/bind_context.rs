@@ -17,19 +17,19 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_ast::ast::Identifier;
-use common_ast::ast::Query;
-use common_ast::ast::TableAlias;
-use common_ast::ast::WindowSpec;
-use common_catalog::plan::InternalColumn;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::ColumnId;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::WindowSpec;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -37,7 +37,6 @@ use itertools::Itertools;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
-use crate::binder::lambda::LambdaInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
@@ -57,6 +56,7 @@ pub enum ExprContext {
     WhereClause,
     GroupClaue,
     HavingClause,
+    QualifyClause,
     OrderByClause,
     LimitClause,
 
@@ -117,8 +117,6 @@ pub struct BindContext {
 
     pub windows: WindowInfo,
 
-    pub lambda_info: LambdaInfo,
-
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
 
@@ -170,7 +168,6 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
-            lambda_info: LambdaInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
             allow_internal_columns: true,
@@ -190,7 +187,6 @@ impl BindContext {
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
-            lambda_info: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
             allow_internal_columns: parent.allow_internal_columns,
@@ -531,6 +527,7 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
+        visible: bool,
     ) -> Result<ColumnBinding> {
         if !self.allow_internal_columns {
             return Err(ErrorCode::SemanticError(format!(
@@ -558,12 +555,24 @@ impl BindContext {
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
+        if !table.table().supported_internal_column(column_id) {
+            return Err(ErrorCode::SemanticError(format!(
+                "Unsupported internal column '{}' in table '{}'.",
+                column_binding.internal_column.column_name(),
+                table.table().name()
+            )));
+        }
+
         let column = metadata.column(column_index);
         let column_binding = ColumnBindingBuilder::new(
             column.name(),
             column_index,
             Box::new(column.data_type()),
-            Visibility::Visible,
+            if visible {
+                Visibility::Visible
+            } else {
+                Visibility::InVisible
+            },
         )
         .database_name(Some(table.database().to_string()))
         .table_name(Some(table.name().to_string()))

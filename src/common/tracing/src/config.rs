@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -20,7 +21,9 @@ use std::fmt::Formatter;
 pub struct Config {
     pub file: FileConfig,
     pub stderr: StderrConfig,
+    pub otlp: OTLPConfig,
     pub query: QueryLogConfig,
+    pub profile: ProfileLogConfig,
     pub tracing: TracingConfig,
 }
 
@@ -33,21 +36,15 @@ impl Config {
                 level: "DEBUG".to_string(),
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
+                limit: 48,
+                prefix_filter: "databend_".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
                 level: "WARN".to_string(),
                 format: "text".to_string(),
             },
-            query: QueryLogConfig {
-                on: true,
-                dir: "./.databend/logs/query-details".to_string(),
-            },
-            tracing: TracingConfig {
-                on: false,
-                capture_log_level: "TRACE".to_string(),
-                otlp_endpoint: "http://127.0.0.1:4317".to_string(),
-            },
+            ..Default::default()
         }
     }
 }
@@ -58,6 +55,8 @@ pub struct FileConfig {
     pub level: String,
     pub dir: String,
     pub format: String,
+    pub limit: usize,
+    pub prefix_filter: String,
 }
 
 impl Display for FileConfig {
@@ -77,6 +76,8 @@ impl Default for FileConfig {
             level: "INFO".to_string(),
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
+            limit: 48,
+            prefix_filter: "databend_".to_string(),
         }
     }
 }
@@ -116,22 +117,106 @@ impl Default for StderrConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct OTLPConfig {
+    pub on: bool,
+    pub level: String,
+    pub endpoint: String,
+    pub labels: BTreeMap<String, String>,
+}
+
+impl Display for OTLPConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            f,
+            "enabled={}, level={}, endpoint={}, labels={}",
+            self.on, self.level, self.endpoint, labels
+        )
+    }
+}
+
+impl Default for OTLPConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            level: "INFO".to_string(),
+            endpoint: "http://127.0.0.1:4317".to_string(),
+            labels: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
+    pub otlp_endpoint: String,
+    pub labels: BTreeMap<String, String>,
 }
 
 impl Display for QueryLogConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "enabled={}, dir={}", self.on, self.dir)
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            f,
+            "enabled={}, dir={}, otlp_endpoint={}, labels={}",
+            self.on, self.dir, self.otlp_endpoint, labels,
+        )
     }
 }
 
 impl Default for QueryLogConfig {
     fn default() -> Self {
         Self {
-            on: true,
-            dir: "./.databend/logs/query-details".to_string(),
+            on: false,
+            dir: "".to_string(),
+            otlp_endpoint: "".to_string(),
+            labels: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ProfileLogConfig {
+    pub on: bool,
+    pub dir: String,
+    pub otlp_endpoint: String,
+    pub labels: BTreeMap<String, String>,
+}
+
+impl Display for ProfileLogConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            f,
+            "enabled={}, dir={}, otlp_endpoint={}, labels={}",
+            self.on, self.dir, self.otlp_endpoint, labels,
+        )
+    }
+}
+
+impl Default for ProfileLogConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            dir: "".to_string(),
+            otlp_endpoint: "".to_string(),
+            labels: BTreeMap::new(),
         }
     }
 }
@@ -158,7 +243,7 @@ impl Default for TracingConfig {
         Self {
             on: false,
             capture_log_level: "INFO".to_string(),
-            otlp_endpoint: "http://localhost:4317".to_string(),
+            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
         }
     }
 }

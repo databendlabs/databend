@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
-use crate::plans::FunctionCall;
-use crate::plans::UDFServerCall;
+use crate::plans::SubqueryExpr;
+use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -32,89 +32,41 @@ impl<'a> WindowChecker<'a> {
     pub fn new(bind_context: &'a BindContext) -> Self {
         Self { bind_context }
     }
+}
 
-    pub fn resolve(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
-        match scalar {
-            ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::FunctionCall(func) => {
-                let args = func
-                    .arguments
-                    .iter()
-                    .map(|arg| self.resolve(arg))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-                Ok(FunctionCall {
-                    span: func.span,
-                    params: func.params.clone(),
-                    arguments: args,
-                    func_name: func.func_name.clone(),
+impl<'a> VisitorMut<'_> for WindowChecker<'a> {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::WindowFunction(win) = expr {
+            if let Some(column) = self
+                .bind_context
+                .windows
+                .window_functions_map
+                .get(&win.display_name)
+            {
+                let window_info = &self.bind_context.windows.window_functions[*column];
+                let column_binding = ColumnBindingBuilder::new(
+                    win.display_name.clone(),
+                    window_info.index,
+                    Box::new(window_info.func.return_type()),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
                 }
-                .into())
-            }
-            ScalarExpr::LambdaFunction(lambda) => {
-                if let Some(column_ref) = self
-                    .bind_context
-                    .lambda_info
-                    .lambda_functions_map
-                    .get(&lambda.display_name)
-                {
-                    return Ok(column_ref.clone().into());
-                }
-                Err(ErrorCode::Internal("Window Check: Invalid lambda function"))
-            }
-            ScalarExpr::CastExpr(cast) => Ok(CastExpr {
-                span: cast.span,
-                is_try: cast.is_try,
-                argument: Box::new(self.resolve(&cast.argument)?),
-                target_type: cast.target_type.clone(),
-            }
-            .into()),
-            ScalarExpr::SubqueryExpr(_) => {
-                // TODO(leiysky): check subquery in the future
-                Ok(scalar.clone())
+                .into();
+                return Ok(());
             }
 
-            ScalarExpr::WindowFunction(win) => {
-                if let Some(column) = self
-                    .bind_context
-                    .windows
-                    .window_functions_map
-                    .get(&win.display_name)
-                {
-                    let window_info = &self.bind_context.windows.window_functions[*column];
-                    let column_binding = ColumnBindingBuilder::new(
-                        win.display_name.clone(),
-                        window_info.index,
-                        Box::new(window_info.func.return_type()),
-                        Visibility::Visible,
-                    )
-                    .build();
-                    return Ok(BoundColumnRef {
-                        span: None,
-                        column: column_binding,
-                    }
-                    .into());
-                }
-                Err(ErrorCode::Internal("Window Check: Invalid window function"))
-            }
-
-            ScalarExpr::AggregateFunction(_) => unreachable!(),
-            ScalarExpr::UDFServerCall(udf) => {
-                let new_args = udf
-                    .arguments
-                    .iter()
-                    .map(|arg| self.resolve(arg))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-                Ok(UDFServerCall {
-                    span: udf.span,
-                    func_name: udf.func_name.clone(),
-                    display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: new_args,
-                }
-                .into())
-            }
+            return Err(ErrorCode::Internal("Window Check: Invalid window function"));
         }
+
+        walk_expr_mut(self, expr)
+    }
+
+    fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {
+        // TODO(leiysky): check subquery in the future
+        Ok(())
     }
 }

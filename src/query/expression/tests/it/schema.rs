@@ -14,15 +14,26 @@
 
 use std::collections::BTreeMap;
 
-use common_exception::Result;
-use common_expression::create_test_complex_schema;
-use common_expression::types::NumberDataType;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
+use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use databend_common_exception::Result;
+use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use pretty_assertions::assert_eq;
+
+#[test]
+fn test_from_arrow_field_to_table_field() -> Result<()> {
+    let extension_data_type =
+        ArrowDataType::Extension("a".to_string(), Box::new(ArrowDataType::Int8), None);
+    let arrow_field = ArrowField::new("".to_string(), extension_data_type, false);
+    let _: TableField = (&arrow_field).try_into().unwrap();
+    Ok(())
+}
 
 #[test]
 fn test_project_schema_from_tuple() -> Result<()> {
@@ -33,6 +44,13 @@ fn test_project_schema_from_tuple() -> Result<()> {
     let b = TableDataType::Tuple {
         fields_name: vec!["b1".to_string(), "b2".to_string()],
         fields_type: vec![b1.clone(), TableDataType::Number(NumberDataType::Int64)],
+    };
+    let d = TableDataType::Tuple {
+        fields_name: vec!["d1".to_string(), "d2".to_string()],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::Int64),
+            TableDataType::Number(NumberDataType::Int64),
+        ],
     };
     let fields = vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
@@ -134,8 +152,44 @@ fn test_project_schema_from_tuple() -> Result<()> {
             TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 5),
             TableField::new_from_column_id("b:b1:b12", TableDataType::String, 6),
             TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 7),
+            TableField::new_from_column_id("b:b1", b1.clone(), 5),
+            TableField::new_from_column_id("b", b.clone(), 5),
+        ];
+        let project_schema = schema.inner_project(&path_indices);
+
+        for (i, field) in project_schema.fields().iter().enumerate() {
+            assert_eq!(*field, expect_fields[i]);
+        }
+        assert_eq!(project_schema.next_column_id(), schema.next_column_id());
+    }
+
+    // add column
+    {
+        schema.add_columns(&[TableField::new("d", d.clone())])?;
+
+        let mut path_indices = BTreeMap::new();
+        path_indices.insert(0, vec![0]);
+        path_indices.insert(1, vec![1]);
+        path_indices.insert(2, vec![2, 0, 0]);
+        path_indices.insert(3, vec![2, 0, 1]);
+        path_indices.insert(4, vec![2, 1]);
+        path_indices.insert(5, vec![2, 0]);
+        path_indices.insert(6, vec![2]);
+        path_indices.insert(7, vec![3, 0]);
+        path_indices.insert(8, vec![3, 1]);
+        path_indices.insert(9, vec![3]);
+
+        let expect_fields = vec![
+            TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
+            TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 4),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 5),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 6),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 7),
             TableField::new_from_column_id("b:b1", b1, 5),
             TableField::new_from_column_id("b", b, 5),
+            TableField::new_from_column_id("d:d1", TableDataType::Number(NumberDataType::Int64), 8),
+            TableField::new_from_column_id("d:d2", TableDataType::Number(NumberDataType::Int64), 9),
+            TableField::new_from_column_id("d", d, 8),
         ];
         let project_schema = schema.inner_project(&path_indices);
 
@@ -200,35 +254,32 @@ fn test_field_leaf_default_values() -> Result<()> {
     let schema = TableSchema::new(fields);
 
     let default_values = vec![
-        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(1)),
         Scalar::Tuple(vec![
             Scalar::Tuple(vec![
                 Scalar::Boolean(true),
-                Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+                Scalar::String("ab".to_string()),
             ]),
-            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),
         ]),
-        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+        Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(10)),
     ];
 
     let leaf_default_values = schema.field_leaf_default_values(&default_values);
     let expected_leaf_default_values: Vec<(ColumnId, Scalar)> = vec![
         (
             0,
-            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(1)),
         ),
         (1, Scalar::Boolean(true)),
-        (
-            2,
-            Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
-        ),
+        (2, Scalar::String("ab".to_string())),
         (
             3,
-            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::Int64(2)),
         ),
         (
             4,
-            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+            Scalar::Number(databend_common_expression::types::number::NumberScalar::UInt64(10)),
         ),
     ];
     expected_leaf_default_values

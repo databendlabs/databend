@@ -18,24 +18,24 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use common_catalog::plan::AggIndexMeta;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::aggregates::StateAddr;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::AccumulatingTransform;
-use common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_catalog::plan::AggIndexMeta;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::aggregates::AggregateFunctionRef;
+use databend_common_functions::aggregates::StateAddr;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
@@ -138,8 +138,8 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 let mut data = Vec::with_capacity(4);
                 func.serialize(place, &mut data)?;
                 columns.push(BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(data)),
+                    DataType::Binary,
+                    Value::Scalar(Scalar::Binary(data)),
                 ));
             }
 

@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_sql::Planner;
-use common_storages_view::view_table::QUERY;
-use common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::Planner;
+use databend_common_storages_view::view_table::QUERY;
+use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -58,22 +58,22 @@ impl AsyncSystemTable for ColumnsTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let rows = self.dump_table_columns(ctx, push_downs).await?;
-        let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut is_nullables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut comments: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut names: Vec<String> = Vec::with_capacity(rows.len());
+        let mut tables: Vec<String> = Vec::with_capacity(rows.len());
+        let mut databases: Vec<String> = Vec::with_capacity(rows.len());
+        let mut types: Vec<String> = Vec::with_capacity(rows.len());
+        let mut data_types: Vec<String> = Vec::with_capacity(rows.len());
+        let mut default_kinds: Vec<String> = Vec::with_capacity(rows.len());
+        let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
+        let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
+        let mut comments: Vec<String> = Vec::with_capacity(rows.len());
         for (database_name, table_name, field) in rows.into_iter() {
-            names.push(field.name().clone().into_bytes());
-            tables.push(table_name.into_bytes());
-            databases.push(database_name.into_bytes());
-            types.push(field.data_type().wrapped_display().into_bytes());
+            names.push(field.name().clone());
+            tables.push(table_name);
+            databases.push(database_name);
+            types.push(field.data_type().wrapped_display());
             let data_type = field.data_type().remove_recursive_nullable().sql_name();
-            data_types.push(data_type.into_bytes());
+            data_types.push(data_type);
 
             let mut default_kind = "".to_string();
             let mut default_expr = "".to_string();
@@ -81,15 +81,15 @@ impl AsyncSystemTable for ColumnsTable {
                 default_kind = "DEFAULT".to_string();
                 default_expr = expr.to_string();
             }
-            default_kinds.push(default_kind.into_bytes());
-            default_exprs.push(default_expr.into_bytes());
+            default_kinds.push(default_kind);
+            default_exprs.push(default_expr);
             if field.is_nullable() {
-                is_nullables.push("YES".to_string().into_bytes());
+                is_nullables.push("YES".to_string());
             } else {
-                is_nullables.push("NO".to_string().into_bytes());
+                is_nullables.push("NO".to_string());
             }
 
-            comments.push("".to_string().into_bytes());
+            comments.push("".to_string());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -143,87 +143,112 @@ impl ColumnsTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<Vec<(String, String, TableField)>> {
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-
-        let mut tables = Vec::new();
-        let mut databases = Vec::new();
-
-        if let Some(push_downs) = push_downs {
-            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(s) = scalar {
-                            if let Ok(database) = String::from_utf8(s.clone()) {
-                                if !databases.contains(&database) {
-                                    databases.push(database);
-                                }
-                            }
-                        }
-                    } else if col_name == "table" {
-                        if let Scalar::String(s) = scalar {
-                            if let Ok(table) = String::from_utf8(s.clone()) {
-                                if !tables.contains(&table) {
-                                    tables.push(table);
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        if databases.is_empty() {
-            let all_databases = catalog.list_databases(tenant.as_str()).await?;
-            for db in all_databases {
-                databases.push(db.name().to_string());
-            }
-        }
-
-        let tenant = ctx.get_tenant();
-        let visibility_checker = ctx.get_visibility_checker().await?;
-
-        let final_dbs: Vec<String> = databases
-            .iter()
-            .filter(|db| visibility_checker.check_database_visibility(CATALOG_DEFAULT, db))
-            .cloned()
-            .collect();
+        let database_and_tables = dump_tables(&ctx, push_downs).await?;
 
         let mut rows: Vec<(String, String, TableField)> = vec![];
-        for database in final_dbs {
-            let tables = if tables.is_empty() {
-                if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
-                    table
-                } else {
-                    vec![]
-                }
-            } else {
-                let mut res = Vec::new();
-                for table in &tables {
-                    if let Ok(table) = catalog.get_table(tenant.as_str(), &database, table).await {
-                        res.push(table);
-                    }
-                }
-                res
-            };
-
+        for (database, tables) in database_and_tables {
             for table in tables {
-                if visibility_checker.check_table_visibility(
-                    CATALOG_DEFAULT,
-                    &database,
-                    table.name(),
-                ) {
-                    let fields = generate_fields(&ctx, &table).await?;
-                    for field in fields {
-                        rows.push((database.clone(), table.name().into(), field.clone()))
-                    }
+                let fields = generate_fields(&ctx, &table).await?;
+                for field in fields {
+                    rows.push((database.clone(), table.name().into(), field.clone()))
                 }
             }
         }
 
         Ok(rows)
     }
+}
+
+pub(crate) async fn dump_tables(
+    ctx: &Arc<dyn TableContext>,
+    push_downs: Option<PushDownInfo>,
+) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
+
+    let mut tables: Vec<String> = Vec::new();
+    let mut databases: Vec<String> = Vec::new();
+
+    if let Some(push_downs) = push_downs {
+        if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            find_eq_filter(&expr, &mut |col_name, scalar| {
+                if col_name == "database" {
+                    if let Scalar::String(database) = scalar {
+                        if !databases.contains(database) {
+                            databases.push(database.clone());
+                        }
+                    }
+                } else if col_name == "table" {
+                    if let Scalar::String(table) = scalar {
+                        if !tables.contains(table) {
+                            tables.push(table.clone());
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    let visibility_checker = ctx.get_visibility_checker().await?;
+
+    let mut final_dbs: Vec<(String, u64)> = Vec::new();
+
+    if databases.is_empty() {
+        let all_databases = catalog.list_databases(tenant.as_str()).await?;
+        for db in all_databases {
+            let db_id = db.get_db_info().ident.db_id;
+            let db_name = db.name();
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+                final_dbs.push((db_name.to_string(), db_id));
+            }
+        }
+    } else {
+        for db in databases {
+            let db_id = catalog
+                .get_database(&tenant, &db)
+                .await?
+                .get_db_info()
+                .ident
+                .db_id;
+            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
+                final_dbs.push((db.to_string(), db_id));
+            }
+        }
+    }
+
+    let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
+    for (database, db_id) in final_dbs {
+        let tables = if tables.is_empty() {
+            if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
+                table
+            } else {
+                vec![]
+            }
+        } else {
+            let mut res = Vec::new();
+            for table in &tables {
+                if let Ok(table) = catalog.get_table(tenant.as_str(), &database, table).await {
+                    res.push(table);
+                }
+            }
+            res
+        };
+        let mut filtered_tables = Vec::with_capacity(tables.len());
+        for table in tables {
+            if visibility_checker.check_table_visibility(
+                CATALOG_DEFAULT,
+                &database,
+                table.name(),
+                db_id,
+                table.get_id(),
+            ) {
+                filtered_tables.push(table);
+            }
+        }
+        final_tables.push((database, filtered_tables));
+    }
+    Ok(final_tables)
 }
 
 async fn generate_fields(

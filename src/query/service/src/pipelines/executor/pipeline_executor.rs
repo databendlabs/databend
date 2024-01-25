@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::intrinsics::assume;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::tokio;
-use common_base::base::tokio::sync::Notify;
-use common_base::runtime::catch_unwind;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::Runtime;
-use common_base::runtime::Thread;
-use common_base::runtime::ThreadJoinHandle;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::processors::profile::Profile;
-use common_pipeline_core::LockGuard;
-use common_pipeline_core::Pipeline;
+use databend_common_base::base::tokio;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::ThreadJoinHandle;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::LockGuard;
+use databend_common_pipeline_core::Pipeline;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -46,12 +43,13 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -62,7 +60,7 @@ pub struct PipelineExecutor {
     on_init_callback: Mutex<Option<InitCallback>>,
     on_finished_callback: Mutex<Option<FinishedCallback>>,
     settings: ExecutorSettings,
-    finished_notify: Arc<Notify>,
+    finished_notify: Arc<WatchNotify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
@@ -87,7 +85,7 @@ impl PipelineExecutor {
 
         match RunningGraph::create(pipeline) {
             Err(cause) => {
-                let _ = on_finished_callback(&Some(cause.clone()));
+                let _ = on_finished_callback(&Err(cause.clone()));
                 Err(cause)
             }
             Ok(running_graph) => Self::try_create(
@@ -158,7 +156,7 @@ impl PipelineExecutor {
         match RunningGraph::from_pipelines(pipelines) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
-                    let _ = on_finished_callback(&Some(cause.clone()));
+                    let _ = on_finished_callback(&Err(cause.clone()));
                 }
 
                 Err(cause)
@@ -195,12 +193,12 @@ impl PipelineExecutor {
             async_runtime: GlobalIORuntime::instance(),
             settings,
             finished_error: Mutex::new(None),
-            finished_notify: Arc::new(Notify::new()),
+            finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
         }))
     }
 
-    fn on_finished(&self, error: &Option<ErrorCode>) -> Result<()> {
+    fn on_finished(&self, error: &Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
@@ -245,7 +243,7 @@ impl PipelineExecutor {
                     let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished(&Some(may_error.clone()))?;
+                    self.on_finished(&Err(may_error.clone()))?;
                     return Err(may_error);
                 }
             }
@@ -253,17 +251,17 @@ impl PipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = thread_res.unwrap_err();
-                self.on_finished(&Some(may_error.clone()))?;
+                self.on_finished(&Err(may_error.clone()))?;
                 return Err(may_error);
             }
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
-            self.on_finished(&Some(error.clone()))?;
+            self.on_finished(&Err(error.clone()))?;
             return Err(error);
         }
 
-        self.on_finished(&None)?;
+        self.on_finished(&Ok(self.graph.get_proc_profiles()))?;
         Ok(())
     }
 
@@ -357,14 +355,8 @@ impl PipelineExecutor {
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
-                let enable_profiling = this.settings.enable_profiling;
                 let try_result = catch_unwind(move || -> Result<()> {
-                    let res = match enable_profiling {
-                        true => this_clone.execute_single_thread::<true>(thread_num),
-                        false => this_clone.execute_single_thread::<false>(thread_num),
-                    };
-
-                    match res {
+                    match this_clone.execute_single_thread(thread_num) {
                         Ok(_) => Ok(()),
                         Err(cause) => {
                             if log::max_level() == LevelFilter::Trace {
@@ -393,10 +385,7 @@ impl PipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread<const ENABLE_PROFILING: bool>(
-        self: &Arc<Self>,
-        thread_num: usize,
-    ) -> Result<()> {
+    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(
             thread_num,
@@ -411,28 +400,7 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let (executed_pid, is_async, elapsed) =
-                    context.execute_task::<ENABLE_PROFILING>()?;
-
-                if ENABLE_PROFILING {
-                    let node = self.graph.get_node(executed_pid);
-                    if let Some(elapsed) = elapsed {
-                        let nanos = elapsed.as_nanos();
-                        assume(nanos < 18446744073709551615_u128);
-
-                        if is_async {
-                            node.profile
-                                .wait_time
-                                .fetch_add(nanos as u64, Ordering::Relaxed);
-                        } else {
-                            node.profile
-                                .cpu_time
-                                .fetch_add(nanos as u64, Ordering::Relaxed);
-                        }
-                    }
-
-                    node.processor.record_profile(&node.profile);
-                }
+                let executed_pid = context.execute_task(&self.graph)?;
 
                 // Not scheduled graph if pipeline is finished.
                 if !self.global_tasks_queue.is_finished() {
@@ -466,7 +434,7 @@ impl Drop for PipelineExecutor {
                 Some(cause) => cause.clone(),
                 None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
             };
-            if let Err(cause) = catch_unwind(move || on_finished_callback(&Some(cause))).flatten() {
+            if let Err(cause) = catch_unwind(move || on_finished_callback(&Err(cause))).flatten() {
                 warn!("Pipeline executor shutdown failure, {:?}", cause);
             }
         }

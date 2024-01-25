@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
 use std::fmt;
@@ -24,30 +25,33 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
-use common_base::base::mask_string;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::AuthType;
-use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
-use common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
-use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
-use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
-use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
-use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
-use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
-use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
-use common_meta_app::tenant::TenantQuota;
-use common_storage::StorageConfig as InnerStorageConfig;
-use common_tracing::Config as InnerLogConfig;
-use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::QueryLogConfig as InnerQueryLogConfig;
-use common_tracing::StderrConfig as InnerStderrLogConfig;
-use common_tracing::TracingConfig as InnerTracingConfig;
-use common_users::idm_config::IDMConfig as InnerIDMConfig;
+use databend_common_base::base::mask_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
+use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
+use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
+use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
+use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
+use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
+use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::StorageConfig as InnerStorageConfig;
+use databend_common_tracing::Config as InnerLogConfig;
+use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
+use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
+use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -712,14 +716,6 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-external-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
-
-    #[clap(
-        long = "storage-s3-allow-anonymous",
-        value_name = "VALUE",
-        default_value_t
-    )]
-    #[serde(rename = "allow_anonymous")]
-    pub s3_allow_anonymous: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -744,7 +740,6 @@ impl Debug for S3StorageConfig {
                 &mask_string(&self.secret_access_key, 3),
             )
             .field("master_key", &mask_string(&self.master_key, 3))
-            .field("allow_anonymous", &self.s3_allow_anonymous)
             .finish()
     }
 }
@@ -763,7 +758,6 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: inner.enable_virtual_host_style,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
-            s3_allow_anonymous: inner.allow_anonymous,
         }
     }
 }
@@ -785,7 +779,6 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
-            allow_anonymous: self.s3_allow_anonymous,
         })
     }
 }
@@ -1490,6 +1483,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
 
+    /// Max retention time in days for data, default is 90 days.
+    #[clap(long, value_name = "VALUE", default_value = "90")]
+    pub(crate) data_retention_time_in_days_max: u64,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1587,6 +1584,9 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
+
+    #[clap(skip)]
+    pub settings: HashMap<String, UserSettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -1654,6 +1654,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
             openai_api_chat_base_url: self.openai_api_chat_base_url,
             openai_api_embedding_base_url: self.openai_api_embedding_base_url,
@@ -1664,6 +1665,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
+            settings: self.settings,
         })
     }
 }
@@ -1729,6 +1731,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
+            data_retention_time_in_days_max: 90,
+
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
@@ -1741,6 +1745,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            //
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_chat_base_url: inner.openai_api_chat_base_url,
             openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
@@ -1751,6 +1756,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
+            settings: HashMap::new(),
         }
     }
 }
@@ -1793,7 +1799,13 @@ pub struct LogConfig {
     pub stderr: StderrLogConfig,
 
     #[clap(flatten)]
+    pub otlp: OTLPLogConfig,
+
+    #[clap(flatten)]
     pub query: QueryLogConfig,
+
+    #[clap(flatten)]
+    pub profile: ProfileLogConfig,
 
     #[clap(flatten)]
     pub tracing: TracingConfig,
@@ -1838,14 +1850,33 @@ impl TryInto<InnerLogConfig> for LogConfig {
             file.dir = self.dir.to_string();
         }
 
+        let otlp: InnerOTLPLogConfig = self.otlp.try_into()?;
+        if otlp.on && otlp.endpoint.is_empty() {
+            return Err(ErrorCode::InvalidConfig(
+                "`endpoint` must be set when `otlp.on` is true".to_string(),
+            ));
+        }
+
         let mut query: InnerQueryLogConfig = self.query.try_into()?;
-        if query.dir.is_empty() {
+        if query.on && query.dir.is_empty() && query.otlp_endpoint.is_empty() {
             if file.dir.is_empty() {
                 return Err(ErrorCode::InvalidConfig(
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
                 ));
+            } else {
+                query.dir = format!("{}/query-details", &file.dir);
             }
-            query.dir = format!("{}/query-details", &file.dir);
+        }
+
+        let mut profile: InnerProfileLogConfig = self.profile.try_into()?;
+        if profile.on && profile.dir.is_empty() && profile.otlp_endpoint.is_empty() {
+            if file.dir.is_empty() {
+                return Err(ErrorCode::InvalidConfig(
+                    "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
+                ));
+            } else {
+                profile.dir = format!("{}/profiles", &file.dir);
+            }
         }
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
@@ -1853,7 +1884,9 @@ impl TryInto<InnerLogConfig> for LogConfig {
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
+            otlp,
             query,
+            profile,
             tracing,
         })
     }
@@ -1866,7 +1899,9 @@ impl From<InnerLogConfig> for LogConfig {
             dir: inner.file.dir.clone(),
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            otlp: inner.otlp.into(),
             query: inner.query.into(),
+            profile: inner.profile.into(),
             tracing: inner.tracing.into(),
 
             // Deprecated fields
@@ -1903,6 +1938,20 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-format", value_name = "VALUE", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
+
+    /// Log file max
+    #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
+    #[serde(rename = "limit")]
+    pub file_limit: usize,
+
+    /// Log prefix filter
+    #[clap(
+        long = "log-file-prefix-filter",
+        value_name = "VALUE",
+        default_value = "databend_"
+    )]
+    #[serde(rename = "prefix_filter")]
+    pub file_prefix_filter: String,
 }
 
 impl Default for FileLogConfig {
@@ -1920,6 +1969,8 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
+            limit: self.file_limit,
+            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -1931,6 +1982,8 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_level: inner.level,
             file_dir: inner.dir,
             file_format: inner.format,
+            file_limit: inner.limit,
+            file_prefix_filter: inner.prefix_filter,
         }
     }
 }
@@ -1990,20 +2043,86 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
+pub struct OTLPLogConfig {
+    #[clap(long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[serde(rename = "on")]
+    pub otlp_on: bool,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = "INFO")]
+    #[serde(rename = "level")]
+    pub otlp_level: String,
+
+    /// Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = "http://127.0.0.1:4317"
+    )]
+    #[serde(rename = "endpoint")]
+    pub otlp_endpoint: String,
+
+    /// Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub otlp_labels: BTreeMap<String, String>,
+}
+
+impl Default for OTLPLogConfig {
+    fn default() -> Self {
+        InnerOTLPLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerOTLPLogConfig> for OTLPLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerOTLPLogConfig> {
+        Ok(InnerOTLPLogConfig {
+            on: self.otlp_on,
+            level: self.otlp_level,
+            endpoint: self.otlp_endpoint,
+            labels: self.otlp_labels,
+        })
+    }
+}
+
+impl From<InnerOTLPLogConfig> for OTLPLogConfig {
+    fn from(inner: InnerOTLPLogConfig) -> Self {
+        Self {
+            otlp_on: inner.on,
+            otlp_level: inner.level,
+            otlp_endpoint: inner.endpoint,
+            otlp_labels: inner.labels,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub log_query_on: bool,
 
     /// Query Log file dir
-    #[clap(
-        long = "log-query-dir",
-        value_name = "VALUE",
-        default_value = "",
-        help = "Default to <log-file-dir>/query-details"
-    )]
+    #[clap(long = "log-query-dir", value_name = "VALUE", default_value = "")]
     #[serde(rename = "dir")]
     pub log_query_dir: String,
+
+    /// Query Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-query-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = ""
+    )]
+    #[serde(rename = "otlp_endpoint")]
+    pub log_query_otlp_endpoint: String,
+
+    /// Query Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub log_query_otlp_labels: BTreeMap<String, String>,
 }
 
 impl Default for QueryLogConfig {
@@ -2019,6 +2138,8 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
         Ok(InnerQueryLogConfig {
             on: self.log_query_on,
             dir: self.log_query_dir,
+            otlp_endpoint: self.log_query_otlp_endpoint,
+            labels: self.log_query_otlp_labels,
         })
     }
 }
@@ -2028,6 +2149,65 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
         Self {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
+            log_query_otlp_endpoint: inner.otlp_endpoint,
+            log_query_otlp_labels: inner.labels,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct ProfileLogConfig {
+    #[clap(long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[serde(rename = "on")]
+    pub log_profile_on: bool,
+
+    /// Profile Log file dir
+    #[clap(long = "log-profile-dir", value_name = "VALUE", default_value = "")]
+    #[serde(rename = "dir")]
+    pub log_profile_dir: String,
+
+    /// Profile Log OpenTelemetry OTLP endpoint
+    #[clap(
+        long = "log-profile-otlp-endpoint",
+        value_name = "VALUE",
+        default_value = ""
+    )]
+    #[serde(rename = "otlp_endpoint")]
+    pub log_profile_otlp_endpoint: String,
+
+    /// Profile Log Labels
+    #[clap(skip)]
+    #[serde(rename = "labels")]
+    pub log_profile_otlp_labels: BTreeMap<String, String>,
+}
+
+impl Default for ProfileLogConfig {
+    fn default() -> Self {
+        InnerProfileLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerProfileLogConfig> for ProfileLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerProfileLogConfig> {
+        Ok(InnerProfileLogConfig {
+            on: self.log_profile_on,
+            dir: self.log_profile_dir,
+            otlp_endpoint: self.log_profile_otlp_endpoint,
+            labels: self.log_profile_otlp_labels,
+        })
+    }
+}
+
+impl From<InnerProfileLogConfig> for ProfileLogConfig {
+    fn from(inner: InnerProfileLogConfig) -> Self {
+        Self {
+            log_profile_on: inner.on,
+            log_profile_dir: inner.dir,
+            log_profile_otlp_endpoint: inner.otlp_endpoint,
+            log_profile_otlp_labels: inner.labels,
         }
     }
 }
@@ -2035,7 +2215,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct TracingConfig {
-    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "false")]
+    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub tracing_on: bool,
 
@@ -2052,7 +2232,7 @@ pub struct TracingConfig {
     #[clap(
         long = "log-tracing-otlp-endpoint",
         value_name = "VALUE",
-        default_value = "http://localhost:4317"
+        default_value = "http://127.0.0.1:4317"
     )]
     #[serde(rename = "otlp_endpoint")]
     pub tracing_otlp_endpoint: String,

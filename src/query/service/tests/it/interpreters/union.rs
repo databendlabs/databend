@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataSchemaRef;
-use common_expression::SendableDataBlockStream;
-use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::planner::plans::Plan;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::planner::plans::Plan;
+use databend_common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::InterpreterPtr;
 use databend_query::sessions::QueryContext;
@@ -58,7 +58,8 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_union_output_type() -> Result<()> {
     {
-        let fixture = TestFixture::new().await?;
+        let fixture = TestFixture::setup().await?;
+
         let (_, schema) = get_interpreter(
             fixture.new_query_ctx().await?,
             "select 1 union all select 2.0::FLOAT64",
@@ -74,6 +75,7 @@ async fn test_simple_union_output_type() -> Result<()> {
             "select 1.0::FLOAT64 union all select 2",
         )
         .await?;
+
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
@@ -81,9 +83,10 @@ async fn test_simple_union_output_type() -> Result<()> {
     }
 
     {
-        let fixture = TestFixture::new().await?;
-        execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
-        execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
+        let fixture = TestFixture::setup().await?;
+
+        let _ = execute_sql(fixture.new_query_ctx().await?, "create table a (a int)").await?;
+        let _ = execute_sql(fixture.new_query_ctx().await?, "create table b (b double)").await?;
         let (_, schema) = get_interpreter(
             fixture.new_query_ctx().await?,
             "select * from a union all select * from b",
@@ -159,15 +162,15 @@ fn create_all_types_table_sql(table_name: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_union_output_type() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     // Prepare tables
     let sql1 = create_all_types_table_sql("t1");
     let plan1 = plan_sql(fixture.new_query_ctx().await?, &sql1).await?;
-    execute_plan(fixture.new_query_ctx().await?, &plan1).await?;
+    let _ = execute_plan(fixture.new_query_ctx().await?, &plan1).await?;
     let sql2 = create_all_types_table_sql("t2");
     let plan2 = plan_sql(fixture.new_query_ctx().await?, &sql2).await?;
-    execute_plan(fixture.new_query_ctx().await?, &plan2).await?;
+    let _ = execute_plan(fixture.new_query_ctx().await?, &plan2).await?;
 
     let table_schema = table_schema(&plan1);
     let table_fields = table_schema.fields();

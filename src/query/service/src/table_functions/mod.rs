@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod async_crash_me;
+mod cloud;
 mod infer_schema;
 mod inspect_parquet;
 mod list_stage;
@@ -33,6 +34,5 @@ pub use others::LicenseInfoTable;
 pub use others::SuggestedBackgroundTasksSource;
 pub use others::SuggestedBackgroundTasksTable;
 pub use others::TenantQuotaTable;
-pub use srf::FlattenTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;

@@ -16,19 +16,19 @@ use std::ops::Add;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::escape_for_key;
-use common_base::base::unescape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_store::MetaStore;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::NodeInfo;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_base::base::escape_for_key;
+use databend_common_base::base::unescape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 
 use crate::cluster::ClusterApi;
 
@@ -65,16 +65,14 @@ impl ClusterMgr {
         })
     }
 
-    fn new_lift_time(&self) -> KVMeta {
+    fn new_lift_time(&self) -> MetaSpec {
         let now = std::time::SystemTime::now();
         let expire_at = now
             .add(self.lift_time)
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        KVMeta {
-            expire_at: Some(expire_at.as_secs()),
-        }
+        MetaSpec::new_expire(expire_at.as_secs())
     }
 }
 
@@ -92,10 +90,10 @@ impl ClusterApi for ClusterMgr {
             .metastore
             .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
-        let res_seq = upsert_node.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_node.await?.added_seq_or_else(|_v| {
             ErrorCode::ClusterNodeAlreadyExists(format!(
-                "Cluster ID already exists, seq [{}]",
-                v.seq
+                "Node with ID '{}' already exists in the cluster.",
+                node.id
             ))
         })?;
 
@@ -133,7 +131,7 @@ impl ClusterApi for ClusterMgr {
                 result: None,
             } => Ok(()),
             UpsertKVReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
-                "unknown node {:?}",
+                "Node with ID '{}' does not exist in the cluster.",
                 node_id
             ))),
         }

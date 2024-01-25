@@ -15,30 +15,30 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use background_service::get_background_service_handler;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_catalog::table_function::TableFunction;
-pub use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_storages_factory::Table;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
+pub use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_storages_factory::Table;
+use databend_enterprise_background_service::get_background_service_handler;
 
 pub struct ExecuteBackgroundJobTable {
     job_name: String,
@@ -53,14 +53,14 @@ impl ExecuteBackgroundJobTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let job_name = String::from_utf8_lossy(args[0].as_string().unwrap().as_slice()).to_string();
+        let job_name = args[0].as_string().unwrap().clone();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: String::from("execute_background_job"),
             meta: TableMeta {
-                schema: Arc::new(TableSchema::empty()),
+                schema: TableSchemaRefExt::create_dummy(),
                 engine: String::from(table_func_name),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
@@ -107,7 +107,7 @@ impl Table for ExecuteBackgroundJobTable {
 
     fn table_args(&self) -> Option<TableArgs> {
         Some(TableArgs::new_positioned(vec![Scalar::String(
-            self.job_name.as_bytes().to_vec(),
+            self.job_name.clone(),
         )]))
     }
 

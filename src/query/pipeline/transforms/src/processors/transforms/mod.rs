@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod sort;
+pub mod sort;
 mod transform;
 mod transform_accumulating;
 mod transform_accumulating_async;
 mod transform_async;
 mod transform_block_compact;
 mod transform_block_compact_for_copy;
+mod transform_blocking;
 mod transform_compact;
 mod transform_dummy;
 mod transform_multi_sort_merge;
+mod transform_sort_merge_base;
 
-pub mod transform_sort;
 mod transform_sort_merge;
 mod transform_sort_merge_limit;
 pub mod transform_sort_partial;
@@ -33,8 +34,12 @@ pub use transform_accumulating_async::*;
 pub use transform_async::*;
 pub use transform_block_compact::*;
 pub use transform_block_compact_for_copy::*;
+pub use transform_blocking::*;
 pub use transform_compact::*;
 pub use transform_dummy::*;
-pub use transform_sort::*;
+pub use transform_multi_sort_merge::try_add_multi_sort_merge;
 pub use transform_sort_merge::sort_merge;
+pub use transform_sort_merge::*;
+pub use transform_sort_merge_base::*;
+pub use transform_sort_merge_limit::*;
 pub use transform_sort_partial::*;

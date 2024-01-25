@@ -16,17 +16,17 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_http::health_handler;
-use common_http::home::debug_home_handler;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_http::health_handler;
+use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
-use common_http::jeprof::debug_jeprof_dump_handler;
-use common_http::pprof::debug_pprof_handler;
-use common_http::stack::debug_dump_stack;
-use common_http::HttpError;
-use common_http::HttpShutdownHandler;
-use common_meta_types::anyerror::AnyError;
+use databend_common_http::jeprof::debug_jeprof_dump_handler;
+use databend_common_http::pprof::debug_pprof_handler;
+use databend_common_http::stack::debug_dump_stack;
+use databend_common_http::HttpError;
+use databend_common_http::HttpShutdownHandler;
+use databend_common_meta_types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::get;
@@ -55,6 +55,7 @@ impl HttpService {
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
+            .at("/v1/system", get(super::http::v1::system::system_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
             .at(
                 "/v1/status",
@@ -80,10 +81,15 @@ impl HttpService {
                 get(super::http::v1::background_tasks::list_background_tasks),
             );
         if self.config.query.management_mode {
-            route = route.at(
-                "/v1/tenants/:tenant/tables",
-                get(super::http::v1::tenant_tables::list_tenant_tables_handler),
-            );
+            route = route
+                .at(
+                    "/v1/tenants/:tenant/tables",
+                    get(super::http::v1::tenant_tables::list_tenant_tables_handler),
+                )
+                .at(
+                    "v1/tenants/:tenant/stream_status",
+                    get(super::http::v1::stream_status::stream_status_handler),
+                );
         }
 
         #[cfg(feature = "memory-profiling")]

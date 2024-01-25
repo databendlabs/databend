@@ -14,22 +14,22 @@
 
 use std::collections::BTreeMap;
 
-use common_ast::ast::AlterDatabaseAction;
-use common_ast::ast::AlterDatabaseStmt;
-use common_ast::ast::CreateDatabaseStmt;
-use common_ast::ast::DatabaseEngine;
-use common_ast::ast::DropDatabaseStmt;
-use common_ast::ast::SQLProperty;
-use common_ast::ast::ShowCreateDatabaseStmt;
-use common_ast::ast::ShowDatabasesStmt;
-use common_ast::ast::ShowLimit;
-use common_ast::ast::UndropDatabaseStmt;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::share::ShareNameIdent;
+use databend_common_ast::ast::AlterDatabaseAction;
+use databend_common_ast::ast::AlterDatabaseStmt;
+use databend_common_ast::ast::CreateDatabaseStmt;
+use databend_common_ast::ast::DatabaseEngine;
+use databend_common_ast::ast::DropDatabaseStmt;
+use databend_common_ast::ast::SQLProperty;
+use databend_common_ast::ast::ShowCreateDatabaseStmt;
+use databend_common_ast::ast::ShowDatabasesStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::UndropDatabaseStmt;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::share::ShareNameIdent;
 use log::debug;
 
 use crate::binder::Binder;
@@ -70,6 +70,7 @@ impl Binder {
 
         if *full {
             select_builder.with_column("catalog AS Catalog");
+            select_builder.with_column("owner");
         }
         select_builder.with_column(format!("name AS `databases_in_{ctl}`"));
         select_builder.with_order_by("catalog");
@@ -205,7 +206,7 @@ impl Binder {
         stmt: &CreateDatabaseStmt,
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             engine,
@@ -229,7 +230,7 @@ impl Binder {
         let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
-            if_not_exists: *if_not_exists,
+            create_option: create_option.clone(),
             tenant,
             catalog,
             database,

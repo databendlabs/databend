@@ -14,8 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod parquet_file;
-mod row_based_file;
+mod append;
 mod stage_table;
 
 pub use stage_table::StageTable;

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::TableIndexType;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::TableInfo;
-use common_meta_types::MetaId;
-use storages_common_table_meta::meta::Location;
+use databend_common_ast::ast::TableIndexType;
+use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_types::MetaId;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::plans::Plan;
 
@@ -25,6 +25,7 @@ pub struct CreateIndexPlan {
     pub if_not_exists: bool,
     pub index_type: TableIndexType,
     pub index_name: String,
+    pub original_query: String,
     pub query: String,
     pub table_id: MetaId,
     pub sync_creation: bool,
@@ -45,6 +46,6 @@ pub struct RefreshIndexPlan {
     pub limit: Option<u64>,
     pub table_info: TableInfo,
     pub query_plan: Box<Plan>,
-    pub user_defined_block_name: bool,
     pub segment_locs: Option<Vec<Location>>,
+    pub user_defined_block_name: bool,
 }

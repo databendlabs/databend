@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::PhysicalPlan;
 

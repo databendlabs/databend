@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -205,10 +205,9 @@ impl RulePushDownFilterEvalScalar {
                 Ok(ScalarExpr::LambdaFunction(LambdaFunc {
                     span: lambda_func.span,
                     func_name: lambda_func.func_name.clone(),
-                    display_name: lambda_func.display_name.clone(),
                     args,
-                    params: lambda_func.params.clone(),
                     lambda_expr: lambda_func.lambda_expr.clone(),
+                    lambda_display: lambda_func.lambda_display.clone(),
                     return_type: lambda_func.return_type.clone(),
                 }))
             }
@@ -230,6 +229,7 @@ impl RulePushDownFilterEvalScalar {
 
                 Ok(ScalarExpr::UDFServerCall(UDFServerCall {
                     span: udf.span,
+                    name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
                     display_name: udf.display_name.clone(),
                     server_addr: udf.server_addr.clone(),

@@ -14,24 +14,24 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Statement;
-use common_ast::parser::token::TokenKind;
-use common_ast::parser::token::Tokenizer;
-use common_base::base::tokio;
-use common_base::base::tokio::io::AsyncRead;
-use common_base::base::tokio::time::Instant;
-use common_config::DATABEND_COMMIT_VERSION;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::SendableDataBlockStream;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_sql::plans::Plan;
-use common_sql::Planner;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::token::Tokenizer;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::io::AsyncRead;
+use databend_common_base::base::tokio::time::Instant;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use futures_util::StreamExt;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -76,10 +76,6 @@ impl SessionExecutor {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
-        user.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
-        );
         session.set_authed_user(user, None).await.unwrap();
 
         let config = Config::load();
@@ -113,7 +109,7 @@ impl SessionExecutor {
                             .convert_to_full_column(&DataType::String, num_rows);
                         let value = StringType::try_downcast_column(&col).unwrap();
                         for r in value.iter() {
-                            keywords.push(unsafe { String::from_utf8_unchecked(r.to_vec()) });
+                            keywords.push(r.to_string());
                         }
                     }
                 }

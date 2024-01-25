@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
 
 use std::time::Duration;
 
-use common_grpc::RpcClientTlsConfig;
-use common_meta_api::SchemaApi;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::MetaClientError;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
+use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::MetaNetworkError;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -55,7 +55,6 @@ async fn test_tls_server() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
         Some(tls_conf),
     )?;
 
@@ -94,7 +93,6 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
         Some(tls_conf),
     )
     .unwrap();

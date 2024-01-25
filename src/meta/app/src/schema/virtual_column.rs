@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::MetaId;
+use databend_common_meta_types::MetaId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct VirtualColumnNameIdent {
@@ -56,6 +56,7 @@ pub struct VirtualColumnMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
+    pub if_not_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
@@ -75,6 +76,7 @@ pub struct CreateVirtualColumnReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateVirtualColumnReq {
+    pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
@@ -94,6 +96,7 @@ pub struct UpdateVirtualColumnReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReq {
+    pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
 }
 
@@ -122,14 +125,17 @@ impl ListVirtualColumnsReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::VirtualColumnMeta;
     use crate::schema::VirtualColumnNameIdent;
     use crate::schema::PREFIX_VIRTUAL_COLUMN;
 
     /// <prefix>/<tenant>/<table_id>
     impl kvapi::Key for VirtualColumnNameIdent {
         const PREFIX: &'static str = PREFIX_VIRTUAL_COLUMN;
+
+        type ValueType = VirtualColumnMeta;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

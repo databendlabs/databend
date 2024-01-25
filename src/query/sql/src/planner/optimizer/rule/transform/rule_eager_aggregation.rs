@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_expression::types::number::NumberDataType;
-use common_expression::types::DataType;
-use common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_expression::types::number::NumberDataType;
+use databend_common_expression::types::DataType;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -366,10 +366,14 @@ impl Rule for RuleEagerAggregation {
         self.id
     }
 
-    fn apply(&self, a_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> databend_common_exception::Result<()> {
         let mut matched_idx = 0;
         for (idx, pattern) in self.patterns.iter().enumerate() {
-            if a_expr.match_pattern(pattern) {
+            if s_expr.match_pattern(pattern) {
                 matched_idx = idx + 1;
                 break;
             }
@@ -386,7 +390,7 @@ impl Rule for RuleEagerAggregation {
             _ => unreachable!(),
         };
 
-        let eval_scalar_expr = a_expr;
+        let eval_scalar_expr = s_expr;
         let sort_expr = eval_scalar_expr.child(0)?;
         let final_agg_expr = match has_sort {
             true => sort_expr.child(0)?,
@@ -805,7 +809,7 @@ impl Rule for RuleEagerAggregation {
                         )),
                         Arc::new(join_expr.child(1)?.clone()),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -829,7 +833,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
             });
 
             // Apply eager split on d and d^1.
@@ -891,7 +895,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_split_count_sum.try_into()?)),
+                    .replace_plan(Arc::new(eager_split_count_sum.into())),
             );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
@@ -1123,7 +1127,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(eager_count_sum.into()))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1136,7 +1140,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                             Arc::new(join_expr.child(1)?.clone()),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(eager_count_sum.into()))
                 });
 
                 // Apply double eager on d and d^1.
@@ -1178,7 +1182,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(double_eager_count_sum.into()))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1206,7 +1210,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(double_eager_count_sum.into()))
                 });
             }
         }
@@ -1229,19 +1233,19 @@ impl Rule for RuleEagerAggregation {
                 .replace_children(vec![Arc::new(
                     final_agg_partial_expr
                         .replace_children(vec![Arc::new(join_exprs[idx].clone())])
-                        .replace_plan(Arc::new(final_agg_partials[idx].clone().try_into()?)),
+                        .replace_plan(Arc::new(final_agg_partials[idx].clone().into())),
                 )])
-                .replace_plan(Arc::new(final_agg_finals[idx].clone().try_into()?));
+                .replace_plan(Arc::new(final_agg_finals[idx].clone().into()));
             let mut result = if has_sort {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(
                         sort_expr.replace_children(vec![Arc::new(temp_final_agg_expr)]),
                     )])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(temp_final_agg_expr)])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);
@@ -1263,7 +1267,7 @@ impl Rule for RuleEagerAggregation {
 // (4) The data type of the aggregate column is either Number or Nullable(Number).
 // Return the (Vec index, func index, func_name) for each eager aggregation function.
 fn get_eager_aggregation_functions(
-    idx: usize,
+    _idx: usize,
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
@@ -1295,12 +1299,6 @@ fn get_eager_aggregation_functions(
                             }
                         }
                     }
-                } else if idx == 1
-                    && aggregate_function.args.is_empty()
-                    && aggregate_function.func_name.as_str() == "count"
-                {
-                    // count(*) does not belong to the left or right child, so we push it down to the probe side.
-                    valid = true;
                 }
                 if valid {
                     return Some((
@@ -1445,7 +1443,7 @@ fn decompose_avg(
     func_name: &mut String,
     metadata: MetadataRef,
     function_factory: &AggregateFunctionFactory,
-) -> common_exception::Result<(usize, usize, usize)> {
+) -> databend_common_exception::Result<(usize, usize, usize)> {
     *func_name = "sum".to_string();
     // Add COUNT aggregate functions.
     final_agg
@@ -1512,7 +1510,7 @@ fn update_aggregate_and_eval(
     eval_scalars: &mut Vec<&mut EvalScalar>,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
     avg_components: &HashMap<usize, usize>,
-) -> common_exception::Result<(bool, usize, usize)> {
+) -> databend_common_exception::Result<(bool, usize, usize)> {
     let final_aggregate_function = &mut final_agg.aggregate_functions[index];
 
     let old_index = final_aggregate_function.index;
@@ -1531,7 +1529,9 @@ fn update_aggregate_and_eval(
 
     let mut success = false;
     // Modify the eval scalars of all aggregate functions that are not AVG components.
-    if let Some(indexes) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
+    if let Some(indexes) = eval_scalar_items.get(&old_index)
+        && !avg_components.contains_key(&old_index)
+    {
         for eval_scalar in eval_scalars {
             for item_idx in indexes {
                 let eval_scalar_item = &mut (eval_scalar).items[*item_idx];
@@ -1542,7 +1542,10 @@ fn update_aggregate_and_eval(
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                             DataType::Number(NumberDataType::UInt64),
                         )));
-                        eval_scalar_item.scalar = wrap_cast(&eval_scalar_item.scalar, &DataType::Number(NumberDataType::UInt64));
+                        eval_scalar_item.scalar = wrap_cast(
+                            &eval_scalar_item.scalar,
+                            &DataType::Number(NumberDataType::UInt64),
+                        );
                     }
                     success = true;
                 }
@@ -1557,7 +1560,7 @@ fn create_eager_count_multiply_scalar_item(
     eager_count_index: IndexType,
     extra_eval_scalar: &EvalScalar,
     metadata: MetadataRef,
-) -> common_exception::Result<ScalarItem> {
+) -> databend_common_exception::Result<ScalarItem> {
     let new_index = metadata.write().add_derived_column(
         format!("{} * _eager_count", aggregate_function.display_name),
         aggregate_function.args[0].data_type()?,

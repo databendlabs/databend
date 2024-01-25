@@ -1,0 +1,23 @@
+query T
+explain create table if not exists t as select * from numbers(10) where number > 5
+----
+CreateTableAsSelect:
+(empty)
+Filter
+├── output columns: [numbers.number (#1)]
+├── filters: [numbers.number (#1) > 5]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#1)]
+    ├── read rows: 10
+    ├── read bytes: 80
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#1) > 5], limit: NONE]
+    └── estimated rows: 10.00
+
+query T
+explain create table if not exists t(a int)
+----
+CreateTable

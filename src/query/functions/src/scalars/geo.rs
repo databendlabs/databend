@@ -17,33 +17,33 @@ use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
 
-use common_expression::types::map::KvPair;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::NumberColumnBuilder;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::number::F32;
-use common_expression::types::number::F64;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::UInt8Type;
-use common_expression::types::ValueType;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::vectorize_with_builder_3_arg;
-use common_expression::Column;
-use common_expression::EvalContext;
-use common_expression::Function;
-use common_expression::FunctionDomain;
-use common_expression::FunctionEval;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_expression::types::map::KvPair;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::number::F32;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::Column;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use geo::coord;
 use geo::Contains;
 use geo::Coord;
@@ -183,13 +183,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             "geohash_decode",
             |_, _| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
-                |encoded, builder, ctx| match std::str::from_utf8(encoded)
-                    .map_err(|e| e.to_string())
-                    .and_then(|s| geohash::decode(s).map_err(|e| e.to_string()))
-                {
+                |encoded, builder, ctx| match geohash::decode(encoded) {
                     Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
                     Err(e) => {
-                        ctx.set_error(builder.len(), e);
+                        ctx.set_error(builder.len(), e.to_string());
                         builder.push((F64::from(0.0), F64::from(0.0)))
                     }
                 },

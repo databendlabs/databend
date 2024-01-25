@@ -1983,19 +1983,19 @@ output         : NULL
 ast            : array_kurtosis([1, 2, 3])
 raw expr       : array_kurtosis(array(1, 2, 3))
 checked expr   : array_kurtosis<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
-optimized expr : NULL
+optimized expr : 0_f64
 output type    : Float64 NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : array_kurtosis([NULL, 3, 2, 1])
 raw expr       : array_kurtosis(array(NULL, 3, 2, 1))
 checked expr   : array_kurtosis<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
-optimized expr : NULL
+optimized expr : 0_f64
 output type    : Float64 NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : array_kurtosis([a, b, c, d])
@@ -2034,9 +2034,9 @@ evaluation:
 | Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | Float64 NULL |
 | Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown      |
 | Row 0  | 1                | 2                | 3           | 4                | -1.2         |
-| Row 1  | 2                | NULL             | 7           | 6                | NULL         |
-| Row 2  | NULL             | 5                | 8           | 5                | NULL         |
-| Row 3  | 4                | 6                | 9           | NULL             | NULL         |
+| Row 1  | 2                | NULL             | 7           | 6                | 0            |
+| Row 2  | NULL             | 5                | 8           | 5                | 0            |
+| Row 3  | 4                | 6                | 9           | NULL             | 0            |
 +--------+------------------+------------------+-------------+------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------+
@@ -2046,7 +2046,7 @@ evaluation (internal):
 | b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] }     |
 | c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] }     |
 | d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] }     |
-| Output | NullableColumn { column: Float64([-1.2, 0, 0, 0]), validity: [0b____0001] } |
+| Output | NullableColumn { column: Float64([-1.2, 0, 0, 0]), validity: [0b____1111] } |
 +--------+-----------------------------------------------------------------------------+
 
 
@@ -2179,7 +2179,7 @@ raw expr       : array_sort_asc_null_first(array(map(array(), array()), map(arra
 checked expr   : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>(array<T0=Map(Nothing)><T0, T0, T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>())))
 optimized expr : [{}, {}, {}]
 output type    : Array(Map(Nothing))
-output domain  : [Undefined]
+output domain  : [{}]
 output         : [{}, {}, {}]
 
 

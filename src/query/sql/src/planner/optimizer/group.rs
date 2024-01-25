@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
+use crate::optimizer::cost::CostContext;
 use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::property::RelationalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::IndexType;
 
@@ -27,16 +30,11 @@ use crate::IndexType;
 pub enum GroupState {
     Init,
     Explored,
-    Optimized,
 }
 
 impl GroupState {
     pub fn explored(&self) -> bool {
-        matches!(self, GroupState::Explored | GroupState::Optimized)
-    }
-
-    pub fn optimized(&self) -> bool {
-        matches!(self, GroupState::Optimized)
+        matches!(self, GroupState::Explored)
     }
 }
 
@@ -48,6 +46,10 @@ pub struct Group {
 
     /// Relational property shared by expressions in a same `Group`
     pub(crate) relational_prop: Arc<RelationalProperty>,
+
+    /// Mapping from required property to best expression.
+    /// This will be updated when optimizing a group
+    pub(crate) best_props: HashMap<RequiredProperty, CostContext>,
 
     /// Stat info shared by expressions in a same `Group`
     pub(crate) stat_info: Arc<StatInfo>,
@@ -65,6 +67,7 @@ impl Group {
             group_index: index,
             m_exprs: vec![],
             relational_prop,
+            best_props: Default::default(),
             stat_info,
             state: GroupState::Init,
         }
@@ -97,5 +100,25 @@ impl Group {
         self.m_exprs
             .get_mut(index)
             .ok_or_else(|| ErrorCode::Internal(format!("MExpr index {} not found", index)))
+    }
+
+    pub fn best_prop(&self, required_prop: &RequiredProperty) -> Option<&CostContext> {
+        self.best_props.get(required_prop)
+    }
+
+    pub fn best_prop_mut(&mut self, required_prop: &RequiredProperty) -> Option<&mut CostContext> {
+        self.best_props.get_mut(required_prop)
+    }
+
+    /// Update the best cost of a required property.
+    pub fn update_best_cost(&mut self, prop: &RequiredProperty, ccx: CostContext) {
+        self.best_props
+            .entry(prop.clone())
+            .and_modify(|c| {
+                if ccx.cost < c.cost {
+                    *c = ccx.clone();
+                }
+            })
+            .or_insert(ccx);
     }
 }

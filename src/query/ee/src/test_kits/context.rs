@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license::LicenseInfo;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::Setup;
-use databend_query::test_kits::TestGuard;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license::LicenseInfo;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_query::test_kits::*;
 use jwt_simple::algorithms::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::ES256KeyPair;
 use tempfile::TempDir;
 
-use crate::test_kits::sessions::TestGlobalServices;
+use crate::test_kits::setup::TestFixture;
 
 fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
     LicenseInfo {
@@ -74,10 +72,8 @@ impl Default for EESetup {
 
 #[async_trait::async_trait]
 impl Setup for EESetup {
-    async fn setup(&self) -> Result<(TestGuard, InnerConfig)> {
-        Ok((
-            TestGlobalServices::setup(&self.config, self.pk.clone()).await?,
-            self.config.clone(),
-        ))
+    async fn setup(&self) -> Result<InnerConfig> {
+        TestFixture::setup(&self.config, self.pk.clone()).await?;
+        Ok(self.config.clone())
     }
 }

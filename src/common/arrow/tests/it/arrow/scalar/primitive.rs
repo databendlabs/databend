@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType;
-use common_arrow::arrow::scalar::PrimitiveScalar;
-use common_arrow::arrow::scalar::Scalar;
+use databend_common_arrow::arrow::datatypes::DataType;
+use databend_common_arrow::arrow::scalar::PrimitiveScalar;
+use databend_common_arrow::arrow::scalar::Scalar;
 
 #[allow(clippy::eq_op)]
 #[test]

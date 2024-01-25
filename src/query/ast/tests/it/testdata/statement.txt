@@ -556,6 +556,7 @@ Explain {
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
@@ -632,6 +633,7 @@ Explain {
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
@@ -721,7 +723,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -770,7 +771,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -821,7 +821,9 @@ CreateTable(
                                 32..33,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: Some(
                             Default(
                                 Literal {
@@ -835,9 +837,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -850,7 +849,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -901,7 +899,9 @@ CreateTable(
                                 32..33,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: Some(
                             Default(
                                 Literal {
@@ -915,9 +915,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -930,7 +927,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -953,7 +949,7 @@ CreateTable(
                         hints: None,
                         distinct: false,
                         select_list: [
-                            QualifiedName {
+                            StarColumns {
                                 qualified: [
                                     Star(
                                         Some(
@@ -961,7 +957,7 @@ CreateTable(
                                         ),
                                     ),
                                 ],
-                                exclude: None,
+                                column_filter: None,
                             },
                         ],
                         from: [
@@ -988,6 +984,7 @@ CreateTable(
                         group_by: None,
                         having: None,
                         window_list: None,
+                        qualify: None,
                     },
                 ),
                 order_by: [],
@@ -1051,7 +1048,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1070,7 +1066,6 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1124,7 +1119,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1137,7 +1131,6 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1211,7 +1204,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1265,7 +1257,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1278,7 +1269,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1332,7 +1322,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1484,7 +1473,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1555,7 +1543,6 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1732,7 +1719,9 @@ CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Identifier {
             name: "a",
@@ -1755,7 +1744,9 @@ CREATE DATABASE ctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: Some(
             Identifier {
                 name: "ctl",
@@ -1788,7 +1779,9 @@ CREATE DATABASE t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Identifier {
             name: "t",
@@ -1813,7 +1806,9 @@ CREATE DATABASE t FROM SHARE a.s
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Identifier {
             name: "t",
@@ -1830,6 +1825,29 @@ CreateDatabase(
                 share_name: "s",
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+create or replace database a;
+---------- Output ---------
+CREATE OR REPLACE DATABASE a
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                27..28,
+            ),
+        },
+        engine: None,
+        options: [],
+        from_share: None,
     },
 )
 
@@ -1915,7 +1933,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1928,7 +1945,6 @@ CreateTable(
                         data_type: Timestamp,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2047,6 +2063,7 @@ CreateView(
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
@@ -2161,6 +2178,7 @@ AlterView(
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
@@ -2305,6 +2323,7 @@ CreateView(
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
@@ -2427,12 +2446,222 @@ AlterView(
                     group_by: None,
                     having: None,
                     window_list: None,
+                    qualify: None,
                 },
             ),
             order_by: [],
             limit: [],
             offset: None,
             ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+create stream test2.s1 on table test.t append_only = false;
+---------- Output ---------
+CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    14..19,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s1",
+            quote: None,
+            span: Some(
+                20..22,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    32..36,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                37..38,
+            ),
+        },
+        stream_point: None,
+        append_only: false,
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
+create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COMMENT = 'this is a stream'
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    28..33,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                34..36,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    46..50,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                51..52,
+            ),
+        },
+        stream_point: Some(
+            AtStream {
+                database: Some(
+                    Identifier {
+                        name: "test1",
+                        quote: None,
+                        span: Some(
+                            67..72,
+                        ),
+                    },
+                ),
+                name: Identifier {
+                    name: "s1",
+                    quote: None,
+                    span: Some(
+                        73..75,
+                    ),
+                },
+            },
+        ),
+        append_only: true,
+        comment: Some(
+            "this is a stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+show full streams from default.test2 like 's%';
+---------- Output ---------
+SHOW FULL STREAMS FROM default.test2 LIKE 's%'
+---------- AST ------------
+ShowStreams(
+    ShowStreamsStmt {
+        catalog: Some(
+            Identifier {
+                name: "default",
+                quote: None,
+                span: Some(
+                    23..30,
+                ),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    31..36,
+                ),
+            },
+        ),
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "s%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+describe stream test2.s2;
+---------- Output ---------
+DESCRIBE STREAM test2.s2
+---------- AST ------------
+DescribeStream(
+    DescribeStreamStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    16..21,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                22..24,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+drop stream if exists test2.s2;
+---------- Output ---------
+DROP STREAM IF EXISTS test2.s2
+---------- AST ------------
+DropStream(
+    DropStreamStmt {
+        if_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    22..27,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s2",
+            quote: None,
+            span: Some(
+                28..30,
+            ),
         },
     },
 )
@@ -2609,7 +2838,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2624,7 +2852,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2639,7 +2866,6 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2682,12 +2908,11 @@ CreateTable(
                                 15..17,
                             ),
                         },
-                        data_type: Int32,
+                        data_type: NotNull(
+                            Int32,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2697,12 +2922,11 @@ CreateTable(
                                 32..34,
                             ),
                         },
-                        data_type: Int64,
+                        data_type: NotNull(
+                            Int64,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2712,12 +2936,11 @@ CreateTable(
                                 52..54,
                             ),
                         },
-                        data_type: String,
+                        data_type: NotNull(
+                            String,
+                        ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: Some(
-                            NotNull,
-                        ),
                     },
                 ],
             ),
@@ -2733,9 +2956,9 @@ CreateTable(
 
 
 ---------- Input ----------
-CREATE TABLE t(c1 varbinary);
+CREATE TABLE t(c1 varbinary, c2 binary(10));
 ---------- Output ---------
-CREATE TABLE t (c1 STRING)
+CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2760,10 +2983,21 @@ CreateTable(
                                 15..17,
                             ),
                         },
-                        data_type: String,
+                        data_type: Binary,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c2",
+                            quote: None,
+                            span: Some(
+                                29..31,
+                            ),
+                        },
+                        data_type: Binary,
+                        expr: None,
+                        comment: None,
                     },
                 ],
             ),
@@ -2820,7 +3054,6 @@ CreateTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2871,7 +3104,7 @@ CreateTable(
                         hints: None,
                         distinct: false,
                         select_list: [
-                            QualifiedName {
+                            StarColumns {
                                 qualified: [
                                     Star(
                                         Some(
@@ -2879,7 +3112,7 @@ CreateTable(
                                         ),
                                     ),
                                 ],
-                                exclude: None,
+                                column_filter: None,
                             },
                         ],
                         from: [
@@ -2906,6 +3139,7 @@ CreateTable(
                         group_by: None,
                         having: None,
                         window_list: None,
+                        qualify: None,
                     },
                 ),
                 order_by: [],
@@ -3337,6 +3571,7 @@ Query(
                     },
                 ),
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -3366,7 +3601,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3374,7 +3609,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3401,6 +3636,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -3430,7 +3666,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3438,7 +3674,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3473,6 +3709,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -3502,7 +3739,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3510,7 +3747,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3573,6 +3810,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -3602,7 +3840,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3610,7 +3848,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3673,13 +3911,14 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [
             OrderByExpr {
                 expr: ColumnRef {
                     span: Some(
-                        31..44,
+                        31..35,
                     ),
                     database: Some(
                         Identifier {
@@ -3745,7 +3984,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3753,7 +3992,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3771,7 +4010,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            26..29,
+                                            26..27,
                                         ),
                                         database: None,
                                         table: Some(
@@ -3795,7 +4034,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            32..35,
+                                            32..33,
                                         ),
                                         database: None,
                                         table: Some(
@@ -3862,6 +4101,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -3891,7 +4131,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -3899,7 +4139,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -3917,7 +4157,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -3941,7 +4181,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            43..46,
+                                            43..44,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4008,6 +4248,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4037,7 +4278,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4045,7 +4286,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4063,7 +4304,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            38..41,
+                                            38..39,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4087,7 +4328,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            44..47,
+                                            44..45,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4154,6 +4395,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4183,7 +4425,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4191,7 +4433,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4209,7 +4451,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            36..39,
+                                            36..37,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4233,7 +4475,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            42..45,
+                                            42..43,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4300,6 +4542,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4329,7 +4572,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4337,7 +4580,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4355,7 +4598,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            31..34,
+                                            31..32,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4379,7 +4622,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4446,6 +4689,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4475,7 +4719,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4483,7 +4727,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4501,7 +4745,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            36..39,
+                                            36..37,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4525,7 +4769,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            42..45,
+                                            42..43,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4592,6 +4836,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4621,7 +4866,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4629,7 +4874,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4647,7 +4892,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            31..34,
+                                            31..32,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4671,7 +4916,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4738,6 +4983,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4767,7 +5013,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4775,7 +5021,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4793,7 +5039,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4817,7 +5063,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            43..46,
+                                            43..44,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4884,6 +5130,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -4913,7 +5160,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -4921,7 +5168,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -4939,7 +5186,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -4963,7 +5210,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            43..46,
+                                            43..44,
                                         ),
                                         database: None,
                                         table: Some(
@@ -5030,6 +5277,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5059,7 +5307,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5067,7 +5315,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5085,7 +5333,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            37..40,
+                                            37..38,
                                         ),
                                         database: None,
                                         table: Some(
@@ -5109,7 +5357,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            43..46,
+                                            43..44,
                                         ),
                                         database: None,
                                         table: Some(
@@ -5176,6 +5424,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5205,7 +5454,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5213,7 +5462,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5231,7 +5480,7 @@ Query(
                                     op: Eq,
                                     left: ColumnRef {
                                         span: Some(
-                                            32..35,
+                                            32..33,
                                         ),
                                         database: None,
                                         table: Some(
@@ -5255,7 +5504,7 @@ Query(
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            38..41,
+                                            38..39,
                                         ),
                                         database: None,
                                         table: Some(
@@ -5322,6 +5571,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5351,7 +5601,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5359,7 +5609,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5423,6 +5673,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5452,7 +5703,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5460,7 +5711,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5524,6 +5775,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5553,7 +5805,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5561,7 +5813,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5625,6 +5877,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5654,7 +5907,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5662,7 +5915,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5726,6 +5979,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5755,7 +6009,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5763,7 +6017,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5794,7 +6048,7 @@ Query(
                         op: Eq,
                         left: ColumnRef {
                             span: Some(
-                                22..25,
+                                22..23,
                             ),
                             database: None,
                             table: Some(
@@ -5839,7 +6093,7 @@ Query(
                                             AliasedExpr {
                                                 expr: ColumnRef {
                                                     span: Some(
-                                                        40..43,
+                                                        40..41,
                                                     ),
                                                     database: None,
                                                     table: Some(
@@ -5888,6 +6142,7 @@ Query(
                                         group_by: None,
                                         having: None,
                                         window_list: None,
+                                        qualify: None,
                                     },
                                 ),
                                 order_by: [],
@@ -5901,6 +6156,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -5930,7 +6186,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -5938,7 +6194,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -5969,7 +6225,7 @@ Query(
                         op: Eq,
                         left: ColumnRef {
                             span: Some(
-                                22..25,
+                                22..23,
                             ),
                             database: None,
                             table: Some(
@@ -6014,7 +6270,7 @@ Query(
                                             AliasedExpr {
                                                 expr: ColumnRef {
                                                     span: Some(
-                                                        40..43,
+                                                        40..41,
                                                     ),
                                                     database: None,
                                                     table: Some(
@@ -6063,6 +6319,7 @@ Query(
                                         group_by: None,
                                         having: None,
                                         window_list: None,
+                                        qualify: None,
                                     },
                                 ),
                                 order_by: [],
@@ -6076,6 +6333,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6105,7 +6363,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -6113,7 +6371,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -6144,7 +6402,7 @@ Query(
                         op: Eq,
                         left: ColumnRef {
                             span: Some(
-                                22..25,
+                                22..23,
                             ),
                             database: None,
                             table: Some(
@@ -6189,7 +6447,7 @@ Query(
                                             AliasedExpr {
                                                 expr: ColumnRef {
                                                     span: Some(
-                                                        41..44,
+                                                        41..42,
                                                     ),
                                                     database: None,
                                                     table: Some(
@@ -6238,6 +6496,7 @@ Query(
                                         group_by: None,
                                         having: None,
                                         window_list: None,
+                                        qualify: None,
                                     },
                                 ),
                                 order_by: [],
@@ -6251,6 +6510,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6280,7 +6540,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -6288,7 +6548,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -6319,7 +6579,7 @@ Query(
                         op: Gt,
                         left: ColumnRef {
                             span: Some(
-                                22..25,
+                                22..23,
                             ),
                             database: None,
                             table: Some(
@@ -6362,7 +6622,7 @@ Query(
                                             AliasedExpr {
                                                 expr: ColumnRef {
                                                     span: Some(
-                                                        36..39,
+                                                        36..37,
                                                     ),
                                                     database: None,
                                                     table: Some(
@@ -6411,6 +6671,7 @@ Query(
                                         group_by: None,
                                         having: None,
                                         window_list: None,
+                                        qualify: None,
                                     },
                                 ),
                                 order_by: [],
@@ -6424,6 +6685,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6533,6 +6795,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6562,7 +6825,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -6570,7 +6833,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -6643,6 +6906,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6672,7 +6936,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -6680,7 +6944,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -6708,6 +6972,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6754,6 +7019,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6800,6 +7066,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -6846,6 +7113,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -7000,7 +7268,7 @@ Insert(
                         hints: None,
                         distinct: false,
                         select_list: [
-                            QualifiedName {
+                            StarColumns {
                                 qualified: [
                                     Star(
                                         Some(
@@ -7008,7 +7276,7 @@ Insert(
                                         ),
                                     ),
                                 ],
-                                exclude: None,
+                                column_filter: None,
                             },
                         ],
                         from: [
@@ -7035,6 +7303,7 @@ Insert(
                         group_by: None,
                         having: None,
                         window_list: None,
+                        qualify: None,
                     },
                 ),
                 order_by: [],
@@ -7051,7 +7320,7 @@ Insert(
 ---------- Input ----------
 select parse_json('{"k1": [0, 1, 2]}').k1[0];
 ---------- Output ---------
-SELECT parse_json('{"k1": [0, 1, 2]}').k1[0]
+SELECT parse_json('{"k1": [0, 1, 2]}'):k1[0]
 ---------- AST ------------
 Query(
     Query {
@@ -7102,7 +7371,7 @@ Query(
                                     window: None,
                                     lambda: None,
                                 },
-                                accessor: Dot {
+                                accessor: Colon {
                                     key: Identifier {
                                         name: "k1",
                                         quote: None,
@@ -7131,6 +7400,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -7737,7 +8007,6 @@ AlterTable(
                 ),
                 expr: None,
                 comment: None,
-                nullable_constraint: None,
             },
             option: End,
         },
@@ -7798,7 +8067,6 @@ AlterTable(
                 comment: Some(
                     "hello",
                 ),
-                nullable_constraint: None,
             },
             option: First,
         },
@@ -7855,7 +8123,6 @@ AlterTable(
                     ),
                 ),
                 comment: None,
-                nullable_constraint: None,
             },
             option: After(
                 Identifier {
@@ -8090,7 +8357,6 @@ AlterTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -8103,7 +8369,6 @@ AlterTable(
                         data_type: Float32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8115,7 +8380,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 COMMENT column b
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 NOT NULL COMMENT column b
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -8165,7 +8430,6 @@ AlterTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -8175,13 +8439,12 @@ AlterTable(
                                 57..58,
                             ),
                         },
-                        data_type: Float32,
+                        data_type: NotNull(
+                            Float32,
+                        ),
                         expr: None,
                         comment: Some(
                             "column b",
-                        ),
-                        nullable_constraint: Some(
-                            NotNull,
                         ),
                     },
                 ],
@@ -8231,7 +8494,6 @@ AlterTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8437,7 +8699,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: None,
             dry_run: None,
         },
     },
@@ -8445,9 +8706,9 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
+VACUUM TABLE t DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -8461,16 +8722,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..23,
-                    ),
-                    lit: UInt64(
-                        4,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8480,58 +8731,15 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 40 HOURS;
+VACUUM DROP TABLE;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 40 HOURS
----------- AST ------------
-VacuumTable(
-    VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "t",
-            quote: None,
-            span: Some(
-                13..14,
-            ),
-        },
-        option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..24,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
-            dry_run: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE RETAIN 20 HOURS;
----------- Output ---------
-VACUUM DROP TABLE RETAIN 20 HOURS
+VACUUM DROP TABLE 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        20,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8540,25 +8748,15 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+VACUUM DROP TABLE DRY RUN;
 ---------- Output ---------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+VACUUM DROP TABLE DRY RUN
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        30,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8569,9 +8767,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+VACUUM DROP TABLE FROM db 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8586,16 +8784,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8604,9 +8792,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;
+VACUUM DROP TABLE FROM db LIMIT 10;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10
+VACUUM DROP TABLE FROM db  LIMIT 10
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8621,16 +8809,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: Some(
                 10,
@@ -8673,7 +8851,6 @@ CreateTable(
                         comment: Some(
                             "col comment",
                         ),
-                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -9405,7 +9582,7 @@ COPY INTO mytable
                 FROM '@~/mybucket/my data.csv'
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9455,7 +9632,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9511,7 +9688,7 @@ COPY INTO mytable
                 max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9576,7 +9753,7 @@ COPY INTO mytable
                 max_files=3000;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9618,7 +9795,7 @@ CopyIntoTable(
         force: false,
         validation_mode: "",
         size_limit: 10,
-        max_files: 2000,
+        max_files: 3000,
         split_size: 0,
         purge: false,
         disable_variant_check: false,
@@ -9643,7 +9820,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9712,7 +9889,7 @@ COPY INTO mytable
                 );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9770,7 +9947,7 @@ CopyIntoTable(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9821,7 +9998,7 @@ CopyIntoTable(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9881,7 +10058,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage FILE_FORMAT = (error_on_column_count_mismatch = 'false', field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9936,7 +10113,7 @@ COPY INTO 's3://mybucket/data.csv'
                 )
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -9974,6 +10151,7 @@ CopyIntoLocation(
         },
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -9982,7 +10160,7 @@ CopyIntoLocation(
 COPY INTO '@my_stage/my data'
                 FROM mytable;
 ---------- Output ---------
-COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE= 0
+COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -10006,6 +10184,7 @@ CopyIntoLocation(
         file_format: {},
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -10021,7 +10200,7 @@ COPY INTO @my_stage
                 );
 ---------- Output ---------
 COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
+', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -10050,6 +10229,7 @@ CopyIntoLocation(
         },
         single: false,
         max_file_size: 0,
+        detailed_output: false,
     },
 )
 
@@ -10070,7 +10250,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '******key', aws_secret_key = '******key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10137,7 +10317,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10192,7 +10372,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10247,7 +10427,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10303,7 +10483,7 @@ COPY INTO mytable
                 disable_variant_check=true;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
+', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10365,7 +10545,7 @@ COPY INTO books FROM 's3://databend/books.csv'
                 )
                 FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '******SER', endpoint_url = '******00/', region = '******t-2', secret_access_key = '******123' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '******SER', endpoint_url = '******00/', region = '******t-2', secret_access_key = '******123' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11307,6 +11487,131 @@ Grant(
 
 
 ---------- Input ----------
+REVOKE write ON stage s1 FROM a;
+---------- Output ---------
+REVOKE Write ON STAGE s1 FROM USER 'a'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Write,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON UDF a TO 'test-grant';
+---------- Output ---------
+GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON UDF a FROM 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: UDF(
+                "a",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a;
 ---------- Output ---------
 REVOKE USAGE ON DATABASE db1 FROM SHARE a
@@ -11847,6 +12152,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -11880,7 +12186,7 @@ Query(
                     AliasedExpr {
                         expr: ColumnRef {
                             span: Some(
-                                7..11,
+                                7..8,
                             ),
                             database: None,
                             table: Some(
@@ -11944,6 +12250,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -11978,7 +12285,7 @@ Query(
                     AliasedExpr {
                         expr: ColumnRef {
                             span: Some(
-                                7..16,
+                                7..13,
                             ),
                             database: None,
                             table: Some(
@@ -12005,7 +12312,7 @@ Query(
                     AliasedExpr {
                         expr: ColumnRef {
                             span: Some(
-                                18..27,
+                                18..24,
                             ),
                             database: None,
                             table: Some(
@@ -12096,6 +12403,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12190,6 +12498,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12258,7 +12567,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12266,7 +12575,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -12370,6 +12679,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12399,7 +12709,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12407,7 +12717,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -12509,6 +12819,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12538,7 +12849,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12546,7 +12857,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -12664,6 +12975,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12693,7 +13005,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12701,7 +13013,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -12802,6 +13114,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12831,7 +13144,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12839,7 +13152,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -12919,6 +13232,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -12948,7 +13262,7 @@ Query(
                 hints: None,
                 distinct: false,
                 select_list: [
-                    QualifiedName {
+                    StarColumns {
                         qualified: [
                             Star(
                                 Some(
@@ -12956,7 +13270,7 @@ Query(
                                 ),
                             ),
                         ],
-                        exclude: None,
+                        column_filter: None,
                     },
                 ],
                 from: [
@@ -13036,6 +13350,7 @@ Query(
                 ),
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -13172,6 +13487,7 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
+        if_not_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13286,6 +13602,7 @@ ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 AlterVirtualColumn(
     AlterVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13400,6 +13717,7 @@ DROP VIRTUAL COLUMN FOR t
 ---------- AST ------------
 DropVirtualColumn(
     DropVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13485,11 +13803,9 @@ AlterNetworkPolicy(
 
 
 ---------- Input ----------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 MINUTE SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT *
-FROM
-    MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 900 SECOND database = 'target' timezone = 'America/Los Angeles' SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13500,14 +13816,84 @@ CreateTask(
                 "MyWarehouse",
             ),
         },
-        schedule_opts: IntervalMinutes(
-            15,
+        schedule_opts: Some(
+            IntervalSecs(
+                900,
+            ),
         ),
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
         suspend_task_after_num_failures: Some(
             3,
         ),
         comments: "This is test task 1",
-        sql: "SELECT *\nFROM\n    MyTable1",
+        after: [],
+        when_condition: None,
+        sql: "SELECT * FROM MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                15,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        after: [],
+        when_condition: None,
+        sql: "SELECT * FROM MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 1215 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                1215,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        after: [],
+        when_condition: None,
+        sql: "SELECT * FROM MyTable1",
     },
 )
 
@@ -13515,10 +13901,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO
-    t (c1, c2)
-VALUES
-    (1, 2), (3, 4)
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13527,23 +13910,28 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 6 * * *",
-            Some(
-                "America/Los_Angeles",
+        schedule_opts: Some(
+            CronExpression(
+                "0 6 * * *",
+                Some(
+                    "America/Los_Angeles",
+                ),
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "serverless + cron",
-        sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
+        after: [],
+        when_condition: None,
+        sql: "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
     },
 )
 
 
 ---------- Input ----------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13552,12 +13940,99 @@ CreateTask(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        schedule_opts: CronExpression(
-            "0 12 * * *",
-            None,
+        schedule_opts: Some(
+            CronExpression(
+                "0 12 * * *",
+                None,
+            ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "",
+        after: [],
+        when_condition: None,
+        sql: "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: Some(
+            CronExpression(
+                "0 13 * * *",
+                None,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [],
+        when_condition: None,
+        sql: "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1AFTER = '["task2", "task3"]'WHEN = 'Some("(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')")' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        session_parameters: {},
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [
+            "task2",
+            "task3",
+        ],
+        when_condition: Some(
+            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
+        ),
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [],
+        when_condition: None,
         sql: "VACUUM TABLE t ",
     },
 )
@@ -13592,6 +14067,43 @@ AlterTask(
 
 
 ---------- Input ----------
+ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
+---------- Output ---------
+ALTER TASK MyTask1 ADD AFTER = '["task2", "task3"]'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: AddAfter(
+            [
+                "task2",
+                "task3",
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 REMOVE AFTER 'task2'
+---------- Output ---------
+ALTER TASK MyTask1 REMOVE AFTER = '["task2"]'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: RemoveAfter(
+            [
+                "task2",
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
 ---------- Output ---------
 ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron'
@@ -13616,6 +14128,7 @@ AlterTask(
             comments: Some(
                 "serverless + cron",
             ),
+            session_parameters: None,
         },
     },
 )
@@ -13624,7 +14137,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 13 MINUTE SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 780 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -13635,8 +14148,8 @@ AlterTask(
                 "MyWarehouse",
             ),
             schedule: Some(
-                IntervalMinutes(
-                    13,
+                IntervalSecs(
+                    780,
                 ),
             ),
             suspend_task_after_num_failures: Some(
@@ -13644,6 +14157,62 @@ AlterTask(
             ),
             comments: Some(
                 "serverless + cron",
+            ),
+            session_parameters: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
+---------- Output ---------
+ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 5 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+            schedule: Some(
+                IntervalSecs(
+                    5,
+                ),
+            ),
+            suspend_task_after_num_failures: Some(
+                10,
+            ),
+            comments: Some(
+                "serverless + cron",
+            ),
+            session_parameters: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'
+---------- Output ---------
+ALTER TASK MyTask1 database = 'newDB' timezone = 'America/Los_Angeles'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: None,
+            schedule: None,
+            suspend_task_after_num_failures: None,
+            comments: None,
+            session_parameters: Some(
+                {
+                    "database": "newDB",
+                    "timezone": "America/Los_Angeles",
+                },
             ),
         },
     },
@@ -13661,6 +14230,22 @@ AlterTask(
         name: "MyTask2",
         options: ModifyAs(
             "SELECT CURRENT_VERSION()",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'
+---------- Output ---------
+ALTER TASK MyTask1 WHEN (SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: ModifyWhen(
+            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
         ),
     },
 )
@@ -13807,9 +14392,22 @@ ShowConnections(
 
 
 ---------- Input ----------
+SHOW LOCKS IN ACCOUNT
+---------- Output ---------
+SHOW LOCKS IN ACCOUNT
+---------- AST ------------
+ShowLocks(
+    ShowLocksStmt {
+        in_account: true,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -13858,7 +14456,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -14048,6 +14646,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -14095,6 +14694,7 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
@@ -14142,12 +14742,106 @@ Query(
                 group_by: None,
                 having: None,
                 window_list: None,
+                qualify: None,
             },
         ),
         order_by: [],
         limit: [],
         offset: None,
         ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON d20_0014.* TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Database(
+                Some(
+                    "d20_0014",
+                ),
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON d20_0014.t TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Table(
+                Some(
+                    "d20_0014",
+                ),
+                "t",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON STAGE s1 TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Stage(
+                "s1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON UDF f1 TO ROLE d20_0015_owner
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: UDF(
+                "f1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
     },
 )
 

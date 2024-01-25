@@ -1,0 +1,112 @@
+## test window,agg,join's correctess
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+create table merge_target_0(a int,b string) cluster by(a,b);
+
+statement ok
+create table merge_source_0(a int,b string) cluster by(a,b);
+
+statement ok
+insert into merge_target_0 values(1,'a1'),(2,'b1');
+
+statement ok
+insert into merge_target_0 values(3,'a2'),(4,'b2');
+
+statement ok
+insert into merge_source_0 values(1,'a3'),(3,'b3');
+
+statement ok
+insert into merge_source_0 values(5,'a4'),(6,'b6');
+
+## test window,agg,join
+## 1. join test
+query TT
+merge into merge_target_0 as t1 using 
+(select t2.a,t3.b from merge_source_0 as t2 inner join merge_source_0 as t3 on t2.a = t3.a) as t4
+on t4.a = t1.a when matched then update * when not matched then insert *;
+----
+2 2
+
+query TT
+select * from merge_target_0 order by a,b;
+----
+1 a3
+2 b1
+3 b3
+4 b2
+5 a4
+6 b6
+
+statement ok
+truncate table merge_source_0;
+
+statement ok
+insert into merge_source_0 values(1,'c7'),(3,'c7');
+
+query TT
+select * from merge_source_0 order by a,b;
+----
+1 c7
+3 c7
+
+## 2. agg test
+query TT
+merge into merge_target_0 as t1 using (select avg(a) as a,b from merge_source_0 group by b) as t2 on t1.a = t2.a
+when matched then update * when not matched then insert *;
+----
+0 1
+
+query TT
+select * from merge_target_0 order by a,b;
+----
+1 a3
+2 c7
+3 b3
+4 b2
+5 a4
+6 b6
+
+## 2. window func test
+query TT
+merge into merge_target_0 as t1 using (select row_number() OVER (PARTITION BY b ORDER BY a) as a,'d1' as b from merge_source_0) as t2 on t1.a = t2.a
+when matched then update * when not matched then insert *;
+----
+0 2
+
+query TT
+select * from merge_target_0 order by a,b;
+----
+1 d1
+2 d1
+3 b3
+4 b2
+5 a4
+6 b6
+
+### test copy into table unsupport
+statement ok
+create table copy_table_test0(a int,b string) cluster by(a,b);
+
+statement ok
+create stage parquet_table0 FILE_FORMAT = (TYPE = PARQUET);
+
+statement ok
+copy into @parquet_table0 from (select a,b from merge_source_0 limit 2)
+
+## test agg
+statement error 1065
+copy into copy_table_test0 from (select avg($1) as a,'b' as b from @parquet_table0);
+
+## test window
+statement error 1065
+copy into copy_table_test0 from (select row_number() OVER (PARTITION BY b ORDER BY a) as a,'d1' as b from @parquet_table0);
+
+## test join, but it's not checked as `copy into table source can't contain window|aggregate|udf|join functions`
+## it's `query as source of copy only allow projection on one stage table.`, because it always support only one table.
+statement error 1005
+copy into copy_table_test0 from (select t2.a,t3.b from @parquet_table0 as t ,@parquet_table0 as t3 where t2.a = t3.a);
+
+statement ok
+set enable_experimental_merge_into = 0;

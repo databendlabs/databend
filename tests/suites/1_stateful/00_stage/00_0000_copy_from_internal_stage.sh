@@ -33,3 +33,6 @@ echo "---- check files are purged;"
 ## list stage has metacache, so we just we aws client to ensure the data are purged
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/internal/s1/ | grep -o sample.csv  | wc -l | sed 's/ //g'
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/user/root/ | grep -o sample.csv  | wc -l | sed 's/ //g'
+
+echo "drop table if exists iti" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s1" | $BENDSQL_CLIENT_CONNECT

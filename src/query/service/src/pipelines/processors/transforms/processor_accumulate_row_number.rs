@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransform;
-use common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_storages_fuse::operations::SourceFullMatched;
+use log::info;
 
 pub struct AccumulateRowNumber {
     data_blocks: Vec<DataBlock>,
@@ -47,6 +49,11 @@ impl AsyncAccumulatingTransform for AccumulateRowNumber {
 impl AccumulateRowNumber {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        info!(
+            "accept a block, num_rows:{:?},num_columns:{:?}",
+            data_block.num_rows(),
+            data_block.num_columns(),
+        );
         // if matched all source data, we will get an empty block, but which
         // has source join schema,not only row_number,for combound_block project,
         // it will do nothing for empty block.
@@ -56,14 +63,22 @@ impl AccumulateRowNumber {
                 data_block.get_by_offset(0).data_type,
                 DataType::Number(NumberDataType::UInt64)
             );
+            self.data_blocks.push(data_block);
         }
-
-        self.data_blocks.push(data_block);
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<DataBlock>> {
+        // for distributed execution, if it's insert-only
+        // merge into , we use right anti join.if all source
+        // data is matched, we can't get any block.
+        if self.data_blocks.is_empty() {
+            return Ok(Some(DataBlock::empty_with_meta(Box::new(
+                SourceFullMatched,
+            ))));
+        }
+
         // row_numbers is small, so concat is ok.
         Ok(Some(DataBlock::concat(&self.data_blocks)?))
     }

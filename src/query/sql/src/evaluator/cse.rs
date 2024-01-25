@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_expression::Expr;
+use databend_common_expression::Expr;
 use log::info;
 
 use super::BlockOperator;
@@ -113,7 +113,6 @@ pub fn apply_cse(
                 input_num_columns = projection.len();
                 results.push(BlockOperator::Project { projection });
             }
-            _ => results.push(op),
         }
     }
 
@@ -125,7 +124,7 @@ pub fn apply_cse(
 fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     match expr {
         Expr::FunctionCall { function, .. } if function.signature.name == "if" => {}
-        Expr::FunctionCall { args, .. } => {
+        Expr::FunctionCall { args, .. } | Expr::LambdaFunctionCall { args, .. } => {
             let entry = counter.entry(expr.clone()).or_insert(0);
             *entry += 1;
 
@@ -161,7 +160,7 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, E
         } => {
             perform_cse_replacement(inner_expr.as_mut(), cse_replacements);
         }
-        Expr::FunctionCall { args, .. } => {
+        Expr::FunctionCall { args, .. } | Expr::LambdaFunctionCall { args, .. } => {
             for arg in args.iter_mut() {
                 perform_cse_replacement(arg, cse_replacements);
             }

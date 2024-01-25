@@ -16,45 +16,47 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::serialize::read_decimal_with_size;
-use common_expression::serialize::uniform_date;
-use common_expression::types::array::ArrayColumnBuilder;
-use common_expression::types::date::check_date;
-use common_expression::types::decimal::Decimal;
-use common_expression::types::decimal::DecimalColumnBuilder;
-use common_expression::types::decimal::DecimalSize;
-use common_expression::types::nullable::NullableColumnBuilder;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::timestamp::check_timestamp;
-use common_expression::types::AnyType;
-use common_expression::types::Number;
-use common_expression::types::NumberColumnBuilder;
-use common_expression::with_decimal_type;
-use common_expression::with_number_mapped_type;
-use common_expression::ColumnBuilder;
-use common_io::constants::FALSE_BYTES_LOWER;
-use common_io::constants::FALSE_BYTES_NUM;
-use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NAN_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_ESCAPE;
-use common_io::constants::NULL_BYTES_LOWER;
-use common_io::constants::TRUE_BYTES_LOWER;
-use common_io::constants::TRUE_BYTES_NUM;
-use common_io::cursor_ext::collect_number;
-use common_io::cursor_ext::read_num_text_exact;
-use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::DateTimeResType;
-use common_io::cursor_ext::ReadBytesExt;
-use common_io::parse_bitmap;
-use common_meta_app::principal::CsvFileFormatParams;
-use common_meta_app::principal::TsvFileFormatParams;
-use common_meta_app::principal::XmlFileFormatParams;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::serialize::uniform_date;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalColumnBuilder;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::ColumnBuilder;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
+use databend_common_io::constants::FALSE_BYTES_NUM;
+use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::NAN_BYTES_LOWER;
+use databend_common_io::constants::NULL_BYTES_ESCAPE;
+use databend_common_io::constants::NULL_BYTES_LOWER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::cursor_ext::collect_number;
+use databend_common_io::cursor_ext::read_num_text_exact;
+use databend_common_io::cursor_ext::BufferReadDateTimeExt;
+use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::cursor_ext::ReadBytesExt;
+use databend_common_io::parse_bitmap;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::XmlFileFormatParams;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
+use num_traits::NumCast;
 
+use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -62,8 +64,9 @@ use crate::NestedValues;
 
 #[derive(Clone)]
 pub struct SeparatedTextDecoder {
-    pub common_settings: InputCommonSettings,
-    pub nested_decoder: NestedValues,
+    common_settings: InputCommonSettings,
+    nested_decoder: NestedValues,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for SeparatedTextDecoder {
@@ -75,7 +78,11 @@ impl FieldDecoder for SeparatedTextDecoder {
 /// in CSV, we find the exact bound of each field before decode it to a type.
 /// which is diff from the case when parsing values.
 impl SeparatedTextDecoder {
-    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_csv(
+        params: &CsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -85,12 +92,18 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: params.binary_format,
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
-    pub fn create_tsv(_params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_tsv(
+        _params: &TsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
@@ -100,12 +113,18 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
-    pub fn create_xml(_params: &XmlFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_xml(
+        _params: &XmlFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_LOWER.as_bytes().to_vec()],
@@ -115,8 +134,10 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
@@ -130,8 +151,14 @@ impl SeparatedTextDecoder {
                 *len += 1;
                 Ok(())
             }
+            ColumnBuilder::Binary(c) => {
+                let data = decode_binary(data, self.common_settings().binary_format)?;
+                c.put_slice(&data);
+                c.commit_row();
+                Ok(())
+            }
             ColumnBuilder::String(c) => {
-                c.data.extend_from_slice(data);
+                c.put_str(std::str::from_utf8(data)?);
                 c.commit_row();
                 Ok(())
             }
@@ -156,7 +183,12 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
-            _ => unimplemented!(),
+            ColumnBuilder::EmptyArray { .. } => {
+                unreachable!("EmptyArray")
+            }
+            ColumnBuilder::EmptyMap { .. } => {
+                unreachable!("EmptyMap")
+            }
         }
     }
 
@@ -195,15 +227,32 @@ impl SeparatedTextDecoder {
     fn read_int<T>(&self, column: &mut Vec<T>, data: &[u8]) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
         // can not use read_num_text_exact directly, because we need to allow int like '1.0'
         let (n_in, effective) = collect_number(data);
         if n_in != data.len() {
             return Err(ErrorCode::BadBytes("invalid text for number"));
         }
-        let n: T::Native = read_num_text_exact(&data[..effective])?;
-        column.push(n.into());
+        let val: Result<T::Native> = read_num_text_exact(&data[..effective]);
+        let v = match val {
+            Ok(v) => v,
+            Err(_) => {
+                // cast float value to integer value
+                let val: f64 = read_num_text_exact(&data[..effective])?;
+                let new_val: Option<T::Native> = if self.rounding_mode {
+                    num_traits::cast::cast(val.round())
+                } else {
+                    num_traits::cast::cast(val)
+                };
+                if let Some(v) = new_val {
+                    v
+                } else {
+                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                }
+            }
+        };
+        column.push(v.into());
         Ok(())
     }
 
@@ -269,14 +318,14 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let rb = parse_bitmap(data)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         match parse_value(data) {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);

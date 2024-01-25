@@ -12,25 +12,24 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_catalog::table_args::TableArgs;
-use common_exception::Result;
-use common_expression::Scalar;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_query::table_functions::GPT2SQLTable;
 
 #[test]
 fn test_ai_to_sql_args() -> Result<()> {
     // 1 arg.
     {
-        let tbl_args =
-            TableArgs::new_positioned(vec![Scalar::String("prompt".to_string().into_bytes())]);
+        let tbl_args = TableArgs::new_positioned(vec![Scalar::String("prompt".to_string())]);
         let _ = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args)?;
     }
 
     // 2 args.
     {
         let tbl_args = TableArgs::new_positioned(vec![
-            Scalar::String("prompt".to_string().into_bytes()),
-            Scalar::String("api-key".to_string().into_bytes()),
+            Scalar::String("prompt".to_string()),
+            Scalar::String("api-key".to_string()),
         ]);
         let result = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args);
         assert!(result.is_err());

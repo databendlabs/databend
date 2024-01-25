@@ -1,5 +1,5 @@
 [package]
-name = "common-exception"
+name = "databend-common-exception"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,9 +11,7 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
-common-arrow = { path = "../arrow" }
-common-meta-stoerr = { path = "../../meta/stoerr" }
-common-meta-types = { path = "../../meta/types" }
+databend-common-arrow = { path = "../arrow" }
 
 # GitHub dependencies
 # TODO: Use the version from crates.io once
@@ -23,7 +21,7 @@ codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c8
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = "0.3.69"
-bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
+bincode = { workspace = true }
 http = "0.2"
 opendal = { workspace = true }
 parquet = { workspace = true }

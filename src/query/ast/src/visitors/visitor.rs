@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Span;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::Span;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use super::walk::walk_cte;
 use super::walk::walk_expr;
@@ -26,6 +26,7 @@ use super::walk::walk_select_target;
 use super::walk::walk_set_expr;
 use super::walk::walk_statement;
 use super::walk::walk_table_reference;
+use super::walk_stream_point;
 use super::walk_time_travel_point;
 use crate::ast::*;
 use crate::visitors::walk_window_definition;
@@ -240,12 +241,15 @@ pub trait Visitor<'ast>: Sized {
         _distinct: bool,
         _name: &'ast Identifier,
         args: &'ast [Expr],
-        _params: &'ast [Literal],
+        params: &'ast [Expr],
         over: &'ast Option<Window>,
         lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
             walk_expr(self, arg);
+        }
+        for param in params {
+            walk_expr(self, param);
         }
 
         if let Some(over) = over {
@@ -377,8 +381,16 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
 
-    fn visit_copy_into_table(&mut self, _copy: &'ast CopyIntoTableStmt) {}
-    fn visit_copy_into_location(&mut self, _copy: &'ast CopyIntoLocationStmt) {}
+    fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
+        if let CopyIntoTableSource::Query(query) = &copy.src {
+            self.visit_query(query)
+        }
+    }
+    fn visit_copy_into_location(&mut self, copy: &'ast CopyIntoLocationStmt) {
+        if let CopyIntoLocationSource::Query(query) = &copy.src {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 
@@ -394,6 +406,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
+    fn visit_show_user_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
     fn visit_show_table_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_show_options(&mut self, _show_options: &'ast Option<ShowOptions>, _name: String) {}
@@ -401,6 +415,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_show_limit(&mut self, _limit: &'ast ShowLimit) {}
 
     fn visit_show_indexes(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
+    fn visit_show_locks(&mut self, _stmt: &'ast ShowLocksStmt) {}
 
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
@@ -415,14 +431,66 @@ pub trait Visitor<'ast>: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &'ast str) {}
     fn visit_set_secondary_roles(&mut self, _option: &SecondaryRolesOption) {}
 
-    fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
-    fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
-    fn visit_merge_into(&mut self, _merge_into: &'ast MergeIntoStmt) {}
+    fn visit_insert(&mut self, insert: &'ast InsertStmt) {
+        if let InsertSource::Select { query } = &insert.source {
+            self.visit_query(query)
+        }
+    }
+
+    fn visit_replace(&mut self, replace: &'ast ReplaceStmt) {
+        if let InsertSource::Select { query, .. } = &replace.source {
+            self.visit_query(query)
+        }
+    }
+
+    fn visit_merge_into(&mut self, merge_into: &'ast MergeIntoStmt) {
+        // for visit merge into, its destination is to do some rules for the exprs
+        // in merge into before we bind_merge_into, we need to make sure the correct
+        // exprs rewrite for bind_merge_into
+        if let MergeSource::Select { query, .. } = &merge_into.source {
+            self.visit_query(query)
+        }
+        self.visit_expr(&merge_into.join_expr);
+        for operation in &merge_into.merge_options {
+            match operation {
+                MergeOption::Match(match_operation) => {
+                    if let Some(expr) = &match_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    if let MatchOperation::Update { update_list, .. } = &match_operation.operation {
+                        for update in update_list {
+                            self.visit_expr(&update.expr)
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_operation) => {
+                    if let Some(expr) = &unmatch_operation.selection {
+                        self.visit_expr(expr)
+                    }
+                    for expr in &unmatch_operation.insert_operation.values {
+                        self.visit_expr(expr)
+                    }
+                }
+            }
+        }
+    }
+
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
-    fn visit_delete(&mut self, _delete: &'ast DeleteStmt) {}
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
+        if let Some(expr) = &delete.selection {
+            self.visit_expr(expr)
+        }
+    }
 
-    fn visit_update(&mut self, _update: &'ast UpdateStmt) {}
+    fn visit_update(&mut self, update: &'ast UpdateStmt) {
+        if let Some(expr) = &update.selection {
+            self.visit_expr(expr)
+        }
+        for update in &update.update_list {
+            self.visit_expr(&update.expr)
+        }
+    }
 
     fn visit_show_catalogs(&mut self, _stmt: &'ast ShowCatalogsStmt) {}
 
@@ -458,7 +526,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_drop_tables(&mut self, _stmt: &'ast ShowDropTablesStmt) {}
 
-    fn visit_create_table(&mut self, _stmt: &'ast CreateTableStmt) {}
+    fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt) {
+        if let Some(query) = stmt.as_query.as_deref() {
+            self.visit_query(query)
+        }
+    }
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
 
@@ -490,6 +562,14 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
 
+    fn visit_create_stream(&mut self, _stmt: &'ast CreateStreamStmt) {}
+
+    fn visit_drop_stream(&mut self, _stmt: &'ast DropStreamStmt) {}
+
+    fn visit_show_streams(&mut self, _stmt: &'ast ShowStreamsStmt) {}
+
+    fn visit_describe_stream(&mut self, _stmt: &'ast DescribeStreamStmt) {}
+
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
@@ -502,6 +582,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_virtual_column(&mut self, _stmt: &'ast DropVirtualColumnStmt) {}
 
     fn visit_refresh_virtual_column(&mut self, _stmt: &'ast RefreshVirtualColumnStmt) {}
+
+    fn visit_show_virtual_columns(&mut self, _stmt: &'ast ShowVirtualColumnsStmt) {}
 
     fn visit_show_users(&mut self) {}
 
@@ -595,6 +677,16 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_network_policies(&mut self) {}
 
+    fn visit_create_password_policy(&mut self, _stmt: &'ast CreatePasswordPolicyStmt) {}
+
+    fn visit_alter_password_policy(&mut self, _stmt: &'ast AlterPasswordPolicyStmt) {}
+
+    fn visit_drop_password_policy(&mut self, _stmt: &'ast DropPasswordPolicyStmt) {}
+
+    fn visit_desc_password_policy(&mut self, _stmt: &'ast DescPasswordPolicyStmt) {}
+
+    fn visit_show_password_policies(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
     fn visit_create_task(&mut self, _stmt: &'ast CreateTaskStmt) {}
 
     fn visit_drop_task(&mut self, _stmt: &'ast DropTaskStmt) {}
@@ -637,6 +729,8 @@ pub trait Visitor<'ast>: Sized {
             selection,
             group_by,
             having,
+            window_list,
+            qualify,
             ..
         } = stmt;
 
@@ -671,6 +765,16 @@ pub trait Visitor<'ast>: Sized {
         if let Some(having) = having {
             walk_expr(self, having);
         }
+
+        if let Some(window_list) = window_list {
+            for window_def in window_list {
+                walk_window_definition(self, window_def);
+            }
+        }
+
+        if let Some(qualify) = qualify {
+            walk_expr(self, qualify);
+        }
     }
 
     fn visit_select_target(&mut self, target: &'ast SelectTarget) {
@@ -683,6 +787,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {
         walk_time_travel_point(self, time);
+    }
+
+    fn visit_stream_point(&mut self, stream: &'ast StreamPoint) {
+        walk_stream_point(self, stream)
     }
 
     fn visit_join(&mut self, join: &'ast Join) {

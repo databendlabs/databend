@@ -14,20 +14,22 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_metrics::transform::*;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_pipeline_sinks::AsyncSink;
-use common_pipeline_sinks::AsyncSinker;
-use common_pipeline_sinks::Sink;
-use common_pipeline_sinks::Sinker;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::transform::*;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline_sinks::Sink;
+use databend_common_pipeline_sinks::Sinker;
 
 use crate::api::rpc::flight_client::FlightSender;
 use crate::api::ExchangeSerializeMeta;
@@ -35,6 +37,9 @@ use crate::sessions::QueryContext;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,
+    source: String,
+    destination: String,
+    fragment: usize,
 }
 
 impl ExchangeWriterSink {
@@ -42,8 +47,16 @@ impl ExchangeWriterSink {
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         flight_sender: FlightSender,
+        source_id: &str,
+        destination_id: &str,
+        fragment_id: usize,
     ) -> Box<dyn Processor> {
-        AsyncSinker::create(input, ctx, ExchangeWriterSink { flight_sender })
+        AsyncSinker::create(input, ctx, ExchangeWriterSink {
+            flight_sender,
+            source: source_id.to_string(),
+            destination: destination_id.to_string(),
+            fragment: fragment_id,
+        })
     }
 }
 
@@ -64,9 +77,9 @@ impl AsyncSink for ExchangeWriterSink {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
             )),
-            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or(
-                ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta."),
-            ),
+            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or_else(|| {
+                ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta.")
+            }),
         }?;
 
         let mut bytes = 0;
@@ -85,9 +98,26 @@ impl AsyncSink for ExchangeWriterSink {
         {
             metrics_inc_exchange_write_count(count);
             metrics_inc_exchange_write_bytes(bytes);
+            Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
         }
 
         Ok(false)
+    }
+
+    fn details_status(&self) -> Option<String> {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Display {
+            source: String,
+            destination: String,
+            fragment: usize,
+        }
+
+        Some(format!("{:?}", Display {
+            source: self.source.clone(),
+            destination: self.destination.clone(),
+            fragment: self.fragment,
+        }))
     }
 }
 
@@ -118,28 +148,24 @@ pub fn create_writer_item(
     ctx: Arc<QueryContext>,
     exchange: FlightSender,
     ignore: bool,
+    destination_id: &str,
+    fragment_id: usize,
+    source_id: &str,
 ) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
         match ignore {
             true => ProcessorPtr::create(IgnoreExchangeSink::create(input.clone(), exchange)),
-            false => ProcessorPtr::create(ExchangeWriterSink::create(ctx, input.clone(), exchange)),
+            false => ProcessorPtr::create(ExchangeWriterSink::create(
+                ctx,
+                input.clone(),
+                exchange,
+                source_id,
+                destination_id,
+                fragment_id,
+            )),
         },
         vec![input],
         vec![],
     )
-}
-
-pub fn create_writer_items(
-    ctx: Arc<QueryContext>,
-    exchanges: Vec<FlightSender>,
-    ignore: bool,
-) -> Vec<PipeItem> {
-    let mut items = Vec::with_capacity(exchanges.len());
-
-    for exchange in exchanges {
-        items.push(create_writer_item(ctx.clone(), exchange, ignore));
-    }
-
-    items
 }

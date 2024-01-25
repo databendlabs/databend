@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::UnSetSource;
-use common_ast::ast::UnSetStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::UnSetSource;
+use databend_common_ast::ast::UnSetStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::wrap_cast;
 use super::BindContext;
@@ -40,15 +40,14 @@ impl Binder {
         variable: &Identifier,
         value: &Expr,
     ) -> Result<Plan> {
-        let mut type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::try_create(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             false,
-            false,
-        );
+        )?;
         let variable = variable.name.clone();
 
         let (scalar, _) = *type_checker.resolve(value).await?;
@@ -58,8 +57,8 @@ impl Binder {
         let (new_expr, _) =
             ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
         match new_expr {
-            common_expression::Expr::Constant { scalar, .. } => {
-                let value = String::from_utf8(scalar.into_string().unwrap())?;
+            databend_common_expression::Expr::Constant { scalar, .. } => {
+                let value = scalar.into_string().unwrap();
                 let vars = vec![VarValue {
                     is_global,
                     variable,

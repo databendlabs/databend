@@ -47,7 +47,7 @@ impl TryFrom<&Compression> for CommonCompression {
 }
 
 impl CommonCompression {
-    pub fn to_compression(&self) -> Compression {
+    pub fn to_compression(self) -> Compression {
         match self {
             Self::None => Compression::None,
             Self::Lz4 => Compression::Lz4,

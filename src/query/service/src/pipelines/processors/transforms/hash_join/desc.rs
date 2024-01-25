@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::Expr;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::physical_plans::HashJoin;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::Expr;
+use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::physical_plans::HashJoin;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;
@@ -35,10 +35,16 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) join_type: JoinType,
+    /// when we have non-equal conditions for hash join,
+    /// for example `a = b and c = d and e > f`, we will use `and_filters`
+    /// to wrap `e > f` as a other_predicate to do next step's check.
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
+    pub(crate) probe_keys_rt: Vec<Option<Expr<String>>>,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl HashJoinDesc {
@@ -56,6 +62,12 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
+        let probe_keys_rt: Vec<Option<Expr<String>>> = join
+            .probe_keys_rt
+            .iter()
+            .map(|k| k.as_ref().map(|v| v.as_expr(&BUILTIN_FUNCTIONS)))
+            .collect();
+
         Ok(HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
@@ -66,6 +78,8 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
+            probe_keys_rt,
+            broadcast: join.broadcast,
         })
     }
 

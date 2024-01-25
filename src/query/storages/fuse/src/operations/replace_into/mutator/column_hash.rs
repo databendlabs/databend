@@ -14,14 +14,14 @@
 
 use std::hash::Hasher;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::AnyType;
-use common_expression::types::DecimalSize;
-use common_expression::types::NumberScalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
@@ -70,7 +70,7 @@ pub fn row_hash_of_columns(
                 NumberScalar::Float64(v) => sip.write_u64(v.to_bits()),
             },
             ScalarRef::Timestamp(v) => sip.write_i64(v),
-            ScalarRef::String(v) => sip.write(v),
+            ScalarRef::String(v) => sip.write(v.as_bytes()),
             ScalarRef::Bitmap(v) => sip.write(v),
             ScalarRef::Decimal(v) => match v {
                 DecimalScalar::Decimal128(i, DecimalSize { precision, scale }) => {

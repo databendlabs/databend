@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_metrics::dump_metric_samples;
-use common_metrics::load_global_prometheus_registry;
-use common_metrics::register_counter;
-use common_metrics::register_histogram_in_milliseconds;
-use common_metrics::MetricValue;
+use databend_common_exception::ErrorCode;
+use databend_common_metrics::dump_metric_samples;
+use databend_common_metrics::load_global_prometheus_registry;
+use databend_common_metrics::register_counter;
+use databend_common_metrics::register_histogram_in_milliseconds;
+use databend_common_metrics::MetricValue;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_dump_metric_samples() -> common_exception::Result<()> {
+async fn test_dump_metric_samples() -> databend_common_exception::Result<()> {
     let counter1 = register_counter("test_test1_count");
     let counter2 = register_counter("test_test2_count");
     let histogram1 = register_histogram_in_milliseconds("test_test_query_usedtime");

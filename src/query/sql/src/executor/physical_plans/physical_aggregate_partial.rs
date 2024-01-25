@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
@@ -44,7 +44,7 @@ impl AggregatePartial {
         for agg in self.agg_funcs.iter() {
             fields.push(DataField::new(
                 &agg.output_column.to_string(),
-                DataType::String,
+                DataType::Binary,
             ));
         }
         if !self.group_by.is_empty() {

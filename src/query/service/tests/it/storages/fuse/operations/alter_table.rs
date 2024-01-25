@@ -14,38 +14,38 @@
 
 use std::collections::HashSet;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::Float64Type;
-use common_expression::types::Int32Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::UInt64Type;
-use common_expression::Column;
-use common_expression::ColumnId;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_sql::plans::AddColumnOption;
-use common_sql::plans::AddTableColumnPlan;
-use common_sql::plans::DropTableColumnPlan;
-use common_sql::Planner;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::FuseTable;
-use common_storages_fuse::TableContext;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_sql::plans::AddColumnOption;
+use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_sql::plans::DropTableColumnPlan;
+use databend_common_sql::Planner;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures_util::TryStreamExt;
 use ordered_float::OrderedFloat;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,
@@ -131,7 +131,9 @@ async fn check_segment_column_ids(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize_alter_table() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
     let catalog_name = fixture.default_catalog_name();
@@ -162,7 +164,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     };
     let ctx = fixture.new_query_ctx().await?;
     let interpreter = DropTableColumnInterpreter::try_create(ctx.clone(), drop_table_column_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // add a column of uint64 with default value `(1,15.0)`
     let field = TableField::new("b", TableDataType::Tuple {
@@ -184,7 +186,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         option: AddColumnOption::End,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // insert values for new schema
     let block = {
@@ -221,19 +223,27 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
             (
                 3,
                 (
-                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
-                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(4)),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::UInt64(1),
+                    ),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::UInt64(4),
+                    ),
                 ),
             ),
             (
                 4,
                 (
-                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
-                        OrderedFloat(13.0),
-                    )),
-                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
-                        OrderedFloat(15.0),
-                    )),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::Float64(
+                            OrderedFloat(13.0),
+                        ),
+                    ),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::Float64(
+                            OrderedFloat(15.0),
+                        ),
+                    ),
                 ),
             ),
         ]),
@@ -259,19 +269,27 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
             (
                 3,
                 (
-                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
-                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(4)),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::UInt64(1),
+                    ),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::UInt64(4),
+                    ),
                 ),
             ),
             (
                 4,
                 (
-                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
-                        OrderedFloat(13.0),
-                    )),
-                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
-                        OrderedFloat(15.0),
-                    )),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::Float64(
+                            OrderedFloat(13.0),
+                        ),
+                    ),
+                    Scalar::Number(
+                        databend_common_expression::types::number::NumberScalar::Float64(
+                            OrderedFloat(15.0),
+                        ),
+                    ),
                 ),
             ),
         ]),

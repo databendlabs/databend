@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use storages_common_table_meta::meta::TableSnapshotLite;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_storages_common_table_meta::meta::TableSnapshotLite;
 
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -93,9 +93,9 @@ impl<'a> FuseSnapshot<'a> {
         latest_snapshot_version: u64,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
-        let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
-        let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
-        let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
+        let mut snapshot_ids: Vec<String> = Vec::with_capacity(len);
+        let mut snapshot_locations: Vec<String> = Vec::with_capacity(len);
+        let mut prev_snapshot_ids: Vec<Option<String>> = Vec::with_capacity(len);
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut segment_count: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
@@ -106,15 +106,14 @@ impl<'a> FuseSnapshot<'a> {
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
-            snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
+            snapshot_ids.push(s.snapshot_id.simple().to_string());
             snapshot_locations.push(
                 location_generator
-                    .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?
-                    .into_bytes(),
+                    .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?,
             );
-            let (id, ver) = s.prev_snapshot_id.map_or((None, 0), |(id, v)| {
-                (Some(id.simple().to_string().into_bytes()), v)
-            });
+            let (id, ver) = s
+                .prev_snapshot_id
+                .map_or((None, 0), |(id, v)| (Some(id.simple().to_string()), v));
             prev_snapshot_ids.push(id);
             format_versions.push(s.format_version);
             segment_count.push(s.segment_count);

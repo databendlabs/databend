@@ -17,25 +17,25 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use common_expression::Value;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::Value;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use itertools::Itertools;
 use jsonb::Value as JsonbValue;
 use log::warn;
 use serde_json::json;
 use serde_json::Value as JsonValue;
-use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
@@ -122,11 +122,11 @@ impl<'a> ClusteringInformation<'a> {
                                 constant_block_count += 1;
                             }
                             points_map
-                                .entry(cluster_stats.min())
+                                .entry(cluster_stats.min().clone())
                                 .and_modify(|v| v.0.push(index))
                                 .or_insert((vec![index], vec![]));
                             points_map
-                                .entry(cluster_stats.max())
+                                .entry(cluster_stats.max().clone())
                                 .and_modify(|v| v.1.push(index))
                                 .or_insert((vec![], vec![index]));
                             index += 1;
@@ -213,12 +213,12 @@ impl<'a> ClusteringInformation<'a> {
         let cluster_key = self
             .table
             .cluster_key_str()
-            .ok_or(ErrorCode::Internal("It's a bug"))?;
+            .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
         Ok(DataBlock::new(
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(cluster_key.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(cluster_key.clone())),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

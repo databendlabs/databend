@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::date_helper::DateConverter;
-use common_expression::types::number::NumberScalar;
-use common_expression::DataBlock;
-use common_expression::ScalarRef;
-use common_expression::TableSchemaRef;
-use common_io::prelude::FormatSettings;
+use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableSchemaRef;
+use databend_common_io::prelude::FormatSettings;
 use roaring::RoaringTreemap;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
@@ -46,7 +46,7 @@ impl JSONOutputFormat {
         }
     }
 
-    fn format_schema(&self) -> common_exception::Result<Vec<u8>> {
+    fn format_schema(&self) -> databend_common_exception::Result<Vec<u8>> {
         let fields = self.schema.fields();
         if fields.is_empty() {
             return Ok(b"\"meta\":[]".to_vec());
@@ -98,7 +98,8 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         }
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
-        ScalarRef::String(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
+        ScalarRef::Binary(x) => JsonValue::String(hex::encode_upper(x)),
+        ScalarRef::String(x) => JsonValue::String(x.to_string()),
         ScalarRef::Array(x) => {
             let vals = x
                 .iter()
@@ -144,7 +145,10 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
 }
 
 impl OutputFormat for JSONOutputFormat {
-    fn serialize_block(&mut self, data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
+    fn serialize_block(
+        &mut self,
+        data_block: &DataBlock,
+    ) -> databend_common_exception::Result<Vec<u8>> {
         let mut res = if self.first_block {
             self.first_block = false;
             let mut buf = b"{".to_vec();
@@ -193,7 +197,7 @@ impl OutputFormat for JSONOutputFormat {
         Ok(res)
     }
 
-    fn finalize(&mut self) -> common_exception::Result<Vec<u8>> {
+    fn finalize(&mut self) -> databend_common_exception::Result<Vec<u8>> {
         let mut buf = b"".to_vec();
         if self.first_row {
             buf.push(b'{');

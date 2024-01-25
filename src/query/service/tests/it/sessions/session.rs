@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use databend_query::sessions::SessionManager;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::sessions::SessionType;
 use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build().clone()).await?;
-    let session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
+    let fixture = TestFixture::setup().await?;
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Tenant.
     {
@@ -50,11 +47,9 @@ async fn test_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().with_management_mode().build()).await?;
-    let session = SessionManager::instance()
-        .create_session(SessionType::Dummy)
-        .await?;
+    let config = ConfigBuilder::create().with_management_mode().build();
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Tenant.
     {

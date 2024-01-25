@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::VariantType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_api::BackgroundApi;
-use common_meta_app::background::ListBackgroundTasksReq;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_users::UserApiProvider;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_api::BackgroundApi;
+use databend_common_meta_app::background::ListBackgroundTasksReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -75,10 +75,10 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
         for (_, name, task) in tasks {
-            names.push(name.as_bytes().to_vec());
-            types.push(task.task_type.to_string().as_bytes().to_vec());
-            stats.push(task.task_state.to_string().as_bytes().to_vec());
-            messages.push(task.message.as_bytes().to_vec());
+            names.push(name);
+            types.push(task.task_type.to_string());
+            stats.push(task.task_state.to_string());
+            messages.push(task.message);
             compaction_stats.push(
                 task.compaction_task_stats
                     .as_ref()
@@ -98,11 +98,8 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 table_ids.push(0);
                 task_run_secs.push(None);
             }
-            creators.push(task.creator.map(|s| s.to_string().as_bytes().to_vec()));
-            trigger.push(
-                task.manual_trigger
-                    .map(|s| s.trigger.to_string().as_bytes().to_vec()),
-            );
+            creators.push(task.creator.map(|s| s.to_string()));
+            trigger.push(task.manual_trigger.map(|s| s.trigger.to_string()));
             create_timestamps.push(task.created_at.timestamp_micros());
             update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
         }

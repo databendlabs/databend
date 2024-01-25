@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -35,6 +35,10 @@ impl Operator for PatternPlan {
         self.plan_type.clone()
     }
 
+    fn arity(&self) -> usize {
+        0
+    }
+
     fn is_pattern(&self) -> bool {
         true
     }
@@ -42,7 +46,7 @@ impl Operator for PatternPlan {
     fn derive_relational_prop(
         &self,
         _rel_expr: &RelExpr,
-    ) -> common_exception::Result<Arc<RelationalProperty>> {
+    ) -> databend_common_exception::Result<Arc<RelationalProperty>> {
         Err(ErrorCode::Internal(
             "Cannot derive relational property for pattern plan",
         ))
@@ -51,13 +55,16 @@ impl Operator for PatternPlan {
     fn derive_physical_prop(
         &self,
         _rel_expr: &RelExpr,
-    ) -> common_exception::Result<PhysicalProperty> {
+    ) -> databend_common_exception::Result<PhysicalProperty> {
         Err(ErrorCode::Internal(
             "Cannot derive physical property for pattern plan",
         ))
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
+    fn derive_stats(
+        &self,
+        _rel_expr: &RelExpr,
+    ) -> databend_common_exception::Result<Arc<StatInfo>> {
         Err(ErrorCode::Internal(
             "Cannot derive cardinality for pattern plan",
         ))
@@ -69,7 +76,20 @@ impl Operator for PatternPlan {
         _rel_expr: &RelExpr,
         _child_index: usize,
         _required: &RequiredProperty,
-    ) -> common_exception::Result<RequiredProperty> {
-        unreachable!()
+    ) -> databend_common_exception::Result<RequiredProperty> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for pattern plan",
+        ))
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> databend_common_exception::Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for pattern plan",
+        ))
     }
 }

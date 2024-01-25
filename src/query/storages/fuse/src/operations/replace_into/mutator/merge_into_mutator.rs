@@ -17,36 +17,36 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Semaphore;
-use common_base::base::ProgressValues;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::ComputedExpr;
-use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_metrics::storage::*;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::physical_plans::OnConflictField;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_metrics::storage::*;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::filters::Filter;
+use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockSlotDescription;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_index::filters::Filter;
-use storages_common_index::filters::Xor8Filter;
-use storages_common_index::BloomIndex;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::BlockSlotDescription;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::io::write_data;
@@ -145,6 +145,7 @@ impl MergeIntoOperationAggregator {
                 projection,
                 false,
                 false,
+                false,
             )
         }?;
 
@@ -158,6 +159,7 @@ impl MergeIntoOperationAggregator {
                     data_accessor.clone(),
                     table_schema,
                     projection,
+                    false,
                     false,
                     false,
                 )?;
@@ -456,6 +458,7 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,
                     block_idx: block_index,
+                    inner: None,
                 },
             };
 
@@ -532,6 +535,7 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
+                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };
@@ -572,7 +576,7 @@ impl AggregationContext {
         if let Some(stats) = column_stats {
             let max = stats.max();
             let min = stats.min();
-            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min,min)
                 || // coincide overlap
                 (max == key_max && min == key_min)
         } else {
@@ -726,10 +730,10 @@ impl AggregationContext {
 
 #[cfg(test)]
 mod tests {
-    use common_expression::types::NumberDataType;
-    use common_expression::types::NumberScalar;
-    use common_expression::TableDataType;
-    use common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
 
     use super::*;
 
@@ -784,8 +788,8 @@ mod tests {
             (
                 1,
                 range(
-                    Scalar::String("a".to_string().into_bytes()),
-                    Scalar::String("z".to_string().into_bytes()),
+                    Scalar::String("a".to_string()),
+                    Scalar::String("z".to_string()),
                 ),
             ),
             // range of xx_time [100, 200]
@@ -823,8 +827,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("y".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("y".to_string()),
             ),
             // for xx_time column, overlaps
             (
@@ -868,8 +872,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("b".to_string()),
             ),
             // for xx_time column, overlaps
             (

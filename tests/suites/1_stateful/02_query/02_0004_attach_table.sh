@@ -49,3 +49,8 @@ comment "select after deletion with self-defined connection"
 query "select * from table_to2 order by a;"
 
 stmt "drop connection my_conn;"
+
+stmt "drop table if exists table_from;"
+stmt "drop table if exists table_from2;"
+stmt "drop table if exists table_to;"
+stmt "drop table if exists table_to2;"

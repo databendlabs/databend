@@ -12,26 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::UInt64Type;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
-use common_expression::ColumnId;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::Value;
-use common_expression::BLOCK_NAME_COLUMN_ID;
-use common_expression::ROW_ID_COLUMN_ID;
-use common_expression::SEGMENT_NAME_COLUMN_ID;
-use common_expression::SNAPSHOT_NAME_COLUMN_ID;
-use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
+use std::path::Path;
+
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::Value;
+use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
+use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::BLOCK_NAME_COLUMN_ID;
+use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
+use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Assumes that the max block count of a segment is 2 ^ NUM_BLOCK_ID_BITS
@@ -90,6 +97,7 @@ pub struct InternalColumnMeta {
     pub snapshot_location: Option<String>,
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
+    pub base_block_ids: Option<Scalar>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -105,9 +113,9 @@ impl BlockMetaInfo for InternalColumnMeta {
 
 impl InternalColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&InternalColumnMeta> {
-        InternalColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
-        ))
+        InternalColumnMeta::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to InternalColumnMeta.")
+        })
     }
 }
 
@@ -117,6 +125,10 @@ pub enum InternalColumnType {
     BlockName,
     SegmentName,
     SnapshotName,
+
+    // stream columns
+    BaseRowId,
+    BaseBlockIds,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -143,6 +155,13 @@ impl InternalColumn {
             InternalColumnType::BlockName => TableDataType::String,
             InternalColumnType::SegmentName => TableDataType::String,
             InternalColumnType::SnapshotName => TableDataType::String,
+            InternalColumnType::BaseRowId => TableDataType::String,
+            InternalColumnType::BaseBlockIds => TableDataType::Array(Box::new(
+                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: 38,
+                    scale: 0,
+                })),
+            )),
         }
     }
 
@@ -161,6 +180,8 @@ impl InternalColumn {
             InternalColumnType::BlockName => BLOCK_NAME_COLUMN_ID,
             InternalColumnType::SegmentName => SEGMENT_NAME_COLUMN_ID,
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
+            InternalColumnType::BaseRowId => BASE_ROW_ID_COLUMN_ID,
+            InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
         }
     }
 
@@ -220,6 +241,43 @@ impl InternalColumn {
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
+                )
+            }
+            InternalColumnType::BaseRowId => {
+                let file_stem = Path::new(&meta.block_location).file_stem().unwrap();
+                let file_strs = file_stem
+                    .to_str()
+                    .unwrap_or("")
+                    .split('_')
+                    .collect::<Vec<&str>>();
+                let uuid = file_strs[0];
+                let mut row_ids = Vec::with_capacity(num_rows);
+                if let Some(offsets) = &meta.offsets {
+                    for i in offsets {
+                        let row_id = format!("{}{:06x}", uuid, *i);
+                        row_ids.push(row_id);
+                    }
+                } else {
+                    for i in 0..num_rows {
+                        let row_id = format!("{}{:06x}", uuid, i);
+                        row_ids.push(row_id);
+                    }
+                }
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Column(StringType::from_data(row_ids)),
+                )
+            }
+            InternalColumnType::BaseBlockIds => {
+                assert!(meta.base_block_ids.is_some());
+                BlockEntry::new(
+                    DataType::Array(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
+                        DecimalSize {
+                            precision: 38,
+                            scale: 0,
+                        },
+                    )))),
+                    Value::Scalar(meta.base_block_ids.clone().unwrap()),
                 )
             }
         }

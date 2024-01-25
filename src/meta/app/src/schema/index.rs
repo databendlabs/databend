@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::MetaId;
+use databend_common_meta_types::MetaId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct IndexNameIdent {
@@ -101,6 +101,7 @@ pub struct IndexMeta {
     // if used in CreateIndexReq, `dropped_on` and `updated_on` MUST set to None.
     pub dropped_on: Option<DateTime<Utc>>,
     pub updated_on: Option<DateTime<Utc>>,
+    pub original_query: String,
     pub query: String,
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
@@ -115,6 +116,7 @@ impl Default for IndexMeta {
             created_on: Utc::now(),
             dropped_on: None,
             updated_on: None,
+            original_query: "".to_string(),
             query: "".to_string(),
             sync_creation: false,
         }
@@ -224,10 +226,11 @@ impl ListIndexesByIdReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdToName;
+    use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
     use crate::schema::PREFIX_INDEX;
     use crate::schema::PREFIX_INDEX_BY_ID;
@@ -236,6 +239,8 @@ mod kvapi_key_impl {
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
         const PREFIX: &'static str = PREFIX_INDEX;
+
+        type ValueType = IndexId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -259,6 +264,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for IndexId {
         const PREFIX: &'static str = PREFIX_INDEX_BY_ID;
 
+        type ValueType = IndexMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.index_id)
@@ -278,6 +285,8 @@ mod kvapi_key_impl {
     /// "<prefix>/<index_id> -> IndexNameIdent"
     impl kvapi::Key for IndexIdToName {
         const PREFIX: &'static str = PREFIX_INDEX_ID_TO_NAME;
+
+        type ValueType = IndexNameIdent;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_sql::executor::physical_plans::ExchangeSink;
-use common_sql::executor::physical_plans::ExchangeSource;
+use databend_common_exception::Result;
+use databend_common_sql::executor::physical_plans::ExchangeSink;
+use databend_common_sql::executor::physical_plans::ExchangeSource;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -24,12 +24,11 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
-            self.enable_profiling,
             self.exchange_injector.clone(),
         )?;
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
-        self.probe_data_fields = build_res.builder_data.input_probe_schema;
+        self.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
 
         self.main_pipeline = build_res.main_pipeline;
         self.pipelines.extend(build_res.sources_pipelines);

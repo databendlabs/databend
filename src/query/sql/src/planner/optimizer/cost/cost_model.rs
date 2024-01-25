@@ -12,108 +12,172 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::Cost;
 use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 
-static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
-static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
-static COST_FACTOR_AGGREGATE_PER_ROW: f64 = 5.0;
-
 #[derive(Default)]
-pub struct DefaultCostModel;
+pub struct DefaultCostModel {
+    compute_per_row: f64,
+    hash_table_per_row: f64,
+    aggregate_per_row: f64,
+    network_per_row: f64,
+
+    /// The number of peers in the cluster to
+    /// exchange data with.
+    cluster_peers: usize,
+
+    /// Degree of parallelism on each node.
+    degree_of_parallelism: usize,
+}
 
 impl CostModel for DefaultCostModel {
     fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        compute_cost_impl(memo, m_expr)
+        self.compute_cost_impl(memo, m_expr)
     }
 }
 
-fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    match m_expr.plan.as_ref() {
-        RelOperator::Scan(plan) => compute_cost_scan(memo, m_expr, plan),
-        RelOperator::DummyTableScan(_)
-        | RelOperator::CteScan(_)
-        | RelOperator::ConstantTableScan(_) => Ok(Cost(0.0)),
-        RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
-        RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
-        RelOperator::Aggregate(_) => compute_aggregate(memo, m_expr),
-        RelOperator::MaterializedCte(_) => compute_materialized_cte(memo, m_expr),
-
-        RelOperator::EvalScalar(_)
-        | RelOperator::Filter(_)
-        | RelOperator::Window(_)
-        | RelOperator::Sort(_)
-        | RelOperator::ProjectSet(_)
-        | RelOperator::Lambda(_)
-        | RelOperator::Udf(_)
-        | RelOperator::Limit(_) => compute_cost_unary_common_operator(memo, m_expr),
-
-        _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
+impl DefaultCostModel {
+    pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let hash_table_per_row = settings.get_cost_factor_hash_table_per_row()? as f64;
+        let aggregate_per_row = settings.get_cost_factor_aggregate_per_row()? as f64;
+        let network_per_row = settings.get_cost_factor_network_per_row()? as f64;
+        Ok(DefaultCostModel {
+            compute_per_row: 1.0,
+            hash_table_per_row,
+            aggregate_per_row,
+            network_per_row,
+            cluster_peers: 1,
+            degree_of_parallelism: 8,
+        })
     }
-}
 
-fn compute_cost_scan(memo: &Memo, m_expr: &MExpr, _plan: &Scan) -> Result<Cost> {
-    // Since we don't have alternations(e.g. index scan) for table scan for now, we just ignore
-    // the I/O cost and treat `PhysicalScan` as normal computation.
-    let group = memo.group(m_expr.group_index)?;
-    let cost = group.stat_info.cardinality * COST_FACTOR_COMPUTE_PER_ROW;
-    Ok(Cost(cost))
-}
-
-fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
-    let build_group = m_expr.child_group(memo, 1)?;
-    let probe_group = m_expr.child_group(memo, 0)?;
-    let build_card = build_group.stat_info.cardinality;
-    let probe_card = probe_group.stat_info.cardinality;
-
-    let mut cost =
-        build_card * COST_FACTOR_HASH_TABLE_PER_ROW + probe_card * COST_FACTOR_COMPUTE_PER_ROW;
-
-    if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
-        // Due to implementation reasons, right semi join is more expensive than left semi join
-        // So if join type is right anti or right semi, cost needs multiply three (an approximate value)
-        cost *= 3.0;
+    pub fn with_cluster_peers(mut self, cluster_peers: usize) -> Self {
+        self.cluster_peers = cluster_peers;
+        self
     }
-    Ok(Cost(cost))
-}
 
-fn compute_materialized_cte(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    let left_group = m_expr.child_group(memo, 0)?;
-    let cost = left_group.stat_info.cardinality * COST_FACTOR_COMPUTE_PER_ROW;
-    Ok(Cost(cost))
-}
+    pub fn with_degree_of_parallelism(mut self, inter_node_parallelism: usize) -> Self {
+        self.degree_of_parallelism = inter_node_parallelism;
+        self
+    }
 
-/// Compute cost for the unary operators that perform simple computation(e.g. `Project`, `Filter`, `EvalScalar`).
-///
-/// TODO(leiysky): Since we don't have alternation for `Aggregate` for now, we just
-/// treat `Aggregate` as normal computation.
-fn compute_cost_unary_common_operator(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    let group = m_expr.child_group(memo, 0)?;
-    let card = group.stat_info.cardinality;
-    let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
-    Ok(Cost(cost))
-}
+    fn compute_cost_impl(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        match m_expr.plan.as_ref() {
+            RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
+            RelOperator::DummyTableScan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::ConstantTableScan(_) => Ok(Cost(0.0)),
+            RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
+            RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
+            RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
+            RelOperator::MaterializedCte(_) => self.compute_materialized_cte(memo, m_expr),
 
-fn compute_cost_union_all(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    let left_group = m_expr.child_group(memo, 0)?;
-    let right_group = m_expr.child_group(memo, 1)?;
-    let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
-    let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
-    Ok(Cost(cost))
-}
+            RelOperator::EvalScalar(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Window(_)
+            | RelOperator::Sort(_)
+            | RelOperator::ProjectSet(_)
+            | RelOperator::Udf(_)
+            | RelOperator::Limit(_) => self.compute_cost_unary_common_operator(memo, m_expr),
 
-fn compute_aggregate(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    let group = m_expr.child_group(memo, 0)?;
-    let card = group.stat_info.cardinality;
-    let cost = card * COST_FACTOR_AGGREGATE_PER_ROW;
-    Ok(Cost(cost))
+            RelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
+
+            _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
+        }
+    }
+
+    fn compute_cost_scan(&self, memo: &Memo, m_expr: &MExpr, _plan: &Scan) -> Result<Cost> {
+        // Since we don't have alternations(e.g. index scan) for table scan for now, we just ignore
+        // the I/O cost and treat `PhysicalScan` as normal computation.
+        let group = memo.group(m_expr.group_index)?;
+        let cost = group.stat_info.cardinality * self.compute_per_row;
+        Ok(Cost(cost))
+    }
+
+    fn compute_cost_join(&self, memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
+        let build_group = m_expr.child_group(memo, 1)?;
+        let probe_group = m_expr.child_group(memo, 0)?;
+        let build_card = build_group.stat_info.cardinality;
+        let probe_card = probe_group.stat_info.cardinality;
+
+        let mut cost = build_card * self.hash_table_per_row + probe_card * self.compute_per_row;
+
+        if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
+            // Due to implementation reasons, right semi join is more expensive than left semi join
+            // So if join type is right anti or right semi, cost needs multiply three (an approximate value)
+            cost *= 3.0;
+        }
+        Ok(Cost(cost))
+    }
+
+    fn compute_materialized_cte(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        let left_group = m_expr.child_group(memo, 0)?;
+        let cost = left_group.stat_info.cardinality * self.compute_per_row;
+        Ok(Cost(cost))
+    }
+
+    /// Compute cost for the unary operators that perform simple computation(e.g. `Project`, `Filter`, `EvalScalar`).
+    ///
+    /// TODO(leiysky): Since we don't have alternation for `Aggregate` for now, we just
+    /// treat `Aggregate` as normal computation.
+    fn compute_cost_unary_common_operator(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        let group = m_expr.child_group(memo, 0)?;
+        let card = group.stat_info.cardinality;
+        let cost = card * self.compute_per_row;
+        Ok(Cost(cost))
+    }
+
+    fn compute_cost_union_all(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        let left_group = m_expr.child_group(memo, 0)?;
+        let right_group = m_expr.child_group(memo, 1)?;
+        let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
+        let cost = card * self.compute_per_row;
+        Ok(Cost(cost))
+    }
+
+    fn compute_aggregate(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        let group = m_expr.child_group(memo, 0)?;
+        let card = group.stat_info.cardinality;
+        let cost = card * self.aggregate_per_row;
+        Ok(Cost(cost))
+    }
+
+    fn compute_cost_exchange(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+        let exchange: Exchange = (*m_expr.plan.clone()).clone().try_into()?;
+        let group = memo.group(m_expr.group_index)?;
+        let cost = match exchange {
+            Exchange::Hash(_) => {
+                group.stat_info.cardinality * self.network_per_row
+                    + group.stat_info.cardinality * self.compute_per_row
+            }
+            Exchange::Merge | Exchange::MergeSort => {
+                // Merge is essentially a very expensive operation cause it will break the parallelism.
+                // Thus we give it a very high cost so we can avoid it as much as possible.
+                group.stat_info.cardinality * self.network_per_row
+                    + group.stat_info.cardinality
+                        * self.compute_per_row
+                        * self.cluster_peers as f64
+                        * self.degree_of_parallelism as f64
+                        * 100.0
+            }
+            Exchange::Broadcast => {
+                group.stat_info.cardinality * self.network_per_row * (self.cluster_peers - 1) as f64
+            }
+        };
+        Ok(Cost(cost))
+    }
 }

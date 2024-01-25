@@ -18,55 +18,65 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::AppendMode;
-use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::NavigationDescriptor;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::Pipeline;
-use common_sharing::create_share_table_operator;
-use common_sql::parse_exprs;
-use common_sql::BloomIndexColumns;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use common_storage::ShareTableConfig;
-use common_storage::StorageMetrics;
-use common_storage::StorageMetricsLayer;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_expression::ROW_VERSION_COL_NAME;
+use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sharing::create_share_table_operator;
+use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
+use databend_common_sql::parse_exprs;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
+use databend_common_storage::ShareTableConfig;
+use databend_common_storage::StorageMetrics;
+use databend_common_storage::StorageMetricsLayer;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::table_storage_prefix;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::warn;
 use opendal::Operator;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::Statistics as FuseStatistics;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
-use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::table_storage_prefix;
-use storages_common_table_meta::table::TableCompression;
-use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
-use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -107,6 +117,35 @@ pub struct FuseTable {
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create(table_info)?)
+    }
+
+    pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
+        // check if table is AttachedReadOnly in a lighter way
+        let need_refresh_schema = match table_info.db_type {
+            DatabaseType::ShareDB(_) => false,
+            DatabaseType::NormalDB => {
+                table_info.meta.storage_params.is_some()
+                    && Self::is_table_attached_read_only(&table_info.meta.options)
+            }
+        };
+
+        if need_refresh_schema {
+            let table = Self::do_create(table_info.as_ref().clone())?;
+            let snapshot = table.read_table_snapshot().await?;
+            let schema = snapshot
+                .ok_or_else(|| {
+                    ErrorCode::ShareStorageError(
+                        "Failed to load snapshot of read_only attach table".to_string(),
+                    )
+                })?
+                .schema
+                .clone();
+            let mut table_info = table_info.as_ref().clone();
+            table_info.meta.schema = Arc::new(schema);
+            Ok(Arc::new(table_info))
+        } else {
+            Ok(table_info)
+        }
     }
 
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
@@ -388,6 +427,10 @@ impl FuseTable {
         self.cluster_key_meta.clone().map(|v| v.0)
     }
 
+    pub fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.cluster_key_meta.clone()
+    }
+
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
     }
@@ -425,6 +468,10 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        column_id >= SNAPSHOT_NAME_COLUMN_ID
+    }
+
     fn support_column_projection(&self) -> bool {
         true
     }
@@ -456,6 +503,31 @@ impl Table for FuseTable {
         vec![]
     }
 
+    fn change_tracking_enabled(&self) -> bool {
+        self.get_option(OPT_KEY_CHANGE_TRACKING, false)
+    }
+
+    fn stream_columns(&self) -> Vec<StreamColumn> {
+        if self.change_tracking_enabled() {
+            vec![
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_VERSION_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_BLOCK_ID_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
+                    .unwrap(),
+                STREAM_COLUMN_FACTORY
+                    .get_stream_column(ROW_VERSION_COL_NAME)
+                    .unwrap(),
+            ]
+        } else {
+            vec![]
+        }
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
@@ -464,8 +536,10 @@ impl Table for FuseTable {
     ) -> Result<()> {
         // if new cluster_key_str is the same with old one,
         // no need to change
-        if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
-            return Ok(())
+        if let Some(old_cluster_key_str) = self.cluster_key_str()
+            && *old_cluster_key_str == cluster_key_str
+        {
+            return Ok(());
         }
         let mut new_table_meta = self.get_table_info().meta.clone();
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
@@ -598,10 +672,20 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
-        self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
+        self.do_commit(
+            ctx,
+            pipeline,
+            copied_files,
+            update_stream_meta,
+            overwrite,
+            prev_snapshot_id,
+            deduplicated_label,
+        )
     }
 
     #[minitrace::trace]
@@ -641,7 +725,10 @@ impl Table for FuseTable {
         self.do_analyze(&ctx).await
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
@@ -676,7 +763,10 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
@@ -721,29 +811,6 @@ impl Table for FuseTable {
         }
     }
 
-    #[async_backtrace::framed]
-    async fn update(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<FieldIndex>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        self.do_update(
-            ctx,
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            query_row_id_col,
-            pipeline,
-        )
-        .await
-    }
-
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
@@ -759,9 +826,10 @@ impl Table for FuseTable {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        self.do_compact_segments(ctx, limit).await
+        self.do_compact_segments(ctx, lock, limit).await
     }
 
     #[async_backtrace::framed]
@@ -791,10 +859,6 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        true
-    }
-
-    fn support_row_id_column(&self) -> bool {
         true
     }
 

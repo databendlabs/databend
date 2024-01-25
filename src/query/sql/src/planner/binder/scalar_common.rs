@@ -14,9 +14,9 @@
 
 use std::collections::HashSet;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::RelationalProperty;
 use crate::plans::walk_expr;
@@ -26,7 +26,6 @@ use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
-use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -48,6 +47,14 @@ where F: Fn(&ScalarExpr) -> bool
 
     pub fn scalars(&self) -> &[ScalarExpr] {
         &self.scalars
+    }
+
+    pub fn reset_finder(&mut self) {
+        self.scalars.clear()
+    }
+
+    pub fn find_fn(&self) -> &'a F {
+        self.find_fn
     }
 }
 
@@ -175,56 +182,44 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
 
 /// check if the scalar could be constructed by the columns
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
-    if columns.contains(scalar) {
-        return true;
+    struct PruneVisitor<'a> {
+        columns: &'a HashSet<ScalarExpr>,
+        can_prune: bool,
     }
 
-    match scalar {
-        ScalarExpr::BoundColumnRef(_) => false,
-        ScalarExpr::ConstantExpr(_) => true,
-        ScalarExpr::WindowFunction(scalar) => {
-            let flag = match &scalar.func {
-                WindowFuncType::Aggregate(agg) => {
-                    agg.args.iter().all(|arg| prune_by_children(arg, columns))
-                }
-                WindowFuncType::LagLead(f) => {
-                    if let Some(default) = &f.default {
-                        prune_by_children(&f.arg, columns) & prune_by_children(default, columns)
-                    } else {
-                        prune_by_children(&f.arg, columns)
-                    }
-                }
-                WindowFuncType::NthValue(f) => prune_by_children(&f.arg, columns),
-                _ => false,
-            };
-            flag || scalar
-                .partition_by
-                .iter()
-                .all(|arg| prune_by_children(arg, columns))
-                || scalar
-                    .order_by
-                    .iter()
-                    .all(|arg| prune_by_children(&arg.expr, columns))
+    impl<'a> PruneVisitor<'a> {
+        fn new(columns: &'a HashSet<ScalarExpr>) -> Self {
+            Self {
+                columns,
+                can_prune: true,
+            }
         }
-        ScalarExpr::AggregateFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::LambdaFunction(scalar) => scalar
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::FunctionCall(scalar) => scalar
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
-        ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
-        ScalarExpr::SubqueryExpr(_) => false,
-        ScalarExpr::UDFServerCall(udf) => udf
-            .arguments
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
     }
+
+    impl<'a> Visitor<'a> for PruneVisitor<'a> {
+        fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+            if self.columns.contains(expr) {
+                return Ok(());
+            }
+
+            walk_expr(self, expr)
+        }
+
+        fn visit_bound_column_ref(&mut self, _: &'a BoundColumnRef) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+
+        fn visit_subquery(&mut self, _: &'a crate::plans::SubqueryExpr) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+    }
+
+    let mut visitor = PruneVisitor::new(columns);
+    visitor.visit(scalar).unwrap();
+
+    visitor.can_prune
 }
 
 /// Wrap cast scalar to target type

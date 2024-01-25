@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::rewrite::RuleCommuteJoin;
 use super::rewrite::RuleEliminateEvalScalar;
@@ -23,11 +23,13 @@ use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
+use super::rewrite::RulePushDownFilterWindow;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
 use super::rewrite::RulePushDownPrewhere;
 use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
+use crate::optimizer::rule::rewrite::RuleEliminateSort;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RuleNormalizeAggregate;
@@ -39,7 +41,9 @@ use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::optimizer::rule::rewrite::RulePushDownLimitUnion;
+use crate::optimizer::rule::rewrite::RulePushDownLimitWindow;
 use crate::optimizer::rule::rewrite::RulePushDownSortScan;
+use crate::optimizer::rule::rewrite::RuleSemiToInnerJoin;
 use crate::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::optimizer::rule::transform::RuleCommuteJoinBaseTable;
 use crate::optimizer::rule::transform::RuleEagerAggregation;
@@ -68,8 +72,10 @@ impl RuleFactory {
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
+            RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new())),
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
+            RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
@@ -87,6 +93,8 @@ impl RuleFactory {
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
+            RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new(metadata))),
         }
     }
 }

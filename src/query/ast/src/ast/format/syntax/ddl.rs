@@ -24,9 +24,11 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
+use crate::ast::StreamPoint;
 use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
@@ -281,4 +283,66 @@ pub(crate) fn pretty_alter_view(stmt: AlterViewStmt) -> RcDoc<'static> {
                     .append(pretty_query(*stmt.query).nest(NEST_FACTOR).group()),
             ),
         )
+}
+
+pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
+    RcDoc::text("CREATE STREAM")
+        .append(if stmt.if_not_exists {
+            RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(
+            RcDoc::space()
+                .append(if let Some(catalog) = stmt.catalog {
+                    RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                } else {
+                    RcDoc::nil()
+                })
+                .append(if let Some(database) = stmt.database {
+                    RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                } else {
+                    RcDoc::nil()
+                })
+                .append(RcDoc::text(stmt.stream.to_string())),
+        )
+        .append(
+            RcDoc::space().append(RcDoc::text("ON TABLE")).append(
+                RcDoc::space()
+                    .append(if let Some(database) = stmt.table_database {
+                        RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                    } else {
+                        RcDoc::nil()
+                    })
+                    .append(RcDoc::text(stmt.table.to_string())),
+            ),
+        )
+        .append(
+            if let Some(StreamPoint::AtStream { database, name }) = stmt.stream_point {
+                RcDoc::space()
+                    .append(RcDoc::text("AT (STREAM => "))
+                    .append(
+                        RcDoc::space()
+                            .append(if let Some(database) = database {
+                                RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                            } else {
+                                RcDoc::nil()
+                            })
+                            .append(RcDoc::text(name.to_string())),
+                    )
+                    .append(RcDoc::text(")"))
+            } else {
+                RcDoc::nil()
+            },
+        )
+        .append(if !stmt.append_only {
+            RcDoc::space().append(RcDoc::text("APPEND_ONLY = false"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(comment) = stmt.comment {
+            RcDoc::space().append(RcDoc::text(format!("COMMENT = '{comment}'")))
+        } else {
+            RcDoc::nil()
+        })
 }

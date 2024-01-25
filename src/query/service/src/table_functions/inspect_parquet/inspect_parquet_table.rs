@@ -16,39 +16,39 @@ use std::any::Any;
 use std::cmp::max;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::Int64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use common_expression::Value;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_sql::binder::resolve_stage_location;
-use common_storage::init_stage_operator;
-use common_storage::read_metadata_async;
-use common_storage::StageFilesInfo;
-use common_storages_fuse::table_functions::string_literal;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::Value;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_sql::binder::resolve_stage_location;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::read_metadata_async;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storages_fuse::table_functions::string_literal;
 
 use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
@@ -69,12 +69,10 @@ impl InspectParquetTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let file_path = String::from_utf8(
-            args[0]
-                .clone()
-                .into_string()
-                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-        )?;
+        let file_path = args[0]
+            .clone()
+            .into_string()
+            .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?;
         if !file_path.starts_with('@') {
             return Err(ErrorCode::BadArguments(format!(
                 "stage path must start with @, but got {}",
@@ -209,7 +207,23 @@ impl AsyncSource for InspectParquetSource {
         }
         self.is_finished = true;
         let uri = self.uri.strip_prefix('@').unwrap().to_string();
-        let (stage_info, path) = resolve_stage_location(&self.ctx, &uri).await?;
+        let (stage_info, path) = resolve_stage_location(self.ctx.as_ref(), &uri).await?;
+        let enable_experimental_rbac_check = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_rbac_check()?;
+        if enable_experimental_rbac_check {
+            let visibility_checker = self.ctx.get_visibility_checker().await?;
+            if !stage_info.is_temporary
+                && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied, privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    &self.ctx.get_current_user()?.identity(),
+                )));
+            }
+        }
 
         let operator = init_stage_operator(&stage_info)?;
 
@@ -249,7 +263,7 @@ impl AsyncSource for InspectParquetSource {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(StringType::upcast_scalar(created.into())),
+                    Value::Scalar(StringType::upcast_scalar(created)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

@@ -19,20 +19,19 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::Thread;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_grpc::ConnectionFactory;
-use common_pipeline_core::processors::profile::Profile;
-use common_profile::SharedProcessorProfiles;
-use common_sql::executor::PhysicalPlan;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_sql::executor::PhysicalPlan;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -125,10 +124,13 @@ impl DataExchangeManager {
 
         let target = &packet.executor.id;
 
+        let create_rpc_client_with_current_rt = packet.create_rpc_clint_with_current_rt;
+
         for connection_info in &packet.fragment_connections_info {
             for fragment in &connection_info.fragments {
                 let address = &connection_info.source.flight_address;
-                let mut flight_client = Self::create_client(address).await?;
+                let mut flight_client =
+                    Self::create_client(address, create_rpc_client_with_current_rt).await?;
 
                 targets_exchanges.insert(
                     (connection_info.source.id.clone(), *fragment),
@@ -141,7 +143,8 @@ impl DataExchangeManager {
 
         for connection_info in &packet.statistics_connections_info {
             let address = &connection_info.source.flight_address;
-            let mut flight_client = Self::create_client(address).await?;
+            let mut flight_client =
+                Self::create_client(address, create_rpc_client_with_current_rt).await?;
             request_exchanges.insert(
                 connection_info.source.id.clone(),
                 flight_client
@@ -168,29 +171,32 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn create_client(address: &str) -> Result<FlightClient> {
+    pub async fn create_client(address: &str, use_current_rt: bool) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
         let address = address.to_string();
-
-        GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move {
-                match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            address.to_owned(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(address.to_owned(), None, None)
-                            .await?,
-                    ))),
-                }
-            })
-            .await
-            .expect("create client future must be joined successfully")
+        let task = async move {
+            match config.tls_query_cli_enabled() {
+                true => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        Some(config.query.to_rpc_client_tls_config()),
+                    )
+                    .await?,
+                ))),
+                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+                ))),
+            }
+        };
+        if use_current_rt {
+            task.await
+        } else {
+            GlobalIORuntime::instance()
+                .spawn(GLOBAL_TASK, task)
+                .await
+                .expect("create client future must be joined successfully")
+        }
     }
 
     // Execute query in background
@@ -224,9 +230,7 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 packet.query_id
             ))),
-            Some(query_coordinator) => {
-                query_coordinator.prepare_pipeline(ctx, packet.enable_profiling, packet)
-            }
+            Some(query_coordinator) => query_coordinator.prepare_pipeline(ctx, packet),
         }
     }
 
@@ -293,7 +297,6 @@ impl DataExchangeManager {
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
-        enable_profiling: bool,
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
@@ -320,7 +323,7 @@ impl DataExchangeManager {
         self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
         // Get local pipeline of local task
-        let build_res = self.get_root_pipeline(ctx, enable_profiling, root_actions)?;
+        let build_res = self.get_root_pipeline(ctx, root_actions)?;
 
         actions
             .get_execute_partial_query_packets()?
@@ -332,7 +335,6 @@ impl DataExchangeManager {
     fn get_root_pipeline(
         &self,
         ctx: Arc<QueryContext>,
-        enable_profiling: bool,
         root_actions: &QueryFragmentActions,
     ) -> Result<PipelineBuildResult> {
         let query_id = ctx.get_id();
@@ -346,12 +348,8 @@ impl DataExchangeManager {
             Some(query_coordinator) => {
                 assert!(query_coordinator.fragment_exchanges.is_empty());
                 let injector = DefaultExchangeInjector::create();
-                let mut build_res = query_coordinator.subscribe_fragment(
-                    &ctx,
-                    enable_profiling,
-                    fragment_id,
-                    injector,
-                )?;
+                let mut build_res =
+                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -364,15 +362,15 @@ impl DataExchangeManager {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
 
-                    statistics_receiver.shutdown(may_error.is_some());
+                    statistics_receiver.shutdown(may_error.is_err());
                     ctx.get_exchange_manager().on_finished_query(&query_id);
                     statistics_receiver.wait_shutdown()?;
 
                     on_finished(may_error)?;
 
                     match may_error {
-                        None => Ok(()),
-                        Some(error_code) => Err(error_code.clone()),
+                        Ok(_) => Ok(()),
+                        Err(error_code) => Err(error_code.clone()),
                     }
                 });
 
@@ -391,7 +389,10 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
+    pub fn get_flight_receiver(
+        &self,
+        params: &ExchangeParams,
+    ) -> Result<Vec<(String, FlightReceiver)>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -405,7 +406,6 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
-        enable_profiling: bool,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -421,12 +421,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(
-                    &query_ctx,
-                    enable_profiling,
-                    fragment_id,
-                    injector,
-                )
+                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
             }
         }
     }
@@ -548,31 +543,37 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn get_flight_receiver(&mut self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
+    pub fn get_flight_receiver(
+        &mut self,
+        params: &ExchangeParams,
+    ) -> Result<Vec<(String, FlightReceiver)>> {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
                 .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
-                .map(|(_, v)| v.convert_to_receiver())
+                .map(|((source, _, _), v)| (source.clone(), v.convert_to_receiver()))
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
 
                 for destination in &params.destination_ids {
-                    exchanges.push(match destination == &params.executor_id {
-                        true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
-                        false => match self.fragment_exchanges.remove(&(
-                            destination.clone(),
-                            params.fragment_id,
-                            FLIGHT_RECEIVER,
-                        )) {
-                            Some(v) => Ok(v.convert_to_receiver()),
-                            _ => Err(ErrorCode::UnknownFragmentExchange(format!(
-                                "Unknown fragment flight receiver, {}, {}",
-                                destination, params.fragment_id
-                            ))),
-                        },
-                    }?);
+                    exchanges.push((
+                        destination.clone(),
+                        match destination == &params.executor_id {
+                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
+                            false => match self.fragment_exchanges.remove(&(
+                                destination.clone(),
+                                params.fragment_id,
+                                FLIGHT_RECEIVER,
+                            )) {
+                                Some(v) => Ok(v.convert_to_receiver()),
+                                _ => Err(ErrorCode::UnknownFragmentExchange(format!(
+                                    "Unknown fragment flight receiver, {}, {}",
+                                    destination, params.fragment_id
+                                ))),
+                            },
+                        }?,
+                    ));
                 }
 
                 Ok(exchanges)
@@ -583,7 +584,6 @@ impl QueryCoordinator {
     pub fn prepare_pipeline(
         &mut self,
         ctx: &Arc<QueryContext>,
-        enable_profiling: bool,
         packet: &QueryFragmentsPlanPacket,
     ) -> Result<()> {
         self.info = Some(QueryInfo {
@@ -603,7 +603,7 @@ impl QueryCoordinator {
         for fragment in &packet.fragments {
             let fragment_id = fragment.fragment_id;
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
+                coordinator.prepare_pipeline(ctx.clone())?;
             }
         }
 
@@ -613,14 +613,13 @@ impl QueryCoordinator {
     pub fn subscribe_fragment(
         &mut self,
         ctx: &Arc<QueryContext>,
-        enable_profiling: bool,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
-            fragment_coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
+            fragment_coordinator.prepare_pipeline(ctx.clone())?;
 
             if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::Internal(
@@ -640,17 +639,11 @@ impl QueryCoordinator {
                     .pipeline_build_res
                     .as_ref()
                     .map(|x| x.exchange_injector.clone())
-                    .unwrap(),
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                    })?,
             )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
-
-            let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
-
-            if !data_exchange.from_multiple_nodes() {
-                return Err(ErrorCode::Unimplemented(
-                    "Exchange source and no from multiple nodes is unimplemented.",
-                ));
-            }
 
             // Add exchange data transform.
 
@@ -698,7 +691,9 @@ impl QueryCoordinator {
                         .pipeline_build_res
                         .as_ref()
                         .map(|x| x.exchange_injector.clone())
-                        .unwrap(),
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                        })?,
                 )?,
             );
         }
@@ -756,7 +751,9 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            statistics_sender.shutdown(executor.execute().err());
+            let res = executor.execute().err();
+            let profiles = executor.get_inner().get_profiles();
+            statistics_sender.shutdown(res, profiles);
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);
@@ -799,6 +796,7 @@ impl FragmentCoordinator {
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
                         destination_id: exchange.destination_id.clone(),
+                        allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                         ignore_exchange: exchange.ignore_exchange,
                     }))
                 }
@@ -832,11 +830,7 @@ impl FragmentCoordinator {
         Err(ErrorCode::Internal("Cannot find data exchange."))
     }
 
-    pub fn prepare_pipeline(
-        &mut self,
-        ctx: Arc<QueryContext>,
-        enable_profiling: bool,
-    ) -> Result<()> {
+    pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
 
@@ -846,8 +840,6 @@ impl FragmentCoordinator {
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
-                enable_profiling,
-                SharedProcessorProfiles::default(),
                 vec![],
             );
 

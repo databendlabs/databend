@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::cast_scalar;
@@ -31,6 +31,7 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
+use crate::types::NumberScalar;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -38,10 +39,10 @@ use crate::FunctionContext;
 use crate::Scalar;
 
 pub fn check<Index: ColumnIndex>(
-    ast: &RawExpr<Index>,
+    expr: &RawExpr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
-    match ast {
+    match expr {
         RawExpr::Constant { span, scalar } => Ok(Expr::Constant {
             span: *span,
             scalar: scalar.clone(),
@@ -126,6 +127,28 @@ pub fn check<Index: ColumnIndex>(
 
             check_function(*span, name, params, &args_expr, fn_registry)
         }
+        RawExpr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } => {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| check(arg, fn_registry))
+                .try_collect()?;
+
+            Ok(Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args,
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            })
+        }
     }
 }
 
@@ -155,7 +178,10 @@ pub fn check_cast<Index: ColumnIndex>(
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
             let params = if let DataType::Decimal(ty) = dest_type {
-                vec![ty.precision() as usize, ty.scale() as usize]
+                vec![
+                    Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
+                    Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+                ]
             } else {
                 vec![]
             };
@@ -235,7 +261,7 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
 pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,
-    params: &[usize],
+    params: &[Scalar],
     args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
@@ -372,7 +398,10 @@ impl Substitution {
             DataType::Generic(idx) => self.0.get(idx).cloned().ok_or_else(|| {
                 ErrorCode::from_string_no_backtrace(format!("unbound generic type `T{idx}`"))
             }),
-            DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
+            DataType::Nullable(box ty) => {
+                let inner_ty = self.apply(ty)?;
+                Ok(inner_ty.wrap_nullable())
+            }
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
             DataType::Map(box ty) => {
                 let inner_ty = self.apply(ty)?;
@@ -412,7 +441,6 @@ pub fn try_check_function<Index: ColumnIndex>(
             check_cast(arg.span(), is_try, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
-
     let return_type = subst.apply(&sig.return_type)?;
     assert!(!return_type.has_nested_nullable());
 
@@ -424,13 +452,11 @@ pub fn try_check_function<Index: ColumnIndex>(
         .map(|max_generic_idx| {
             (0..max_generic_idx + 1)
                 .map(|idx| {
-                    subst
-                        .0
-                        .get(&idx)
-                        .cloned()
-                        .ok_or(ErrorCode::from_string_no_backtrace(format!(
+                    subst.0.get(&idx).cloned().ok_or_else(|| {
+                        ErrorCode::from_string_no_backtrace(format!(
                             "unable to resolve generic T{idx}"
-                        )))
+                        ))
+                    })
                 })
                 .collect::<Result<Vec<_>>>()
         })
@@ -561,7 +587,8 @@ pub fn can_auto_cast_to(
             properties.scale <= d.scale()
                 && properties.precision - properties.scale <= d.leading_digits()
         }
-        (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
+        // Only available for decimal --> f64, otherwise `sqrt(1234.56789)` will have signature: `sqrt(1234.56789::Float32)`
+        (DataType::Decimal(_), DataType::Number(n)) if n.is_float64() => true,
         _ => false,
     }
 }
@@ -681,6 +708,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
 }
 
 pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
+    "to_binary",
     "to_string",
     "to_uint8",
     "to_uint16",

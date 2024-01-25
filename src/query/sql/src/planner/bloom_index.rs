@@ -15,17 +15,18 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use common_ast::parser::parse_comma_separated_idents;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ComputedExpr;
-use common_expression::FieldIndex;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_settings::Settings;
+use databend_common_ast::parser::parse_comma_separated_idents;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::is_stream_column_id;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_settings::Settings;
 
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;
@@ -48,7 +49,7 @@ impl FromStr for BloomIndexColumns {
             return Ok(BloomIndexColumns::None);
         }
 
-        let sql_dialect = Dialect::MySQL;
+        let sql_dialect = Dialect::default();
         let tokens = tokenize_sql(s)?;
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
 
@@ -81,7 +82,7 @@ impl BloomIndexColumns {
         let settings = Settings::create("".to_string());
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let sql_dialect = Dialect::MySQL;
+        let sql_dialect = Dialect::default();
         let tokens = tokenize_sql(definition)?;
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
         for ident in idents.iter() {
@@ -120,6 +121,11 @@ impl BloomIndexColumns {
         match self {
             BloomIndexColumns::All => {
                 for (i, field) in source_schema.fields.into_iter().enumerate() {
+                    // Ignore stream column.
+                    if is_stream_column_id(field.column_id) {
+                        continue;
+                    }
+
                     if verify_type(field.data_type()) {
                         fields_map.insert(i, field);
                     }

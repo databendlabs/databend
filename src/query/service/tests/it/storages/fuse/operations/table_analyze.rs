@@ -15,31 +15,26 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::Scalar;
-use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::FuseTable;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
-use databend_query::test_kits::table_test_fixture::analyze_table;
-use databend_query::test_kits::table_test_fixture::do_deletion;
-use databend_query::test_kits::table_test_fixture::do_update;
-use databend_query::test_kits::table_test_fixture::execute_command;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use databend_query::test_kits::utils::query_count;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
+use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // setup
@@ -65,7 +60,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     assert_eq!(num_inserts, query_count(stream).await? as usize);
 
     let expected = HashMap::from([(0, num_inserts as u64)]);
-    check_column_ndv_statistics(table.clone(), expected.clone()).await?;
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
@@ -78,7 +73,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
 
-    check_column_ndv_statistics(table.clone(), expected.clone()).await?;
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
     // delete
     ctx.evict_table_from_cache("default", "default", "t")?;
@@ -92,17 +87,17 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     fixture.execute_command(statistics_sql).await?;
 
     // check count: delete not affect counts
-    check_column_ndv_statistics(table.clone(), expected).await?;
+    check_column_ndv_statistics(ctx, table.clone(), expected).await?;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_update_analyze_statistics() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    // create table
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
     let db_name = fixture.default_db_name();
     let tb_name = fixture.default_table_name();
@@ -118,8 +113,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     if let Plan::Update(update) = plan {
-        let table = fixture.latest_default_table().await?;
-        do_update(ctx.clone(), table, *update).await?;
+        do_update(ctx.clone(), *update).await?;
     }
 
     // check summary after update
@@ -171,10 +165,11 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
 }
 
 async fn check_column_ndv_statistics(
+    ctx: Arc<dyn TableContext>,
     table: Arc<dyn Table>,
     expected: HashMap<u32, u64>,
 ) -> Result<()> {
-    let provider = table.column_statistics_provider().await?;
+    let provider = table.column_statistics_provider(ctx).await?;
 
     for (i, num) in expected.iter() {
         let stat = provider.column_statistics(*i);

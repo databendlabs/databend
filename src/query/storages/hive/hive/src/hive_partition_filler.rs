@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::AnyType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::Value;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
 use crate::utils::str_field_to_scalar;

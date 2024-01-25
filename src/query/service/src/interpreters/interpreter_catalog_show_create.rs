@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_meta_app::schema::CatalogOption;
-use common_meta_app::storage::StorageParams;
-use common_sql::plans::ShowCreateCatalogPlan;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -72,18 +72,12 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let block = DataBlock::new(
             vec![
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(name))),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.into_bytes())),
+                    Value::Scalar(Scalar::String(catalog_type)),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(catalog_type.into_bytes())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(option.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(option))),
             ],
             1,
         );

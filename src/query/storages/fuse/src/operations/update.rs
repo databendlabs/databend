@@ -15,48 +15,38 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::Filters;
-use common_catalog::plan::Projection;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::types::NumberDataType;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::Pipeline;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::plans::PREDICATE_COLUMN_NAME;
-use log::info;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::PREDICATE_COLUMN_NAME;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use super::delete::MutationBlockPruningContext;
-use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
-use crate::pruning::create_segment_location_vector;
 use crate::FuseTable;
 
 impl FuseTable {
-    /// UPDATE column = expression WHERE condition
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
-    pub async fn do_update(
+    pub async fn fast_update(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        filters: &mut Option<Filters>,
         col_indices: Vec<FieldIndex>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty
@@ -64,88 +54,64 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no update
-            return Ok(());
+            return Ok(None);
         };
 
         if snapshot.summary.row_count == 0 {
             // empty snapshot, no update
-            return Ok(());
+            return Ok(None);
         }
 
-        let mut filter = filter;
-        if col_indices.is_empty() && filter.is_some() && !query_row_id_col {
-            let filter_expr = filter.clone().unwrap();
-            if !self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
+        if col_indices.is_empty() && filters.is_some() && !query_row_id_col {
+            let filter_expr = filters.clone().unwrap();
+            if !self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr.filter)? {
                 // The condition is always false, do nothing.
-                return Ok(());
+                return Ok(None);
             }
             // The condition is always true.
-            filter = None;
+            *filters = None;
         }
-
-        self.try_add_update_source(
-            ctx.clone(),
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            &snapshot,
-            query_row_id_col,
-            pipeline,
-        )
-        .await?;
-        if pipeline.is_empty() {
-            return Ok(());
-        }
-
-        let block_thresholds = self.get_block_thresholds();
-        // sort
-        let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, None)?;
-
-        pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                ctx.clone(),
-                input,
-                output,
-                self,
-                cluster_stats_gen.clone(),
-            )?;
-            proc.into_processor()
-        })?;
-
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update, false, false)
+        Ok(Some(snapshot))
     }
 
     #[async_backtrace::framed]
     #[allow(clippy::too_many_arguments)]
-    async fn try_add_update_source(
+    pub fn add_update_source(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        base_snapshot: &TableSnapshot,
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
-        let schema = self.schema();
+        let schema = self.schema_with_stream();
 
         let mut offset_map = BTreeMap::new();
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
+            let mut fields = schema.remove_virtual_computed_fields().fields().to_vec();
+
             all_column_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
                 pos += 1;
             });
 
-            (
-                Projection::Columns(all_column_indices),
-                Arc::new(schema.remove_virtual_computed_fields()),
-            )
+            if query_row_id_col {
+                // add `_predicate` column into input schema
+                fields.push(TableField::new(
+                    PREDICATE_COLUMN_NAME,
+                    TableDataType::Boolean,
+                ));
+                pos += 1;
+            }
+
+            let schema = TableSchema::new(fields);
+
+            (Projection::Columns(all_column_indices), Arc::new(schema))
         } else {
             col_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
@@ -157,6 +123,7 @@ impl FuseTable {
                 .map(|index| schema.fields()[*index].clone())
                 .collect();
 
+            // add `_predicate` column into input schema
             fields.push(TableField::new(
                 PREDICATE_COLUMN_NAME,
                 TableDataType::Boolean,
@@ -177,6 +144,7 @@ impl FuseTable {
                     ctx.clone(),
                     Projection::Columns(remain_col_indices),
                     false,
+                    self.change_tracking_enabled(),
                     false,
                 )?;
                 fields.extend_from_slice(reader.schema().fields());
@@ -184,11 +152,10 @@ impl FuseTable {
             }
 
             (
-                Projection::Columns(col_indices.clone()),
+                Projection::Columns(col_indices),
                 Arc::new(TableSchema::new(fields)),
             )
         };
-
         let mut cap = 2;
         if !computed_list.is_empty() {
             cap += 1;
@@ -236,8 +203,13 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection.clone(), false, false)?;
+        let block_reader = self.create_block_reader(
+            ctx.clone(),
+            projection,
+            false,
+            self.change_tracking_enabled(),
+            false,
+        )?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(
@@ -246,82 +218,32 @@ impl FuseTable {
                 1,
             );
         }
+
         let remain_reader = Arc::new(remain_reader);
-        let (filter_expr, filters) = if let Some(remote_expr) = filter {
-            let reverted_expr = check_function(
-                None,
-                "not",
-                &[],
-                &[remote_expr.as_expr(&BUILTIN_FUNCTIONS)],
-                &BUILTIN_FUNCTIONS,
-            )?;
+        let filter_expr = Arc::new(filter.map(|v| {
+            v.as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap())
+        }));
 
-            (
-                Arc::new(Some(
-                    remote_expr
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|name| schema.index_of(name).unwrap()),
-                )),
-                Some(Filters {
-                    filter: remote_expr,
-                    inverted_filter: reverted_expr.as_remote_expr(),
-                }),
-            )
-        } else {
-            (Arc::new(None), None)
-        };
-
-        let (parts, part_info) = self
-            .do_mutation_block_pruning(
-                ctx.clone(),
-                filters,
-                projection,
-                MutationBlockPruningContext {
-                    segment_locations: create_segment_location_vector(
-                        base_snapshot.segments.clone(),
-                        None,
-                    ),
-                    block_count: Some(base_snapshot.summary.block_count as usize),
-                },
-                false,
-                false, // for update
-            )
-            .await?;
-        ctx.set_partitions(parts)?;
-
-        let total_tasks = part_info.total_tasks;
-        if total_tasks != 0 {
-            let max_threads =
-                std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
-            // Add source pipe.
-            pipeline.add_source(
-                |output| {
-                    MutationSource::try_create(
-                        ctx.clone(),
-                        MutationAction::Update,
-                        output,
-                        filter_expr.clone(),
-                        block_reader.clone(),
-                        remain_reader.clone(),
-                        ops.clone(),
-                        self.storage_format,
-                        true,
-                    )
-                },
-                max_threads,
-            )?;
-
-            // Status.
-            {
-                let status = format!(
-                    "update: begin to run update tasks, total tasks: {}",
-                    total_tasks
-                );
-                ctx.set_status_info(&status);
-                info!("{}", status);
-            }
-        }
-
-        Ok(())
+        let max_threads = (ctx.get_settings().get_max_threads()? as usize)
+            .min(ctx.partition_num())
+            .max(1);
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
+                MutationSource::try_create(
+                    ctx.clone(),
+                    MutationAction::Update,
+                    output,
+                    filter_expr.clone(),
+                    block_reader.clone(),
+                    remain_reader.clone(),
+                    ops.clone(),
+                    self.storage_format,
+                    true,
+                )
+            },
+            max_threads,
+        )
     }
 }

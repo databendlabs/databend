@@ -12,15 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::SendableDataBlockStream;
-use common_pipeline_core::SourcePipeBuilder;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_pipeline_core::get_statistics_desc;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::ProfileDesc;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_pipeline_core::SourcePipeBuilder;
 use log::error;
+use log::info;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -50,33 +56,71 @@ pub trait Interpreter: Sync + Send {
         log_query_start(&ctx);
 
         if let Err(err) = ctx.check_aborting() {
-            log_query_finished(&ctx, Some(err.clone()));
+            log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
         }
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {
                 InterpreterMetrics::record_query_error(&ctx);
-                log_query_finished(&ctx, Some(build_error.clone()));
+                log_query_finished(&ctx, Some(build_error.clone()), false);
                 return Err(build_error);
             }
         };
 
         if build_res.main_pipeline.is_empty() {
             InterpreterMetrics::record_query_finished(&ctx, None);
-            log_query_finished(&ctx, None);
+            log_query_finished(&ctx, None, false);
 
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let query_ctx = ctx.clone();
         build_res.main_pipeline.set_on_finished(move |may_error| {
-            InterpreterMetrics::record_query_finished(&query_ctx, may_error.clone());
-            log_query_finished(&query_ctx, may_error.clone());
+            let mut has_profiles = false;
+            if let Ok(profiles) = may_error {
+                query_ctx.add_query_profiles(
+                    &profiles
+                        .iter()
+                        .filter(|x| x.plan_id.is_some())
+                        .map(|x| PlanProfile::create(x))
+                        .collect::<Vec<_>>(),
+                );
+
+                let query_profiles = query_ctx.get_query_profiles();
+
+                if !query_profiles.is_empty() {
+                    has_profiles = true;
+                    #[derive(serde::Serialize)]
+                    struct QueryProfiles {
+                        query_id: String,
+                        profiles: Vec<PlanProfile>,
+                        statistics_desc: Arc<HashMap<ProfileStatisticsName, ProfileDesc>>,
+                    }
+
+                    info!(
+                        target: "databend::log::profile",
+                        "{}",
+                        serde_json::to_string(&QueryProfiles {
+                            query_id: query_ctx.get_id(),
+                            profiles: query_profiles,
+                            statistics_desc: get_statistics_desc(),
+                        })?
+                    );
+                }
+            }
+
+            let err_opt = match may_error {
+                Ok(_) => None,
+                Err(e) => Some(e.clone()),
+            };
+
+            InterpreterMetrics::record_query_finished(&query_ctx, err_opt.clone());
+            log_query_finished(&query_ctx, err_opt, has_profiles);
 
             match may_error {
-                None => Ok(()),
-                Some(error) => Err(error.clone()),
+                Ok(_) => Ok(()),
+                Err(error) => Err(error.clone()),
             }
         });
 
@@ -137,7 +181,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 }
 
-fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
+fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
@@ -146,7 +190,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
         SessionManager::instance().status.write().query_finish(now)
     }
 
-    if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error) {
+    if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
         error!("interpreter.finish.error: {:?}", error)
     }
 }

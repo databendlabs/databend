@@ -20,31 +20,33 @@ use std::time::Duration;
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
-use common_base::base::tokio::time::sleep;
-use common_base::containers::ItemManager;
-use common_base::containers::Pool;
-use common_base::future::TimingFutureExt;
-use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_sled_store::openraft::RaftNetworkFactory;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::SnapshotChunkRequest;
-use common_meta_types::AppendEntriesRequest;
-use common_meta_types::AppendEntriesResponse;
-use common_meta_types::InstallSnapshotError;
-use common_meta_types::InstallSnapshotRequest;
-use common_meta_types::InstallSnapshotResponse;
-use common_meta_types::MembershipNode;
-use common_meta_types::MetaNetworkError;
-use common_meta_types::NetworkError;
-use common_meta_types::NodeId;
-use common_meta_types::RPCError;
-use common_meta_types::RaftError;
-use common_meta_types::RemoteError;
-use common_meta_types::TypeConfig;
-use common_meta_types::VoteRequest;
-use common_meta_types::VoteResponse;
-use common_metrics::count::Count;
+use databend_common_base::containers::ItemManager;
+use databend_common_base::containers::Pool;
+use databend_common_base::future::TimingFutureExt;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
+use databend_common_meta_sled_store::openraft::error::Unreachable;
+use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::AppendEntriesRequest;
+use databend_common_meta_types::AppendEntriesResponse;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::InstallSnapshotError;
+use databend_common_meta_types::InstallSnapshotRequest;
+use databend_common_meta_types::InstallSnapshotResponse;
+use databend_common_meta_types::MembershipNode;
+use databend_common_meta_types::NetworkError;
+use databend_common_meta_types::NodeId;
+use databend_common_meta_types::RPCError;
+use databend_common_meta_types::RaftError;
+use databend_common_meta_types::RemoteError;
+use databend_common_meta_types::TypeConfig;
+use databend_common_meta_types::VoteRequest;
+use databend_common_meta_types::VoteResponse;
+use databend_common_metrics::count::Count;
 use log::debug;
 use log::info;
 use log::warn;
@@ -52,9 +54,7 @@ use openraft::async_trait::async_trait;
 use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
-use tonic::Code;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;
@@ -153,11 +153,6 @@ impl Network {
             backoff: Backoff::default(),
         }
     }
-
-    fn incr_meta_metrics_sent_bytes_to_peer(target: &NodeId, message: &RaftRequest) {
-        let bytes = message.data.len() as u64;
-        raft_metrics::network::incr_sendto_bytes(target, bytes);
-    }
 }
 
 pub struct NetworkConnection {
@@ -188,14 +183,14 @@ pub struct NetworkConnection {
 impl NetworkConnection {
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    pub async fn make_client(&self) -> Result<RaftClient, MetaNetworkError> {
+    pub async fn make_client(&self) -> Result<RaftClient, Unreachable> {
         let target = self.target;
 
         let endpoint = self
             .sto
-            .get_node_endpoint(&target)
+            .get_node_raft_endpoint(&target)
             .await
-            .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
+            .map_err(|e| Unreachable::new(&e))?;
 
         let addr = format!("http://{}", endpoint);
 
@@ -210,7 +205,7 @@ impl NetworkConnection {
             }
             Err(err) => {
                 raft_metrics::network::incr_connect_failure(&target, &endpoint.to_string());
-                Err(err.into())
+                Err(Unreachable::new(&err))
             }
         }
     }
@@ -226,6 +221,50 @@ impl NetworkConnection {
         RPCError::RemoteError(remote_err)
     }
 
+    /// Create a new RaftRequest for AppendEntriesRequest,
+    /// if it is too large, return `PayloadTooLarge` error
+    /// to tell Openraft to split it in to smaller chunks.
+    fn new_append_entries_raft_req<E>(
+        &self,
+        rpc: &AppendEntriesRequest,
+    ) -> Result<RaftRequest, RPCError<E>>
+    where
+        E: std::error::Error,
+    {
+        let raft_req = GrpcHelper::encode_raft_request(rpc).map_err(|e| Unreachable::new(&e))?;
+
+        if raft_req.data.len() <= GrpcConfig::advisory_encoding_size() {
+            return Ok(raft_req);
+        }
+
+        // data.len() is too large
+
+        let l = rpc.entries.len();
+        if l == 0 {
+            // impossible.
+            Ok(raft_req)
+        } else if l == 1 {
+            warn!(
+                "append_entries req too large: target={}, len={}, can not split",
+                self.target,
+                raft_req.data.len()
+            );
+            // can not split, just try to send this big request
+            Ok(raft_req)
+        } else {
+            // l > 1
+            let n = std::cmp::max(1, l / 2);
+            warn!(
+                "append_entries req too large: target={}, len={}, reduce NO entries from {} to {}",
+                self.target,
+                raft_req.data.len(),
+                l,
+                n
+            );
+            Err(PayloadTooLarge::new_entries_hint(n as u64).into())
+        }
+    }
+
     pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
         let policy = ExponentialBuilder::default()
             .with_factor(self.backoff.back_off_ratio)
@@ -237,6 +276,14 @@ impl NetworkConnection {
         // so the longest back off will not be wasted
         let zero = vec![Duration::default()].into_iter();
         policy.chain(zero)
+    }
+
+    /// Convert gRPC status to `RPCError`
+    fn status_to_unreachable<E>(&self, status: tonic::Status) -> RPCError<RaftError<E>>
+    where E: std::error::Error {
+        warn!("target={}, gRPC error: {:?}", self.target, status);
+
+        RPCError::Unreachable(Unreachable::new(&status))
     }
 }
 
@@ -255,56 +302,29 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             "send_append_entries",
         );
 
-        let mut client = self
-            .make_client()
-            .await
-            .map_err(|e| RPCError::Network(NetworkError::new(&e)))?;
+        let mut client = self.make_client().await?;
 
-        let mut last_err = None;
+        let raft_req = self.new_append_entries_raft_req(&rpc)?;
+        let req = GrpcHelper::traced_req(raft_req);
 
-        for back_off in self.back_off() {
-            let req = common_tracing::inject_span_to_tonic_request(&rpc);
+        let bytes = req.get_ref().data.len() as u64;
+        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
-            Network::incr_meta_metrics_sent_bytes_to_peer(&self.target, req.get_ref());
+        let grpc_res = client
+            .append_entries(req)
+            .timed(observe_append_send_spent(self.target))
+            .await;
+        debug!(
+            "append_entries resp from: target={}: {:?}",
+            self.target, grpc_res
+        );
 
-            let resp = client.append_entries(req).await;
-            debug!(
-                "append_entries resp from: target={}: {:?}",
-                self.target, resp
-            );
+        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
 
-            match resp {
-                Ok(resp) => {
-                    let mes = resp.into_inner();
-                    match serde_json::from_str(&mes.data) {
-                        Ok(resp) => return Ok(resp),
-                        Err(serde_err) => {
-                            // parsing error, won't increase send failures
-                            last_err = Some(NetworkError::new(
-                                &AnyError::new(&serde_err).add_context(|| "send_append_entries"),
-                            ));
-                            // backoff and retry sending
-                            sleep(back_off).await;
-                        }
-                    }
-                }
-                Err(status) => {
-                    raft_metrics::network::incr_sendto_failure(&self.target);
-                    last_err = Some(NetworkError::new(
-                        &AnyError::new(&status).add_context(|| "send_append_entries"),
-                    ));
-                    // backoff and retry sending
-                    sleep(back_off).await;
-                }
-            }
-        }
-        if let Some(net_err) = last_err {
-            Err(RPCError::Network(net_err))
-        } else {
-            Err(RPCError::Network(NetworkError::new(&AnyError::error(
-                "backoff does not send send_append_entries RPC",
-            ))))
-        }
+        let raft_res = GrpcHelper::parse_raft_reply(resp)
+            .map_err(|serde_err| new_net_err(&serde_err, || "parse append_entries reply"))?;
+
+        return raft_res.map_err(|e| self.to_rpc_err(e));
     }
 
     #[logcall::logcall(err = "debug")]
@@ -321,88 +341,69 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         );
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
+
+        let mut client = self.make_client().await?;
+
         let bytes = rpc.data.len() as u64;
+        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
-        let mut client = self
-            .make_client()
-            .await
-            .map_err(|e| NetworkError::new(&e))?;
+        // Try send via `v1` API, if the remote peer does not provide `v1` API,
+        // revert to `v0` API.
+        let v1_res = if self.install_snapshot_via_v0 == 0 {
+            // Send via v1 API
 
-        let mut last_err = None;
+            let v1_req = SnapshotChunkRequest::new_v1(rpc.clone());
+            let req = databend_common_tracing::inject_span_to_tonic_request(v1_req);
+            let res = client
+                .install_snapshot_v1(req)
+                .timed(observe_snapshot_send_spent(self.target))
+                .await;
 
-        // It consumes a loop to retry sending install_snapshot via v0 API.
-        // Thus add another backoff of 0.
-        for back_off in [Duration::from_millis(0)]
-            .into_iter()
-            .chain(self.back_off())
-        {
-            raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
-
-            // Try send via `v1` API, if the remote peer does not provide `v1` API,
-            // revert to `v0` API.
-
-            let res = if self.install_snapshot_via_v0 == 0 {
-                // Send via v1 API
-
-                let v1_req = SnapshotChunkRequest::new_v1(rpc.clone());
-                let req = common_tracing::inject_span_to_tonic_request(v1_req);
-                let res = client
-                    .install_snapshot_v1(req)
-                    .timed(observe_snapshot_send_spent(self.target))
-                    .await;
-
-                if let Err(ref status) = res {
-                    if status.code() == Code::Unimplemented {
-                        warn!(
-                            "target={} does not support install_snapshot_v1 API, fallback to v0 API for next 10 times",
-                            self.target
-                        );
-                        // The remote peer may not be upgraded yet, try to send via v0 API for the
-                        // next 10 install_snapshot RPC and retry at once.
-                        self.install_snapshot_via_v0 = 10;
-                        continue;
-                    }
-                }
-                res
+            if is_unimplemented(&res) {
+                warn!(
+                    "target={} does not support install_snapshot_v1 API, fallback to v0 API for next 10 times",
+                    self.target
+                );
+                self.install_snapshot_via_v0 = 10;
+                None
             } else {
-                // Send via v0 API
-
-                self.install_snapshot_via_v0 -= 1;
-
-                let req = common_tracing::inject_span_to_tonic_request(rpc.clone());
-                client
-                    .install_snapshot(req)
-                    .timed(observe_snapshot_send_spent(self.target))
-                    .await
-            };
-
-            info!("install_snapshot resp target={}: {:?}", self.target, res);
-
-            let resp = match res {
-                Ok(x) => x,
-                Err(status) => {
-                    self.report_metrics_snapshot(false);
-                    last_err = Some(new_net_err(&status, || "send_install_snapshot"));
-                    sleep(back_off).await;
-                    continue;
-                }
-            };
-
-            let rpc_res = GrpcHelper::parse_raft_reply(resp)
-                .map_err(|serde_err| new_net_err(&serde_err, || "parse install_snapshot reply"))?;
-
-            self.report_metrics_snapshot(rpc_res.is_ok());
-
-            return rpc_res.map_err(|e| self.to_rpc_err(e));
-        }
-
-        if let Some(net_err) = last_err {
-            Err(RPCError::Network(net_err))
+                Some(res)
+            }
         } else {
-            Err(RPCError::Network(NetworkError::new(&AnyError::error(
-                "backoff does not send send_install_snapshot RPC",
-            ))))
-        }
+            None
+        };
+
+        let grpc_res = if let Some(v1_res) = v1_res {
+            v1_res
+        } else {
+            // Via v1 API is not tried or failed,
+            // Send via v0 API
+
+            self.install_snapshot_via_v0 -= 1;
+
+            let req = databend_common_tracing::inject_span_to_tonic_request(rpc.clone());
+            client
+                .install_snapshot(req)
+                .timed(observe_snapshot_send_spent(self.target))
+                .await
+        };
+
+        info!(
+            "install_snapshot resp target={}: {:?}",
+            self.target, grpc_res
+        );
+
+        let resp = grpc_res.map_err(|e| {
+            self.report_metrics_snapshot(false);
+            self.status_to_unreachable(e)
+        })?;
+
+        let raft_res = GrpcHelper::parse_raft_reply(resp)
+            .map_err(|serde_err| new_net_err(&serde_err, || "parse install_snapshot reply"))?;
+
+        self.report_metrics_snapshot(raft_res.is_ok());
+
+        return raft_res.map_err(|e| self.to_rpc_err(e));
     }
 
     #[logcall::logcall(err = "debug")]
@@ -410,54 +411,31 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
     async fn send_vote(&mut self, rpc: VoteRequest) -> Result<VoteResponse, RPCError<RaftError>> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
-        let mut client = self
-            .make_client()
-            .await
-            .map_err(|e| RPCError::Network(NetworkError::new(&e)))?;
+        let mut client = self.make_client().await?;
 
-        let mut last_err = None;
+        let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
 
-        for back_off in self.back_off() {
-            let req = common_tracing::inject_span_to_tonic_request(&rpc);
+        let req = GrpcHelper::traced_req(raft_req);
 
-            Network::incr_meta_metrics_sent_bytes_to_peer(&self.target, req.get_ref());
+        let bytes = req.get_ref().data.len() as u64;
+        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
-            let resp = client.vote(req).await;
-            info!("vote: resp from target={} {:?}", self.target, resp);
+        let grpc_res = client.vote(req).await;
+        info!("vote: resp from target={} {:?}", self.target, grpc_res);
 
-            match resp {
-                Ok(resp) => {
-                    let mes = resp.into_inner();
-                    match serde_json::from_str(&mes.data) {
-                        Ok(resp) => return Ok(resp),
-                        Err(e) => {
-                            // parsing error, won't increase sending errors
-                            last_err = Some(NetworkError::new(
-                                &AnyError::new(&e).add_context(|| "send_vote"),
-                            ));
-                            // back off and retry
-                            sleep(back_off).await;
-                        }
-                    }
-                }
-                Err(e) => {
-                    raft_metrics::network::incr_sendto_failure(&self.target);
-                    last_err = Some(NetworkError::new(
-                        &AnyError::new(&e).add_context(|| "send_vote"),
-                    ));
-                    // back off and retry
-                    sleep(back_off).await;
-                }
-            }
-        }
+        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
 
-        if let Some(net_err) = last_err {
-            Err(RPCError::Network(net_err))
-        } else {
-            Err(RPCError::Network(NetworkError::new(&AnyError::error(
-                "backoff does not send send_vote RPC",
-            ))))
-        }
+        let raft_res = GrpcHelper::parse_raft_reply(resp)
+            .map_err(|serde_err| new_net_err(&serde_err, || "parse vote reply"))?;
+
+        return raft_res.map_err(|e| self.to_rpc_err(e));
+    }
+
+    /// When a `Unreachable` error is returned from the `Network`,
+    /// Openraft will call this method to build a backoff instance.
+    fn backoff(&self) -> openraft::network::Backoff {
+        warn!("backoff is required: target={}", self.target);
+        openraft::network::Backoff::new(self.back_off())
     }
 }
 
@@ -495,6 +473,13 @@ fn new_net_err<D: Display>(
 }
 
 /// Create a function record the time cost of snapshot sending.
+fn observe_append_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
+    move |t, _b| {
+        raft_metrics::network::observe_append_sendto_spent(&target, t.as_secs() as f64);
+    }
+}
+
+/// Create a function record the time cost of snapshot sending.
 fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
     move |t, _b| {
         raft_metrics::network::observe_snapshot_sendto_spent(&target, t.as_secs() as f64);
@@ -504,4 +489,15 @@ fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
 /// Create a function that increases metric value of inflight snapshot sending.
 fn snapshot_send_inflight(target: NodeId) -> impl FnMut(i64) {
     move |i: i64| raft_metrics::network::incr_snapshot_sendto_inflight(&target, i)
+}
+
+/// Return true if it IS an error and the error code is Unimplemented.
+///
+/// Return false if it is NOT an error or the error code is NOT Unimplemented.
+fn is_unimplemented<T>(res: &Result<T, tonic::Status>) -> bool {
+    if let Err(status) = res {
+        status.code() == tonic::Code::Unimplemented
+    } else {
+        false
+    }
 }

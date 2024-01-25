@@ -1,5 +1,5 @@
 [package]
-name = "enterprise-query"
+name = "databend-enterprise-query"
 description = "A real-time Cloud Distributed Query Engine"
 version = { workspace = true }
 authors = { workspace = true }
@@ -13,39 +13,43 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-aggregating-index = { path = "../ee_features/aggregating_index" }
 async-backtrace = { workspace = true }
-background-service = { path = "../ee_features/background_service" }
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-catalog = { path = "../catalog" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-io = { path = "../../common/io" }
-common-license = { path = "../../common/license" }
-common-meta-api = { path = "../../meta/api" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-store = { path = "../../meta/store" }
-common-storages-fuse = { path = "../storages/fuse" }
-common-tracing = { path = "../../common/tracing" }
-common-users = { path = "../users" }
-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-common-ast = { path = "../ast" }
+databend-common-base = { path = "../../common/base" }
+databend-common-catalog = { path = "../catalog" }
+databend-common-config = { path = "../config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-functions = { path = "../functions" }
+databend-common-io = { path = "../../common/io" }
+databend-common-license = { path = "../../common/license" }
+databend-common-meta-api = { path = "../../meta/api" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-store = { path = "../../meta/store" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-sql = { path = "../sql" }
+databend-common-storages-fuse = { path = "../storages/fuse" }
+databend-common-storages-stream = { path = "../storages/stream" }
+databend-common-tracing = { path = "../../common/tracing" }
+databend-common-users = { path = "../users" }
+databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
+databend-enterprise-background-service = { path = "../ee_features/background_service" }
+databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-enterprise-storage-encryption = { path = "../ee_features/storage_encryption" }
+databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
+databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
+databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
 databend-query = { path = "../service" }
-jsonb = { workspace = true }
+databend-storages-common-cache = { path = "../storages/common/cache" }
+databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 opendal = { workspace = true }
-storage-encryption = { path = "../ee_features/storage_encryption" }
-storages-common-cache = { path = "../storages/common/cache" }
-storages-common-table-meta = { path = "../storages/common/table_meta" }
-vacuum-handler = { path = "../ee_features/vacuum_handler" }
-virtual-column = { path = "../ee_features/virtual_column" }
 
 arrow-array = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-dashmap = "5.4"
-futures = "0.3.24"
+dashmap = { workspace = true }
+futures = { workspace = true }
 futures-util = { workspace = true }
 
 jwt-simple = "0.11.0"
@@ -53,10 +57,6 @@ log = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
-common-sql = { path = "../sql" }
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]
+databend-common-building = { path = "../../common/building" }

@@ -14,28 +14,28 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_expression::Value;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::query_spill_prefix;
-use common_storage::DataOperator;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::Value;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_storage::DataOperator;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Metakey;
@@ -64,7 +64,7 @@ impl AsyncSystemTable for TempFilesTable {
         let tenant = ctx.get_tenant();
         let operator = DataOperator::instance().operator();
 
-        let mut temp_files_name = vec![];
+        let mut temp_files_name: Vec<String> = vec![];
         let mut temp_files_content_length = vec![];
         let mut temp_files_last_modified = vec![];
 
@@ -81,7 +81,7 @@ impl AsyncSystemTable for TempFilesTable {
                 let metadata = entry.metadata();
 
                 if metadata.is_file() {
-                    temp_files_name.push(entry.name().as_bytes().to_vec());
+                    temp_files_name.push(entry.name().to_string());
 
                     temp_files_last_modified
                         .push(metadata.last_modified().map(|x| x.timestamp_micros()));
@@ -95,7 +95,7 @@ impl AsyncSystemTable for TempFilesTable {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String("Spill".as_bytes().to_owned())),
+                    Value::Scalar(Scalar::String("Spill".to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,

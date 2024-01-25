@@ -17,7 +17,7 @@
 use std::intrinsics::assume;
 use std::sync::atomic::Ordering;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;

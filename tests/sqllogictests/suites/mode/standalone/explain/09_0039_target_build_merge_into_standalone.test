@@ -1,0 +1,306 @@
+statement ok
+set enable_experimental_merge_into = 1;
+
+## Target Build Optimization Test
+statement ok
+create table target_build_optimization(a int,b string,c string);
+
+statement ok
+create table source_optimization(a int,b string,c string);
+
+### 1. add 4 blocks for target_build_optimization
+statement ok
+insert into target_build_optimization values(1,'b1','c1'),(2,'b2','c2');
+
+statement ok
+insert into target_build_optimization values(3,'b3','c3'),(4,'b4','c4');
+
+statement ok
+insert into target_build_optimization values(5,'b5','c5'),(6,'b6','c6');
+
+statement ok
+insert into target_build_optimization values(7,'b7','c7'),(8,'b8','c8');
+
+### 2. we need to make source_optimization is larger than target_build_optimization
+### 2.1 test multi columns matched,
+statement ok
+insert into source_optimization values(1,'b1','c_1'),(1,'b1','c_2');
+
+statement ok
+insert into source_optimization values(3,'b3','c3'),(4,'b4','c4');
+
+statement ok
+insert into source_optimization values(5,'b5','c5'),(6,'b6','c6');
+
+statement ok
+insert into source_optimization values(7,'b7','c7'),(8,'b8','c8');
+
+statement ok
+insert into source_optimization values(7,'b7','c7'),(8,'b8','c8');
+
+statement ok
+insert into source_optimization values(5,'b5','c5'),(6,'b6','c6');
+
+statement error 4001
+merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+
+### 2.2 make sure the plan is expected
+query T
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_build_optimization
+├── distributed: false
+├── target_build_optimization: true
+├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
+├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+└── HashJoin: LEFT OUTER
+    ├── equi conditions: [and(eq(t2.a (#0), t1.a (#3)), eq(t2.b (#1), t1.b (#4)))]
+    ├── non-equi conditions: []
+    ├── LogicalGet
+    │   ├── table: default.default.source_optimization
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.target_build_optimization
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+### 3. test with conjunct and without conjunct
+statement ok
+truncate table source_optimization;
+
+## partial updated
+statement ok
+insert into source_optimization values(1,'b1','c_1')
+
+statement ok
+insert into source_optimization values(3,'b3','c_3')
+
+## all updated
+statement ok
+insert into source_optimization values(5,'b5','c_5'),(6,'b6','c_6');
+
+statement ok
+insert into source_optimization values(7,'b7','c_7'),(8,'b8','c_8');
+
+## insert
+statement ok
+insert into source_optimization values(9,'b9','c_9'),(10,'b10','c_10');
+
+statement ok
+insert into source_optimization values(11,'b11','c_11'),(12,'b12','c_12');
+
+### test block counts
+query T
+select count(*) from fuse_block('default','source_optimization');
+----
+6
+
+query T
+select count(*) from fuse_block('default','target_build_optimization');
+----
+4
+
+### make sure the plan is expected
+query T
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_build_optimization
+├── distributed: false
+├── target_build_optimization: true
+├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
+├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+└── HashJoin: LEFT OUTER
+    ├── equi conditions: [and(eq(t2.a (#0), t1.a (#3)), eq(t2.b (#1), t1.b (#4)))]
+    ├── non-equi conditions: []
+    ├── LogicalGet
+    │   ├── table: default.default.source_optimization
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.target_build_optimization
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+## test without conjunct
+query TT
+merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+----
+4 6
+
+query TTT
+select * from target_build_optimization order by a,b,c;
+----
+1 b1 c_1
+2 b2 c2
+3 b3 c_3
+4 b4 c4
+5 b5 c_5
+6 b6 c_6
+7 b7 c_7
+8 b8 c_8
+9 b9 c_9
+10 b10 c_10
+11 b11 c_11
+12 b12 c_12
+
+### test with conjunct
+#### we need to make sure the blocks count and layout, so we should truncate and insert again.
+statement ok
+truncate table target_build_optimization;
+
+statement ok
+insert into target_build_optimization values(1,'b1','c1'),(3,'b2','c2');
+
+statement ok
+insert into target_build_optimization values(3,'b3','c3'),(5,'b4','c4');
+
+statement ok
+insert into target_build_optimization values(7,'b5','c5'),(8,'b6','c6');
+
+statement ok
+insert into target_build_optimization values(7,'b7','c7'),(8,'b8','c8');
+
+### test block counts
+query T
+select count(*) from fuse_block('default','source_optimization');
+----
+6
+
+query T
+select count(*) from fuse_block('default','target_build_optimization');
+----
+4
+
+### make sure the plan is expected
+query T
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b > t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_build_optimization
+├── distributed: false
+├── target_build_optimization: true
+├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
+├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+└── HashJoin: LEFT OUTER
+    ├── equi conditions: [eq(t2.a (#0), t1.a (#3))]
+    ├── non-equi conditions: [gt(t1.b (#4), t2.b (#1))]
+    ├── LogicalGet
+    │   ├── table: default.default.source_optimization
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.target_build_optimization
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+statement ok
+update source_optimization set a = 2,b = 'b2' where a = 3 and b = 'b3';
+
+query TTT
+select * from source_optimization order by a,b,c;
+----
+1 b1 c_1
+2 b2 c_3
+5 b5 c_5
+6 b6 c_6
+7 b7 c_7
+8 b8 c_8
+9 b9 c_9
+10 b10 c_10
+11 b11 c_11
+12 b12 c_12
+
+query TTT
+select * from target_build_optimization order by a,b,c;
+----
+1 b1 c1
+3 b2 c2
+3 b3 c3
+5 b4 c4
+7 b5 c5
+7 b7 c7 
+8 b6 c6
+8 b8 c8
+
+query TT
+merge into target_build_optimization as t1 using source_optimization as t2 on t1.a > t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+----
+7 3
+
+query TTT
+select * from target_build_optimization order by a,b,c;
+----
+1 b1 c1
+1 b1 c_1
+2 b2 c_3
+3 b3 c3
+5 b4 c4
+5 b5 c_5
+6 b6 c_6
+7 b7 c7
+7 b7 c_7
+8 b8 c8
+8 b8 c_8
+9 b9 c_9
+10 b10 c_10
+11 b11 c_11
+12 b12 c_12
+
+### test target_table is empty
+statement ok
+truncate table target_build_optimization;
+
+### make sure the plan is expected
+query T
+explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b > t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_build_optimization
+├── distributed: false
+├── target_build_optimization: true
+├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
+├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+└── HashJoin: LEFT OUTER
+    ├── equi conditions: [eq(t2.a (#0), t1.a (#3))]
+    ├── non-equi conditions: [gt(t1.b (#4), t2.b (#1))]
+    ├── LogicalGet
+    │   ├── table: default.default.source_optimization
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.target_build_optimization
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query TT
+merge into target_build_optimization as t1 using source_optimization as t2 on t1.a > t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
+----
+10 0
+
+query TTT
+select * from target_build_optimization order by a,b,c;
+----
+1 b1 c_1
+2 b2 c_3
+5 b5 c_5
+6 b6 c_6
+7 b7 c_7
+8 b8 c_8
+9 b9 c_9
+10 b10 c_10
+11 b11 c_11
+12 b12 c_12
+
+statement ok
+set enable_experimental_merge_into = 0;

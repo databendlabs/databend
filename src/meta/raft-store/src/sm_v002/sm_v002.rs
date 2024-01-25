@@ -17,24 +17,24 @@ use std::future;
 use std::io;
 use std::sync::Arc;
 
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::KVStream;
-use common_meta_kvapi::kvapi::MGetKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::AppliedState;
-use common_meta_types::Entry;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::SeqValue;
-use common_meta_types::SnapshotData;
-use common_meta_types::StorageIOError;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKV;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::AppliedState;
+use databend_common_meta_types::CmdContext;
+use databend_common_meta_types::Entry;
+use databend_common_meta_types::EvalExpireTime;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::SnapshotData;
+use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use futures::Stream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -78,26 +78,18 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         unreachable!("write operation SM2KVApi::upsert_kv is disabled")
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        let got = self.sm.get_maybe_expired_kv(key).await?;
-
-        let local_now_ms = SeqV::<()>::now_ms();
-        let got = Self::non_expired(got, local_now_ms);
-        Ok(got)
-    }
-
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = SeqV::<()>::now_ms();
 
-        let mut values = Vec::with_capacity(keys.len());
+        let mut items = Vec::with_capacity(keys.len());
 
         for k in keys {
             let got = self.sm.get_maybe_expired_kv(k.as_str()).await?;
             let v = Self::non_expired(got, local_now_ms);
-            values.push(v);
+            items.push(Ok(StreamItem::from((k.clone(), v))));
         }
 
-        Ok(values)
+        Ok(futures::stream::iter(items).boxed())
     }
 
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
@@ -385,7 +377,10 @@ impl SMV002 {
     pub(crate) async fn upsert_kv_primary_index(
         &mut self,
         upsert_kv: &UpsertKV,
+        cmd_ctx: &CmdContext,
     ) -> Result<(Marked<Vec<u8>>, Marked<Vec<u8>>), io::Error> {
+        let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
+
         let prev = self.levels.str_map().get(&upsert_kv.key).await?.clone();
 
         if upsert_kv.seq.match_seq(prev.seq()).is_err() {
@@ -395,24 +390,17 @@ impl SMV002 {
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
                 self.levels
-                    .set(
-                        upsert_kv.key.clone(),
-                        Some((v.clone(), upsert_kv.value_meta.clone())),
-                    )
+                    .set(upsert_kv.key.clone(), Some((v.clone(), kv_meta.clone())))
                     .await?
             }
             Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await?,
             Operation::AsIs => {
-                MapApiExt::update_meta(
-                    &mut self.levels,
-                    upsert_kv.key.clone(),
-                    upsert_kv.value_meta.clone(),
-                )
-                .await?
+                MapApiExt::update_meta(&mut self.levels, upsert_kv.key.clone(), kv_meta.clone())
+                    .await?
             }
         };
 
-        let expire_ms = upsert_kv.get_expire_at_ms().unwrap_or(u64::MAX);
+        let expire_ms = kv_meta.eval_expire_at_ms();
         if expire_ms < self.expire_cursor.time_ms {
             // The record has expired, delete it at once.
             //
@@ -447,13 +435,13 @@ impl SMV002 {
 
         // Remove previous expiration index, add a new one.
 
-        if let Some(exp_ms) = removed.expire_at_ms() {
+        if let Some(exp_ms) = removed.get_expire_at_ms() {
             self.levels
                 .set(ExpireKey::new(exp_ms, removed.internal_seq().seq()), None)
                 .await?;
         }
 
-        if let Some(exp_ms) = added.expire_at_ms() {
+        if let Some(exp_ms) = added.get_expire_at_ms() {
             let k = ExpireKey::new(exp_ms, added.internal_seq().seq());
             let v = key.to_string();
             self.levels.set(k, Some((v, None))).await?;

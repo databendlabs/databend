@@ -12,53 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::AggregateFunctionRef;
-use common_expression::Scalar;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::assert_unary_arguments;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::AggregateUnaryFunction;
 use crate::aggregates::aggregate_unary::UnaryState;
 
-#[derive(Serialize, Deserialize)]
-pub struct SkewnessStateV2<T> {
+#[derive(Default, BorshSerialize, BorshDeserialize)]
+pub struct SkewnessStateV2 {
     pub n: u64,
     pub sum: f64,
     pub sum_sqr: f64,
     pub sum_cub: f64,
-    _ph: PhantomData<T>,
 }
 
-impl<T> Default for SkewnessStateV2<T>
-where
-    T: ValueType + Sync + Send,
-    T::Scalar: AsPrimitive<f64>,
-{
-    fn default() -> Self {
-        Self {
-            n: 0,
-            sum: 0.0,
-            sum_sqr: 0.0,
-            sum_cub: 0.0,
-            _ph: PhantomData,
-        }
-    }
-}
-
-impl<T> UnaryState<T, Float64Type> for SkewnessStateV2<T>
+impl<T> UnaryState<T, Float64Type> for SkewnessStateV2
 where
     T: ValueType + Sync + Send,
     T::Scalar: AsPrimitive<f64>,
@@ -85,7 +66,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut <Float64Type as ValueType>::ColumnBuilder,
+        builder: &mut Vec<F64>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.n <= 2 {
@@ -116,11 +97,11 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, self)
+        borsh_serialize_state(writer, self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        deserialize_state::<Self>(reader)
+        borsh_deserialize_state::<Self>(reader)
     }
 }
 
@@ -135,7 +116,7 @@ pub fn try_create_aggregate_skewness_function(
         DataType::Number(NumberDataType::NUM) => {
             let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
-                SkewnessStateV2<NumberType<NUM>>,
+                SkewnessStateV2,
                 NumberType<NUM>,
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())

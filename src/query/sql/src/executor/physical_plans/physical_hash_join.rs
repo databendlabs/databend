@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_cast;
-use common_expression::type_check::common_super_type;
-use common_expression::types::DataType;
-use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
-use common_expression::ROW_NUMBER_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::ROW_NUMBER_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -33,6 +33,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
@@ -61,14 +62,17 @@ pub struct HashJoin {
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+
+    // probe keys for runtime filter
+    pub probe_keys_rt: Vec<Option<RemoteExpr<String>>>,
+    // Under cluster, mark if the join is broadcast join.
+    pub broadcast: bool,
 }
 
 impl HashJoin {
@@ -171,6 +175,7 @@ impl PhysicalPlanBuilder {
         assert_eq!(join.left_conditions.len(), join.right_conditions.len());
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         for (left_condition, right_condition) in join
             .left_conditions
@@ -183,6 +188,26 @@ impl PhysicalPlanBuilder {
             let left_expr = left_condition
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+
+            let left_expr_for_runtime_filter =
+                if left_condition.used_columns().iter().all(|idx| {
+                    // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+                    // the same name as a base table column, so we need to check if the column is a base table column.
+                    matches!(
+                        self.metadata.read().column(*idx),
+                        ColumnEntry::BaseTableColumn(_)
+                    )
+                }) && matches!(probe_side, box PhysicalPlan::TableScan(_))
+                {
+                    Some(
+                        left_condition
+                            .as_raw_expr()
+                            .type_check(&*self.metadata.read())?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )
+                } else {
+                    None
+                };
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -240,29 +265,38 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?;
 
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
+                .map(|expr| check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS))
+                .transpose()?;
+
             let (left_expr, _) =
                 ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
+                .map(|expr| ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0);
+
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
+            left_join_conditions_rt
+                .push(left_expr_for_runtime_filter.map(|expr| expr.as_remote_expr()));
         }
 
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
-        for column in pre_column_projections {
-            if let Ok(index) = probe_schema.index_of(&column.to_string()) {
+        for column in pre_column_projections.iter() {
+            if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
                 probe_projections.insert(index);
             }
-            if let Ok(index) = build_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = build_schema.column_with_name(&column.to_string()) {
                 build_projections.insert(index);
             }
         }
 
         // for distributed merge into, there is a field called "_row_number", but
         // it's not an internal row_number, we need to add it here
-        if let Ok(index) = build_schema.index_of(ROW_NUMBER_COL_NAME) {
+        if let Some((index, _)) = build_schema.column_with_name(ROW_NUMBER_COL_NAME) {
             build_projections.insert(index);
         }
 
@@ -322,8 +356,39 @@ impl PhysicalPlanBuilder {
                 probe_fields.extend(build_fields);
                 probe_fields
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
-            JoinType::RightSemi | JoinType::RightAnti => build_fields,
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti => {
+                let (result_fields, dropped_fields) = if join.join_type == JoinType::LeftSemi
+                    || join.join_type == JoinType::LeftAnti
+                {
+                    (probe_fields, build_fields)
+                } else {
+                    (build_fields, probe_fields)
+                };
+                for field in dropped_fields.iter() {
+                    if result_fields.iter().all(|x| x.name() != field.name())
+                        && let Ok(index) = field.name().parse::<usize>()
+                        && column_projections.contains(&index)
+                    {
+                        let metadata = self.metadata.read();
+                        let unexpected_column = metadata.column(index);
+                        let unexpected_column_info =
+                            if let Some(table_index) = unexpected_column.table_index() {
+                                format!(
+                                    "{:?}.{:?}",
+                                    metadata.table(table_index).name(),
+                                    unexpected_column.name()
+                                )
+                            } else {
+                                unexpected_column.name().to_string()
+                            };
+                        return Err(ErrorCode::SemanticError(format!(
+                            "cannot access the {} in ANTI or SEMI join",
+                            unexpected_column_info
+                        )));
+                    }
+                }
+                result_fields
+            }
             JoinType::LeftMark => {
                 let name = if let Some(idx) = join.marker_index {
                     idx.to_string()
@@ -352,14 +417,14 @@ impl PhysicalPlanBuilder {
         let mut projections = ColumnSet::new();
         let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
         for column in column_projections.iter() {
-            if let Ok(index) = projected_schema.index_of(&column.to_string()) {
+            if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
         }
 
         // for distributed merge into, there is a field called "_row_number", but
         // it's not an internal row_number, we need to add it here
-        if let Ok(index) = projected_schema.index_of(ROW_NUMBER_COL_NAME) {
+        if let Some((index, _)) = projected_schema.column_with_name(ROW_NUMBER_COL_NAME) {
             projections.insert(index);
         }
 
@@ -381,6 +446,7 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
+            probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions
                 .iter()
@@ -398,9 +464,9 @@ impl PhysicalPlanBuilder {
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
-            contain_runtime_filter: join.contain_runtime_filter,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
+            broadcast: join.broadcast,
         }))
     }
 }

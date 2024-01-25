@@ -16,39 +16,39 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::map::KvColumn;
-use common_expression::types::map::KvPair;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::number::UInt8Type;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ConstantFolder;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FromData;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_index::filters::BlockFilter as LatestBloom;
-use storages_common_index::filters::Xor8Filter;
-use storages_common_index::BloomIndex;
-use storages_common_index::FilterEvalResult;
-use storages_common_index::Index;
-use storages_common_table_meta::meta::Versioned;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::map::KvColumn;
+use databend_common_expression::types::map::KvPair;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::number::UInt8Type;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_index::filters::BlockFilter as LatestBloom;
+use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::FilterEvalResult;
+use databend_storages_common_index::Index;
+use databend_storages_common_table_meta::meta::Versioned;
 
 #[test]
 fn test_bloom_filter() -> Result<()> {
@@ -73,7 +73,7 @@ fn test_bloom_filter() -> Result<()> {
     ]);
     let map_ty = DataType::Map(Box::new(kv_ty));
 
-    let blocks = vec![
+    let blocks = [
         DataBlock::new(
             vec![
                 BlockEntry::new(
@@ -82,7 +82,7 @@ fn test_bloom_filter() -> Result<()> {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(b"a".to_vec())),
+                    Value::Scalar(Scalar::String("a".to_string())),
                 ),
                 BlockEntry::new(
                     map_ty.clone(),
@@ -161,7 +161,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields.clone(),
             schema.clone(),
-            Scalar::String(b"a".to_vec()),
+            Scalar::String("a".to_string()),
             DataType::String
         )
     );
@@ -172,7 +172,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields.clone(),
             schema.clone(),
-            Scalar::String(b"b".to_vec()),
+            Scalar::String("b".to_string()),
             DataType::String
         )
     );
@@ -183,7 +183,7 @@ fn test_bloom_filter() -> Result<()> {
             "1",
             bloom_fields,
             schema.clone(),
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );
@@ -197,7 +197,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty.clone(),
             Scalar::Number(NumberScalar::UInt8(1)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"a".to_vec()),
+            Scalar::String("a".to_string()),
             DataType::String
         )
     );
@@ -210,7 +210,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty.clone(),
             Scalar::Number(NumberScalar::UInt8(2)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"b".to_vec()),
+            Scalar::String("b".to_string()),
             DataType::String
         )
     );
@@ -223,7 +223,7 @@ fn test_bloom_filter() -> Result<()> {
             map_ty,
             Scalar::Number(NumberScalar::UInt8(3)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String(b"x".to_vec()),
+            Scalar::String("x".to_string()),
             DataType::String
         )
     );
@@ -238,7 +238,7 @@ fn test_specify_bloom_filter() -> Result<()> {
         TableField::new("1", TableDataType::String),
     ]));
 
-    let blocks = vec![DataBlock::new_from_columns(vec![
+    let blocks = [DataBlock::new_from_columns(vec![
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec!["a", "b"]),
     ])];
@@ -261,7 +261,7 @@ fn test_specify_bloom_filter() -> Result<()> {
             "1",
             fields,
             schema,
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );
@@ -277,7 +277,7 @@ fn test_string_bloom_filter() -> Result<()> {
     ]));
 
     let val: String = (0..512).map(|_| 'a').collect();
-    let blocks = vec![DataBlock::new_from_columns(vec![
+    let blocks = [DataBlock::new_from_columns(vec![
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec![&val, "bc"]),
     ])];
@@ -301,7 +301,7 @@ fn test_string_bloom_filter() -> Result<()> {
             "1",
             fields,
             schema,
-            Scalar::String(b"d".to_vec()),
+            Scalar::String("d".to_string()),
             DataType::String
         )
     );

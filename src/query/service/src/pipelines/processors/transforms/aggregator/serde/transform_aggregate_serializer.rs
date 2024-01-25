@@ -17,19 +17,19 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_functions::aggregates::StateAddr;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_functions::aggregates::StateAddr;
+use databend_common_hashtable::HashtableEntryRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use crate::pipelines::processors::transforms::aggregator::create_state_serializer;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
@@ -166,7 +166,7 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
     let offsets_aggregate_states = &params.offsets_aggregate_states;
 
     // Builders.
-    let mut state_builders: Vec<StringColumnBuilder> = funcs
+    let mut state_builders: Vec<BinaryColumnBuilder> = funcs
         .iter()
         .map(|func| create_state_serializer(func, keys_len))
         .collect();
@@ -189,7 +189,7 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
     }
 
     for builder in state_builders.into_iter() {
-        columns.push(Column::String(builder.build()));
+        columns.push(Column::Binary(builder.build()));
     }
     columns.push(group_key_builder.finish());
     Ok(DataBlock::new_from_columns(columns))
@@ -257,7 +257,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
         let funcs = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-        let mut state_builders: Vec<StringColumnBuilder> = funcs
+        let mut state_builders: Vec<BinaryColumnBuilder> = funcs
             .iter()
             .map(|func| create_state_serializer(func, max_block_rows))
             .collect();
@@ -291,13 +291,13 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
 
     fn finish(
         &self,
-        state_builders: Vec<StringColumnBuilder>,
+        state_builders: Vec<BinaryColumnBuilder>,
         group_key_builder: Method::ColumnBuilder<'_>,
     ) -> Result<Option<DataBlock>> {
         let mut columns = Vec::with_capacity(state_builders.len() + 1);
 
         for builder in state_builders.into_iter() {
-            columns.push(Column::String(builder.build()));
+            columns.push(Column::Binary(builder.build()));
         }
 
         let bucket = self.payload.bucket;

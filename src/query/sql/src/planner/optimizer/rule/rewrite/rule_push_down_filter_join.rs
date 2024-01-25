@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::constant::false_constant;
@@ -153,7 +153,10 @@ pub fn try_push_down_filter_join(
                 right_push_down.push(predicate.clone());
             }
             JoinPredicate::Left(_) => {
-                if matches!(join.join_type, JoinType::Right) {
+                if matches!(
+                    join.join_type,
+                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                ) {
                     original_predicates.push(predicate);
                     continue;
                 }
@@ -161,7 +164,10 @@ pub fn try_push_down_filter_join(
                 left_push_down.push(predicate);
             }
             JoinPredicate::Right(_) => {
-                if matches!(join.join_type, JoinType::Left) {
+                if matches!(
+                    join.join_type,
+                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                ) {
                     original_predicates.push(predicate);
                     continue;
                 }

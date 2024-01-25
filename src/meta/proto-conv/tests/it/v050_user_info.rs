@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
 use minitrace::func_name;
 
@@ -29,7 +29,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v50_user_info() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -41,32 +41,36 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
         6, 49, 168, 6, 24, 160, 6, 50, 168, 6, 24,
     ];
 
-    let want = || common_meta_app::principal::UserInfo {
+    let want = || databend_common_meta_app::principal::UserInfo {
         name: "test_user".to_string(),
         hostname: "%".to_string(),
-        auth_info: common_meta_app::principal::AuthInfo::Password {
+        auth_info: databend_common_meta_app::principal::AuthInfo::Password {
             hash_value: [
                 116, 101, 115, 116, 95, 112, 97, 115, 115, 119, 111, 114, 100,
             ]
             .to_vec(),
-            hash_method: common_meta_app::principal::PasswordHashMethod::DoubleSha1,
+            hash_method: databend_common_meta_app::principal::PasswordHashMethod::DoubleSha1,
         },
-        grants: common_meta_app::principal::UserGrantSet::new(
-            vec![common_meta_app::principal::GrantEntry::new(
-                common_meta_app::principal::GrantObject::Global,
+        grants: databend_common_meta_app::principal::UserGrantSet::new(
+            vec![databend_common_meta_app::principal::GrantEntry::new(
+                databend_common_meta_app::principal::GrantObject::Global,
                 make_bitflags!(UserPrivilegeType::{Create}),
             )],
             HashSet::new(),
         ),
-        quota: common_meta_app::principal::UserQuota {
+        quota: databend_common_meta_app::principal::UserQuota {
             max_cpu: 10,
             max_memory_in_bytes: 10240,
             max_storage_in_bytes: 20480,
         },
-        option: common_meta_app::principal::UserOption::default()
-            .with_set_flag(common_meta_app::principal::UserOptionFlag::TenantSetting)
+        option: databend_common_meta_app::principal::UserOption::default()
+            .with_set_flag(databend_common_meta_app::principal::UserOptionFlag::TenantSetting)
             .with_default_role(Some("role1".into()))
             .with_network_policy(Some("mypolicy".to_string())),
+        history_auth_infos: vec![],
+        password_fails: vec![],
+        password_update_on: None,
+        lockout_time: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

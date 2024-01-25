@@ -98,6 +98,35 @@ function install_build_essentials {
 	esac
 }
 
+function install_ziglang {
+	PACKAGE_MANAGER=$1
+
+	if zig version; then
+		echo "==> ziglang is already installed"
+		return
+	fi
+	echo "==> installing ziglang..."
+
+	arch=$(uname -m)
+	case "$PACKAGE_MANAGER" in
+	apt-get | yum | dnf | pacman)
+		curl -sSfLo /tmp/zig.tar.xz "https://ziglang.org/download/0.11.0/zig-linux-${arch}-0.11.0.tar.xz"
+		tar -xf /tmp/zig.tar.xz -C /tmp
+		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/zig" /usr/local/bin/
+		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/zig
+		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/lib" /usr/local/lib/zig
+		rm -rf /tmp/zig*
+		;;
+	brew)
+		install_pkg zig "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install ziglang with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
 function install_python3 {
 	PACKAGE_MANAGER=$1
 
@@ -160,45 +189,6 @@ function install_openssl {
 		exit 1
 		;;
 	esac
-}
-
-function install_sccache {
-	PACKAGE_MANAGER=$1
-
-	if sccache --version; then
-		echo "==> sccache is already installed"
-		return
-	fi
-	echo "==> installing sccache..."
-
-	case "$PACKAGE_MANAGER" in
-	brew)
-		install_pkg sccache "$PACKAGE_MANAGER"
-		;;
-	*)
-
-		arch=$(uname -m)
-		case "$arch" in
-		amd64)
-			arch="x86_64"
-			;;
-		arm64)
-			arch="aarch64"
-			;;
-		esac
-		download_version="v0.5.3"
-		download_target="sccache-${download_version}-${arch}-unknown-linux-musl"
-		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
-		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
-		tar -xzf sccache.tar.gz
-		"${PRE_COMMAND[@]}" cp "${download_target}/sccache" /usr/local/bin/
-		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/sccache
-		rm -rf "${download_target}"
-		rm sccache.tar.gz
-		;;
-	esac
-
-	sccache --version
 }
 
 function install_protobuf {
@@ -564,22 +554,25 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
+	install_ziglang "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
+	cargo install cargo-quickinstall
+	cargo quickinstall cargo-binstall
+	cargo binstall -y sccache
+	cargo binstall -y cargo-zigbuild
+	cargo binstall -y cargo-nextest
 
-	# Install tools that needed in build
-	install_sccache "$PACKAGE_MANAGER"
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
-		cargo install cargo-quickinstall
-		cargo quickinstall cargo-binstall
 		while read -r tool; do
-			cargo binstall -y "$tool"
+			# Use cargo install to prevent downloading the tools with incompatible GLIBC
+			cargo install "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
 

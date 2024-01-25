@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_meta_api::ShareApi;
-use common_meta_app::share::ShowSharesReq;
-use common_sharing::ShareEndpointManager;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::ShowSharesReq;
+use databend_common_sharing::ShareEndpointManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -48,40 +48,26 @@ impl Interpreter for ShowSharesInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();
-        let mut names: Vec<Vec<u8>> = vec![];
-        let mut kinds: Vec<Vec<u8>> = vec![];
-        let mut created_owns: Vec<Vec<u8>> = vec![];
-        let mut database_names: Vec<Vec<u8>> = vec![];
-        let mut from: Vec<Vec<u8>> = vec![];
-        let mut to: Vec<Vec<u8>> = vec![];
-        let mut comments: Vec<Vec<u8>> = vec![];
+        let mut names: Vec<String> = vec![];
+        let mut kinds: Vec<String> = vec![];
+        let mut created_owns: Vec<String> = vec![];
+        let mut database_names: Vec<String> = vec![];
+        let mut from: Vec<String> = vec![];
+        let mut to: Vec<String> = vec![];
+        let mut comments: Vec<String> = vec![];
 
         // query all share endpoint for other tenant inbound shares
         let share_specs = ShareEndpointManager::instance()
             .get_inbound_shares(&tenant, None, None)
             .await?;
         for (from_tenant, share_spec) in share_specs {
-            names.push(share_spec.name.clone().as_bytes().to_vec());
-            kinds.push("INBOUND".to_string().as_bytes().to_vec());
-            created_owns.push(
-                share_spec
-                    .share_on
-                    .unwrap_or_default()
-                    .to_string()
-                    .as_bytes()
-                    .to_vec(),
-            );
-            database_names.push(
-                share_spec
-                    .database
-                    .unwrap_or_default()
-                    .name
-                    .as_bytes()
-                    .to_vec(),
-            );
-            from.push(from_tenant.as_bytes().to_vec());
-            to.push(tenant.clone().as_bytes().to_vec());
-            comments.push(share_spec.comment.unwrap_or_default().as_bytes().to_vec());
+            names.push(share_spec.name.clone());
+            kinds.push("INBOUND".to_string());
+            created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
+            database_names.push(share_spec.database.unwrap_or_default().name);
+            from.push(from_tenant);
+            to.push(tenant.clone());
+            comments.push(share_spec.comment.unwrap_or_default());
         }
 
         let req = ShowSharesReq {
@@ -90,19 +76,17 @@ impl Interpreter for ShowSharesInterpreter {
         let resp = meta_api.show_shares(req).await?;
 
         for entry in resp.outbound_accounts {
-            names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
-            kinds.push("OUTBOUND".to_string().as_bytes().to_vec());
-            created_owns.push(entry.create_on.to_string().as_bytes().to_vec());
-            database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
-            from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
+            names.push(entry.share_name.share_name.clone());
+            kinds.push("OUTBOUND".to_string());
+            created_owns.push(entry.create_on.to_string());
+            database_names.push(entry.database_name.unwrap_or_default());
+            from.push(entry.share_name.tenant.clone());
             to.push(
                 entry
                     .accounts
-                    .map_or("".to_string().as_bytes().to_vec(), |accounts| {
-                        accounts.join(",").as_bytes().to_vec()
-                    }),
+                    .map_or("".to_string(), |accounts| accounts.join(",")),
             );
-            comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
+            comments.push(entry.comment.unwrap_or_default());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

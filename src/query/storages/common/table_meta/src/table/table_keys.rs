@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
@@ -23,11 +22,19 @@ pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
+pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
 // Read only attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_READ_ONLY: &str = "read_only_attached";
+
+// the following are used in for delta and iceberg engine
+pub const OPT_KEY_LOCATION: &str = "location";
+pub const OPT_KEY_CONNECTION_NAME: &str = "connection_name";
+// TableMeta need to contain all info needed to create a Table, store them under this internal key as a JSON.
+// e.g. the partition columns of a Delta table
+pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 
 /// Legacy table snapshot location key
 ///
@@ -42,7 +49,7 @@ pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
 /// - Should not be shown in `show create table` statement
-pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
@@ -50,10 +57,11 @@ pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|
 });
 
 /// Table option keys that Should not be shown in `show create table` statement
-pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_ENGINE_META);
     r
 });
 

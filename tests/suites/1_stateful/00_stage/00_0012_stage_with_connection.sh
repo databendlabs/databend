@@ -14,3 +14,7 @@ stmt "create stage my_stage url= 's3://testbucket/admin/tempdata/' connection = 
 stmt "remove @my_stage;"
 stmt "copy into @my_stage/a.csv from my_table"
 query "select * from @my_stage order by a;"
+
+stmt "drop table if exists my_table;"
+stmt "drop stage if exists my_stage;"
+stmt "drop connection if exists my_conn;"

@@ -26,41 +26,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::block_debug::assert_block_value_sort_eq;
-use common_expression::types::ArgType;
-use common_expression::types::BooleanType;
-use common_expression::types::Float32Type;
-use common_expression::types::Float64Type;
-use common_expression::types::Int16Type;
-use common_expression::types::Int32Type;
-use common_expression::types::Int64Type;
-use common_expression::types::Int8Type;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::types::F32;
-use common_expression::types::F64;
-use common_expression::AggregateHashTable;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::HashTableConfig;
-use common_expression::PayloadFlushState;
-use common_expression::ProbeState;
-use common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::Int8Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::AggregateHashTable;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
+use databend_common_expression::ProbeState;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 use itertools::Itertools;
 
-// cargo test --package common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
+// cargo test --package databend-common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
 #[test]
 fn test_agg_hashtable() {
     let factory = AggregateFunctionFactory::instance();
     let m: usize = 4;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = vec![
-            StringType::from_data(
-                (0..n)
-                    .map(|x| format!("{}", x % m).as_bytes().to_vec())
-                    .collect_vec(),
-            ),
+            StringType::from_data((0..n).map(|x| format!("{}", x % m)).collect_vec()),
             Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()),
             Int32Type::from_data((0..n).map(|x| (x % m) as i32).collect_vec()),
             Int16Type::from_data((0..n).map(|x| (x % m) as i16).collect_vec()),

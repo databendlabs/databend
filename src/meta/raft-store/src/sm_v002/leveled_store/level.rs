@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::map_api::AsMap;

@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::table_test_fixture::TestFixture;
-use enterprise_query::test_kits::context::EESetup;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let fixture = TestFixture::with_setup(EESetup::new()).await?;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+
+    fixture.create_default_database().await?;
     fixture.create_computed_table().await?;
 
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
     for i in 0..2 {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;

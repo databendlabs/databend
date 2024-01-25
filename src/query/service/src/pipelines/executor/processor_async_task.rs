@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::future::Future;
+use std::intrinsics::assume;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -21,14 +22,17 @@ use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio::time::sleep;
-use common_base::runtime::catch_unwind;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
+use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
@@ -42,7 +46,10 @@ pub struct ProcessorAsyncTask {
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    inner: BoxFuture<'static, (Duration, Result<()>)>,
+    profile: Arc<Profile>,
+    instant: Instant,
+    last_nanos: usize,
+    inner: BoxFuture<'static, Result<()>>,
 }
 
 impl ProcessorAsyncTask {
@@ -53,6 +60,7 @@ impl ProcessorAsyncTask {
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
         weak_executor: Weak<PipelineExecutor>,
+        profile: Arc<Profile>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -74,6 +82,7 @@ impl ProcessorAsyncTask {
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
+            let mut log_graph = false;
 
             loop {
                 let interval = Box::pin(sleep(Duration::from_secs(5)));
@@ -82,37 +91,48 @@ impl ProcessorAsyncTask {
                         inner = right;
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
-                        let running_graph_format =
-                            match elapsed >= Duration::from_secs(200) && active_workers == 0 {
-                                false => String::new(),
-                                true => match weak_executor.upgrade() {
-                                    None => String::new(),
-                                    Some(executor) => executor.graph.format_graph_nodes(),
-                                },
-                            };
-
-                        warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
-                            query_id,
-                            processor_id,
-                            processor_name,
-                            elapsed,
-                            active_workers,
-                            running_graph_format
-                        );
+                        match elapsed >= Duration::from_secs(200)
+                            && active_workers == 0
+                            && !log_graph
+                        {
+                            false => {
+                                warn!(
+                                    "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
+                                    query_id, processor_id, processor_name, elapsed, active_workers
+                                );
+                            }
+                            true => {
+                                log_graph = true;
+                                if let Some(executor) = weak_executor.upgrade() {
+                                    error!(
+                                        "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
+                                        query_id,
+                                        processor_id,
+                                        processor_name,
+                                        elapsed,
+                                        active_workers,
+                                        executor.graph.format_graph_nodes()
+                                    );
+                                }
+                            }
+                        };
                     }
                     Either::Right((res, _)) => {
-                        return (start.elapsed(), res);
+                        return res;
                     }
                 }
             }
         };
 
+        let instant = Instant::now();
         ProcessorAsyncTask {
             worker_id,
             processor_id,
             queue,
             workers_condvar,
+            profile,
+            last_nanos: instant.elapsed().as_nanos() as usize,
+            instant,
             inner: inner.boxed(),
         }
     }
@@ -126,30 +146,52 @@ impl Future for ProcessorAsyncTask {
             return Poll::Ready(());
         }
 
+        Profile::track_profile(&self.profile);
+
+        let last_nanos = self.last_nanos;
+        let last_instant = self.instant;
         let inner = self.inner.as_mut();
 
-        match catch_unwind(move || inner.poll(cx)) {
-            Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready((elapsed, res))) => {
+        let before_poll_nanos = elapsed_nanos(last_instant);
+        let wait_nanos = before_poll_nanos - last_nanos;
+        Profile::record_usize_profile(ProfileStatisticsName::WaitTime, wait_nanos);
+
+        let poll_res = catch_unwind(move || inner.poll(cx));
+
+        let after_poll_nanos = elapsed_nanos(last_instant);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::CpuTime,
+            after_poll_nanos - before_poll_nanos,
+        );
+
+        match poll_res {
+            Ok(Poll::Pending) => {
+                self.last_nanos = after_poll_nanos;
+                Poll::Pending
+            }
+            Ok(Poll::Ready(res)) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(
-                        self.processor_id,
-                        self.worker_id,
-                        res,
-                        Some(elapsed),
-                    ),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), None),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
                 );
 
                 Poll::Ready(())
             }
         }
     }
+}
+
+fn elapsed_nanos(instant: Instant) -> usize {
+    let nanos = (Instant::now() - instant).as_nanos();
+    unsafe {
+        assume(nanos < 18446744073709551615_u128);
+    }
+    nanos as usize
 }

@@ -13,11 +13,13 @@
 // limitations under the License.
 
 mod build_spill;
+mod build_state;
 mod common;
 mod desc;
 mod hash_join_build_state;
 mod hash_join_probe_state;
 mod hash_join_state;
+mod merge_into_hash_join_optimization;
 mod probe_join;
 mod probe_spill;
 mod probe_state;
@@ -36,6 +38,5 @@ pub use hash_join_probe_state::HashJoinProbeState;
 pub use hash_join_state::*;
 pub use probe_spill::ProbeSpillState;
 pub use probe_state::ProbeState;
-pub use result_blocks::*;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;

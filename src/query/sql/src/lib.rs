@@ -18,6 +18,7 @@
 #![feature(let_chains)]
 #![feature(try_blocks)]
 #![feature(extend_one)]
+#![feature(lazy_cell)]
 
 pub mod evaluator;
 pub mod executor;

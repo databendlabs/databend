@@ -1,5 +1,5 @@
 [package]
-name = "common-catalog"
+name = "databend-common-catalog"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,36 +9,38 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
-common-io = { path = "../../common/io" }
-common-meta-api = { path = "../../meta/api" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-store = { path = "../../meta/store" }
-common-meta-types = { path = "../../meta/types" }
-common-pipeline-core = { path = "../pipeline/core" }
-common-settings = { path = "../settings" }
-common-storage = { path = "../../common/storage" }
-common-users = { path = "../users" }
-storages-common-table-meta = { path = "../storages/common/table_meta" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
+databend-common-config = { path = "../config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-io = { path = "../../common/io" }
+databend-common-meta-api = { path = "../../meta/api" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-store = { path = "../../meta/store" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-pipeline-core = { path = "../pipeline/core" }
+databend-common-settings = { path = "../settings" }
+databend-common-storage = { path = "../../common/storage" }
+databend-common-users = { path = "../users" }
+databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
+async-trait = { workspace = true }
 chrono = { workspace = true }
-dashmap = "5.4"
+dashmap = { workspace = true }
 dyn-clone = "1.0.9"
-parking_lot = "0.12"
+log = "0.4.19"
+parking_lot = { workspace = true }
 parquet_rs = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
 thrift = "0.17.0"
-typetag = "0.2.3"
+typetag = { workspace = true }
+xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 
 [dev-dependencies]
 goldenfile = "1.4"

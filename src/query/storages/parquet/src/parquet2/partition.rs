@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use common_arrow::parquet::compression::Compression;
-use common_arrow::parquet::indexes::Interval;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
+use databend_common_arrow::parquet::compression::Compression;
+use databend_common_arrow::parquet::indexes::Interval;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ColumnMeta {

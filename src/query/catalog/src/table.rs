@@ -18,31 +18,33 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockThresholds;
-use common_expression::ColumnId;
-use common_expression::FieldIndex;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
-use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::MetaId;
-use common_pipeline_core::Pipeline;
-use common_storage::StorageMetrics;
-use storages_common_table_meta::meta::SnapshotId;
-use storages_common_table_meta::meta::TableSnapshot;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::StorageMetrics;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
@@ -55,6 +57,11 @@ pub trait Table: Sync + Send {
 
     fn engine(&self) -> &str {
         self.get_table_info().engine()
+    }
+
+    /// Whether the table engine supports the given internal column.
+    fn supported_internal_column(&self, _column_id: ColumnId) -> bool {
+        false
     }
 
     fn schema(&self) -> Arc<TableSchema> {
@@ -104,6 +111,25 @@ pub trait Table: Sync + Send {
         vec![]
     }
 
+    fn change_tracking_enabled(&self) -> bool {
+        false
+    }
+
+    fn stream_columns(&self) -> Vec<StreamColumn> {
+        vec![]
+    }
+
+    fn schema_with_stream(&self) -> Arc<TableSchema> {
+        let mut fields = self.schema().fields().clone();
+        for stream_column in self.stream_columns().iter() {
+            fields.push(stream_column.table_field());
+        }
+        Arc::new(TableSchema {
+            fields,
+            ..self.schema().as_ref().clone()
+        })
+    }
+
     /// Whether the table engine supports prewhere optimization.
     /// only Fuse Engine supports this.
     fn support_prewhere(&self) -> bool {
@@ -119,11 +145,6 @@ pub trait Table: Sync + Send {
         false
     }
 
-    /// Whether the table engine supports virtual column `_row_id`.
-    fn support_row_id_column(&self) -> bool {
-        false
-    }
-
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
@@ -133,7 +154,7 @@ pub trait Table: Sync + Send {
         let (_, _) = (ctx, cluster_key);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Unsupported clustering keys for engine: {}",
+            "Altering table cluster keys is not supported for the '{}' engine.",
             self.engine()
         )))
     }
@@ -143,7 +164,7 @@ pub trait Table: Sync + Send {
         let _ = ctx;
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Unsupported clustering keys for engine: {}",
+            "Dropping table cluster keys is not supported for the '{}' engine.",
             self.engine()
         )))
     }
@@ -157,8 +178,9 @@ pub trait Table: Sync + Send {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
+
         Err(ErrorCode::Unimplemented(format!(
-            "read_partitions operation for table {} is not implemented. table engine : {}",
+            "The 'read_partitions' operation is not implemented for table '{}' using the '{}' engine.",
             self.name(),
             self.get_table_info().meta.engine
         )))
@@ -179,7 +201,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
 
         Err(ErrorCode::Unimplemented(format!(
-            "read_data operation for table {} is not implemented. table engine : {}",
+            "The 'read_data' operation is not implemented for the table '{}'. Table engine type: '{}'.",
             self.name(),
             self.get_table_info().meta.engine
         )))
@@ -195,20 +217,30 @@ pub trait Table: Sync + Send {
         let (_, _, _) = (ctx, pipeline, append_mode);
 
         Err(ErrorCode::Unimplemented(format!(
-            "append_data operation for table {} is not implemented. table engine : {}",
+            "The 'append_data' operation is not available for the table '{}'. Current table engine: '{}'.",
             self.name(),
             self.get_table_info().meta.engine
         )))
     }
+
     fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, copied_files, pipeline, overwrite, prev_snapshot_id);
+        let (_, _, _, _, _, _) = (
+            ctx,
+            copied_files,
+            update_stream_meta,
+            pipeline,
+            overwrite,
+            prev_snapshot_id,
+        );
 
         Ok(())
     }
@@ -240,12 +272,22 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
+        let _ = ctx;
+
         Ok(None)
     }
 
     #[async_backtrace::framed]
-    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let _ = ctx;
+
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
@@ -254,36 +296,7 @@ pub trait Table: Sync + Send {
         let _ = instant;
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support time travel",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[async_backtrace::framed]
-    async fn update(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<FieldIndex>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let (_, _, _, _, _, _, _) = (
-            ctx,
-            filter,
-            col_indices,
-            update_list,
-            computed_list,
-            query_row_id_col,
-            pipeline,
-        );
-
-        Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support UPDATE",
+            "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -305,12 +318,13 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _) = (ctx, limit);
+        let (_, _, _) = (ctx, lock, limit);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support compact segments",
+            "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -325,7 +339,7 @@ pub trait Table: Sync + Send {
         let (_, _) = (ctx, limit);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support compact",
+            "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -343,7 +357,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support recluster",
+            "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -356,8 +370,9 @@ pub trait Table: Sync + Send {
         point: NavigationDescriptor,
     ) -> Result<()> {
         let (_, _) = (ctx, point);
+
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support revert",
+            "The 'revert_to' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -404,7 +419,7 @@ pub trait TableExt: Table {
         if self.is_read_only() {
             let table_info = self.get_table_info();
             Err(ErrorCode::InvalidOperation(format!(
-                "Mutation not allowed, table [{}] is READ ONLY.",
+                "Modification not permitted: Table '{}' is READ ONLY, preventing any changes or updates.",
                 table_info.name
             )))
         } else {

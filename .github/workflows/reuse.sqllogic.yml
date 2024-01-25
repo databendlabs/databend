@@ -27,7 +27,7 @@ jobs:
         timeout-minutes: 10
         with:
           dirs: management
-          handlers: mysql,http,clickhouse
+          handlers: mysql,http
 
   standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -46,7 +46,6 @@ jobs:
         handler:
           - "mysql"
           - "http"
-          - "clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
@@ -74,7 +73,7 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: udf_server
-          handlers: mysql,http,clickhouse
+          handlers: mysql,http
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
@@ -95,13 +94,37 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: task
-          handlers: mysql,http,clickhouse
+          handlers: mysql,http
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-cloud
+
+  standalone_minio:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        dirs:
+          - "query"
+        handler:
+          - "mysql"
+          - "http"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handler }}
+          storage-format: all
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
 
   cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -120,7 +143,6 @@ jobs:
         handler:
           - "mysql"
           - "http"
-          - "clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
@@ -149,7 +171,7 @@ jobs:
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
-          handlers: mysql,http,clickhouse
+          handlers: mysql,http
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

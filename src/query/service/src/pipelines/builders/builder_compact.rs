@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_pipeline_sources::EmptySource;
-use common_sql::executor::physical_plans::CompactSource;
-use common_storages_fuse::FuseTable;
+use databend_common_exception::Result;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;
 

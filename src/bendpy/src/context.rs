@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeSet;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -47,21 +49,23 @@ impl PySessionContext {
                 .await
                 .unwrap();
 
-            if let Some(tenant) = tenant {
-                session.set_current_tenant(tenant.to_owned());
+            let tenant = if let Some(tenant) = tenant {
+                tenant.to_owned()
             } else {
-                session.set_current_tenant(uuid::Uuid::new_v4().to_string());
-            }
+                uuid::Uuid::new_v4().to_string()
+            };
+
+            let config = GlobalConfig::instance();
+            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
+                .await
+                .unwrap();
+
+            session.set_current_tenant(tenant.to_owned());
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
-            );
-
-            user.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_stage(),
             );
 
             session.set_authed_user(user, None).await.unwrap();

@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::BinaryOperator;
-use common_ast::ast::ColumnID;
-use common_ast::ast::ColumnPosition;
-use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
-use common_ast::ast::IntervalKind;
-use common_ast::ast::Literal;
-use common_ast::ast::MapAccessor;
-use common_ast::ast::SubqueryModifier;
-use common_ast::ast::TrimWhere;
-use common_ast::ast::TypeName;
-use common_ast::ast::UnaryOperator;
-use common_expression::types::DataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::NumberDataType;
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IntervalKind;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::SubqueryModifier;
+use databend_common_ast::ast::TrimWhere;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UnaryOperator;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
 use ethnum::I256;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -528,19 +528,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let mut expr = self.gen_expr(ty);
                 let len = self.rng.gen_range(1..=3);
                 for _ in 0..len {
-                    let accessor = match self.rng.gen_range(0..=3) {
+                    let accessor = match self.rng.gen_range(0..=2) {
                         0 => MapAccessor::Bracket {
                             key: Box::new(self.gen_expr(&DataType::Number(NumberDataType::UInt8))),
                         },
                         1 => {
-                            let key = self.gen_identifier();
-                            MapAccessor::Dot { key }
-                        }
-                        2 => {
                             let key = self.rng.gen_range(0..=10);
                             MapAccessor::DotNumber { key }
                         }
-                        3 => {
+                        2 => {
                             let key = self.gen_identifier();
                             MapAccessor::Colon { key }
                         }
@@ -689,9 +685,25 @@ fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::String => TypeName::String,
         DataType::Bitmap => TypeName::Bitmap,
         DataType::Variant => TypeName::Variant,
+        DataType::Binary => TypeName::Binary,
         DataType::Nullable(box inner_ty) => {
             TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
         }
-        _ => unreachable!(),
+        DataType::Array(box inner_ty) => TypeName::Array(Box::new(convert_to_type_name(inner_ty))),
+        DataType::Map(box inner_ty) => match inner_ty {
+            DataType::Tuple(inner_tys) => TypeName::Map {
+                key_type: Box::new(convert_to_type_name(&inner_tys[0])),
+                val_type: Box::new(convert_to_type_name(&inner_tys[1])),
+            },
+            _ => unreachable!(),
+        },
+        DataType::Tuple(inner_tys) => TypeName::Tuple {
+            fields_name: None,
+            fields_type: inner_tys
+                .iter()
+                .map(convert_to_type_name)
+                .collect::<Vec<_>>(),
+        },
+        _ => TypeName::String,
     }
 }

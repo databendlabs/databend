@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,26 +15,26 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_base::base::escape_for_key;
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_management::*;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::PasswordHashMethod;
-use common_meta_app::principal::UserIdentity;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::KVStream;
-use common_meta_kvapi::kvapi::ListKVReply;
-use common_meta_kvapi::kvapi::MGetKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReply;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnReply;
-use common_meta_types::TxnRequest;
+use databend_common_base::base::escape_for_key;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_management::*;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::GetKVReply;
+use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_kvapi::kvapi::MGetKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -57,6 +57,8 @@ mock! {
             key: &[String],
         ) -> Result<MGetKVReply,MetaError>;
 
+        async fn get_kv_stream(&self, key: &[String]) -> Result<KVStream<MetaError>, MetaError>;
+
         async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
         async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;
@@ -78,13 +80,13 @@ fn default_test_auth_info() -> AuthInfo {
 }
 
 mod add {
-    use common_meta_app::principal::UserInfo;
-    use common_meta_types::Operation;
+    use databend_common_meta_app::principal::UserInfo;
+    use databend_common_meta_types::Operation;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_add_user() -> common_exception::Result<()> {
+    async fn test_add_user() -> databend_common_exception::Result<()> {
         let test_user_name = "test_user";
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
@@ -159,12 +161,12 @@ mod add {
 }
 
 mod get {
-    use common_meta_app::principal::UserInfo;
+    use databend_common_meta_app::principal::UserInfo;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_seq_match() -> common_exception::Result<()> {
+    async fn test_get_user_seq_match() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -190,7 +192,7 @@ mod get {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
+    async fn test_get_user_do_not_care_seq() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -215,7 +217,7 @@ mod get {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_not_exist() -> common_exception::Result<()> {
+    async fn test_get_user_not_exist() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -243,7 +245,7 @@ mod get {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_not_exist_seq_mismatch() -> common_exception::Result<()> {
+    async fn test_get_user_not_exist_seq_mismatch() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -271,7 +273,7 @@ mod get {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_invalid_user_info_encoding() -> common_exception::Result<()> {
+    async fn test_get_user_invalid_user_info_encoding() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -301,14 +303,14 @@ mod get {
 }
 
 mod get_users {
-    use common_meta_app::principal::UserInfo;
+    use databend_common_meta_app::principal::UserInfo;
 
     use super::*;
 
     type FakeKeys = Vec<(String, SeqV<Vec<u8>>)>;
     type UserInfos = Vec<SeqV<UserInfo>>;
 
-    fn prepare() -> common_exception::Result<(FakeKeys, UserInfos)> {
+    fn prepare() -> databend_common_exception::Result<(FakeKeys, UserInfos)> {
         let mut names = vec![];
         let mut hostnames = vec![];
         let mut keys = vec![];
@@ -338,7 +340,7 @@ mod get_users {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_users_normal() -> common_exception::Result<()> {
+    async fn test_get_users_normal() -> databend_common_exception::Result<()> {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
@@ -358,7 +360,8 @@ mod get_users {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_all_users_invalid_user_info_encoding() -> common_exception::Result<()> {
+    async fn test_get_all_users_invalid_user_info_encoding() -> databend_common_exception::Result<()>
+    {
         let (mut res, _user_infos) = prepare()?;
         res.insert(
             8,
@@ -394,7 +397,7 @@ mod drop {
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_drop_user_normal_case() -> common_exception::Result<()> {
+    async fn test_drop_user_normal_case() -> databend_common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_user = "test";
         let test_hostname = "localhost";
@@ -420,7 +423,7 @@ mod drop {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_drop_user_unknown() -> common_exception::Result<()> {
+    async fn test_drop_user_unknown() -> databend_common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_user = "test";
         let test_hostname = "localhost";
@@ -449,8 +452,8 @@ mod drop {
 }
 
 mod update {
-    use common_meta_app::principal::AuthInfo;
-    use common_meta_app::principal::UserInfo;
+    use databend_common_meta_app::principal::AuthInfo;
+    use databend_common_meta_app::principal::UserInfo;
 
     use super::*;
 
@@ -466,16 +469,16 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_update_full() -> common_exception::Result<()> {
+    async fn test_update_user_normal_update_full() -> databend_common_exception::Result<()> {
         test_update_user_normal(true).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_update_partial() -> common_exception::Result<()> {
+    async fn test_update_user_normal_update_partial() -> databend_common_exception::Result<()> {
         test_update_user_normal(false).await
     }
 
-    async fn test_update_user_normal(full: bool) -> common_exception::Result<()> {
+    async fn test_update_user_normal(full: bool) -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
 
@@ -525,7 +528,8 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_with_conflict_when_writing_back() -> common_exception::Result<()> {
+    async fn test_update_user_with_conflict_when_writing_back()
+    -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -557,7 +561,7 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_with_complete() -> common_exception::Result<()> {
+    async fn test_update_user_with_complete() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -597,15 +601,15 @@ mod update {
 }
 
 mod set_user_privileges {
-    use common_meta_app::principal::GrantObject;
-    use common_meta_app::principal::UserInfo;
-    use common_meta_app::principal::UserPrivilegeSet;
-    use common_meta_app::principal::UserPrivilegeType;
+    use databend_common_meta_app::principal::GrantObject;
+    use databend_common_meta_app::principal::UserInfo;
+    use databend_common_meta_app::principal::UserPrivilegeSet;
+    use databend_common_meta_app::principal::UserPrivilegeType;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_grant_user_privileges() -> common_exception::Result<()> {
+    async fn test_grant_user_privileges() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(

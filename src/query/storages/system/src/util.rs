@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::Expr;
-use common_expression::Scalar;
+use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
@@ -38,6 +38,11 @@ pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
                 for arg in args {
                     find_eq_filter(arg, visitor)
                 }
+            }
+        }
+        Expr::LambdaFunctionCall { args, .. } => {
+            for arg in args {
+                find_eq_filter(arg, visitor)
             }
         }
     }

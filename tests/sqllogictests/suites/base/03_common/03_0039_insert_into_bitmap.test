@@ -29,14 +29,17 @@ SELECT id, to_string(v) FROM t1 order by id
 statement ok
 CREATE TABLE IF NOT EXISTS t2(a int not null, b bitmap not null) Engine = Fuse
 
-statement ok
+statement error 1006
 insert into t2 (a) values (1),(2);
+
+statement ok
+insert into t2 (a,b) values (1,to_bitmap('0')),(2,to_bitmap('1'));
 
 query IT
 SELECT a, to_string(b) FROM t2
 ----
-1 (empty)
-2 (empty)
+1 0
+2 1
 
 statement ok
 DROP DATABASE db_bitmap

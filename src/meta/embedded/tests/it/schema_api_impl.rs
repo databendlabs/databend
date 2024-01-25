@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_base::base::tokio;
-use common_meta_api::BackgroundApiTestSuite;
-use common_meta_api::SchemaApiTestSuite;
-use common_meta_api::ShareApiTestSuite;
-use common_meta_embedded::MetaEmbedded;
-use common_meta_kvapi::kvapi;
+use databend_common_base::base::tokio;
+use databend_common_meta_api::BackgroundApiTestSuite;
+use databend_common_meta_api::SchemaApiTestSuite;
+use databend_common_meta_api::ShareApiTestSuite;
+use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_kvapi::kvapi;
 
 #[derive(Clone)]
 pub struct MetaEmbeddedBuilder {}

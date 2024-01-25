@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::query_kind::QueryKind;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_types::NodeInfo;
-use common_settings::ChangeValue;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
+use databend_common_settings::Settings;
 
 use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
 use crate::api::rpc::packets::packet::create_client;
@@ -35,11 +35,9 @@ pub struct QueryFragmentsPlanPacket {
     pub executor: String,
     pub request_executor: String,
     pub fragments: Vec<FragmentPlanPacket>,
-    pub changed_settings: HashMap<String, ChangeValue>,
+    pub changed_settings: Arc<Settings>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
-    /// Enable profiling for this query
-    pub enable_profiling: bool,
 }
 
 impl QueryFragmentsPlanPacket {
@@ -50,9 +48,8 @@ impl QueryFragmentsPlanPacket {
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
-        changed_settings: HashMap<String, ChangeValue>,
+        changed_settings: Arc<Settings>,
         request_executor: String,
-        enable_profiling: bool,
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
             query_id,
@@ -62,7 +59,6 @@ impl QueryFragmentsPlanPacket {
             executors_info,
             changed_settings,
             request_executor,
-            enable_profiling,
         }
     }
 }

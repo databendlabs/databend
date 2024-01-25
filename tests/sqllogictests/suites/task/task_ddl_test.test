@@ -5,6 +5,9 @@ statement ok
 DROP TASK IF EXISTS mytask
 
 statement ok
+DROP TASK IF EXISTS sessionTask
+
+statement ok
 CREATE TASK mytask
   WAREHOUSE = 'mywh'
   SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
@@ -58,7 +61,7 @@ ALTER TASK mytask SET schedule = 100 MINUTE
 query S
 select schedule from system.tasks where name = 'mytask'
 ----
-INTERVAL 100 MINUTE
+INTERVAL 6000 SECOND
 
 statement ok
 ALTER TASK mytask SET SUSPEND_TASK_AFTER_NUM_FAILURES = 199
@@ -79,7 +82,7 @@ test comment
 query SSSSSIS
 select name, state, warehouse, definition, schedule, suspend_task_after_num_failures, comment from system.tasks where name = 'mytask'
 ----
-mytask Suspended warehouse2 SELECT 2023 INTERVAL 100 MINUTE 199 test comment
+mytask Suspended warehouse2 SELECT 2023 INTERVAL 6000 SECOND 199 test comment
 
 statement ok
 EXECUTE TASK mytask
@@ -87,7 +90,7 @@ EXECUTE TASK mytask
 query SSSS
 select name, warehouse, schedule, definition from system.task_history where name = 'mytask'
 ----
-mytask warehouse2 INTERVAL 100 MINUTE SELECT 2023
+mytask warehouse2 INTERVAL 6000 SECOND SELECT 2023
 
 query S
 select state from system.task_history where name = 'mytask'
@@ -95,4 +98,37 @@ select state from system.task_history where name = 'mytask'
 SUCCEEDED
 
 statement ok
+CREATE TASK sessionTask
+  WAREHOUSE = 'mywh'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  DATABASE = 'mydb', TIMEZONE = 'America/Los_Angeles'
+  AS SELECT 1;
+
+query SSS
+select name, state, session_parameters from system.tasks where name = 'sessionTask'
+----
+sessionTask Suspended {"database":"mydb","timezone":"America/Los_Angeles"}
+
+statement ok
+EXECUTE TASK sessionTask
+
+query SSSS
+select name, session_parameters from system.task_history where name = 'sessionTask'
+----
+sessionTask {"database":"mydb","timezone":"America/Los_Angeles"}
+
+statement ok
+ALTER TASK sessionTask
+  SET
+  DATABASE = 'db2', TIMEZONE = 'Pacific/Honolulu'
+
+query SSS
+select name, state, session_parameters from system.tasks where name = 'sessionTask'
+----
+sessionTask Suspended {"database":"db2","timezone":"Pacific/Honolulu"}
+
+statement ok
 DROP TASK mytask
+
+statement ok
+DROP TASK sessionTask

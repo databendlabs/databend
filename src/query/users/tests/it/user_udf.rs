@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_grpc::RpcClientConf;
-use common_meta_app::principal::UserDefinedFunction;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_grpc::RpcClientConf;
+use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_lambda_udf() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "test";
+
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
@@ -90,9 +90,9 @@ async fn test_user_lambda_udf() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf_server() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "test";
+
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
     let address = "http://127.0.0.1:8888";
     let arg_types = vec![DataType::String];
     let return_type = DataType::Boolean;

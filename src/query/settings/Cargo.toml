@@ -1,5 +1,5 @@
 [package]
-name = "common-settings"
+name = "databend-common-settings"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,18 +9,22 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = "../ast" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
-common-users = { path = "../users" }
+databend-common-ast = { path = "../ast" }
+databend-common-config = { path = "../config" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-types = { path = "../../meta/types" }
+databend-common-users = { path = "../users" }
 serde = { workspace = true }
 
 async-backtrace = { workspace = true }
-dashmap = "5.4"
-itertools = "0.10.5"
+dashmap = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
 sys-info = "0.9"
+
+[dev-dependencies]
+databend-common-base = { path = "../../common/base" }
+tokio = { workspace = true }

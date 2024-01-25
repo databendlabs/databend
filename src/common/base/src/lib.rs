@@ -23,6 +23,7 @@
 #![feature(backtrace_frames)]
 #![feature(alloc_error_hook)]
 #![feature(slice_swap_unchecked)]
+#![feature(lint_reasons)]
 
 pub mod base;
 pub mod containers;

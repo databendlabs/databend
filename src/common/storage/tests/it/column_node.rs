@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::create_test_complex_schema;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_storage::ColumnNode;
-use common_storage::ColumnNodes;
+use databend_common_exception::Result;
+use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_storage::ColumnNode;
+use databend_common_storage::ColumnNodes;
 
 fn test_node_leaf_index_match_column_ids(schema: &TableSchema, column_node: &ColumnNode) {
     let leaf_column_ids = schema.to_leaf_column_ids();
@@ -44,7 +44,7 @@ fn test_column_nodes_index_match_column_ids(schema: &TableSchema, column_leaves:
 fn test_column_leaf_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
 
-    let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
+    let column_leaves = ColumnNodes::new_from_schema(&(&schema).into(), Some(&schema));
     let column_1_ids = vec![0];
     let column_2_ids = vec![1, 2, 3];
     let column_3_ids = vec![4, 5];
@@ -78,10 +78,10 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
 #[test]
 fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     let old_schema = create_test_complex_schema();
-    let old_column_leaves = ColumnNodes::new_from_schema(&old_schema.to_arrow(), None);
+    let old_column_leaves = ColumnNodes::new_from_schema(&(&old_schema).into(), None);
 
     let new_schema = TableSchema::init_if_need(old_schema);
-    let new_column_leaves = ColumnNodes::new_from_schema(&new_schema.to_arrow(), Some(&new_schema));
+    let new_column_leaves = ColumnNodes::new_from_schema(&(&new_schema).into(), Some(&new_schema));
 
     for (old_leaf, new_leaf) in old_column_leaves
         .column_nodes
@@ -119,7 +119,7 @@ fn test_alter_schema_column() -> Result<()> {
     for field in old_schema.fields() {
         schema.add_columns(&[TableField::new(field.name(), field.data_type().to_owned())])?;
 
-        let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
+        let column_leaves = ColumnNodes::new_from_schema(&(&schema).into(), Some(&schema));
         test_column_nodes_index_match_column_ids(&schema, &column_leaves);
     }
 
@@ -127,7 +127,7 @@ fn test_alter_schema_column() -> Result<()> {
     for field in old_schema.fields() {
         schema.drop_column(field.name())?;
 
-        let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
+        let column_leaves = ColumnNodes::new_from_schema(&(&schema).into(), Some(&schema));
         test_column_nodes_index_match_column_ids(&schema, &column_leaves);
     }
 

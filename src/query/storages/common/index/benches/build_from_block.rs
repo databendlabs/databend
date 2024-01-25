@@ -19,23 +19,23 @@ extern crate criterion;
 
 use std::ops::Deref;
 
-use common_expression::types::number::NumberColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::Column;
-use common_expression::FunctionContext;
 use criterion::Criterion;
+use databend_common_expression::types::number::NumberColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::Column;
+use databend_common_expression::FunctionContext;
+use databend_storages_common_index::filters::Filter;
+use databend_storages_common_index::filters::FilterBuilder;
+use databend_storages_common_index::filters::Xor8Builder;
+use databend_storages_common_index::BloomIndex;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use storages_common_index::filters::Filter;
-use storages_common_index::filters::FilterBuilder;
-use storages_common_index::filters::Xor8Builder;
-use storages_common_index::BloomIndex;
 
 /// Benchmark building BlockFilter from DataBlock.
 ///

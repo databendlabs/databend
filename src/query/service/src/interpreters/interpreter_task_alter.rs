@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::AlterTaskOptions;
-use common_catalog::table_context::TableContext;
-use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::alter_task_request::AlterTaskType;
-use common_cloud_control::pb::AlterTaskRequest;
-use common_cloud_control::pb::WarehouseOptions;
-use common_cloud_control::task_client::make_request;
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_sql::plans::AlterTaskPlan;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
+use databend_common_cloud_control::pb::AlterTaskRequest;
+use databend_common_cloud_control::pb::WarehouseOptions;
+use databend_common_cloud_control::task_client::make_request;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_sql::plans::AlterTaskPlan;
 
 use crate::interpreters::common::get_client_config;
 use crate::interpreters::common::make_schedule_options;
@@ -65,6 +65,11 @@ impl AlterTaskInterpreter {
             schedule_options: None,
             warehouse_options: None,
             suspend_task_after_num_failures: None,
+            when_condition: None,
+            add_after: vec![],
+            remove_after: vec![],
+            set_session_parameters: false,
+            session_parameters: Default::default(),
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -78,6 +83,7 @@ impl AlterTaskInterpreter {
                 comments,
                 warehouse,
                 suspend_task_after_num_failures,
+                session_parameters,
             } => {
                 req.alter_task_type = AlterTaskType::Set as i32;
                 req.schedule_options = schedule.map(make_schedule_options);
@@ -88,6 +94,10 @@ impl AlterTaskInterpreter {
                 });
                 req.suspend_task_after_num_failures =
                     suspend_task_after_num_failures.map(|i| i as i32);
+                if let Some(session_parameters) = session_parameters {
+                    req.set_session_parameters = true;
+                    req.session_parameters = session_parameters;
+                }
             }
             AlterTaskOptions::Unset { .. } => {
                 todo!()
@@ -95,6 +105,18 @@ impl AlterTaskInterpreter {
             AlterTaskOptions::ModifyAs(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyAs as i32;
                 req.query_text = Some(sql);
+            }
+            AlterTaskOptions::AddAfter(tasks) => {
+                req.alter_task_type = AlterTaskType::AddAfter as i32;
+                req.add_after = tasks;
+            }
+            AlterTaskOptions::RemoveAfter(tasks) => {
+                req.alter_task_type = AlterTaskType::RemoveAfter as i32;
+                req.remove_after = tasks;
+            }
+            AlterTaskOptions::ModifyWhen(sql) => {
+                req.alter_task_type = AlterTaskType::ModifyWhen as i32;
+                req.when_condition = Some(sql);
             }
         }
         req

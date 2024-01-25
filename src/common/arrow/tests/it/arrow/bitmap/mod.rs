@@ -19,7 +19,7 @@ mod immutable;
 mod mutable;
 mod utils;
 
-use common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use proptest::prelude::*;
 
 /// Returns a strategy of an arbitrary sliced [`Bitmap`] of size up to 1000

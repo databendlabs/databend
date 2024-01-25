@@ -18,9 +18,9 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::Result;
-use common_meta_kvapi::kvapi::Key;
-use common_meta_kvapi::kvapi::KeyError;
+use databend_common_exception::Result;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KeyError;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
@@ -47,6 +47,17 @@ impl LockType {
             LockType::TABLE => {
                 let key = TableLockKey::from_str_key(s)?;
                 Ok(key.revision)
+            }
+        }
+    }
+
+    pub fn key_from_str(&self, s: &str) -> Result<LockKey, KeyError> {
+        match self {
+            LockType::TABLE => {
+                let key = TableLockKey::from_str_key(s)?;
+                Ok(LockKey::Table {
+                    table_id: key.table_id,
+                })
             }
         }
     }
@@ -91,13 +102,40 @@ impl LockKey {
         }
     }
 
-    pub fn gen_key(&self, revision: u64) -> impl Key {
+    pub fn gen_key(&self, revision: u64) -> TableLockKey {
         match self {
             LockKey::Table { table_id } => TableLockKey {
                 table_id: *table_id,
                 revision,
             },
         }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct LockInfo {
+    pub key: LockKey,
+    pub revision: u64,
+    pub meta: LockMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListLocksReq {
+    pub prefixes: Vec<String>,
+}
+
+impl ListLocksReq {
+    pub fn create() -> Self {
+        let prefixes = vec![TableLockKey::PREFIX.to_string()];
+        Self { prefixes }
+    }
+
+    pub fn create_with_table_ids(table_ids: Vec<u64>) -> Self {
+        let mut prefixes = Vec::new();
+        for table_id in table_ids {
+            prefixes.push(format!("{}/{}", TableLockKey::PREFIX, table_id));
+        }
+        Self { prefixes }
     }
 }
 
@@ -141,14 +179,17 @@ pub struct TableLockKey {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::LockMeta;
     use crate::schema::TableLockKey;
     use crate::schema::PREFIX_TABLE_LOCK;
 
     /// __fd_table_lock/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
         const PREFIX: &'static str = PREFIX_TABLE_LOCK;
+
+        type ValueType = LockMeta;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

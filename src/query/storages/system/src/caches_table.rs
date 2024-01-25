@@ -14,22 +14,22 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_storages_fuse::TableContext;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CacheManager;
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CacheManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -68,68 +68,67 @@ impl SyncSystemTable for CachesTable {
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
 
         if let Some(table_snapshot_cache) = table_snapshot_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("table_snapshot_cache");
+            nodes.push(local_node.clone());
+            names.push("table_snapshot_cache".to_string());
             num_items.push(table_snapshot_cache.len() as u64);
             size.push(table_snapshot_cache.size());
         }
         if let Some(table_snapshot_statistic_cache) = table_snapshot_statistic_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("table_snapshot_statistic_cache");
+            nodes.push(local_node.clone());
+            names.push("table_snapshot_statistic_cache".to_string());
             num_items.push(table_snapshot_statistic_cache.len() as u64);
             size.push(table_snapshot_statistic_cache.size());
         }
 
         if let Some(segment_info_cache) = segment_info_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("segment_info_cache");
+            nodes.push(local_node.clone());
+            names.push("segment_info_cache".to_string());
             num_items.push(segment_info_cache.len() as u64);
             size.push(segment_info_cache.size());
         }
 
         if let Some(bloom_index_filter_cache) = bloom_index_filter_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("bloom_index_filter_cache");
+            nodes.push(local_node.clone());
+            names.push("bloom_index_filter_cache".to_string());
             num_items.push(bloom_index_filter_cache.len() as u64);
             size.push(bloom_index_filter_cache.size());
         }
 
         if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("bloom_index_meta_cache");
+            nodes.push(local_node.clone());
+            names.push("bloom_index_meta_cache".to_string());
             num_items.push(bloom_index_meta_cache.len() as u64);
             size.push(bloom_index_meta_cache.size());
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("prune_partitions_cache");
+            nodes.push(local_node.clone());
+            names.push("prune_partitions_cache".to_string());
             num_items.push(prune_partitions_cache.len() as u64);
             size.push(prune_partitions_cache.size());
         }
 
         if let Some(file_meta_data_cache) = file_meta_data_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("file_meta_data_cache");
+            nodes.push(local_node.clone());
+            names.push("file_meta_data_cache".to_string());
             num_items.push(file_meta_data_cache.len() as u64);
             size.push(file_meta_data_cache.size());
         }
 
         if let Some(table_data_cache) = table_data_cache {
-            nodes.push(local_node.clone().into_bytes());
-            names.push("table_data_cache");
+            nodes.push(local_node.clone());
+            names.push("table_data_cache".to_string());
             num_items.push(table_data_cache.len() as u64);
             size.push(table_data_cache.size());
         }
 
         if let Some(table_column_array_cache) = table_column_array_cache {
-            nodes.push(local_node.into_bytes());
-            names.push("table_column_array_cache");
+            nodes.push(local_node.clone());
+            names.push("table_column_array_cache".to_string());
             num_items.push(table_column_array_cache.len() as u64);
             size.push(table_column_array_cache.size());
         }
 
-        let names: Vec<_> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(nodes),
             StringType::from_data(names),

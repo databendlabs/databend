@@ -18,23 +18,23 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_number;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::with_number_mapped_type;
-use common_expression::with_unsigned_integer_mapped_type;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_quantile_tdigest::QuantileTDigestState;
 use crate::aggregates::aggregate_quantile_tdigest::MEDIAN;
@@ -144,12 +144,12 @@ where
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        serialize_state(writer, state)
+        borsh_serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = deserialize_state(reader)?;
+        let mut rhs: QuantileTDigestState = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 

@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-stage"
+name = "databend-common-storages-stage"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,28 +12,29 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-compress = { path = "../../../common/compress" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-formats = { path = "../../formats" }
-common-meta-app = { path = "../../../meta/app" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-storage = { path = "../../../common/storage" }
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-compress = { path = "../../../common/compress" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-formats = { path = "../../formats" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-pipeline-core = { path = "../../pipeline/core" }
+databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
+databend-common-storage = { path = "../../../common/storage" }
+databend-common-storages-parquet = { path = "../parquet" }
 
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
-dashmap = "5.4.0"
+async-trait = { workspace = true }
+dashmap = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 serde = { workspace = true }
 
-typetag = "0.2.6"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+typetag = { workspace = true }
+uuid = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../../common/building" }
+databend-common-building = { path = "../../../common/building" }

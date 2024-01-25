@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
@@ -31,8 +31,18 @@ use crate::IndexType;
 /// A helper to access children of `SExpr` and `MExpr` in
 /// a unified view.
 pub enum RelExpr<'a> {
-    SExpr { expr: &'a SExpr },
-    MExpr { expr: &'a MExpr, memo: &'a Memo },
+    SExpr {
+        expr: &'a SExpr,
+    },
+    MExpr {
+        expr: &'a MExpr,
+        memo: &'a Memo,
+    },
+    OptContext {
+        expr: &'a MExpr,
+        memo: &'a Memo,
+        children_best_props: &'a [PhysicalProperty],
+    },
 }
 
 impl<'a> RelExpr<'a> {
@@ -42,6 +52,18 @@ impl<'a> RelExpr<'a> {
 
     pub fn with_m_expr(m_expr: &'a MExpr, memo: &'a Memo) -> Self {
         Self::MExpr { expr: m_expr, memo }
+    }
+
+    pub fn with_opt_context(
+        m_expr: &'a MExpr,
+        memo: &'a Memo,
+        children_best_props: &'a [PhysicalProperty],
+    ) -> Self {
+        Self::OptContext {
+            expr: m_expr,
+            memo,
+            children_best_props,
+        }
     }
 
     pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
@@ -55,6 +77,7 @@ impl<'a> RelExpr<'a> {
                 Ok(rel_prop)
             }
             RelExpr::MExpr { expr, .. } => expr.plan.derive_relational_prop(self),
+            RelExpr::OptContext { expr, .. } => expr.plan.derive_relational_prop(self),
         }
     }
 
@@ -68,6 +91,11 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, memo } => {
                 Ok(memo.group(expr.group_index)?.relational_prop.clone())
             }
+            RelExpr::OptContext {
+                expr,
+                memo,
+                children_best_props: _,
+            } => Ok(memo.group(expr.group_index)?.relational_prop.clone()),
         }
     }
 
@@ -78,11 +106,12 @@ impl<'a> RelExpr<'a> {
                 if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
                     return Ok(stat_info.clone());
                 }
-                let stat_info = expr.plan.derive_cardinality(self)?;
+                let stat_info = expr.plan.derive_stats(self)?;
                 *expr.stat_info.lock().unwrap() = Some(stat_info.clone());
                 Ok(stat_info)
             }
-            RelExpr::MExpr { expr, .. } => expr.plan.derive_cardinality(self),
+            RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self),
+            RelExpr::OptContext { expr, .. } => expr.plan.derive_stats(self),
         }
     }
 
@@ -94,6 +123,9 @@ impl<'a> RelExpr<'a> {
                 rel_expr.derive_cardinality()
             }
             RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
+            RelExpr::OptContext { expr, memo, .. } => {
+                Ok(memo.group(expr.group_index)?.stat_info.clone())
+            }
         }
     }
 
@@ -101,6 +133,7 @@ impl<'a> RelExpr<'a> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),
             RelExpr::MExpr { expr, .. } => &expr.plan,
+            RelExpr::OptContext { expr, .. } => &expr.plan,
         };
 
         let prop = plan.derive_physical_prop(self)?;
@@ -117,6 +150,13 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { .. } => Err(ErrorCode::Internal(
                 "Cannot derive physical property from MExpr".to_string(),
             )),
+            RelExpr::OptContext {
+                children_best_props,
+                ..
+            } => Ok(children_best_props
+                .get(index)
+                .ok_or_else(|| ErrorCode::Internal("Cannot find child best property".to_string()))?
+                .clone()),
         }
     }
 
@@ -129,9 +169,25 @@ impl<'a> RelExpr<'a> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),
             RelExpr::MExpr { expr, .. } => &expr.plan,
+            RelExpr::OptContext { expr, .. } => &expr.plan,
         };
 
         let prop = plan.compute_required_prop_child(ctx, self, index, input)?;
+        Ok(prop)
+    }
+
+    pub fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        input: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let plan = match self {
+            RelExpr::SExpr { expr } => expr.plan(),
+            RelExpr::MExpr { expr, .. } => &expr.plan,
+            RelExpr::OptContext { expr, .. } => &expr.plan,
+        };
+
+        let prop = plan.compute_required_prop_children(ctx, self, input)?;
         Ok(prop)
     }
 }

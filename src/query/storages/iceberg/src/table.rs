@@ -18,70 +18,82 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
-use common_arrow::arrow::datatypes::Field as Arrow2Field;
-use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataSchema;
-use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::Pipeline;
-use common_storage::DataOperator;
-use common_storages_parquet::ParquetFilesPart;
-use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSPruner;
-use common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
+use databend_common_arrow::arrow::datatypes::Schema as Arrow2Schema;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
+use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetPart;
+use databend_common_storages_parquet::ParquetRSPruner;
+use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_storages_common_pruner::RangePrunerCreator;
 use icelake::catalog::Catalog;
 use opendal::Operator;
-use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
 use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
 
+pub const ICEBERG_ENGINE: &str = "ICEBERG";
+
 /// accessor wrapper as a table
 ///
 /// TODO: we should use icelake Table instead.
 pub struct IcebergTable {
     info: TableInfo,
-    op: DataOperator,
-
     table: OnceCell<icelake::Table>,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
     #[async_backtrace::framed]
-    pub fn try_new(dop: DataOperator, info: TableInfo) -> Result<IcebergTable> {
-        Ok(Self {
+    pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(Self {
             info,
-            op: dop,
             table: OnceCell::new(),
+        }))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: ICEBERG_ENGINE.to_string(),
+            comment: "ICEBERG Storage Engine".to_string(),
+            support_cluster_key: false,
+        }
+    }
+
+    fn get_storage_params(&self) -> Result<&StorageParams> {
+        self.info.meta.storage_params.as_ref().ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Iceberg table {} must have storage parameters",
+                self.info.name
+            ))
         })
     }
 
-    /// create a new table on the table directory
-    #[async_backtrace::framed]
-    pub async fn try_create(
-        catalog: &str,
-        database: &str,
-        table_name: &str,
-        dop: DataOperator,
-    ) -> Result<IcebergTable> {
+    pub async fn load_iceberg_table(dop: DataOperator) -> Result<icelake::Table> {
         // FIXME: we should implement catalog for icelake.
         let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
             "databend",
@@ -89,10 +101,12 @@ impl IcebergTable {
         ));
 
         let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-        let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
+        icelake_catalog.load_table(&table_id).await.map_err(|err| {
             ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-        })?;
+        })
+    }
 
+    pub async fn get_schema(table: &icelake::Table) -> Result<TableSchema> {
         let meta = table.current_table_metadata();
 
         // Build arrow schema from iceberg metadata.
@@ -116,7 +130,19 @@ impl IcebergTable {
             .collect();
         let arrow2_schema = Arrow2Schema::from(fields);
 
-        let table_schema = TableSchema::from(&arrow2_schema);
+        TableSchema::try_from(&arrow2_schema)
+    }
+
+    /// create a new table on the table directory
+    #[async_backtrace::framed]
+    pub async fn try_create_from_iceberg_catalog(
+        catalog: &str,
+        database: &str,
+        table_name: &str,
+        dop: DataOperator,
+    ) -> Result<IcebergTable> {
+        let table = Self::load_iceberg_table(dop.clone()).await?;
+        let table_schema = Self::get_schema(&table).await?;
 
         // construct table info
         let info = TableInfo {
@@ -136,7 +162,6 @@ impl IcebergTable {
 
         Ok(Self {
             info,
-            op: dop,
             table: OnceCell::new_with(Some(table)),
         })
     }
@@ -144,10 +169,12 @@ impl IcebergTable {
     async fn table(&self) -> Result<&icelake::Table> {
         self.table
             .get_or_try_init(|| async {
+                let sp = self.get_storage_params()?;
+                let op = DataOperator::try_new(sp)?;
                 // FIXME: we should implement catalog for icelake.
                 let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
                     "databend",
-                    OperatorCreatorWrapper(self.op.clone()),
+                    OperatorCreatorWrapper(op),
                 ));
 
                 let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
@@ -171,13 +198,7 @@ impl IcebergTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema = self.schema();
-        let arrow_schema = table_schema.to_arrow();
-        let arrow_fields = arrow_schema
-            .fields
-            .into_iter()
-            .map(|f| f.into())
-            .collect::<Vec<arrow_schema::Field>>();
-        let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let arrow_schema = table_schema.as_ref().into();
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
         let mut read_options = ParquetReadOptions::default();
@@ -200,19 +221,18 @@ impl IcebergTable {
             leaf_fields,
             &plan.push_downs,
             read_options,
+            vec![],
         )?;
 
-        let mut builder = ParquetRSReaderBuilder::create(
-            ctx.clone(),
-            self.op.operator(),
-            table_schema,
-            &arrow_schema,
-        )?
-        .with_options(read_options)
-        .with_push_downs(plan.push_downs.as_ref())
-        .with_pruner(Some(pruner));
+        let sp = self.get_storage_params()?;
+        let op = init_operator(sp)?;
+        let mut builder =
+            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, &arrow_schema)?
+                .with_options(read_options)
+                .with_push_downs(plan.push_downs.as_ref())
+                .with_pruner(Some(pruner));
 
-        let praquet_reader = Arc::new(builder.build_full_reader()?);
+        let parquet_reader = Arc::new(builder.build_full_reader()?);
 
         // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
@@ -222,7 +242,7 @@ impl IcebergTable {
                     ctx.clone(),
                     output,
                     output_schema.clone(),
-                    praquet_reader.clone(),
+                    parquet_reader.clone(),
                 )
             },
             max_threads.max(1),

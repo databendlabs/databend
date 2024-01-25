@@ -13,38 +13,33 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
-use common_catalog::plan::StageTableInfo;
-use common_exception::Result;
-use common_expression::types::Int32Type;
-use common_expression::types::StringType;
-use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::FromData;
-use common_expression::SendableDataBlockStream;
-use common_pipeline_core::Pipeline;
-use common_sql::executor::physical_plans::CopyIntoTable;
-use common_sql::executor::physical_plans::CopyIntoTableSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::QuerySource;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::PhysicalPlan;
-use common_storage::StageFileInfo;
-use common_storages_stage::StageTable;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_exception::Result;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::executor::physical_plans::CopyIntoTable;
+use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_storage::StageFileInfo;
+use databend_common_storages_stage::StageTable;
 use log::debug;
-use log::info;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::hook_compact;
-use crate::interpreters::common::hook_refresh_agg_index;
-use crate::interpreters::common::CompactHookTraceCtx;
-use crate::interpreters::common::CompactTargetTableDescription;
-use crate::interpreters::common::RefreshAggIndexDesc;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,7 +63,10 @@ impl CopyIntoTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<(SelectInterpreter, DataSchemaRef)> {
+    async fn build_query(
+        &self,
+        query: &Plan,
+    ) -> Result<(SelectInterpreter, DataSchemaRef, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -79,6 +77,8 @@ impl CopyIntoTableInterpreter {
             } => (s_expr, metadata, bind_context, formatted_ast),
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
+
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
@@ -103,19 +103,15 @@ impl CopyIntoTableInterpreter {
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
 
-        Ok((select_interpreter, data_schema))
-    }
-
-    fn set_status(&self, status: &str) {
-        self.ctx.set_status_info(status);
-        info!("{}", status);
+        Ok((select_interpreter, data_schema, update_stream_meta))
     }
 
     #[async_backtrace::framed]
     pub async fn build_physical_plan(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<(PhysicalPlan, Vec<StageFileInfo>)> {
+    ) -> Result<(PhysicalPlan, Vec<StageFileInfo>, Vec<UpdateStreamMetaReq>)> {
+        let mut next_plan_id = 0;
         let to_table = self
             .ctx
             .get_table(
@@ -125,9 +121,13 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
         let files = plan.collect_files(self.ctx.as_ref()).await?;
+        let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
-            let (select_interpreter, query_source_schema) = self.build_query(query).await?;
+            let (select_interpreter, query_source_schema, update_stream_meta) =
+                self.build_query(query).await?;
+            seq = update_stream_meta;
             let plan_query = select_interpreter.build_physical_plan().await?;
+            next_plan_id = plan_query.get_id() + 1;
             let result_columns = select_interpreter.get_result_columns();
             CopyIntoTableSource::Query(Box::new(QuerySource {
                 plan: plan_query,
@@ -156,6 +156,7 @@ impl CopyIntoTableInterpreter {
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            plan_id: next_plan_id,
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -169,48 +170,18 @@ impl CopyIntoTableInterpreter {
             files: files.clone(),
             source,
         }));
+        next_plan_id += 1;
         if plan.enable_distributed {
             root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+                plan_id: next_plan_id,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
         }
-        Ok((root, files))
-    }
-
-    #[async_backtrace::framed]
-    async fn build_read_stage_table_data_pipeline(
-        &self,
-        pipeline: &mut Pipeline,
-        plan: &CopyIntoTablePlan,
-        block_thresholds: BlockThresholds,
-        files: Vec<StageFileInfo>,
-    ) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-
-        let mut stage_table_info = plan.stage_table_info.clone();
-        stage_table_info.files_to_copy = Some(files.clone());
-        let stage_table = StageTable::try_create(stage_table_info.clone())?;
-        let read_source_plan = {
-            stage_table
-                .read_plan_with_catalog(
-                    ctx.clone(),
-                    plan.catalog_info.catalog_name().to_string(),
-                    None,
-                    None,
-                    false,
-                )
-                .await?
-        };
-
-        stage_table.set_block_thresholds(block_thresholds);
-        stage_table.read_data(table_ctx, &read_source_plan, pipeline, false)?;
-
-        Ok(())
+        Ok((root, files, seq))
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
@@ -235,13 +206,13 @@ impl CopyIntoTableInterpreter {
         for entry in results {
             let status = entry.value();
             if let Some(err) = &status.error {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(err.num_errors as i32);
-                first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
+                first_error.push(Some(err.first_error.error.to_string().clone()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
             } else if return_all {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(0);
                 first_error.push(None);
@@ -264,6 +235,8 @@ impl CopyIntoTableInterpreter {
         main_pipeline: &mut Pipeline,
         plan: &CopyIntoTablePlan,
         files: &[StageFileInfo],
+        update_stream_meta: Vec<UpdateStreamMetaReq>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -288,8 +261,10 @@ impl CopyIntoTableInterpreter {
                 ctx.clone(),
                 main_pipeline,
                 copied_files_meta_req,
+                update_stream_meta,
                 plan.write_mode.is_overwrite(),
                 None,
+                deduplicated_label,
             )?;
         }
 
@@ -319,8 +294,6 @@ impl Interpreter for CopyIntoTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-        let start = Instant::now();
-
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
@@ -328,54 +301,34 @@ impl Interpreter for CopyIntoTableInterpreter {
         if self.plan.no_file_to_copy {
             return Ok(PipelineBuildResult::create());
         }
-        let (physical_plan, files) = self.build_physical_plan(&self.plan).await?;
+        let (physical_plan, files, update_stream_meta) =
+            self.build_physical_plan(&self.plan).await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Build commit insertion pipeline.
         {
-            self.commit_insertion(&mut build_res.main_pipeline, &self.plan, &files)
-                .await?;
-        }
-
-        // Compact if 'enable_recluster_after_write' on.
-        {
-            let compact_target = CompactTargetTableDescription {
-                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
-                database: self.plan.database_name.clone(),
-                table: self.plan.table_name.clone(),
-            };
-
-            let trace_ctx = CompactHookTraceCtx {
-                start,
-                operation_name: "copy_into_table".to_owned(),
-            };
-
-            hook_compact(
-                self.ctx.clone(),
+            self.commit_insertion(
                 &mut build_res.main_pipeline,
-                compact_target,
-                trace_ctx,
-                true,
-            )
-            .await;
-        }
-
-        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
-        {
-            let refresh_agg_index_desc = RefreshAggIndexDesc {
-                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
-                database: self.plan.database_name.clone(),
-                table: self.plan.table_name.clone(),
-            };
-
-            hook_refresh_agg_index(
-                self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                refresh_agg_index_desc,
+                &self.plan,
+                &files,
+                update_stream_meta,
+                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             )
             .await?;
+        }
+
+        // Execute hook.
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                self.plan.catalog_info.catalog_name().to_string(),
+                self.plan.database_name.to_string(),
+                self.plan.table_name.to_string(),
+                "copy_into_table".to_string(),
+                true,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
         }
 
         Ok(build_res)

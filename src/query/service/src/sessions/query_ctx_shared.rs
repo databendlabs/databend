@@ -20,24 +20,31 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
-use common_base::base::Progress;
-use common_base::runtime::Runtime;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::MaterializedCtesBlocks;
-use common_catalog::table_context::StageAttachment;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_pipeline_core::InputError;
-use common_settings::ChangeValue;
-use common_settings::Settings;
-use common_storage::CopyStatus;
-use common_storage::DataOperator;
-use common_storage::StorageMetrics;
 use dashmap::DashMap;
+use databend_common_base::base::Progress;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
+use databend_common_catalog::table_context::MaterializedCtesBlocks;
+use databend_common_catalog::table_context::StageAttachment;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::InputError;
+use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::DataOperator;
+use databend_common_storage::MergeStatus;
+use databend_common_storage::StorageMetrics;
+use databend_common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -67,6 +74,7 @@ pub struct QueryContextShared {
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
+    pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -90,10 +98,12 @@ pub struct QueryContextShared {
         Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     pub(in crate::sessions) copy_status: Arc<CopyStatus>,
+    pub(in crate::sessions) merge_status: Arc<RwLock<MergeStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
+    pub(in crate::sessions) auto_compact_after_write: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -101,6 +111,15 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
+
+    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+
+    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+
+    pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
+
+    // Records query level data cache metrics
+    pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 }
 
 impl QueryContextShared {
@@ -119,6 +138,7 @@ impl QueryContextShared {
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
             error: Arc::new(Mutex::new(None)),
+            warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
@@ -132,15 +152,21 @@ impl QueryContextShared {
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
             copy_status: Arc::new(Default::default()),
+            merge_status: Arc::new(Default::default()),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
+            auto_compact_after_write: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_cache_metrics: DataCacheMetrics::new(),
+            query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            runtime_filters: Default::default(),
+            merge_into_join: Default::default(),
         }))
     }
 
@@ -152,6 +178,18 @@ impl QueryContextShared {
     pub fn get_error(&self) -> Option<ErrorCode> {
         let guard = self.error.lock();
         (*guard).clone()
+    }
+
+    pub fn push_warning(&self, warn: String) {
+        let mut guard = self.warnings.lock();
+        (*guard).push(warn);
+    }
+
+    pub fn pop_warnings(&self) -> Vec<String> {
+        let mut guard = self.warnings.lock();
+        let warnings = (*guard).clone();
+        (*guard).clear();
+        warnings
     }
 
     pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
@@ -166,6 +204,7 @@ impl QueryContextShared {
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
         self.on_error_mode.read().clone()
     }
+
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
         let mut guard = self.on_error_mode.write();
         *guard = Some(mode);
@@ -245,14 +284,6 @@ impl QueryContextShared {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.session.get_changed_settings()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.session.apply_changed_settings(changes)
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
@@ -406,6 +437,16 @@ impl QueryContextShared {
     pub fn get_status_info(&self) -> String {
         let status = self.status.read();
         status.clone()
+    }
+
+    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_connection(&tenant, name).await
+    }
+
+    pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
+        &self.query_cache_metrics
     }
 }
 

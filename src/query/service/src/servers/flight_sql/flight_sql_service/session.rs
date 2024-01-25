@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserIdentity;
-use common_users::UserApiProvider;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_users::UserApiProvider;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Status;
@@ -64,7 +64,7 @@ impl FlightSqlServiceImpl {
     pub(super) fn get_user_password(metadata: &MetadataMap) -> Result<(String, String), String> {
         let basic = "Basic ";
         let authorization = Self::get_header_value(metadata, "authorization")
-            .ok_or_else(|| "authorization not parsable".to_string())?;
+            .ok_or("authorization not parsable".to_string())?;
 
         if !authorization.starts_with(basic) {
             return Err(format!("Auth type not implemented: {authorization}"));
@@ -97,29 +97,41 @@ impl FlightSqlServiceImpl {
 
         let identity = UserIdentity::new(&user, "%");
         let user = UserApiProvider::instance()
-            .get_user_with_client_ip(&tenant, identity, client_ip)
+            .get_user_with_client_ip(&tenant, identity.clone(), client_ip)
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
+        // Check password policy for login
+        UserApiProvider::instance()
+            .check_login_password(&tenant, identity.clone(), &user)
+            .await
+            .map_err(|e| status!("not compliant with password policy {}", e))?;
+
         let password = password.as_bytes().to_vec();
         let password = (!password.is_empty()).then_some(password);
 
-        let user = match &user.auth_info {
-            AuthInfo::None => user,
+        let authed = match &user.auth_info {
+            AuthInfo::None => Ok(()),
             AuthInfo::Password {
                 hash_value: h,
                 hash_method: t,
             } => match password {
-                None => return Err(Status::unauthenticated("password required")),
+                None => Err(Status::unauthenticated("password required")),
                 Some(p) => {
                     if *h == t.hash(&p) {
-                        user
+                        Ok(())
                     } else {
-                        return Err(Status::unauthenticated("wrong password"));
+                        Err(Status::unauthenticated("wrong password"))
                     }
                 }
             },
-            _ => return Err(Status::unauthenticated("wrong auth type")),
+            _ => Err(Status::unauthenticated("wrong auth type")),
         };
+
+        UserApiProvider::instance()
+            .update_user_login_result(&tenant, identity, authed.is_ok())
+            .await?;
+        authed?;
+
         session
             .set_authed_user(user, None)
             .await

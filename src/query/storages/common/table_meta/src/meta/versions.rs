@@ -14,15 +14,14 @@
 
 use std::marker::PhantomData;
 
-use common_exception::ErrorCode;
-use common_expression::DataBlock;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataBlock;
 
 use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v3;
 use crate::meta::v4;
-use crate::meta::v5;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -48,7 +47,6 @@ impl Versioned<1> for v1::SegmentInfo {}
 impl Versioned<2> for v2::SegmentInfo {}
 impl Versioned<3> for v3::SegmentInfo {}
 impl Versioned<4> for v4::SegmentInfo {}
-impl Versioned<5> for v5::SegmentInfo {}
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
@@ -56,7 +54,6 @@ pub enum SegmentInfoVersion {
     V2(PhantomData<v2::SegmentInfo>),
     V3(PhantomData<v3::SegmentInfo>),
     V4(PhantomData<v4::SegmentInfo>),
-    V5(PhantomData<v5::SegmentInfo>),
 }
 
 impl SegmentInfoVersion {
@@ -67,7 +64,6 @@ impl SegmentInfoVersion {
             SegmentInfoVersion::V2(a) => Self::ver(a),
             SegmentInfoVersion::V3(a) => Self::ver(a),
             SegmentInfoVersion::V4(a) => Self::ver(a),
-            SegmentInfoVersion::V5(a) => Self::ver(a),
         }
     }
 
@@ -81,7 +77,6 @@ impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
 impl Versioned<3> for v3::TableSnapshot {}
 impl Versioned<4> for v4::TableSnapshot {}
-impl Versioned<5> for v5::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
@@ -89,7 +84,6 @@ pub enum SnapshotVersion {
     V2(PhantomData<v2::TableSnapshot>),
     V3(PhantomData<v3::TableSnapshot>),
     V4(PhantomData<v4::TableSnapshot>),
-    V5(PhantomData<v5::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -100,7 +94,6 @@ impl SnapshotVersion {
             SnapshotVersion::V2(a) => Self::ver(a),
             SnapshotVersion::V3(a) => Self::ver(a),
             SnapshotVersion::V4(a) => Self::ver(a),
-            SnapshotVersion::V5(a) => Self::ver(a),
         }
     }
 

@@ -1,3 +1,9 @@
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_block_size = 1;
+
 query I
 select unnest([]);
 ----
@@ -127,6 +133,9 @@ select unnest([1,2,3]) + unnest([3]);
 4
 NULL
 NULL
+
+statement ok
+set max_block_size = 2;
 
 query IIT
 select unnest([1,2,3]), number, unnest([3]) from numbers(2);
@@ -469,3 +478,18 @@ select unnest(parse_json('[1,2,"a",[3,4]]'))
 query T
 select unnest(parse_json('"a"'))
 ----
+
+statement error 1065
+select unnest(max(11))
+
+statement error 1065
+select unnest(min(11),max(12))
+
+statement error 1065
+select unnest(first_value('aa') OVER (PARTITION BY 'bb'))
+
+statement ok
+set max_block_size = 65535;
+
+statement ok
+set max_threads = 16;

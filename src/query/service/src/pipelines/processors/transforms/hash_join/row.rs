@@ -16,15 +16,15 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnVec;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_hashtable::RowPtr;
-use common_sql::ColumnSet;
-use common_storages_fuse::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnVec;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_hashtable::RowPtr;
+use databend_common_sql::ColumnSet;
+use databend_common_storages_fuse::TableContext;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;

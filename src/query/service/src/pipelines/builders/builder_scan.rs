@@ -12,26 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Instant;
-
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::OneBlockSource;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::ConstantTableScan;
-use common_sql::executor::physical_plans::CteScan;
-use common_sql::executor::physical_plans::TableScan;
-use common_storages_fuse::operations::FillInternalColumnProcessor;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::ConstantTableScan;
+use databend_common_sql::executor::physical_plans::CteScan;
+use databend_common_sql::executor::physical_plans::TableScan;
 
 use crate::pipelines::processors::transforms::MaterializedCteSource;
+use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -45,49 +38,11 @@ impl PipelineBuilder {
             true,
         )?;
 
-        if self.enable_profiling {
-            self.main_pipeline.add_transform(|input, output| {
-                // shared timer between `on_start` and `on_finish`
-                let start_timer = Arc::new(Mutex::new(Instant::now()));
-                let finish_timer = Arc::new(Mutex::new(Instant::now()));
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(scan.plan_id, self.proc_profs.clone())
-                        .on_start(move |v| {
-                            *start_timer.lock().unwrap() = Instant::now();
-                            *v
-                        })
-                        .on_finish(move |prof| {
-                            let elapsed = finish_timer.lock().unwrap().elapsed();
-                            let mut prof = *prof;
-                            prof.wait_time = elapsed;
-                            prof
-                        })
-                        .accumulate_output_bytes()
-                        .accumulate_output_rows(),
-                )))
-            })?;
-        }
-
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
-            if table.support_row_id_column() {
-                self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(Box::new(
-                        FillInternalColumnProcessor::create(
-                            internal_columns.clone(),
-                            input,
-                            output,
-                        ),
-                    )))
-                })?;
-            } else {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "Table engine `{}` does not support virtual column _row_id",
-                    table.engine()
-                )));
-            }
+            self.main_pipeline.add_transform(|input, output| {
+                TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
+            })?;
         }
 
         let schema = scan.source.schema();

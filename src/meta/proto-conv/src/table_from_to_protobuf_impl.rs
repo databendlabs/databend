@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_expression as ex;
-use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
-use common_protos::pb;
+use databend_common_expression as ex;
+use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_protos::pb;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -175,7 +175,7 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or(Incompatible {
+        let schema = p.schema.ok_or_else(|| Incompatible {
             reason: "TableMeta.schema can not be None".to_string(),
         })?;
 
@@ -218,10 +218,6 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
-            owner: match p.owner {
-                Some(owner) => Some(mt::Ownership::from_pb(owner)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -258,10 +254,6 @@ impl FromToProto for mt::TableMeta {
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
-            owner: match self.owner.as_ref() {
-                Some(o) => Some(o.to_pb()?),
-                None => None,
-            },
         };
         Ok(p)
     }

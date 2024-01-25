@@ -22,14 +22,14 @@ use std::io::stdin;
 use std::io::IsTerminal;
 use std::path::Path;
 
-use common_config::Config;
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license_manager::LicenseManager;
-use common_license::license_manager::OssLicenseManager;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
-use common_meta_embedded::MetaEmbedded;
+use databend_common_config::Config;
+use databend_common_config::InnerConfig;
+use databend_common_exception::Result;
+use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_embedded::MetaEmbedded;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
@@ -54,7 +54,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
         .await
         .unwrap();
 
-    GlobalServices::init(conf.clone()).await?;
+    GlobalServices::init(&conf).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();
 

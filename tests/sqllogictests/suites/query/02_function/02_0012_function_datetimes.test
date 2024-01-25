@@ -222,6 +222,60 @@ select to_date('2023-01-01') - 100 = to_date('2022-09-23')
 ----
 1
 
+query FF
+SELECT
+    MONTHS_BETWEEN('2019-03-15'::DATE,
+                   '2019-02-15'::DATE) AS MonthsBetween1,
+    MONTHS_BETWEEN('2019-03-31'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween2;
+----
+1.0 1.0
+
+query FF
+SELECT
+    MONTHS_BETWEEN('2019-03-01'::DATE,
+                   '2019-02-15'::DATE) AS MonthsBetween1,
+    MONTHS_BETWEEN('2019-03-01 02:00:00'::TIMESTAMP,
+                   '2019-02-15 01:00:00'::TIMESTAMP) AS MonthsBetween2,
+    MONTHS_BETWEEN('2019-02-15 02:00:00'::TIMESTAMP,
+                   '2019-02-15 01:00:00'::TIMESTAMP) AS MonthsBetween3
+----
+0.5483870967741935 0.5483870967741935 0.0
+
+query FFF
+SELECT
+    MONTHS_BETWEEN('2019-03-28'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween1,
+    MONTHS_BETWEEN('2019-03-30'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween2,
+    MONTHS_BETWEEN('2019-03-31'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween3
+----
+1.0 1.064516129032258 1.0
+
+
+query FFF
+SELECT
+    MONTHS_BETWEEN('2019-03-28'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween1,
+    MONTHS_BETWEEN('2019-03-30'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween2,
+    MONTHS_BETWEEN('2019-03-31'::DATE,
+                   '2019-02-28'::DATE) AS MonthsBetween3
+----
+1.0 1.064516129032258 1.0
+
+query FFFFFFF
+SELECT MONTHS_BETWEEN('2024-01-01'::DATE, '2024-01-01'::DATE),
+	MONTHS_BETWEEN('2024-02-15'::DATE, '2024-01-15'::DATE),
+	MONTHS_BETWEEN('2024-03-10'::DATE, '2024-01-20'::DATE),
+	MONTHS_BETWEEN('2024-01-15'::DATE, '2023-12-15'::DATE),
+	MONTHS_BETWEEN('2024-02-29'::DATE, '2024-01-31'::DATE),
+	MONTHS_BETWEEN('2024-03-31'::DATE, '2024-03-30'::DATE),
+	MONTHS_BETWEEN('2023-01-01'::DATE, '2024-01-01'::DATE);
+----
+0.0 1.0 1.6774193548387097 1.0 1.0 0.03225806451612903 -12.0
+
 statement error 1006
 select to_date('2023-01-01') + 100000000
 
@@ -936,7 +990,7 @@ insert into t values('2022-04-02T15:10:28+08:13', '2022-04-02T15:10:28.223-08:00
 statement ok
 insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00', '2022-04-02')
 
-skipif clickhouse
+
 statement error 1006
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10')
 

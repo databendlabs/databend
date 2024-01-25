@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::Result;
-use common_expression::arrow::or_validities;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::AnyType;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::or_validities;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
@@ -139,6 +139,7 @@ impl HashJoinProbeState {
 }
 
 impl HashJoinState {
+    /// if all cols in the same row are all null, we mark this row as null.
     pub(crate) fn init_markers(
         &self,
         cols: &[(Column, DataType)],

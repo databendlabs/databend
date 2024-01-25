@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_meta_api::BackgroundApi;
-use common_meta_app::background::BackgroundJobType;
-use common_meta_app::background::ListBackgroundJobsReq;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_users::UserApiProvider;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_api::BackgroundApi;
+use databend_common_meta_app::background::BackgroundJobType;
+use databend_common_meta_app::background::ListBackgroundJobsReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -76,10 +76,10 @@ impl AsyncSystemTable for BackgroundJobTable {
         let mut creator = Vec::with_capacity(jobs.len());
         let mut create_time = Vec::with_capacity(jobs.len());
         for (_, name, job) in jobs {
-            names.push(name.as_bytes().to_vec());
+            names.push(name);
             let job_type = job.job_params.as_ref().map(|x| x.job_type.clone());
             if let Some(job_type) = job_type {
-                job_types.push(Some(job_type.to_string().as_bytes().to_vec()));
+                job_types.push(Some(job_type.to_string()));
                 match job_type {
                     BackgroundJobType::INTERVAL => {
                         scheduled_job_interval_secs.push(Some(
@@ -95,19 +95,13 @@ impl AsyncSystemTable for BackgroundJobTable {
                     BackgroundJobType::CRON => {
                         scheduled_job_interval_secs.push(None);
                         scheduled_job_cron_expression.push(Some(
-                            job.job_params
-                                .as_ref()
-                                .unwrap()
-                                .scheduled_job_cron
-                                .clone()
-                                .as_bytes()
-                                .to_vec(),
+                            job.job_params.as_ref().unwrap().scheduled_job_cron.clone(),
                         ));
                         scheduled_job_cron_timezone.push(
                             job.job_params
                                 .unwrap()
                                 .scheduled_job_timezone
-                                .map(|tz| tz.to_string().as_bytes().to_vec()),
+                                .map(|tz| tz.to_string()),
                         );
                     }
                     BackgroundJobType::ONESHOT => {
@@ -122,17 +116,9 @@ impl AsyncSystemTable for BackgroundJobTable {
                 scheduled_job_cron_expression.push(None);
                 scheduled_job_cron_timezone.push(None);
             }
-            task_types.push(job.task_type.to_string().as_bytes().to_vec());
-            job_states.push(
-                job.job_status
-                    .as_ref()
-                    .map(|x| x.job_state.to_string().as_bytes().to_vec()),
-            );
-            last_task_ids.push(
-                job.job_status
-                    .as_ref()
-                    .and_then(|x| x.last_task_id.clone().map(|x| x.as_bytes().to_vec())),
-            );
+            task_types.push(job.task_type.to_string());
+            job_states.push(job.job_status.as_ref().map(|x| x.job_state.to_string()));
+            last_task_ids.push(job.job_status.as_ref().and_then(|x| x.last_task_id.clone()));
             last_task_run_at.push(
                 job.job_status
                     .as_ref()
@@ -143,9 +129,9 @@ impl AsyncSystemTable for BackgroundJobTable {
                     .as_ref()
                     .and_then(|x| x.next_task_scheduled_time.map(|x| x.timestamp_micros())),
             );
-            message.push(job.message.as_bytes().to_vec());
+            message.push(job.message);
             last_updated.push(job.last_updated.map(|t| t.timestamp_micros()));
-            creator.push(job.creator.map(|x| x.to_string().as_bytes().to_vec()));
+            creator.push(job.creator.map(|x| x.to_string()));
             create_time.push(job.created_at.timestamp_micros());
         }
 

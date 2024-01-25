@@ -1287,6 +1287,7 @@ system settings default String
 system settings description String
 system settings level String
 system settings name String
+system settings range String
 system settings type String
 system settings value String
 

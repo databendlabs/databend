@@ -12,35 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::decimal::*;
-use common_expression::types::number::*;
-use common_expression::types::*;
-use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::with_number_mapped_type;
-use common_expression::AggregateFunctionRef;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::StateAddr;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 use num_traits::AsPrimitive;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::assert_unary_arguments;
-use super::deserialize_state;
-use super::serialize_state;
+use super::borsh_deserialize_state;
+use super::borsh_serialize_state;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::UnaryState;
 use crate::aggregates::AggregateUnaryFunction;
 
-pub trait SumState: Serialize + DeserializeOwned + Send + Sync + Default + 'static {
+pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
     fn mem_size() -> Option<usize> {
         None
@@ -67,36 +64,31 @@ pub trait SumState: Serialize + DeserializeOwned + Send + Sync + Default + 'stat
     ) -> Result<()>;
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct NumberSumState<T, R>
-where R: ValueType
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct NumberSumState<N>
+where N: ValueType
 {
-    pub value: R::Scalar,
-    #[serde(skip)]
-    _t: PhantomData<T>,
+    pub value: N::Scalar,
 }
 
-impl<T, R> Default for NumberSumState<T, R>
+impl<N> Default for NumberSumState<N>
 where
-    T: ValueType + Sync + Send,
-    R: ValueType,
-    T::Scalar: Number + AsPrimitive<R::Scalar>,
-    R::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
+    N: ValueType,
+    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn default() -> Self {
-        NumberSumState::<T, R> {
-            value: R::Scalar::default(),
-            _t: PhantomData,
+        NumberSumState::<N> {
+            value: N::Scalar::default(),
         }
     }
 }
 
-impl<T, R> UnaryState<T, R> for NumberSumState<T, R>
+impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
     T: ValueType + Sync + Send,
-    R: ValueType,
-    T::Scalar: Number + AsPrimitive<R::Scalar>,
-    R::Scalar: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
+    N: ValueType,
+    T::Scalar: Number + AsPrimitive<N::Scalar>,
+    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
@@ -111,27 +103,24 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        builder: &mut N::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        R::push_item(builder, R::to_scalar_ref(&self.value));
+        N::push_item(builder, N::to_scalar_ref(&self.value));
         Ok(())
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.value)
+        borsh_serialize_state(writer, &self.value)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        let value = deserialize_state(reader)?;
-        Ok(Self {
-            value,
-            _t: PhantomData,
-        })
+        let value = borsh_deserialize_state(reader)?;
+        Ok(Self { value })
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(BorshDeserialize, BorshSerialize)]
 pub struct DecimalSumState<const OVERFLOW: bool, T>
 where
     T: ValueType,
@@ -143,7 +132,7 @@ where
 impl<const OVERFLOW: bool, T> Default for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
@@ -155,7 +144,7 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + Serialize + DeserializeOwned,
+    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
         self.value += T::to_owned_scalar(other);
@@ -184,12 +173,12 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_state(writer, &self.value)
+        borsh_serialize_state(writer, &self.value)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        let value = deserialize_state(reader)?;
+        let value = borsh_deserialize_state(reader)?;
         Ok(Self { value })
     }
 }
@@ -212,7 +201,7 @@ pub fn try_create_aggregate_sum_function(
             type TSum = <NUM as ResultTypeOfUnary>::Sum;
             let return_type = NumberType::<TSum>::data_type();
             AggregateUnaryFunction::<
-                NumberSumState<NumberType<NUM>, NumberType<TSum>>,
+                NumberSumState<NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
@@ -275,8 +264,8 @@ pub fn try_create_aggregate_sum_function(
             }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "AggregateSumFunction does not support type '{:?}'",
-            arguments[0]
+            "{} does not support type '{:?}'",
+            display_name, arguments[0]
         ))),
     })
 }

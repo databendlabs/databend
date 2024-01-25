@@ -15,13 +15,13 @@
 use std::fmt::Write;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_sql::plans::ShowCreateDatabasePlan;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_sql::plans::ShowCreateDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -74,11 +74,11 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(info.clone())),
                 ),
             ],
             1,

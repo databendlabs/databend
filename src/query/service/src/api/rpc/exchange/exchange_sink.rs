@@ -14,18 +14,17 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_core::Pipeline;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
-use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
@@ -43,7 +42,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let mut flight_senders = exchange_manager.get_flight_sender(params)?;
+        let mut senders = exchange_manager.get_flight_sender(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -59,7 +58,9 @@ impl ExchangeSink {
                 let exchange_injector = &params.exchange_injector;
 
                 if !params.ignore_exchange {
-                    exchange_injector.apply_merge_serializer(params, pipeline)?;
+                    let settings = ctx.get_settings();
+                    let compression = settings.get_query_flight_compression()?;
+                    exchange_injector.apply_merge_serializer(params, compression, pipeline)?;
                 }
 
                 if !params.ignore_exchange && exchange_injector.exchange_sorting().is_some() {
@@ -77,20 +78,35 @@ impl ExchangeSink {
                 }
 
                 pipeline.try_resize(1)?;
-                assert_eq!(flight_senders.len(), 1);
+                assert_eq!(senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
                     ctx.clone(),
-                    flight_senders.remove(0),
+                    senders.remove(0),
                     params.ignore_exchange,
+                    &params.destination_id,
+                    params.fragment_id,
+                    &ctx.get_cluster().local_id(),
                 )]));
                 Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
-                exchange_shuffle(params, pipeline)?;
+                exchange_shuffle(ctx, params, pipeline)?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(ctx.clone(), flight_senders, false);
+                let mut items = Vec::with_capacity(senders.len());
+
+                for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
+                    items.push(create_writer_item(
+                        ctx.clone(),
+                        sender,
+                        false,
+                        destination_id,
+                        params.fragment_id,
+                        &ctx.get_cluster().local_id(),
+                    ));
+                }
+
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }
@@ -111,7 +127,12 @@ impl ExchangeSorting for SinkExchangeSorting {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(ExchangeSerializeMeta::downcast_ref_from)
-            .unwrap();
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Failed to downcast ExchangeSerializeMeta from BlockMeta: {:?}",
+                    block_meta
+                ))
+            })?;
 
         Ok(shuffle_meta.block_number)
     }

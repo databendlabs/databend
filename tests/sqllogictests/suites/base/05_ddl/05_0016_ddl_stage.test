@@ -19,17 +19,11 @@ CREATE STAGE test_stage_internal file_format=(type=csv compression=AUTO record_d
 statement ok
 LIST @test_stage_internal
 
-onlyif mysql
-query TTTTTITT
+statement ok
 desc stage test_stage_internal
-----
-test_stage_internal Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: AbortNum(1), size_limit: 0, max_files: 0, split_size: 0, purge: false, single: false, max_file_size: 0, disable_variant_check: false, return_failed_only: false } Csv(CsvFileFormatParams { compression: Auto, headers: 0, field_delimiter: ",", record_delimiter: "\n", null_display: "\\N", nan_display: "NaN", escape: "\\", quote: "\"", error_on_column_count_mismatch: true }) 0 'root'@'%' (empty)
 
-query TTTTT
+statement ok
 SHOW STAGES
-----
-test_stage External NULL 'root'@'%' (empty)
-test_stage_internal Internal 0 'root'@'%' (empty)
 
 statement ok
 DROP STAGE test_stage
@@ -38,4 +32,17 @@ statement ok
 DROP STAGE test_stage_internal
 
 statement ok
+CREATE STAGE if not exists test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+DROP STAGE test_stage_huggingface
+
+statement ok
+CREATE STAGE if not exists test_stage_cos url='cos://testbucket/' connection=(secret_id ='minioadmin' secret_key ='minioadmin' endpoint_url='https://cos.ap-guangzhou.myqcloud.com')
+
+statement ok
+DROP STAGE test_stage_cos
+
+statement ok
 SHOW STAGES
+

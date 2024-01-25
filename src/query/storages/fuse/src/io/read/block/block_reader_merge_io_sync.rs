@@ -15,15 +15,18 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
-use common_base::rangemap::RangeMerger;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_arrow::arrow::io::parquet::read::read_metadata;
+use databend_common_base::rangemap::RangeMerger;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_storage::infer_schema_with_extension;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::CacheManager;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCacheKey;
-use storages_common_cache_manager::CacheManager;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
@@ -36,7 +39,7 @@ impl BlockReader {
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
-        raw_ranges: Vec<(ColumnId, Range<u64>)>,
+        raw_ranges: &[(ColumnId, Range<u64>)],
     ) -> Result<MergeIOReadResult> {
         let path = location.to_string();
 
@@ -75,12 +78,12 @@ impl BlockReader {
             table_data_cache,
         );
 
-        for (raw_idx, raw_range) in &raw_ranges {
+        for (raw_idx, raw_range) in raw_ranges {
             let column_id = *raw_idx as ColumnId;
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(||ErrorCode::Internal(format!(
                 "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
                 column_range, path, merged_ranges
             )))?;
@@ -126,8 +129,11 @@ impl BlockReader {
         }
 
         let mut merge_io_result =
-            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, ranges)?;
+            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, &ranges)?;
         merge_io_result.cached_column_array = cached_column_array;
+
+        self.report_cache_metrics(&merge_io_result, ranges.iter().map(|(_, r)| r));
+
         Ok(merge_io_result)
     }
 
@@ -141,5 +147,13 @@ impl BlockReader {
     ) -> Result<(usize, Vec<u8>)> {
         let chunk = op.blocking().read_with(path).range(start..end).call()?;
         Ok((index, chunk))
+    }
+
+    pub fn sync_read_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let metadata = read_metadata(&mut reader).ok()?;
+        debug_assert_eq!(metadata.row_groups.len(), 1);
+        let schema = infer_schema_with_extension(&metadata).ok()?;
+        Some(schema)
     }
 }

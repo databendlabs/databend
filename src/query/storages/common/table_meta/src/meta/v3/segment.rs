@@ -14,7 +14,7 @@
 
 use std::io::Cursor;
 
-use common_exception::Result;
+use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 

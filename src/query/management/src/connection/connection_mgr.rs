@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
-use common_base::base::escape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserDefinedConnection;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_base::base::escape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -72,10 +72,10 @@ impl ConnectionApi for ConnectionMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
             ErrorCode::ConnectionAlreadyExists(format!(
-                "connection already exists, seq [{}]",
-                v.seq
+                "Connection '{}' already exists.",
+                info.name
             ))
         })?;
 
@@ -93,8 +93,9 @@ impl ConnectionApi for ConnectionMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .ok_or_else(|| ErrorCode::UnknownConnection(format!("Unknown connection {}", name)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownConnection(format!("Connection '{}' does not exist.", name))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -102,7 +103,7 @@ impl ConnectionApi for ConnectionMgr {
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalConnection, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownConnection(format!(
-                "Unknown connection {}",
+                "Connection '{}' does not exist.",
                 name
             ))),
         }
@@ -137,7 +138,7 @@ impl ConnectionApi for ConnectionMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownConnection(format!(
-                "Unknown connection {}",
+                "Connection '{}' does not exist.",
                 name
             )))
         }

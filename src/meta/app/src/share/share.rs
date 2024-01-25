@@ -746,15 +746,19 @@ pub struct ShareSpec {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi;
 
     use super::ShareEndpointId;
+    use crate::share::ObjectSharedByShareIds;
+    use crate::share::ShareAccountMeta;
     use crate::share::ShareAccountNameIdent;
     use crate::share::ShareEndpointIdToName;
     use crate::share::ShareEndpointIdent;
+    use crate::share::ShareEndpointMeta;
     use crate::share::ShareGrantObject;
     use crate::share::ShareId;
     use crate::share::ShareIdToName;
+    use crate::share::ShareMeta;
     use crate::share::ShareNameIdent;
 
     const PREFIX_SHARE: &str = "__fd_share";
@@ -769,6 +773,8 @@ mod kvapi_key_impl {
     /// __fd_share_by/{db|table}/<object_id> -> ObjectSharedByShareIds
     impl kvapi::Key for ShareGrantObject {
         const PREFIX: &'static str = PREFIX_SHARE_BY;
+
+        type ValueType = ObjectSharedByShareIds;
 
         fn to_string_key(&self) -> String {
             match *self {
@@ -808,6 +814,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for ShareNameIdent {
         const PREFIX: &'static str = PREFIX_SHARE;
 
+        type ValueType = ShareId;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(&self.tenant)
@@ -830,6 +838,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for ShareId {
         const PREFIX: &'static str = PREFIX_SHARE_ID;
 
+        type ValueType = ShareMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.share_id)
@@ -849,6 +859,8 @@ mod kvapi_key_impl {
     // __fd_share_account/tenant/id -> ShareAccountMeta
     impl kvapi::Key for ShareAccountNameIdent {
         const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
+
+        type ValueType = ShareAccountMeta;
 
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
@@ -878,6 +890,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for ShareIdToName {
         const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
 
+        type ValueType = ShareNameIdent;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.share_id)
@@ -897,6 +911,8 @@ mod kvapi_key_impl {
     /// __fd_share/<tenant>/<share_endpoint_name> -> ShareEndpointId
     impl kvapi::Key for ShareEndpointIdent {
         const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT;
+
+        type ValueType = ShareEndpointId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -920,6 +936,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for ShareEndpointId {
         const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT_ID;
 
+        type ValueType = ShareEndpointMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.share_endpoint_id)
@@ -939,6 +957,8 @@ mod kvapi_key_impl {
     /// __fd_share_endpoint_id_to_name/<share_endpoint_id> -> ShareEndpointIdent
     impl kvapi::Key for ShareEndpointIdToName {
         const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT_ID_TO_NAME;
+
+        type ValueType = ShareEndpointIdent;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

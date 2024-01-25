@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::register_counter_family;
 use crate::register_gauge_family;
@@ -20,14 +20,12 @@ use crate::Counter;
 use crate::Family;
 use crate::Gauge;
 
-lazy_static! {
-    static ref CLUSTER_CLUSTER_HEARTBEAT_COUNT: Family<Vec<(&'static str, String)>, Counter> =
-        register_counter_family("cluster_heartbeat_count");
-    static ref CLUSTER_CLUSTER_ERROR_COUNT: Family<Vec<(&'static str, String)>, Counter> =
-        register_counter_family("cluster_error_count");
-    static ref CLUSTER_DISCOVERED_NODE_GAUGE: Family<Vec<(&'static str, String)>, Gauge> =
-        register_gauge_family("cluster_discovered_node");
-}
+static CLUSTER_CLUSTER_HEARTBEAT_COUNT: LazyLock<Family<Vec<(&'static str, String)>, Counter>> =
+    LazyLock::new(|| register_counter_family("cluster_heartbeat_count"));
+static CLUSTER_CLUSTER_ERROR_COUNT: LazyLock<Family<Vec<(&'static str, String)>, Counter>> =
+    LazyLock::new(|| register_counter_family("cluster_error_count"));
+static CLUSTER_DISCOVERED_NODE_GAUGE: LazyLock<Family<Vec<(&'static str, String)>, Gauge>> =
+    LazyLock::new(|| register_gauge_family("cluster_discovered_node"));
 
 pub fn metric_incr_cluster_heartbeat_count(
     local_id: &str,

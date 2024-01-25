@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::and;
-use common_arrow::arrow::bitmap::or;
-use common_arrow::arrow::bitmap::xor;
-use common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::and;
+use databend_common_arrow::arrow::bitmap::or;
+use databend_common_arrow::arrow::bitmap::xor;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use proptest::prelude::*;
 
 use crate::arrow::bitmap::bitmap_strategy;

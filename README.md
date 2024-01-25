@@ -3,8 +3,8 @@
 <div align="center">
 
 <h4 align="center">
-  <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
-  <a href="https://databend.rs/doc">Documentation</a>  |
+  <a href="https://docs.databend.com/guides/cloud">Databend Serverless Cloud (beta)</a>  |
+  <a href="https://docs.databend.com/">Documentation</a>  |
   <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/11868">Roadmap (v1.3)</a>
 
@@ -40,7 +40,7 @@
 
 - **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.rs/blog/clickbench-databend-top).
+- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.com/blog/clickbench-databend-top).
 
 - **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
 
@@ -50,7 +50,7 @@
 
 - **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/sql/sql-functions/ai-functions/).
 
 - **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 
@@ -62,7 +62,7 @@
 
 ### 1. Databend Serverless Cloud
 
-The fastest way to try Databend, [Databend Cloud](https://databend.rs/doc/cloud/)
+The fastest way to try Databend, [Databend Cloud](https://databend.com)
 
 ### 2. Install Databend from Docker
 
@@ -82,140 +82,138 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Deploying Databend</summary>
 
-- [Understanding Deployment Modes](https://databend.rs/doc/deploy/understanding-deployment-modes)
-- [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
-- [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
-- [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
+- [Understanding Deployment Modes](https://docs.databend.com/guides/deploy/understanding-deployment-modes)
+- [Deploying a Standalone Databend](https://docs.databend.com/guides/deploy/deploying-databend)
+- [Expanding a Standalone Databend](https://docs.databend.com/guides/deploy/expanding-to-a-databend-cluster)
+- [Databend Cloud (Beta)](https://docs.databend.com/guides/cloud)
 </details>
 
 <details>
 <summary>Connecting to Databend</summary>
 
-- [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
-- [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
-- [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
+- [Connecting to Databend with BendSQL](https://docs.databend.com/guides/sql-clients/bendsql)
+- [Connecting to Databend with JDBC](https://docs.databend.com/guides/sql-clients/jdbc)
 
 </details>
 
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File](https://databend.rs/doc/load-data/load/local)
-- [How to Load Data from Bucket](https://databend.rs/doc/load-data/load/s3)
-- [How to Load Data from Stage](https://databend.rs/doc/load-data/load/stage)
-- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/load/http)
-- [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
-- [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
-- [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
+- [Loading Semi-structured Data](https://docs.databend.com/guides/load-data/load-semistructured/)
+- [Transforming Data During a Load](https://docs.databend.com/guides/load-data/transform/data-load-transform)
+- [Continuous Data Pipelines](https://docs.databend.com/guides/load-data/continuous-data-pipelines/)
+- [How to Unload Data from Databend](https://docs.databend.com/guides/unload-data/)
 
 </details>
 
 <details>
 <summary>Loading Data Tools with Databend</summary>
 
-- [Apache Kafka](https://databend.rs/doc/load-data/load-db/kafka)
-- [Airbyte](https://databend.rs/doc/load-data/load-db/airbyte)
-- [dbt](https://databend.rs/doc/load-data/load-db/dbt)
-- [Debezium](https://databend.rs/doc/load-data/load-db/debezium)
-- [Apache Flink CDC](https://databend.rs/doc/load-data/load-db/flink-cdc)
-- [DataDog Vector](https://databend.rs/doc/load-data/load-db/vector)
-- [Addax](https://databend.rs/doc/load-data/load-db/addax)
-- [DataX](https://databend.rs/doc/load-data/load-db/datax)
+- [Apache Kafka](https://docs.databend.com/guides/load-data/load-db/kafka)
+- [Airbyte](https://docs.databend.com/guides/load-data/load-db/airbyte)
+- [dbt](https://docs.databend.com/guides/load-data/load-db/dbt)
+- [Debezium](https://docs.databend.com/guides/load-data/load-db/debezium)
+- [Apache Flink CDC](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+- [DataDog Vector](https://docs.databend.com/guides/load-data/load-db/vector)
+- [Addax](https://docs.databend.com/guides/load-data/load-db/addax)
+- [DataX](https://docs.databend.com/guides/load-data/load-db/datax)
 
 </details>
 
 <details>
 <summary>Visualize Tools with Databend</summary>
 
-- [Metabase](https://databend.rs/doc/visualize/metabase)
-- [Tableau](https://databend.rs/doc/visualize/tableau)
-- [Grafana](https://databend.rs/doc/visualize/grafana)
-- [Jupyter Notebook](https://databend.rs/doc/visualize/jupyter)
-- [Deepnote](https://databend.rs/doc/visualize/deepnote)
-- [MindsDB](https://databend.rs/doc/visualize/mindsdb)
-- [Redash](https://databend.rs/doc/visualize/redash)
+- [Deepnote](https://docs.databend.com/guides/visualize/deepnote)
+- [Grafana](https://docs.databend.com/guides/visualize/grafana)
+- [Jupyter Notebook](https://docs.databend.com/guides/visualize/jupyter)
+- [Metabase](https://docs.databend.com/guides/visualize/metabase)
+- [MindsDB](https://docs.databend.com/guides/visualize/mindsdb)
+- [Redash](https://docs.databend.com/guides/visualize/redash)
+- [Superset](https://docs.databend.com/guides/visualize/superset)
+- [Tableau](https://docs.databend.com/guides/visualize/tableau)
 
 </details>
 
 <details>
 <summary>Managing Users</summary>
 
-- [How to Create a User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user)
-- [How to Grant Privileges to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
-- [How to Revoke Privileges from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-privileges)
-- [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
-- [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
-- [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
-- [How to Revoke the Role of a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+- [How to Create a User](https://docs.databend.com/sql/sql-commands/ddl/user/user-create-user)
+- [How to Grant Privileges to a User](https://docs.databend.com/sql/sql-commands/ddl/user/grant#granting-privileges)
+- [How to Revoke Privileges from a User](https://docs.databend.com/sql/sql-commands/ddl/user/revoke#revoking-privileges)
+- [How to Create a Role](https://docs.databend.com/sql/sql-commands/ddl/user/user-create-role)
+- [How to Grant Privileges to a Role](https://docs.databend.com/sql/sql-commands/ddl/user/grant#granting-role)
+- [How to Grant Role to a User](https://docs.databend.com/sql/sql-commands/ddl/user/grant)
+- [How to Revoke the Role of a User](https://docs.databend.com/sql/sql-commands/ddl/user/revoke#revoking-role)
 </details>
 
 <details>
 <summary>Managing Databases</summary>
 
-- [How to Create a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-create-database)
-- [How to Drop a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-drop-database)
+- [How to Create a Database](https://docs.databend.com/sql/sql-commands/ddl/database/ddl-create-database)
+- [How to Drop a Database](https://docs.databend.com/sql/sql-commands/ddl/database/ddl-drop-database)
 </details>
 
 <details>
 <summary>Managing Tables</summary>
 
-- [How to Create a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table)
-- [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
-- [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
-- [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
-- [How to Flash Back a Table](https://databend.rs/doc/sql-commands/ddl/table/flashback-table)
-- [How to Add/Drop Table Column](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column)
+- [How to Create a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-create-table)
+- [How to Drop a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-drop-table)
+- [How to Rename a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-rename-table)
+- [How to Truncate a Table](https://docs.databend.com/sql/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Flash Back a Table](https://docs.databend.com/sql/sql-commands/ddl/table/flashback-table)
+- [How to Add/Drop Table Column](https://docs.databend.com/sql/sql-commands/ddl/table/alter-table-column)
 </details>
 
 <details>
 <summary>Managing Data</summary>
 
-- [COPY](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table)
-- [INSERT](https://databend.rs/doc/sql-commands/dml/dml-insert)
-- [DELETE](https://databend.rs/doc/sql-commands/dml/dml-delete-from)
-- [UPDATE](https://databend.rs/doc/sql-commands/dml/dml-update)
-- [REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
+- [COPY-INTO](https://docs.databend.com/sql/sql-commands/dml/dml-copy-into-table)
+- [INSERT](https://docs.databend.com/sql/sql-commands/dml/dml-insert)
+- [DELETE](https://docs.databend.com/sql/sql-commands/dml/dml-delete-from)
+- [UPDATE](https://docs.databend.com/sql/sql-commands/dml/dml-update)
+- [REPLACE](https://docs.databend.com/sql/sql-commands/dml/dml-replace)
+- [MERGE-INTO](https://docs.databend.com/sql/sql-commands/dml/dml-merge)
 </details>
 
 <details>
 <summary>Managing Views</summary>
 
-- [How to Create a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-create-view)
-- [How to Drop a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-drop-view)
-- [How to Alter a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-alter-view)
+- [How to Create a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-create-view)
+- [How to Drop a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-drop-view)
+- [How to Alter a View](https://docs.databend.com/sql/sql-commands/ddl/view/ddl-alter-view)
 </details>
 
 <details>
 <summary>AI Functions</summary>
 
-- [Generating SQL with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
-- [Creating Embedding Vectors](https://databend.rs/doc/sql-functions/ai-functions/ai-embedding-vector)
-- [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/ai-cosine-distance)
-- [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
+- [Generating SQL with AI](https://docs.databend.com/sql/sql-functions/ai-functions/ai-to-sql)
+- [Creating Embedding Vectors](https://docs.databend.com/sql/sql-functions/ai-functions/ai-embedding-vector)
+- [Computing Text Similarities](https://docs.databend.com/sql/sql-functions/ai-functions/ai-cosine-distance)
+- [Text Completion with AI](https://docs.databend.com/sql/sql-functions/ai-functions/ai-text-completion)
 </details>
 
 <details>
 <summary>Data Governance</summary>
 
-- [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
-- [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
+- [How to Create Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/create-mask-policy)
+- [How to Drop Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/drop-mask-policy)
 
 </details>
 
 <details>
 <summary>Securing Databend</summary>
 
-- [How to Create Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-create-policy)
-- [How to Drop Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-drop-policy)
-- [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
+- [How to Create Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-create-policy)
+- [How to Drop Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-drop-policy)
+- [How to Alter Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-alter-policy)
 
 </details>
 
 <details>
 <summary>Performance</summary>
   
-- [Review Clickbench](https://databend.rs/blog/clickbench-databend-top)
-- [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+- [Review Clickbench](https://databend.com/blog/clickbench-databend-top)
+- [How to Benchmark Databend using TPC-H](https://databend.com/blog/2022/08/08/benchmark-tpc-h)
   
 </details>
 
@@ -226,8 +224,8 @@ Databend thrives on community contributions! Whether it's through ideas, code, o
 
 Here are some resources to help you get started:
 
-- [Building Databend From Source](https://databend.rs/doc/contributing/building-from-source)
-- [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
+- [Building Databend From Source](https://docs.databend.com/guides/overview/community/contributor/building-from-source)
+- [The First Good Pull Request](https://docs.databend.com/guides/overview/community/contributor/good-pr)
 
 
 ## 👥 Community
@@ -236,7 +234,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs/) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 
@@ -244,6 +242,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
+- [Roadmap 2024](https://github.com/datafuselabs/databend/issues/14167)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 - [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
 - [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
@@ -258,7 +257,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/enterprise/license).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/overview/editions/dee/license).
 
 
 ## 🙏 Acknowledgement
@@ -267,4 +266,4 @@ For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https
 
 - **Computing Model**: Our computing foundation is built upon [Arrow2](https://github.com/jorgecarleitao/arrow2), a faster and more secure rendition of the Apache Arrow Columnar Format.
 
-- **Documentation Hosting**: The [Databend documentation website](https://databend.rs) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+- **Documentation Hosting**: The [Databend documentation website](https://docs.databend.com) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).

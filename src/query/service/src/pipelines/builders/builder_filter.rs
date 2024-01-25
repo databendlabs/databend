@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check::check_function;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_transforms::processors::TransformProfileWrapper;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::physical_plans::Filter;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::filter::build_select_expr;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::Filter;
 
+use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -42,31 +41,20 @@ impl PipelineBuilder {
                     "Invalid empty predicate list".to_string(),
                 ))
             })?;
+        assert_eq!(predicate.data_type(), &DataType::Boolean);
 
-        let num_input_columns = filter.input.output_schema()?.num_fields();
+        let max_block_size = self.settings.get_max_block_size()? as usize;
+        let (select_expr, has_or) = build_select_expr(&predicate).into();
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![BlockOperator::Filter {
-                    projections: filter.projections.clone(),
-                    expr: predicate.clone(),
-                }],
+            Ok(ProcessorPtr::create(TransformFilter::create(
+                input,
+                output,
+                select_expr.clone(),
+                has_or,
+                filter.projections.clone(),
                 self.func_ctx.clone(),
-                num_input_columns,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
-                    transform,
-                    input,
-                    output,
-                    filter.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input, output, transform,
-                )))
-            }
+                max_block_size,
+            )))
         })?;
 
         Ok(())

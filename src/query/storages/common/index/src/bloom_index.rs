@@ -17,38 +17,38 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::Span;
-use common_expression::converts::scalar_to_datavalue;
-use common_expression::eval_function;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::MapType;
-use common_expression::types::NullableType;
-use common_expression::types::Number;
-use common_expression::types::NumberDataType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ValueType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ConstantFolder;
-use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::FunctionContext;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_table_meta::meta::SingleColumnMeta;
-use storages_common_table_meta::meta::Versioned;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_exception::Span;
+use databend_common_expression::converts::datavalues::scalar_to_datavalue;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::MapType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::Versioned;
 
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::Filter;
@@ -64,7 +64,7 @@ pub struct BloomIndexMeta {
 }
 
 impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
-    type Error = common_exception::ErrorCode;
+    type Error = databend_common_exception::ErrorCode;
 
     fn try_from(mut meta: ThriftFileMetaData) -> std::result::Result<Self, Self::Error> {
         let rg = meta.row_groups.remove(0);
@@ -143,7 +143,7 @@ pub struct BloomIndex {
 /// FilterExprEvalResult represents the evaluation result of an expression by a filter.
 ///
 /// For example, expression of 'age = 12' should return false is the filter are sure
-/// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Maybe'.
+/// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Uncertain'.
 ///
 /// If the column is not applicable for a filter, like TypeID::struct, Uncertain is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,7 +263,7 @@ impl BloomIndex {
             }
 
             let filter_name = Self::build_filter_column_name(version, &field)?;
-            filter_fields.push(TableField::new(&filter_name, TableDataType::String));
+            filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }
 
@@ -287,8 +287,8 @@ impl BloomIndex {
         let mut filter_columns = Vec::with_capacity(fields.len());
         for filter in &self.filters {
             let serialized_bytes = filter.to_bytes()?;
-            let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
-            filter_columns.push(BlockEntry::new(DataType::String, filter_value));
+            let filter_value = Value::Scalar(Scalar::Binary(serialized_bytes));
+            filter_columns.push(BlockEntry::new(DataType::Binary, filter_value));
         }
         Ok(DataBlock::new(filter_columns, 1))
     }

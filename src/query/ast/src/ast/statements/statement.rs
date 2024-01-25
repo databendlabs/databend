@@ -15,9 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
@@ -61,12 +61,16 @@ pub enum Statement {
     ShowFunctions {
         show_options: Option<ShowOptions>,
     },
+    ShowUserFunctions {
+        show_options: Option<ShowOptions>,
+    },
     ShowTableFunctions {
         show_options: Option<ShowOptions>,
     },
     ShowIndexes {
         show_options: Option<ShowOptions>,
     },
+    ShowLocks(ShowLocksStmt),
 
     KillStmt {
         kill_target: KillTarget,
@@ -140,6 +144,12 @@ pub enum Statement {
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
 
+    // Streams
+    CreateStream(CreateStreamStmt),
+    DropStream(DropStreamStmt),
+    ShowStreams(ShowStreamsStmt),
+    DescribeStream(DescribeStreamStmt),
+
     // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
@@ -150,6 +160,7 @@ pub enum Statement {
     AlterVirtualColumn(AlterVirtualColumnStmt),
     DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
+    ShowVirtualColumns(ShowVirtualColumnsStmt),
 
     // User
     ShowUsers,
@@ -245,6 +256,15 @@ pub enum Statement {
     DescNetworkPolicy(DescNetworkPolicyStmt),
     ShowNetworkPolicies,
 
+    // password policy
+    CreatePasswordPolicy(CreatePasswordPolicyStmt),
+    AlterPasswordPolicy(AlterPasswordPolicyStmt),
+    DropPasswordPolicy(DropPasswordPolicyStmt),
+    DescPasswordPolicy(DescPasswordPolicyStmt),
+    ShowPasswordPolicies {
+        show_options: Option<ShowOptions>,
+    },
+
     // tasks
     CreateTask(CreateTaskStmt),
     AlterTask(AlterTaskStmt),
@@ -261,7 +281,7 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatementMsg {
+pub struct StatementWithFormat {
     pub(crate) stmt: Statement,
     pub(crate) format: Option<String>,
 }
@@ -371,12 +391,19 @@ impl Display for Statement {
                     write!(f, " {show_options}")?;
                 }
             }
+            Statement::ShowUserFunctions { show_options } => {
+                write!(f, "SHOW USER FUNCTIONS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::ShowTableFunctions { show_options } => {
                 write!(f, "SHOW TABLE_FUNCTIONS")?;
                 if let Some(show_options) = show_options {
                     write!(f, " {show_options}")?;
                 }
             }
+            Statement::ShowLocks(stmt) => write!(f, "{stmt}")?,
             Statement::KillStmt {
                 kill_target,
                 object_id,
@@ -450,6 +477,10 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
+            Statement::DropStream(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
@@ -457,6 +488,7 @@ impl Display for Statement {
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
@@ -576,6 +608,16 @@ impl Display for Statement {
             Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
+            Statement::CreatePasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescPasswordPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowPasswordPolicies { show_options } => {
+                write!(f, "SHOW PASSWORD POLICIES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateTask(stmt) => write!(f, "{stmt}")?,
             Statement::AlterTask(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,

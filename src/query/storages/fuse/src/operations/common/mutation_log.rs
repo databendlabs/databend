@@ -14,15 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_transforms::processors::AccumulatingTransform;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::Statistics;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::FormatVersion;
+use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::AbortOperation;
 use crate::operations::common::ConflictResolveContext;
@@ -66,8 +67,20 @@ pub enum MutationLogEntry {
 pub struct BlockMetaIndex {
     pub segment_idx: SegmentIndex,
     pub block_idx: BlockIndex,
+    pub inner: Option<BlockMetaInfoPtr>,
     // range is unused for now.
     // pub range: Option<Range<usize>>,
+}
+
+#[typetag::serde(name = "block_meta_index")]
+impl BlockMetaInfo for BlockMetaIndex {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        BlockMetaIndex::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
 }
 
 #[typetag::serde(name = "mutation_logs_meta")]
@@ -262,8 +275,8 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 
     fn transform(
         &mut self,
-        data: common_expression::DataBlock,
-    ) -> common_exception::Result<Vec<common_expression::DataBlock>> {
+        data: databend_common_expression::DataBlock,
+    ) -> databend_common_exception::Result<Vec<databend_common_expression::DataBlock>> {
         let commit_meta = CommitMeta::try_from(data)?;
         self.to_merged.push(commit_meta);
         Ok(vec![])

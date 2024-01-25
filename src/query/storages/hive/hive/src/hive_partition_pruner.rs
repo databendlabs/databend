@@ -16,14 +16,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::Expr;
-use common_expression::TableSchema;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_expression::TableSchema;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::debug;
-use storages_common_index::RangeIndex;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::utils::str_field_to_scalar;
 

@@ -16,11 +16,11 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageInfo;
-use common_meta_app::principal::StageType;
-use common_meta_app::principal::UserIdentity;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;
@@ -151,12 +151,16 @@ impl StageFilesInfo {
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.list(operator, true, None).await?;
-        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
+        files
+            .pop()
+            .ok_or_else(|| ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.blocking_list(operator, true, None)?;
-        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
+        files
+            .pop()
+            .ok_or_else(|| ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_list(
@@ -215,7 +219,10 @@ impl StageFilesInfo {
                     if path == STDIN_FD {
                         return Ok(vec![stdin_stage_info()?]);
                     }
-                    return Err(ErrorCode::BadArguments("object mode is unknown"));
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unable to determine the mode of the object at path '{}'. The mode is unknown or unsupported.",
+                        path
+                    )));
                 }
             },
             Err(e) => {
@@ -231,7 +238,7 @@ impl StageFilesInfo {
         let mut files = Vec::new();
         let mut lister = operator
             .lister_with(path)
-            .delimiter("")
+            .recursive(true)
             .metakey(StageFileInfo::meta_query())
             .await?;
         let mut limit: usize = 0;
@@ -295,7 +302,7 @@ fn blocking_list_files_with_pattern(
     let mut files = Vec::new();
     let list = operator
         .lister_with(path)
-        .delimiter("")
+        .recursive(true)
         .metakey(StageFileInfo::meta_query())
         .call()?;
     let mut limit = 0;

@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::PipeItem;
-use common_pipeline_transforms::processors::Transform;
-use common_pipeline_transforms::processors::Transformer;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
 
-use super::processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
+use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
 use super::RowIdKind;
 
 // It will receive MutationLogs Or RowIds.
@@ -37,7 +37,7 @@ pub struct TransformDistributedMergeIntoBlockDeserialize;
 
 /// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockDeserialize {
-    fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
             input,
             output,
@@ -66,7 +66,7 @@ impl Transform for TransformDistributedMergeIntoBlockDeserialize {
     const NAME: &'static str = "TransformDistributedMergeIntoBlockDeserialize";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let mix_kind = MixRowNumberKindAndLog::downcast_ref_from(data.get_meta().unwrap()).unwrap();
+        let mix_kind = MixRowIdKindAndLog::downcast_ref_from(data.get_meta().unwrap()).unwrap();
         match mix_kind.kind {
             0 => Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
@@ -84,7 +84,7 @@ impl Transform for TransformDistributedMergeIntoBlockDeserialize {
                 data.num_rows(),
                 Some(Box::new(RowIdKind::Delete)),
             )),
-            _ => Err(ErrorCode::BadBytes("get error MixRowNumberKindAndLog kind")),
+            _ => Err(ErrorCode::BadBytes("get error MixRowIdKindAndLog kind")),
         }
     }
 }

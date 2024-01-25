@@ -12,24 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_base::base::tokio::sync::RwLock;
-use common_base::base::ProgressValues;
-use common_base::runtime::CatchUnwindFuture;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Scalar;
-use common_settings::ChangeValue;
-use common_sql::plans::Plan;
-use common_sql::PlanExtras;
-use common_sql::Planner;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
+use databend_common_settings::Settings;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::PlanExtras;
+use databend_common_sql::Planner;
 use futures::StreamExt;
 use log::error;
 use log::info;
@@ -113,6 +112,7 @@ pub struct ExecuteStopped {
     pub reason: Result<()>,
     pub session_state: ExecutorSessionState,
     pub query_duration_ms: i64,
+    pub warnings: Vec<String>,
 }
 
 pub struct Executor {
@@ -128,7 +128,7 @@ pub struct ExecutorSessionState {
     pub current_database: String,
     pub current_role: Option<String>,
     pub secondary_roles: Option<Vec<String>>,
-    pub settings: HashMap<String, ChangeValue>,
+    pub settings: Arc<Settings>,
 }
 
 impl ExecutorSessionState {
@@ -137,7 +137,7 @@ impl ExecutorSessionState {
             current_database: session.get_current_database(),
             current_role: session.get_current_role().map(|r| r.name),
             secondary_roles: session.get_secondary_roles(),
-            settings: session.get_changed_settings(),
+            settings: session.get_settings(),
         }
     }
 }
@@ -156,6 +156,14 @@ impl Executor {
             Starting(_) => None,
             Running(r) => r.ctx.get_affect(),
             Stopped(r) => r.affect.clone(),
+        }
+    }
+
+    pub fn get_warnings(&self) -> Vec<String> {
+        match &self.state {
+            Starting(_) => vec![],
+            Running(r) => r.ctx.pop_warnings(),
+            Stopped(r) => r.warnings.clone(),
         }
     }
 
@@ -205,14 +213,20 @@ impl Executor {
         match &guard.state {
             Starting(s) => {
                 if let Err(e) = &reason {
-                    InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
-                        .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
+                    InterpreterQueryLog::log_finish(
+                        &s.ctx,
+                        SystemTime::now(),
+                        Some(e.clone()),
+                        false,
+                    )
+                    .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
+                    warnings: s.ctx.pop_warnings(),
                     affect: Default::default(),
                 }))
             }
@@ -233,6 +247,7 @@ impl Executor {
                     reason,
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
+                    warnings: r.ctx.pop_warnings(),
                     affect: r.ctx.get_affect(),
                 }))
             }
@@ -310,7 +325,7 @@ async fn execute(
         // duplicate codes, but there is an async call
         let data = BlockEntry::new(
             DataType::String,
-            common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+            databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
         );
         block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
@@ -327,7 +342,7 @@ async fn execute(
             // duplicate codes, but there is an async call
             let data = BlockEntry::new(
                 DataType::String,
-                common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+                databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
@@ -345,8 +360,8 @@ async fn execute(
                         // duplicate codes, but there is an async call
                         let data = BlockEntry::new(
                             DataType::String,
-                            common_expression::Value::Scalar(Scalar::String(
-                                err.to_string().into_bytes(),
+                            databend_common_expression::Value::Scalar(Scalar::String(
+                                err.to_string(),
                             )),
                         );
                         block_sender.send(DataBlock::new(vec![data], 1), 1).await;

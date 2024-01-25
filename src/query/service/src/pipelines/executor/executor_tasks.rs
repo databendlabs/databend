@@ -16,22 +16,21 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 
-use common_base::base::tokio::sync::Notify;
-use common_exception::Result;
+use databend_common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
 use crate::pipelines::processors::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
     finished: Arc<AtomicBool>,
-    finished_notify: Arc<Notify>,
+    finished_notify: Arc<WatchNotify>,
     workers_tasks: Mutex<ExecutorTasks>,
 }
 
@@ -39,7 +38,7 @@ impl ExecutorTasksQueue {
     pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
         Arc::new(ExecutorTasksQueue {
             finished: Arc::new(AtomicBool::new(false)),
-            finished_notify: Arc::new(Notify::new()),
+            finished_notify: Arc::new(WatchNotify::new()),
             workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
         })
     }
@@ -183,7 +182,7 @@ impl ExecutorTasksQueue {
         }
     }
 
-    pub fn get_finished_notify(&self) -> Arc<Notify> {
+    pub fn get_finished_notify(&self) -> Arc<WatchNotify> {
         self.finished_notify.clone()
     }
 
@@ -198,22 +197,11 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
-    pub elapsed: Option<Duration>,
 }
 
 impl CompletedAsyncTask {
-    pub fn create(
-        id: NodeIndex,
-        worker_id: usize,
-        res: Result<()>,
-        elapsed: Option<Duration>,
-    ) -> Self {
-        CompletedAsyncTask {
-            id,
-            worker_id,
-            res,
-            elapsed,
-        }
+    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>) -> Self {
+        CompletedAsyncTask { id, worker_id, res }
     }
 }
 

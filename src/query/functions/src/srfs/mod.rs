@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::FunctionRegistry;
-
 mod array;
 mod variant;
 
-pub use variant::FlattenGenerator;
-pub use variant::FlattenMode;
+use databend_common_expression::FunctionRegistry;
 
 pub fn register(registry: &mut FunctionRegistry) {
     array::register(registry);

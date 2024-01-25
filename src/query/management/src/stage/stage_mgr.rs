@@ -14,26 +14,26 @@
 
 use std::sync::Arc;
 
-use common_base::base::escape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_api::reply::txn_reply_to_api_result;
-use common_meta_api::txn_cond_seq;
-use common_meta_api::txn_op_del;
-use common_meta_api::txn_op_put;
-use common_meta_app::app_error::TxnRetryMaxTimes;
-use common_meta_app::principal::StageFile;
-use common_meta_app::principal::StageInfo;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::ConditionResult::Eq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::TxnOp;
-use common_meta_types::TxnRequest;
+use databend_common_base::base::escape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::txn_cond_seq;
+use databend_common_meta_api::txn_op_del;
+use databend_common_meta_api::txn_op_put;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::StageFile;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -85,8 +85,8 @@ impl StageApi for StageMgr {
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|v| {
-            ErrorCode::StageAlreadyExists(format!("Stage already exists, seq [{}]", v.seq))
+        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
+            ErrorCode::StageAlreadyExists(format!("Stage '{}' already exists.", info.stage_name))
         })?;
 
         Ok(res_seq)
@@ -99,15 +99,18 @@ impl StageApi for StageMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownStage(format!(
+                "Stage '{}' does not exist.",
+                name
+            ))),
         }
     }
 
@@ -181,10 +184,10 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            if let Some(seq_v) = self.kv_api.get_kv(&file_key).await? {
-                return Err(ErrorCode::StageFileAlreadyExists(format!(
-                    "Stage file already exists, seq [{}]",
-                    seq_v.seq
+            if let Some(_v) = self.kv_api.get_kv(&file_key).await? {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    name,
                 )));
             }
             let (stage_seq, mut old_stage): (_, StageInfo) =
@@ -194,7 +197,10 @@ impl StageApi for StageMgr {
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
                     )
                 } else {
-                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
+                    return Err(ErrorCode::UnknownStage(format!(
+                        "Stage '{}' does not exist.",
+                        name
+                    )));
                 };
             old_stage.number_of_files += 1;
 

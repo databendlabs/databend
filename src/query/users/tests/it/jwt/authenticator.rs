@@ -14,9 +14,9 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use common_base::base::tokio;
-use common_exception::Result;
-use common_users::JwtAuthenticator;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_users::JwtAuthenticator;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;

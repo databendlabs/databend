@@ -15,15 +15,15 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use common_ast::ast::CreateStageStmt;
-use common_ast::ast::UriLocation;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::FileFormatOptionsAst;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::StageInfo;
-use common_storage::init_operator;
+use databend_common_ast::ast::CreateStageStmt;
+use databend_common_ast::ast::UriLocation;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::location::parse_uri_location;
@@ -39,7 +39,7 @@ impl Binder {
         location: &str,
         pattern: &str,
     ) -> Result<Plan> {
-        let (stage, path) = resolve_stage_location(&self.ctx, location).await?;
+        let (stage, path) = resolve_stage_location(self.ctx.as_ref(), location).await?;
         let plan_node = RemoveStagePlan {
             path,
             stage,
@@ -82,7 +82,8 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&mut uri, Some(&self.ctx)).await?;
+                let (stage_storage, path) =
+                    parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
 
                 if !path.ends_with('/') {
                     return Err(ErrorCode::SyntaxException(
@@ -93,11 +94,12 @@ impl Binder {
                 // Check the storage params via init operator.
                 let _ = init_operator(&stage_storage).map_err(|err| {
                     ErrorCode::InvalidConfig(format!(
-                        "Input storage config for stage is not invalid: {err:?}"
+                        "Input storage config for stage is invalid: {err:?}"
                     ))
                 })?;
 
-                StageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
+                StageInfo::new_external_stage(stage_storage, &path, true)
+                    .with_stage_name(stage_name)
             }
         };
 

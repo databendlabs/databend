@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::io::Error as IOError;
 
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
 use mysql_async::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
 use serde::Deserialize;
@@ -55,9 +55,6 @@ pub enum DSqlLogicTestError {
     // Error from databend
     #[error("Databend error: {0}")]
     Databend(#[from] ErrorCode),
-    // ClickHouseClient Text Error
-    #[error("ClickHouse client error: {0}")]
-    ClickHouseClient(#[from] TextError),
     // Error from mysql client
     #[error("mysql client error: {0}")]
     MysqlClient(#[from] MysqlClientError),

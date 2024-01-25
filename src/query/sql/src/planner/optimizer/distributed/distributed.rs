@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 
-use super::topn::TopNPushDownOptimizer;
+use super::sort_and_limit::SortAndLimitPushDownOptimizer;
 use crate::optimizer::property::require_property;
 use crate::optimizer::Distribution;
 use crate::optimizer::RelExpr;
@@ -25,14 +25,15 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 
+/// TODO(leiysky): deprecate this, should use cascades planner instead.
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
     let required = RequiredProperty {
         distribution: Distribution::Any,
     };
     let result = require_property(ctx, &required, s_expr)?;
 
-    let topn_optimizer = TopNPushDownOptimizer::create();
-    let mut result = topn_optimizer.optimize(&result)?;
+    let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+    let mut result = sort_and_limit_optimizer.optimize(&result)?;
 
     let rel_expr = RelExpr::with_s_expr(&result);
     let physical_prop = rel_expr.derive_physical_prop()?;

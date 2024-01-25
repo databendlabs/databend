@@ -14,27 +14,26 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::time::Duration;
 
-use common_meta_client::MetaGrpcClient;
-use common_meta_raft_store::key_spaces::RaftStoreEntry;
-use common_meta_types::protobuf::Empty;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_types::protobuf as pb;
 use tokio_stream::StreamExt;
 
-pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr.to_string()],
-        "root",
-        "xxx",
-        None,
-        None,
-        Duration::from_secs(10),
-        None,
-    )?;
+pub async fn export_meta(addr: &str, save: String, chunk_size: Option<u64>) -> anyhow::Result<()> {
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
-    let (mut grpc_client, _server_version) = client.make_client().await?;
+    let mut grpc_client = client.make_established_client().await?;
 
-    let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
+    // TODO: since 1.2.315, export_v1() is added, via which chunk size can be specified.
+    let exported = if grpc_client.server_protocol_version() >= 1002315 {
+        grpc_client
+            .export_v1(pb::ExportRequest { chunk_size })
+            .await?
+    } else {
+        grpc_client.export(pb::Empty {}).await?
+    };
 
     let mut stream = exported.into_inner();
 

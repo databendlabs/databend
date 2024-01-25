@@ -14,15 +14,15 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::type_check;
-use common_expression::types::DataType;
-use common_expression::ColumnIndex;
-use common_expression::DataSchema;
-use common_expression::Expr;
-use common_expression::RawExpr;
-use common_functions::BUILTIN_FUNCTIONS;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::DataSchema;
+use databend_common_expression::Expr;
+use databend_common_expression::RawExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::plans::ScalarExpr;
@@ -98,6 +98,7 @@ fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
                 data_type,
             })
         }
+        RawExpr::Constant { .. } => Ok(raw_expr.clone()),
         RawExpr::Cast {
             span,
             is_try,
@@ -126,7 +127,27 @@ fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
                 args,
             })
         }
-        RawExpr::Constant { .. } => Ok(raw_expr.clone()),
+        RawExpr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } => {
+            let args = args
+                .iter()
+                .map(|arg| update_column_type(arg, type_provider))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(RawExpr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args,
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            })
+        }
     }
 }
 
@@ -197,17 +218,13 @@ impl ScalarExpr {
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
             },
-            ScalarExpr::LambdaFunction(func) => RawExpr::ColumnRef {
+            ScalarExpr::LambdaFunction(func) => RawExpr::LambdaFunctionCall {
                 span: None,
-                id: ColumnBindingBuilder::new(
-                    func.display_name.clone(),
-                    usize::MAX,
-                    Box::new((*func.return_type).clone()),
-                    Visibility::Visible,
-                )
-                .build(),
-                data_type: (*func.return_type).clone(),
-                display_name: func.display_name.clone(),
+                name: func.func_name.clone(),
+                args: func.args.iter().map(ScalarExpr::as_raw_expr).collect(),
+                lambda_expr: (*func.lambda_expr).clone(),
+                lambda_display: func.lambda_display.clone(),
+                return_type: (*func.return_type).clone(),
             },
             ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
                 span: func.span,
@@ -239,6 +256,10 @@ impl ScalarExpr {
                 data_type: (*udf.return_type).clone(),
                 display_name: udf.display_name.clone(),
             },
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let scalar = &udf.scalar;
+                scalar.as_raw_expr()
+            }
         }
     }
 

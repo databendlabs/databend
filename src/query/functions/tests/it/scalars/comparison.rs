@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::*;
-use common_expression::FromData;
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -40,6 +40,7 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "null=null", &[]);
     run_ast(file, "1=2", &[]);
     run_ast(file, "1.0=1", &[]);
+    run_ast(file, "2.222>2.11", &[]);
     run_ast(file, "true=null", &[]);
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
@@ -294,6 +295,8 @@ fn test_gt(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) > parse_json(rhs)", &table);
     run_ast(file, "lhs > rhs", &table);
+    let table = [("col", StringType::from_data(vec![r#"bcd"#, r#"efg"#]))];
+    run_ast(file, "col > 'efg'", &table);
 }
 
 fn test_gte(file: &mut impl Write) {

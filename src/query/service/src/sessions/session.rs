@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::prelude::FormatSettings;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantObjectByID;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType;
-use common_settings::ChangeValue;
-use common_settings::Settings;
-use common_users::GrantObjectVisibilityChecker;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_settings::Settings;
+use databend_common_users::GrantObjectVisibilityChecker;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -243,6 +241,11 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_all_effective_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
+        self.privilege_mgr.get_all_effective_roles().await
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
@@ -257,11 +260,11 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn validate_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<()> {
+    pub async fn has_ownership(self: &Arc<Self>, object: &OwnershipObject) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
-            return Ok(());
+            return Ok(true);
         }
-        self.privilege_mgr.validate_ownership(object).await
+        self.privilege_mgr.has_ownership(object).await
     }
 
     #[async_backtrace::framed]
@@ -271,14 +274,6 @@ impl Session {
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         self.session_ctx.get_settings()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.session_ctx.get_changed_settings()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        self.session_ctx.apply_changed_settings(changes)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

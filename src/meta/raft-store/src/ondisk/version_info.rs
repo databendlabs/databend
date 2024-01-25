@@ -102,18 +102,14 @@ impl VersionInfo {
     }
 }
 
-lazy_static::lazy_static! {
-
-    pub static ref VERSION_INFOS: BTreeMap<DataVersion, VersionInfo> = {
-
+pub static VERSION_INFOS: std::sync::LazyLock<BTreeMap<DataVersion, VersionInfo>> =
+    std::sync::LazyLock::new(|| {
         btreemap! {
             DataVersion::V0 => VersionInfo::v0(),
             DataVersion::V001 => VersionInfo::v001() ,
             DataVersion::V002 => VersionInfo::v002() ,
         }
-
-    };
-}
+    });
 
 const fn new_semver(major: u64, minor: u64, patch: u64) -> semver::Version {
     semver::Version {

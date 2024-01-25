@@ -17,21 +17,24 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_metrics::storage::*;
-use common_sql::field_default_value;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_common_sql::field_default_value;
+use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshot;
+use log::warn;
 use uuid::Uuid;
 
 use crate::statistics::merge_statistics;
@@ -105,6 +108,7 @@ pub struct SnapshotMerged {
     pub merged_statistics: Statistics,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub enum ConflictResolveContext {
     AppendOnly((SnapshotMerged, TableSchemaRef)),
@@ -227,7 +231,7 @@ impl SnapshotGenerator for MutationGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly(_) => {
                 return Err(ErrorCode::Internal(
@@ -325,7 +329,7 @@ impl AppendGenerator {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
-            .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
+            .ok_or_else(|| ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
             ConflictResolveContext::AppendOnly((ctx, schema)) => Ok((ctx, schema.as_ref())),
             _ => Err(ErrorCode::Internal(
@@ -384,24 +388,47 @@ impl SnapshotGenerator for AppendGenerator {
 
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
+
+                let leaf_fields = schema.leaf_fields();
+                let column_data_types: HashMap<ColumnId, &TableDataType> =
+                    HashMap::from_iter(leaf_fields.iter().map(|f| (f.column_id, &f.data_type)));
+
                 if self.check_fill_default(&summary)? {
                     self.leaf_default_values
                         .iter()
                         .for_each(|(col_id, default_value)| {
-                            if !summary.col_stats.contains_key(col_id) {
-                                let (null_count, distinct_of_values) = if default_value.is_null() {
-                                    (summary.row_count, Some(0))
-                                } else {
-                                    (0, Some(1))
-                                };
-                                let col_stat = ColumnStatistics::new(
-                                    default_value.to_owned(),
-                                    default_value.to_owned(),
-                                    null_count,
-                                    0,
-                                    distinct_of_values,
-                                );
-                                summary.col_stats.insert(*col_id, col_stat);
+                            if let Some(data_type) = column_data_types.get(col_id) {
+                                if !summary.col_stats.contains_key(col_id) {
+                                    assert!(
+                                        default_value
+                                            .as_ref()
+                                            .is_value_of_type(&DataType::from(*data_type)),
+                                        "default value: {:?} is not of type: {:?}",
+                                        default_value,
+                                        data_type
+                                    );
+                                    if let Some((min, max)) = crate::statistics::scalar_min_max(
+                                        &DataType::from(*data_type),
+                                        default_value.clone(),
+                                    ) {
+                                        let (null_count, distinct_of_values) =
+                                            if default_value.is_null() {
+                                                (summary.row_count, Some(0))
+                                            } else {
+                                                (0, Some(1))
+                                            };
+                                        let col_stat = ColumnStatistics::new(
+                                            min,
+                                            max,
+                                            null_count,
+                                            0,
+                                            distinct_of_values,
+                                        );
+                                        summary.col_stats.insert(*col_id, col_stat);
+                                    }
+                                }
+                            } else {
+                                warn!("column id:{} not found in schema, while populating min/max values. the schema is {:?}", col_id, schema);
                             }
                         });
                 }
@@ -420,6 +447,17 @@ impl SnapshotGenerator for AppendGenerator {
                 );
             }
         }
+
+        // check if need to auto compact
+        // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
+        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 50.
+        let imperfect_count = new_summary.block_count - new_summary.perfect_block_count;
+        let auto_compaction_imperfect_blocks_threshold = self
+            .ctx
+            .get_settings()
+            .get_auto_compaction_imperfect_blocks_threshold()?;
+        let auto_compact = imperfect_count >= auto_compaction_imperfect_blocks_threshold;
+        self.ctx.set_need_compact_after_write(auto_compact);
 
         Ok(TableSnapshot::new(
             Uuid::new_v4(),

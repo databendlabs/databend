@@ -19,14 +19,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::runtime::TrackedFuture;
-use common_base::runtime::TrySpawn;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_pipeline_core::processors::profile::Profile;
-use common_pipeline_core::processors::EventCause;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::PlanScope;
+use databend_common_base::runtime::TrackedFuture;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::EventCause;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::PlanScope;
 use log::debug;
 use log::trace;
 use minitrace::prelude::*;
@@ -58,7 +58,7 @@ enum State {
     Finished,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct EdgeInfo {
     input_index: usize,
     output_index: usize,
@@ -207,6 +207,12 @@ impl ExecutingGraph {
                     let output_trigger = graph[source_node].create_trigger(edge_index);
                     graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
 
+                    if graph[source_node].profile.plan_id.is_some()
+                        && graph[source_node].profile.plan_id != graph[target_node].profile.plan_id
+                    {
+                        graph[source_node].outputs_port[source_port].record_profile();
+                    }
+
                     connect(
                         &graph[target_node].inputs_port[target_port],
                         &graph[source_node].outputs_port[source_port],
@@ -275,6 +281,8 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
+
+                Profile::track_profile(&node.profile);
 
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
@@ -386,6 +394,7 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
+            let node_profile = executor.graph.get_node_profile(proc.id()).clone();
             let process_future = proc.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -396,6 +405,7 @@ impl ScheduleQueue {
                     global_queue,
                     workers_condvar,
                     weak_executor,
+                    node_profile,
                     process_future,
                 ))
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
@@ -443,8 +453,8 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub(crate) fn get_node(&self, pid: NodeIndex) -> &Node {
-        &self.0.graph[pid]
+    pub(crate) fn get_node_profile(&self, pid: NodeIndex) -> &Arc<Profile> {
+        &self.0.graph[pid].profile
     }
 
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
@@ -480,15 +490,32 @@ impl RunningGraph {
             id: usize,
             name: String,
             state: String,
+            details_status: Option<String>,
+            inputs_status: Vec<(&'static str, &'static str, &'static str)>,
+            outputs_status: Vec<(&'static str, &'static str, &'static str)>,
         }
 
         impl Debug for NodeDisplay {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("Node")
-                    .field("name", &self.name)
-                    .field("id", &self.id)
-                    .field("state", &self.state)
-                    .finish()
+                match &self.details_status {
+                    None => f
+                        .debug_struct("Node")
+                        .field("name", &self.name)
+                        .field("id", &self.id)
+                        .field("state", &self.state)
+                        .field("inputs_status", &self.inputs_status)
+                        .field("outputs_status", &self.outputs_status)
+                        .finish(),
+                    Some(details_status) => f
+                        .debug_struct("Node")
+                        .field("name", &self.name)
+                        .field("id", &self.id)
+                        .field("state", &self.state)
+                        .field("inputs_status", &self.inputs_status)
+                        .field("outputs_status", &self.outputs_status)
+                        .field("details", details_status)
+                        .finish(),
+                }
             }
         }
 
@@ -497,9 +524,58 @@ impl RunningGraph {
         for node_index in self.0.graph.node_indices() {
             unsafe {
                 let state = self.0.graph[node_index].state.lock().unwrap();
+                let inputs_status = self.0.graph[node_index]
+                    .inputs_port
+                    .iter()
+                    .map(|x| {
+                        let finished = match x.is_finished() {
+                            true => "Finished",
+                            false => "Unfinished",
+                        };
+
+                        let has_data = match x.has_data() {
+                            true => "HasData",
+                            false => "Nodata",
+                        };
+
+                        let need_data = match x.is_need_data() {
+                            true => "NeedData",
+                            false => "UnNeeded",
+                        };
+
+                        (finished, has_data, need_data)
+                    })
+                    .collect::<Vec<_>>();
+
+                let outputs_status = self.0.graph[node_index]
+                    .outputs_port
+                    .iter()
+                    .map(|x| {
+                        let finished = match x.is_finished() {
+                            true => "Finished",
+                            false => "Unfinished",
+                        };
+
+                        let has_data = match x.has_data() {
+                            true => "HasData",
+                            false => "Nodata",
+                        };
+
+                        let need_data = match x.is_need_data() {
+                            true => "NeedData",
+                            false => "UnNeeded",
+                        };
+
+                        (finished, has_data, need_data)
+                    })
+                    .collect::<Vec<_>>();
+
                 nodes_display.push(NodeDisplay {
+                    inputs_status,
+                    outputs_status,
                     id: self.0.graph[node_index].processor.id().index(),
                     name: self.0.graph[node_index].processor.name(),
+                    details_status: self.0.graph[node_index].processor.details_status(),
                     state: String::from(match *state {
                         State::Idle => "Idle",
                         State::Processing => "Processing",

@@ -14,13 +14,14 @@
 
 use std::marker::PhantomData;
 
-use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::HashMethodFixedKeys;
-use common_hashtable::DictionaryKeys;
+use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::HashMethodFixedKeys;
+use databend_common_hashtable::DictionaryKeys;
 
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
@@ -77,7 +78,7 @@ pub struct SerializedKeysGroupColumnsBuilder<'a> {
     data: Vec<&'a [u8]>,
     group_data_types: Vec<DataType>,
 
-    single_builder: Option<StringColumnBuilder>,
+    single_builder: Option<BinaryColumnBuilder>,
 }
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
@@ -86,7 +87,7 @@ impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
             && (params.group_data_types[0].is_string() || params.group_data_types[0].is_variant())
         {
             (
-                Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
+                Some(BinaryColumnBuilder::with_capacity(capacity, data_capacity)),
                 vec![],
             )
         } else {
@@ -118,7 +119,11 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         if let Some(builder) = self.single_builder.take() {
             let col = builder.build();
             match self.group_data_types[0] {
-                DataType::String => return Ok(vec![Column::String(col)]),
+                DataType::String => {
+                    return Ok(vec![Column::String(unsafe {
+                        StringColumn::from_binary_unchecked(col)
+                    })]);
+                }
                 DataType::Variant => return Ok(vec![Column::Variant(col)]),
                 _ => {}
             }
@@ -131,7 +136,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         for data_type in self.group_data_types.iter() {
             let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
-            for (_, key) in keys.iter_mut().enumerate() {
+            for key in keys.iter_mut() {
                 column.push_binary(key)?;
             }
             res.push(column.build());
@@ -178,7 +183,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
         let mut res = Vec::with_capacity(self.group_data_types.len());
         for data_type in self.group_data_types.iter() {
             if data_type.is_string() || data_type.is_variant() {
-                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
 
                 for string_type_keys in &self.string_type_data {
                     builder.put(unsafe { string_type_keys.keys.as_ref()[index].as_ref() });
@@ -187,13 +192,15 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
 
                 index += 1;
                 res.push(match data_type.is_string() {
-                    true => Column::String(builder.build()),
+                    true => Column::String(unsafe {
+                        StringColumn::from_binary_unchecked(builder.build())
+                    }),
                     false => Column::Variant(builder.build()),
                 });
             } else {
                 let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
-                for (_, key) in other_type_keys.iter_mut().enumerate() {
+                for key in other_type_keys.iter_mut() {
                     column.push_binary(key)?;
                 }
 

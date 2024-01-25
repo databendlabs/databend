@@ -58,7 +58,7 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 ----
 {"x":"abc","y":false,"z":10}
 
-skipif clickhouse
+
 query T
 select parse_json('{ "test" : "\\"abc\"测试⚠️✅❌မြန်မာဘာသာ" } ')
 ----

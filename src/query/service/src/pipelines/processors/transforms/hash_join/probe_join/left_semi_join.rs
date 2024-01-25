@@ -12,211 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_hashtable::HashJoinHashtableLike;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::KeyAccessor;
+use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
-/// Semi join contain semi join and semi-anti join
 impl HashJoinProbeState {
-    pub(crate) fn left_semi_anti_join<'a, const SEMI: bool, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn left_semi_join<'a, H: HashJoinHashtableLike>(
         &self,
+        input: &DataBlock,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
         probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
-        input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        // If there is no build key, the result is input
-        // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
-        let max_block_size = probe_state.max_block_size;
-        let valids = probe_state.valids.as_ref();
-        let probe_indexes = &mut probe_state.probe_indexes;
-        let string_items_buf = &mut probe_state.string_items_buf;
-        let mut matched_num = 0;
+        // Probe states.
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let pointers = probe_state.hashes.as_slice();
+
+        // Results.
+        let mut matched_idx = 0;
         let mut result_blocks = vec![];
 
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
-            let contains = if self.hash_join_state.hash_join_desc.from_correlated_subquery
-                || valids.map_or(true, |v| v.get_bit(i))
-            {
-                hash_table.next_contains(key, *ptr)
-            } else {
-                false
-            };
-
-            match (contains, SEMI) {
-                (true, true) | (false, false) => {
-                    probe_indexes[matched_num] = i as u32;
-                    matched_num += 1;
-                    if matched_num >= max_block_size {
-                        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                            return Err(ErrorCode::AbortedQuery(
-                                "Aborted query, because the server is shutting down or the query was killed.",
-                            ));
-                        }
-                        let probe_block = DataBlock::take(input, probe_indexes, string_items_buf)?;
-                        result_blocks.push(probe_block);
-
-                        matched_num = 0;
-                    }
+        // Probe hash table and generate data blocks.
+        if probe_state.probe_with_selection {
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+                if hash_table.next_contains(key, ptr) {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    matched_idx += 1;
                 }
-                _ => {}
             }
-        }
-        if matched_num == 0 {
-            return Ok(result_blocks);
-        }
-        let probe_block = DataBlock::take(input, &probe_indexes[0..matched_num], string_items_buf)?;
-        result_blocks.push(probe_block);
-        Ok(result_blocks)
-    }
-
-    pub(crate) fn left_semi_anti_join_with_conjunct<
-        'a,
-        const SEMI: bool,
-        H: HashJoinHashtableLike,
-        IT,
-    >(
-        &self,
-        hash_table: &H,
-        probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
-        input: &DataBlock,
-        is_probe_projected: bool,
-    ) -> Result<Vec<DataBlock>>
-    where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
-        H::Key: 'a,
-    {
-        let max_block_size = probe_state.max_block_size;
-        let valids = probe_state.valids.as_ref();
-        // The semi join will return multiple data chunks of similar size.
-        let mut matched_num = 0;
-        let mut result_blocks = vec![];
-        let probe_indexes = &mut probe_state.probe_indexes;
-        let build_indexes = &mut probe_state.build_indexes;
-        let build_indexes_ptr = build_indexes.as_mut_ptr();
-        let string_items_buf = &mut probe_state.string_items_buf;
-
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
-
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
-        // The `row_state` is used to mark whether the row is matched.
-        let mut row_state = vec![false; input.num_rows()];
-
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
-            let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery
-                    || valids.map_or(true, |v| v.get_bit(i))
-                {
-                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
-                } else {
-                    (0, 0)
-                };
-
-            match match_count > 0 {
-                false if SEMI => {
-                    continue;
-                }
-                false => {
-                    continue;
-                }
-                true => (),
-            };
-
-            for _ in 0..match_count {
-                probe_indexes[matched_num] = i as u32;
-                matched_num += 1;
-            }
-            if matched_num >= max_block_size {
-                loop {
-                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
-                    } else {
-                        None
-                    };
-                    let build_block = if is_build_projected {
-                        Some(self.hash_join_state.row_space.gather(
-                            build_indexes,
-                            build_columns,
-                            build_columns_data_type,
-                            build_num_rows,
-                            string_items_buf,
-                        )?)
-                    } else {
-                        None
-                    };
-                    let result_block =
-                        self.merge_eq_block(probe_block.clone(), build_block, matched_num);
-
-                    let mut bm = match self.get_other_filters(
-                        &result_block,
-                        other_predicate,
-                        &self.func_ctx,
-                    )? {
-                        (Some(b), _, _) => b.make_mut(),
-                        (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
-                        (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
-                        _ => unreachable!(),
-                    };
-
-                    self.update_row_state(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
-
-                    matched_num = 0;
-
-                    if incomplete_ptr == 0 {
-                        break;
-                    }
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    );
-                    if match_count == 0 {
-                        break;
-                    }
-
-                    for _ in 0..match_count {
-                        probe_indexes[matched_num] = i as u32;
-                        matched_num += 1;
-                    }
-
-                    if matched_num < max_block_size {
-                        break;
-                    }
+        } else {
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
+                if hash_table.next_contains(key, ptr) {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                    matched_idx += 1;
                 }
             }
         }
@@ -227,75 +75,247 @@ impl HashJoinProbeState {
             ));
         }
 
-        let probe_block = if is_probe_projected {
-            Some(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_num],
-                string_items_buf,
-            )?)
-        } else {
-            None
-        };
-        let build_block = if is_build_projected {
-            Some(self.hash_join_state.row_space.gather(
-                &build_indexes[0..matched_num],
-                build_columns,
-                build_columns_data_type,
-                build_num_rows,
-                string_items_buf,
-            )?)
-        } else {
-            None
-        };
-        let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_num);
-
-        let mut bm = match self.get_other_filters(&result_block, other_predicate, &self.func_ctx)? {
-            (Some(b), _, _) => b.make_mut(),
-            (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
-            (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
-            _ => unreachable!(),
-        };
-
-        self.update_row_state(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
-
-        matched_num = 0;
-        if SEMI {
-            for (i, state) in row_state.iter().enumerate() {
-                if *state {
-                    probe_indexes[matched_num] = i as u32;
-                    matched_num += 1;
-                }
-            }
-        } else {
-            for (i, state) in row_state.iter().enumerate() {
-                if !*state {
-                    probe_indexes[matched_num] = i as u32;
-                    matched_num += 1;
-                }
-            }
-        }
-
-        if matched_num > 0 {
+        if matched_idx > 0 {
             result_blocks.push(DataBlock::take(
                 input,
-                &probe_indexes[0..matched_num],
-                string_items_buf,
+                &probe_indexes[0..matched_idx],
+                &mut probe_state.generation_state.string_items_buf,
             )?);
         }
 
         Ok(result_blocks)
     }
 
-    fn update_row_state(
+    pub(crate) fn left_semi_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
-        bm: &mut MutableBitmap,
-        probe_indexes: &[u32],
-        row_state: &mut [bool],
-    ) {
-        for (index, row) in probe_indexes.iter().enumerate() {
-            if bm.get(index) && !row_state[*row as usize] {
-                row_state[*row as usize] = true;
+        input: &DataBlock,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        hash_table: &H,
+        probe_state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>>
+    where
+        H::Key: 'a,
+    {
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let mutable_indexes = &mut probe_state.mutable_indexes;
+        let probe_indexes = &mut mutable_indexes.probe_indexes;
+        let build_indexes = &mut mutable_indexes.build_indexes;
+        let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let pointers = probe_state.hashes.as_slice();
+
+        // Build states.
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+
+        // For semi join, it defaults to false.
+        let mut row_state = vec![false; input.num_rows()];
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
+
+        // Results.
+        let mut matched_idx = 0;
+        let mut result_blocks = vec![];
+
+        // Probe hash table and generate data blocks.
+        if probe_state.probe_with_selection {
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+
+                // Probe hash table and fill `build_indexes`.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                if match_count == 0 {
+                    continue;
+                }
+
+                // Fill `probe_indexes`.
+                for _ in 0..match_count {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    matched_idx += 1;
+                }
+
+                while matched_idx == max_block_size {
+                    self.process_left_semi_join_block(
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
+                        other_predicate,
+                        &mut row_state,
+                    )?;
+                    matched_idx = 0;
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        matched_idx,
+                        max_block_size,
+                    );
+                    for _ in 0..match_count {
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                        matched_idx += 1;
+                    }
+                }
+            }
+        } else {
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
+
+                // Probe hash table and fill build_indexes.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                if match_count == 0 {
+                    continue;
+                }
+
+                // Fill probe_indexes.
+                for _ in 0..match_count {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                    matched_idx += 1;
+                }
+
+                while matched_idx == max_block_size {
+                    self.process_left_semi_join_block(
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
+                        other_predicate,
+                        &mut row_state,
+                    )?;
+                    matched_idx = 0;
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        matched_idx,
+                        max_block_size,
+                    );
+                    for _ in 0..match_count {
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                        matched_idx += 1;
+                    }
+                }
             }
         }
+
+        if matched_idx > 0 {
+            self.process_left_semi_join_block(
+                matched_idx,
+                input,
+                probe_indexes,
+                build_indexes,
+                &mut probe_state.generation_state,
+                &build_state.generation_state,
+                other_predicate,
+                &mut row_state,
+            )?;
+        }
+
+        // Find all matched indexes and generate the result `DataBlock`.
+        matched_idx = 0;
+        for (i, state) in row_state.iter().enumerate() {
+            if *state {
+                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = i as u32 };
+                matched_idx += 1;
+            }
+        }
+        if matched_idx > 0 {
+            result_blocks.push(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_idx],
+                &mut probe_state.generation_state.string_items_buf,
+            )?);
+        }
+
+        Ok(result_blocks)
+    }
+
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    fn process_left_semi_join_block(
+        &self,
+        matched_idx: usize,
+        input: &DataBlock,
+        probe_indexes: &[u32],
+        build_indexes: &[RowPtr],
+        probe_state: &mut ProbeBlockGenerationState,
+        build_state: &BuildBlockGenerationState,
+        other_predicate: &Expr,
+        row_state: &mut [bool],
+    ) -> Result<()> {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+
+        let probe_block = if probe_state.is_probe_projected {
+            Some(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_idx],
+                &mut probe_state.string_items_buf,
+            )?)
+        } else {
+            None
+        };
+        let build_block = if build_state.is_build_projected {
+            Some(self.hash_join_state.row_space.gather(
+                &build_indexes[0..matched_idx],
+                &build_state.build_columns,
+                &build_state.build_columns_data_type,
+                &build_state.build_num_rows,
+                &mut probe_state.string_items_buf,
+            )?)
+        } else {
+            None
+        };
+
+        let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
+        self.update_row_state(
+            &result_block,
+            other_predicate,
+            &probe_indexes[0..matched_idx],
+            row_state,
+        )?;
+
+        Ok(())
+    }
+
+    #[inline]
+    pub(crate) fn update_row_state(
+        &self,
+        result_block: &DataBlock,
+        other_predicate: &Expr,
+        probe_indexes: &[u32],
+        row_state: &mut [bool],
+    ) -> Result<()> {
+        match self.get_other_filters(result_block, other_predicate, &self.func_ctx)? {
+            (Some(bm), _, _) => {
+                for (row, selected) in probe_indexes.iter().zip(bm.iter()) {
+                    if selected && unsafe { !*row_state.get_unchecked(*row as usize) } {
+                        unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
+                    }
+                }
+            }
+            (_, true, _) => {
+                for row in probe_indexes.iter() {
+                    unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
+                }
+            }
+            _ => (),
+        };
+        Ok(())
     }
 }

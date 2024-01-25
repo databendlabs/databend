@@ -15,21 +15,22 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_base::base::tokio;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::RenameDatabaseReq;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableNameIdent;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
@@ -72,7 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     // Create.
     {
         let mut req = CreateDatabaseReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "db1".to_string(),
@@ -213,11 +214,14 @@ async fn test_catalogs_table() -> Result<()> {
     // Drop.
     {
         let tbl = catalog.get_table(tenant, "default", "test_table").await?;
+        let db = catalog.get_database(tenant, "default").await?;
         let res = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                table_name: "test_table".to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
+                db_id: db.get_db_info().ident.db_id,
             })
             .await;
         assert!(res.is_ok());

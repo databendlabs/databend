@@ -30,11 +30,12 @@ use crate::ErrorKind;
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
     let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-
+    let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
     rule! (
         #literal_string
         | #ident_to_string
         | #u64_to_string
+        | #boolean_to_string
     )(i)
 }
 
@@ -83,6 +84,11 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
 
+    let ident_options = map(
+        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
+        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+    );
+
     let string_options = map(
         rule! {
             (TYPE
@@ -110,7 +116,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let bool_options = map(
         rule! {
-            ERROR_ON_COLUMN_COUNT_MISMATCH ~ ^"=" ~ ^#literal_bool
+            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), v.to_string()),
     );
@@ -128,7 +134,14 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { ((#option_type | #option_compression | #string_options | #int_options | #bool_options | #none_options) ~ ","?)* },
+        rule! { ((
+        #option_type
+        | #option_compression
+        | #ident_options
+        | #string_options
+        | #int_options
+        | #bool_options
+        | #none_options) ~ ","?)* },
         |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
     )(i)
 }
@@ -165,13 +178,17 @@ pub fn file_location(i: Input) -> IResult<FileLocation> {
 pub fn stage_location(i: Input) -> IResult<String> {
     map_res(file_location, |location| match location {
         FileLocation::Stage(s) => Ok(s),
-        FileLocation::Uri(_) => Err(ErrorKind::Other("expect stage location, got uri location")),
+        FileLocation::Uri(_) => Err(nom::Err::Failure(ErrorKind::Other(
+            "expect stage location, got uri location",
+        ))),
     })(i)
 }
 
 pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(string_location, |location| match location {
-        FileLocation::Stage(_) => Err(ErrorKind::Other("uri location should not start with '@'")),
+        FileLocation::Stage(_) => Err(nom::Err::Failure(ErrorKind::Other(
+            "uri location should not start with '@'",
+        ))),
         FileLocation::Uri(u) => Ok(u),
     })(i)
 }
@@ -192,7 +209,9 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
-                    Err(ErrorKind::Other("uri location should not start with '@'"))
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "uri location should not start with '@'",
+                    )))
                 }
             } else {
                 let part_prefix = if let Some((_, _, p, _)) = location_prefix {
@@ -207,7 +226,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 conns.extend(credentials_opts.map(|v| v.2).unwrap_or_default());
 
                 let uri = UriLocation::from_uri(location, part_prefix, conns)
-                    .map_err(|_| ErrorKind::Other("invalid uri"))?;
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;
                 Ok(FileLocation::Uri(uri))
             }
         },

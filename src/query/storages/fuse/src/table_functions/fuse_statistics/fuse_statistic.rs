@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchema;
-use common_expression::TableSchemaRefExt;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::sessions::TableContext;
 use crate::FuseTable;
@@ -58,13 +58,13 @@ impl<'a> FuseStatistic<'a> {
         _summy: &Statistics,
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
     ) -> Result<DataBlock> {
-        let mut col_ndvs: Vec<Vec<u8>> = Vec::with_capacity(1);
+        let mut col_ndvs: Vec<String> = Vec::with_capacity(1);
         if let Some(table_statistics) = table_statistics {
             let mut ndvs: String = "".to_string();
             for (i, n) in table_statistics.column_distinct_values.iter() {
                 ndvs.push_str(&format!("({},{});", *i, *n));
             }
-            col_ndvs.push(ndvs.into_bytes());
+            col_ndvs.push(ndvs);
         };
 
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(

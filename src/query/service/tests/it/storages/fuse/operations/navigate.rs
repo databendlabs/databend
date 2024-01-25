@@ -15,15 +15,15 @@
 use std::ops::Sub;
 use std::time::Duration;
 
-use common_base::base::tokio;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_base::base::tokio;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -33,9 +33,11 @@ async fn test_fuse_navigate() -> Result<()> {
     // - navigate to the snapshot that generated before the first insertion should fail
 
     // 1. Setup
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     // 1.1 first commit
@@ -120,15 +122,18 @@ async fn test_fuse_navigate() -> Result<()> {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
+
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_navigate_for_purge() -> Result<()> {
     // 1. Setup
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
     // 1.1 first commit

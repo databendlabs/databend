@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::TableSchema;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use futures_util::AsyncRead;
 use futures_util::AsyncReadExt;
 
@@ -33,7 +33,6 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
         let mut buffer: Vec<u8> = vec![];
         reader.read_to_end(&mut buffer).await?;
         let r = match self {
-            SnapshotVersion::V5(_) => unimplemented!(),
             SnapshotVersion::V4(_) => TableSnapshot::from_slice(&buffer)?,
             SnapshotVersion::V3(_) => TableSnapshotV3::from_slice(&buffer)?.into(),
             SnapshotVersion::V2(v) => {

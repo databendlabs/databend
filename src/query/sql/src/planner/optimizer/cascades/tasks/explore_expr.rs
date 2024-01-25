@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use super::apply_rule::ApplyRuleTask;
@@ -54,8 +54,8 @@ pub struct ExploreExprTask {
     pub group_index: IndexType,
     pub m_expr_index: IndexType,
 
-    pub ref_count: Rc<SharedCounter>,
-    pub parent: Option<Rc<SharedCounter>>,
+    pub ref_count: SharedCounter,
+    pub parent: Option<SharedCounter>,
 }
 
 impl ExploreExprTask {
@@ -69,34 +69,26 @@ impl ExploreExprTask {
             state: ExploreExprState::Init,
             group_index,
             m_expr_index,
-            ref_count: Rc::new(SharedCounter::new()),
+            ref_count: SharedCounter::new(),
             parent: None,
         }
     }
 
-    pub fn with_parent(
-        ctx: Arc<dyn TableContext>,
-        group_index: IndexType,
-        m_expr_index: IndexType,
-        parent: &Rc<SharedCounter>,
-    ) -> Self {
-        let mut task = Self::new(ctx, group_index, m_expr_index);
-        parent.inc();
-        task.parent = Some(parent.clone());
-        task
+    pub fn with_parent(mut self, parent: SharedCounter) -> Self {
+        self.parent = Some(parent);
+        self
     }
 
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
         scheduler: &mut Scheduler,
-    ) -> Result<()> {
+    ) -> Result<Option<Task>> {
         if matches!(self.state, ExploreExprState::ExploredSelf) {
-            return Ok(());
+            return Ok(None);
         }
         self.transition(optimizer, scheduler)?;
-        scheduler.add_task(Task::ExploreExpr(self));
-        Ok(())
+        Ok(Some(Task::ExploreExpr(self)))
     }
 
     fn transition(
@@ -120,7 +112,10 @@ impl ExploreExprTask {
             (ExploreExprState::ExploredChildren, ExploreExprEvent::ExploredSelf) => {
                 self.state = ExploreExprState::ExploredSelf;
             }
-            _ => unreachable!(),
+            _ => Err(ErrorCode::Internal(format!(
+                "Invalid transition from {:?} with {:?}",
+                self.state, event
+            )))?,
         }
 
         Ok(())
@@ -141,8 +136,8 @@ impl ExploreExprTask {
             if !group.state.explored() {
                 // If the child group isn't explored, then schedule a `ExploreGroupTask` for it.
                 all_children_explored = false;
-                let explore_group_task =
-                    ExploreGroupTask::with_parent(self.ctx.clone(), *child, &self.ref_count);
+                let explore_group_task = ExploreGroupTask::new(self.ctx.clone(), *child)
+                    .with_parent(self.ref_count.clone());
                 scheduler.add_task(Task::ExploreGroup(explore_group_task));
             }
         }
@@ -166,19 +161,12 @@ impl ExploreExprTask {
         let rule_set = &optimizer.explore_rule_set;
 
         for rule_id in rule_set.iter() {
-            let apply_rule_task = ApplyRuleTask::with_parent(
-                self.ctx.clone(),
-                rule_id,
-                m_expr.group_index,
-                m_expr.index,
-                &self.ref_count,
-            );
+            let apply_rule_task =
+                ApplyRuleTask::new(self.ctx.clone(), rule_id, m_expr.group_index, m_expr.index)
+                    .with_parent(self.ref_count.clone());
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
 
-        if let Some(parent) = &self.parent {
-            parent.dec();
-        }
         Ok(ExploreExprEvent::ExploredSelf)
     }
 }

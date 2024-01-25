@@ -16,12 +16,12 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
 use super::StateAddr;
@@ -67,7 +67,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::String)
+        Ok(DataType::Binary)
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -120,7 +120,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let str_builder = builder.as_string_mut().unwrap();
+        let str_builder = builder.as_binary_mut().unwrap();
         self.serialize(place, &mut str_builder.data)?;
         str_builder.commit_row();
         Ok(())

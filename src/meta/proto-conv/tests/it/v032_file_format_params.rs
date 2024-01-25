@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::principal::CsvFileFormatParams;
-use common_meta_app::principal::JsonNullAs;
-use common_meta_app::principal::StageFileCompression;
-use common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::StageFileCompression;
+use databend_common_meta_app::principal::TsvFileFormatParams;
 use minitrace::func_name;
 
 use crate::common;
@@ -44,6 +44,7 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
         mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
             compression: StageFileCompression::Gzip,
             headers: 1,
+            output_header: false,
             field_delimiter: "fd".to_string(),
             record_delimiter: "rd".to_string(),
             null_display: "\\N".to_string(),
@@ -51,6 +52,8 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: true,
+            empty_field_as: Default::default(),
+            binary_format: Default::default(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
@@ -88,8 +91,8 @@ fn test_decode_v32_ndjson_file_format_params() -> anyhow::Result<()> {
     let want = || {
         mt::principal::FileFormatParams::NdJson(NdJsonFileFormatParams {
             compression: StageFileCompression::Gzip,
-            missing_field_as: JsonNullAs::Error,
-            null_field_as: JsonNullAs::FieldDefault,
+            missing_field_as: NullAs::Error,
+            null_field_as: NullAs::Null,
         })
     };
     common::test_pb_from_to(func_name!(), want())?;
@@ -131,7 +134,11 @@ fn test_decode_v32_xml_file_format_params() -> anyhow::Result<()> {
 fn test_decode_v32_parquet_file_format_params() -> anyhow::Result<()> {
     let file_format_params_v32 = vec![10, 6, 160, 6, 32, 168, 6, 24];
 
-    let want = || mt::principal::FileFormatParams::Parquet(ParquetFileFormatParams {});
+    let want = || {
+        mt::principal::FileFormatParams::Parquet(ParquetFileFormatParams {
+            missing_field_as: Default::default(),
+        })
+    };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())

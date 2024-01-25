@@ -14,12 +14,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::StageType;
-use common_meta_types::MatchSeq;
-use common_sql::plans::CreateStagePlan;
-use common_users::UserApiProvider;
+use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::StageType;
+use databend_common_meta_types::MatchSeq;
+use databend_common_sql::plans::CreateStagePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -78,9 +82,25 @@ impl Interpreter for CreateUserStageInterpreter {
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+        user_stage.created_on = Utc::now();
         let _create_stage = user_mgr
             .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
             .await?;
+
+        // Grant ownership as the current role
+        let tenant = self.ctx.get_tenant();
+        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        if let Some(current_role) = self.ctx.get_current_role() {
+            role_api
+                .grant_ownership(
+                    &OwnershipObject::Stage {
+                        name: self.plan.stage_info.stage_name.clone(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         Ok(PipelineBuildResult::create())
     }

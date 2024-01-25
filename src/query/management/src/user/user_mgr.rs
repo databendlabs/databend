@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_base::base::escape_for_key;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
+use databend_common_base::base::escape_for_key;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MatchSeqExt;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -57,7 +57,7 @@ impl UserMgr {
         &self,
         user_info: &UserInfo,
         seq: MatchSeq,
-    ) -> common_exception::Result<u64> {
+    ) -> databend_common_exception::Result<u64> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -70,7 +70,7 @@ impl UserMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
+                "User '{}' update failed: User does not exist or invalid request.",
                 user_info.name
             ))),
         }
@@ -81,7 +81,7 @@ impl UserMgr {
 impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
+    async fn add_user(&self, user_info: UserInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
@@ -95,8 +95,8 @@ impl UserApi for UserMgr {
             None,
         ));
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|v| {
-            ErrorCode::UserAlreadyExists(format!("User already exists, seq [{}]", v.seq))
+        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
+            ErrorCode::UserAlreadyExists(format!("User {} already exists.", user_key))
         })?;
 
         Ok(res_seq)
@@ -108,15 +108,18 @@ impl UserApi for UserMgr {
         let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
+        let seq_value = res
+            .ok_or_else(|| ErrorCode::UnknownUser(format!("User {} does not exist.", user_key)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
+            Err(_) => Err(ErrorCode::UnknownUser(format!(
+                "User {} does not exist.",
+                user_key
+            ))),
         }
     }
 
@@ -171,7 +174,10 @@ impl UserApi for UserMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key)))
+            Err(ErrorCode::UnknownUser(format!(
+                "Cannot delete user {}. User does not exist or invalid operation.",
+                user_key
+            )))
         }
     }
 }

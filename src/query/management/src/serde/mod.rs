@@ -14,5 +14,6 @@
 
 mod pb_serde;
 
+pub use pb_serde::check_and_upgrade_to_pb;
 pub use pb_serde::deserialize_struct;
 pub use pb_serde::serialize_struct;

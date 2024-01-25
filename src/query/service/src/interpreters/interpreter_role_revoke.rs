@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_app::principal::PrincipalIdentity;
-use common_sql::plans::RevokeRolePlan;
-use common_users::RoleCacheManager;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_sql::plans::RevokeRolePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

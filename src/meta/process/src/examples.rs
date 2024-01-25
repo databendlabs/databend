@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use clap::Parser;
-use common_meta_raft_store::key_spaces::RaftStoreEntry;
-use common_meta_sled_store::init_sled_db;
-use common_tracing::init_logging;
-use common_tracing::Config as LogConfig;
+use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_sled_store::init_sled_db;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config as LogConfig;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -61,7 +63,11 @@ impl Default for RaftConfig {
 async fn upgrade_09() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging("databend-meta-upgrade-09", &LogConfig::default());
+    let _guards = init_logging(
+        "databend-meta-upgrade-09",
+        &LogConfig::default(),
+        BTreeMap::new(),
+    );
 
     eprintln!("config: {}", pretty(&config)?);
 
@@ -90,7 +96,7 @@ pub fn print_table_meta(config: &Config) -> anyhow::Result<()> {
 
     init_sled_db(raft_config.raft_dir.clone());
 
-    for tree_iter_res in common_meta_sled_store::iter::<Vec<u8>>() {
+    for tree_iter_res in databend_common_meta_sled_store::iter::<Vec<u8>>() {
         let (_tree_name, item_iter) = tree_iter_res?;
 
         for item_res in item_iter {

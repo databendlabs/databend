@@ -16,9 +16,11 @@ use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataBlock;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
+use crate::processors::Profile;
+use crate::processors::ProfileStatisticsName;
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
 
@@ -154,6 +156,10 @@ impl InputPort {
         ((flags & IS_FINISHED) == IS_FINISHED) && ((flags & HAS_DATA) == 0)
     }
 
+    pub fn is_need_data(&self) -> bool {
+        self.shared.get_flags() & NEED_DATA != 0
+    }
+
     #[inline(always)]
     pub fn set_need_data(&self) {
         unsafe {
@@ -202,6 +208,7 @@ impl InputPort {
 }
 
 pub struct OutputPort {
+    record_profile: UnSafeCellWrap<bool>,
     shared: UnSafeCellWrap<Arc<SharedStatus>>,
     update_trigger: UnSafeCellWrap<*mut UpdateTrigger>,
 }
@@ -209,6 +216,7 @@ pub struct OutputPort {
 impl OutputPort {
     pub fn create() -> Arc<OutputPort> {
         Arc::new(OutputPort {
+            record_profile: UnSafeCellWrap::create(false),
             shared: UnSafeCellWrap::create(SharedStatus::create()),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
@@ -218,6 +226,19 @@ impl OutputPort {
     pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
+
+            if *self.record_profile {
+                if let Ok(data_block) = &data {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputRows,
+                        data_block.num_rows(),
+                    );
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputBytes,
+                        data_block.memory_size(),
+                    );
+                }
+            }
 
             let data = Box::into_raw(Box::new(SharedData(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);
@@ -240,6 +261,14 @@ impl OutputPort {
         (self.shared.get_flags() & IS_FINISHED) != 0
     }
 
+    pub fn has_data(&self) -> bool {
+        (self.shared.get_flags() & HAS_DATA) != 0
+    }
+
+    pub fn is_need_data(&self) -> bool {
+        (self.shared.get_flags() & NEED_DATA) != 0
+    }
+
     #[inline(always)]
     pub fn can_push(&self) -> bool {
         let flags = self.shared.get_flags();
@@ -258,6 +287,13 @@ impl OutputPort {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
+    }
+
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
+    pub unsafe fn record_profile(&self) {
+        self.record_profile.set_value(true);
     }
 }
 

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_pipeline_core::PipeItem;
-use storages_common_table_meta::meta::Location;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::PipeItem;
+use databend_storages_common_table_meta::meta::Location;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
@@ -77,6 +77,7 @@ impl FuseTable {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
+        target_build_optimization: bool,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let aggregator = MatchedAggregator::create(
@@ -88,6 +89,7 @@ impl FuseTable {
             block_builder,
             io_request_semaphore,
             segment_locations,
+            target_build_optimization,
         )?;
         Ok(aggregator.into_pipe_item())
     }

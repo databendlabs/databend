@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-client"
+name = "databend-common-meta-client"
 description = "common meta grpc"
 version = { workspace = true }
 authors = { workspace = true }
@@ -14,26 +14,27 @@ doctest = false
 test = true
 
 [features]
-enable-histogram = ["common-metrics/enable-histogram"]
+enable-histogram = ["databend-common-metrics/enable-histogram"]
 
 [dependencies]
-common-arrow = { path = "../../common/arrow" }
-common-base = { path = "../../common/base" }
-common-grpc = { path = "../../common/grpc" }
-common-meta-api = { path = "../api" }
-common-meta-kvapi = { path = "../kvapi" }
-common-meta-types = { path = "../types" }
-common-metrics = { path = "../../common/metrics" }
-common-tracing = { path = "../../common/tracing" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
+databend-common-grpc = { path = "../../common/grpc" }
+databend-common-meta-api = { path = "../api" }
+databend-common-meta-kvapi = { path = "../kvapi" }
+databend-common-meta-types = { path = "../types" }
+databend-common-metrics = { path = "../../common/metrics" }
+databend-common-tracing = { path = "../../common/tracing" }
 
+anyerror = { workspace = true }
 derive_more = { workspace = true }
-futures = "0.3.24"
-lazy_static = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = "0.12.1"
+parking_lot = { workspace = true }
 prost = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -41,11 +42,11 @@ serde_json = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
-common-exception = { path = "../../common/exception" }
-common-meta-app = { path = "../app" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-meta-app = { path = "../app" }
 
 anyhow = { workspace = true }
-rand = "0.8.5"
+rand = { workspace = true }
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
+databend-common-building = { path = "../../common/building" }

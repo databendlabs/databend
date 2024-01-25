@@ -17,21 +17,22 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::ColumnId;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::TableDataCache;
+use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache_manager::SizedColumnArray;
 use enum_as_inner::EnumAsInner;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCache;
-use storages_common_cache::TableDataCacheKey;
-use storages_common_cache_manager::SizedColumnArray;
 
+type ChunkIndex = usize;
 pub struct OwnerMemory {
-    chunks: HashMap<usize, Bytes>,
+    chunks: HashMap<ChunkIndex, Bytes>,
 }
 
 impl OwnerMemory {
-    pub fn create(chunks: Vec<(usize, Vec<u8>)>) -> OwnerMemory {
+    pub fn create(chunks: Vec<(ChunkIndex, Vec<u8>)>) -> OwnerMemory {
         let chunks = chunks
             .into_iter()
             .map(|(idx, chunk)| (idx, Bytes::from(chunk)))
@@ -39,7 +40,7 @@ impl OwnerMemory {
         OwnerMemory { chunks }
     }
 
-    pub fn get_chunk(&self, index: usize, path: &str) -> Result<Bytes> {
+    pub fn get_chunk(&self, index: ChunkIndex, path: &str) -> Result<Bytes> {
         match self.chunks.get(&index) {
             Some(chunk) => Ok(chunk.clone()),
             None => Err(ErrorCode::Internal(format!(
@@ -54,7 +55,7 @@ type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 pub struct MergeIOReadResult {
     block_path: String,
-    columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
+    columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,
     owner_memory: OwnerMemory,
     pub cached_column_data: CachedColumnData,
     pub cached_column_array: CachedColumnArray,

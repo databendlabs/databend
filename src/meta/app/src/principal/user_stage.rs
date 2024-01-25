@@ -20,10 +20,10 @@ use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_io::constants::NAN_BYTES_SNAKE;
-use common_io::escape_string;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::constants::NAN_BYTES_SNAKE;
+use databend_common_io::escape_string;
 
 use crate::principal::FileFormatParams;
 use crate::principal::UserIdentity;
@@ -55,6 +55,12 @@ use crate::storage::StorageParams;
 // copyOptions ::=
 // ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
 // SIZE_LIMIT = <num>
+
+/// Maximum files per 'copy into table' commit.
+pub const COPY_MAX_FILES_PER_COMMIT: usize = 15000;
+
+/// Instruction for exceeding 'copy into table' file limit.
+pub const COPY_MAX_FILES_COMMIT_MSG: &str = "Commit limit reached: 15,000 files for 'copy into table'. To handle more files, adjust 'CopyOption' with 'max_files=<num>'(e.g., 'max_files=10000') and perform several operations until all files are processed.";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
@@ -199,7 +205,7 @@ impl FromStr for StageFileFormatType {
 
 impl ToString for StageFileFormatType {
     fn to_string(&self) -> String {
-        format!("{:?}", *self)
+        format!("{:?}", *self).to_uppercase()
     }
 }
 
@@ -472,10 +478,13 @@ pub struct CopyOptions {
     pub max_files: usize,
     pub split_size: usize,
     pub purge: bool,
-    pub single: bool,
-    pub max_file_size: usize,
     pub disable_variant_check: bool,
     pub return_failed_only: bool,
+
+    // unload only
+    pub max_file_size: usize,
+    pub single: bool,
+    pub detailed_output: bool,
 }
 
 impl CopyOptions {
@@ -555,12 +564,15 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
+    // on `COPY INTO xx FROM 's3://xxx?ak=?&sk=?'`, the URL(ExternalLocation) will be treated as an temporary stage.
+    pub is_temporary: bool,
     pub file_format_params: FileFormatParams,
     pub copy_options: CopyOptions,
     pub comment: String,
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub number_of_files: u64,
     pub creator: Option<UserIdentity>,
+    pub created_on: DateTime<Utc>,
 }
 
 impl StageInfo {
@@ -573,10 +585,11 @@ impl StageInfo {
         }
     }
 
-    pub fn new_external_stage(storage: StorageParams, path: &str) -> StageInfo {
+    pub fn new_external_stage(storage: StorageParams, path: &str, is_temporary: bool) -> StageInfo {
         StageInfo {
             stage_name: format!("{storage},path={path}"),
             stage_type: StageType::External,
+            is_temporary,
             stage_params: StageParams { storage },
             ..Default::default()
         }

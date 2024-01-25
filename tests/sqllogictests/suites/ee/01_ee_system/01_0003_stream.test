@@ -1,0 +1,408 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_stream
+
+statement ok
+CREATE DATABASE test_stream
+
+statement ok
+USE test_stream
+
+statement ok
+set enable_table_lock = 0
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values(1)
+
+statement ok
+alter table t set options(change_tracking=true)
+
+statement ok
+create stream if not exists s on table t
+
+statement error 2732
+create stream s on table t
+
+statement ok
+insert into t values(2)
+
+statement error 1025
+create stream s1 on table t1
+
+statement ok
+create stream s1 on table t append_only = true
+
+statement ok
+insert into t values(3)
+
+statement ok
+optimize table t compact
+
+query I
+select * from t
+----
+1
+2
+3
+
+query ITB
+select a, change$action, change$is_update from s
+----
+2 INSERT 0
+3 INSERT 0
+
+query ITB
+select a, change$action, change$is_update from s1
+----
+3 INSERT 0
+
+statement ok
+create stream s2 on table t at (stream => s) comment='this is a stream'
+
+query ITB
+select a, change$action, change$is_update from s2
+----
+2 INSERT 0
+3 INSERT 0
+
+statement ok
+create table t1(a int)
+
+statement ok
+insert into t1 select a from s
+
+query I
+select a from s
+----
+
+statement ok
+insert into t values(4)
+
+statement ok
+replace into t1 on(a) select a from s
+
+query I
+select * from t1 order by a
+----
+2
+3
+4
+
+statement ok
+set enable_experimental_merge_into = 1
+
+query I
+merge into t1 using (select a from s1) as t2 on t1.a = t2.a when matched then delete
+----
+2
+
+query I
+select * from t1
+----
+2
+
+query I
+select a from s1
+----
+
+query ITB
+select a, change$action, change$is_update from s2 order by a
+----
+2 INSERT 0
+3 INSERT 0
+4 INSERT 0
+
+statement ok
+create table t2(a int)
+
+statement ok
+create stream s3 on table t2
+
+statement ok
+set hide_options_in_show_create_table=0
+
+query TT
+show create table t2
+----
+t2 CREATE TABLE `t2` (   `a` INT NULL ) ENGINE=FUSE CHANGE_TRACKING='true' COMPRESSION='zstd' STORAGE_FORMAT='parquet'
+
+statement ok
+insert into t2 values(3),(4)
+
+query ITB
+select a, change$action, change$is_update from s3
+----
+3 INSERT 0
+4 INSERT 0
+
+statement ok
+insert into t1 select s2.a from s2 join s3 on s2.a = s3.a
+
+query I
+select * from t1 order by a
+----
+2
+3
+4
+
+query I
+select a from s2
+----
+
+query I
+select a from s3
+----
+
+statement ok
+drop stream s3
+
+statement ok
+drop table t2 all
+
+query TTTTT
+select catalog, database, name, mode, table_name, comment from system.streams where database='test_stream' order by name
+----
+default test_stream s append_only test_stream.t (empty)
+default test_stream s1 append_only test_stream.t (empty)
+default test_stream s2 append_only test_stream.t this is a stream
+
+statement ok
+drop stream s
+
+statement ok
+drop stream s1
+
+statement error 2730
+drop stream s1
+
+statement error 1302
+drop stream t1
+
+statement ok
+drop table t1 all
+
+statement ok
+alter table t set options(change_tracking = false)
+
+query TTT
+select name, invalid_reason from system.streams where database='test_stream' order by name
+----
+s2 Change tracking is not enabled for table 'test_stream.t'
+
+statement ok
+drop table t all
+
+query TTT
+select name, invalid_reason from system.streams where database='test_stream' order by name
+----
+s2 Unknown table 't'
+
+statement ok
+create table t(a int) change_tracking = true
+
+statement error 2733
+select * from s2
+
+statement error 1302
+drop table s2
+
+statement ok
+drop stream s2
+
+###############
+# issue 14062 #
+###############
+
+statement ok
+create table t_14062 (c int)
+
+statement ok
+create stream s_14062 on table t_14062
+
+statement ok
+insert into t_14062 values(1)
+
+query I
+select c from s_14062 where change$action = 'INSERT'
+----
+1
+
+query I
+select c from s_14062 where change$is_update = false
+----
+1
+
+query I
+select c from s_14062 where change$row_id = '1'
+----
+
+statement ok
+drop stream s_14062
+
+statement ok
+drop table t_14062 all
+
+######################
+# end of issue 14062 #
+######################
+
+###############
+# issue 14099 #
+###############
+
+statement ok
+create table t_14099 (a int, b int)
+
+statement ok
+create stream s_14099 on table t_14099
+
+statement ok
+insert into t_14099 values(1, 1), (2, 2)
+
+query IITB
+select a, b, change$action, change$is_update from s_14099 where a>1 limit 1
+----
+2 2 INSERT 0
+
+statement ok
+drop table t_14099 all
+
+statement ok
+drop stream s_14099
+
+######################
+# end of issue 14099 #
+######################
+
+statement ok
+create table t3(a int, b int)
+
+statement ok
+insert into t3 values(1, 1), (2, 2), (3, 3)
+
+statement ok
+create stream s3 on table t3 append_only = false
+
+statement ok
+insert into t3 values(4, 4), (5, 5)
+
+statement ok
+delete from t3 where a = 2
+
+statement ok
+update t3 set a = 0 where b = 1
+
+statement ok
+update t3 set a = 6 where b = 5
+
+statement ok
+optimize table t3 compact
+
+query IIBBII
+select a, b, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t3 order by a
+----
+0 1 0 0 0 1
+3 3 0 0 2 0
+4 4 0 0 0 0
+6 5 0 0 1 1
+
+query IITB
+select a, b, change$action, change$is_update from s3 order by a
+----
+0 1 INSERT 1
+1 1 DELETE 1
+2 2 DELETE 0
+4 4 INSERT 0
+6 5 INSERT 0
+
+statement ok
+create table t4(a int, b int)
+
+statement ok
+insert into t4 values(1,1),(2,2),(3,3)
+
+query II
+merge into t4 using (select a, b, change$action from s3) as t3 on t3.a=t4.a when matched and change$action = 'DELETE' then delete 
+when not matched and change$action = 'INSERT' then insert (a,b) values(t3.a,t3.b)
+----
+3 2
+
+query II
+select * from t4 order by a
+----
+0 1
+3 3
+4 4
+6 5
+
+query II
+select a, b from s3
+----
+
+###############
+# issue 14431 #
+###############
+
+statement ok
+create stream default.s4 on table t3
+
+statement ok
+insert into t3 values(7, 7)
+
+query II
+select a, b from default.s4
+----
+7 7
+
+statement ok
+drop stream default.s4
+
+######################
+# end of issue 14431 #
+######################
+
+statement error 2733
+create stream s_err on table t4 at (stream => s3)
+
+statement ok
+create transient table t5(a int)
+
+statement error 2733
+create stream s5 on table t5
+
+statement ok
+set enable_table_lock = 1
+
+statement ok
+drop stream s3
+
+statement ok
+drop table t3 all
+
+statement ok
+drop table t4 all
+
+statement ok
+drop table t5 all
+
+statement ok
+DROP DATABASE IF EXISTS test_stream

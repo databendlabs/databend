@@ -15,8 +15,8 @@
 use std::io;
 use std::mem::MaybeUninit;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use micromarshal::Unmarshal;
 
 use crate::stat_buffer::StatBuffer;

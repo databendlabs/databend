@@ -16,19 +16,20 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_hashtable::FastHash;
-use common_hashtable::HashtableEntryMutRefLike;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::query_spill_prefix;
-use common_pipeline_core::Pipeline;
-use common_storage::DataOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_hashtable::FastHash;
+use databend_common_hashtable::HashtableEntryMutRefLike;
+use databend_common_hashtable::HashtableEntryRefLike;
+use databend_common_hashtable::HashtableLike;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::FlightCompression;
+use databend_common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
 use crate::api::DataExchange;
@@ -244,6 +245,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_merge_serializer(
         &self,
         _: &MergeExchangeParams,
+        _compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -292,6 +294,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     fn apply_shuffle_serializer(
         &self,
         shuffle_params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -319,6 +322,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         location_prefix.clone(),
                         schema.clone(),
                         local_pos,
+                        compression,
                     ),
                     false => TransformExchangeAggregateSerializer::create(
                         self.ctx.clone(),
@@ -328,6 +332,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         operator.clone(),
                         location_prefix.clone(),
                         params.clone(),
+                        compression,
                         schema.clone(),
                         local_pos,
                     ),

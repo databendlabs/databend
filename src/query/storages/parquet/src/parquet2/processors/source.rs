@@ -17,18 +17,18 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::DataBlock;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -52,14 +52,14 @@ impl Debug for Parquet2SourceMeta {
 }
 
 impl serde::Serialize for Parquet2SourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize ParquetSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for Parquet2SourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ParquetSourceMeta")
     }
@@ -102,7 +102,9 @@ impl SyncSource for SyncParquet2Source {
             None => Ok(None),
             Some(part) => {
                 let part_clone = part.clone();
-                let data = self.block_reader.readers_from_blocking_io(part)?;
+                let data = self
+                    .block_reader
+                    .readers_from_blocking_io(self.ctx.clone(), part)?;
                 metrics_inc_copy_read_part_counter();
                 Ok(Some(DataBlock::empty_with_meta(Box::new(
                     Parquet2SourceMeta {
@@ -180,7 +182,7 @@ impl Processor for AsyncParquet2Source {
             let parquet_part = ParquetPart::from_part(&part)?;
             let block_reader = self.block_reader.clone();
             let data = block_reader
-                .readers_from_non_blocking_io(parquet_part)
+                .readers_from_non_blocking_io(self.ctx.clone(), parquet_part)
                 .await?;
             metrics_inc_copy_read_part_counter();
             self.output_data = Some(vec![(part, data)]);

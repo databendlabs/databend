@@ -1,5 +1,5 @@
 [package]
-name = "common-pipeline-core"
+name = "databend-common-pipeline-core"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,17 +12,19 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
 
 async-backtrace = { workspace = true }
-async-trait = "0.1.57"
-futures = "0.3.24"
+async-trait = { workspace = true }
+futures = { workspace = true }
 minitrace = { workspace = true }
+once_cell = { workspace = true }
 petgraph = "0.6.2"
+serde = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }

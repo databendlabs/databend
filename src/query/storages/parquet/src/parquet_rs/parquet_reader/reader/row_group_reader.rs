@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::TopKSorter;
-use common_metrics::storage::metrics_inc_omit_filter_rowgroups;
-use common_metrics::storage::metrics_inc_omit_filter_rows;
+use databend_common_exception::Result;
+use databend_common_expression::TopKSorter;
+use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
+use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
@@ -27,6 +27,7 @@ use crate::parquet_rs::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_rs::parquet_reader::policy::POLICY_PREDICATE_ONLY;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::ParquetRSRowGroupPart;
+use crate::ReadSettings;
 
 /// The reader to read a row group.
 pub struct ParquetRSRowGroupReader {
@@ -48,6 +49,7 @@ impl ParquetRSRowGroupReader {
     /// If return [None], it means the whole row group is skipped (by eval push down predicate).
     pub async fn create_read_policy(
         &self,
+        read_settings: &ReadSettings,
         part: &ParquetRSRowGroupPart,
         topk_sorter: &mut Option<TopKSorter>,
     ) -> Result<Option<ReadPolicyImpl>> {
@@ -66,6 +68,8 @@ impl ParquetRSRowGroupReader {
             self.op.clone(),
             &part.meta,
             page_locations.as_deref(),
+            read_settings.max_gap_size,
+            read_settings.max_range_size,
         );
         let mut selection = part
             .selectors

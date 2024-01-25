@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
-use lazy_static::lazy_static;
 use prometheus_client::registry::Registry;
 
-lazy_static! {
-    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
-}
+pub static REGISTRY: LazyLock<Mutex<Registry>> = LazyLock::new(|| Mutex::new(Registry::default()));
 
 pub fn load_global_registry() -> MutexGuard<'static, Registry> {
     REGISTRY.lock().unwrap()

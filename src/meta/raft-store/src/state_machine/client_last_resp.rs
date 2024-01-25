@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::SledBytesError;
-use common_meta_sled_store::SledSerde;
-use common_meta_types::AppliedState;
+use databend_common_meta_sled_store::SledBytesError;
+use databend_common_meta_sled_store::SledSerde;
+use databend_common_meta_types::AppliedState;
 use serde::Deserialize;
 use serde::Serialize;
 

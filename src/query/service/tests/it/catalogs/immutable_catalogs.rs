@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::RenameDatabaseReq;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_query::catalogs::default::ImmutableCatalog;
 use databend_query::catalogs::Catalog;
 
@@ -43,7 +44,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     // create database should failed
     let create_db_req = CreateDatabaseReq {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         name_ident: DatabaseNameIdent {
             tenant: tenant.to_string(),
             db_name: "system".to_string(),

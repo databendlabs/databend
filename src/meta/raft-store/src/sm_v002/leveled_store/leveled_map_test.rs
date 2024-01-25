@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::KVMeta;
+use databend_common_meta_types::KVMeta;
 use futures_util::TryStreamExt;
 
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
@@ -379,26 +379,18 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
 
     // internal_seq: 0
     l.str_map_mut()
-        .set(s("a"), Some((b("a0"), Some(KVMeta { expire_at: Some(1) }))))
+        .set(s("a"), Some((b("a0"), Some(KVMeta::new_expire(1)))))
         .await?;
     l.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
     l.str_map_mut()
-        .set(s("c"), Some((b("c0"), Some(KVMeta { expire_at: Some(2) }))))
+        .set(s("c"), Some((b("c0"), Some(KVMeta::new_expire(2)))))
         .await?;
 
     l.freeze_writable();
 
     // internal_seq: 3
     l.str_map_mut()
-        .set(
-            s("b"),
-            Some((
-                b("b1"),
-                Some(KVMeta {
-                    expire_at: Some(10),
-                }),
-            )),
-        )
+        .set(s("b"), Some((b("b1"), Some(KVMeta::new_expire(10)))))
         .await?;
     l.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
 
@@ -414,17 +406,17 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::upsert_value(&mut l, s("a"), b("a1")).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(1, b("a0"), Some(KVMeta::new_expire(1)))
         );
         assert_eq!(
             result,
-            Marked::new_with_meta(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
         );
 
         let got = l.str_map().get("a").await?;
         assert_eq!(
             got,
-            Marked::new_with_meta(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
         );
     }
 
@@ -435,23 +427,17 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::upsert_value(&mut l, s("b"), b("x1")).await?;
         assert_eq!(
             prev,
-            Marked::new_normal(4, b("b1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(4, b("b1")).with_meta(Some(KVMeta::new_expire(10)))
         );
         assert_eq!(
             result,
-            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
         );
 
         let got = l.str_map().get("b").await?;
         assert_eq!(
             got,
-            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta {
-                expire_at: Some(10)
-            }))
+            Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
         );
     }
 
@@ -477,20 +463,20 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, s("a"), Some(KVMeta { expire_at: Some(2) })).await?;
+            MapApiExt::update_meta(&mut l, s("a"), Some(KVMeta::new_expire(2))).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_with_meta(1, b("a0"), Some(KVMeta::new_expire(1)))
         );
         assert_eq!(
             result,
-            Marked::new_with_meta(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
+            Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
         );
 
         let got = l.str_map().get("a").await?;
         assert_eq!(
             got,
-            Marked::new_with_meta(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
+            Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
         );
     }
 
@@ -501,13 +487,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let (prev, result) = MapApiExt::update_meta(&mut l, s("b"), None).await?;
         assert_eq!(
             prev,
-            Marked::new_with_meta(
-                4,
-                b("b1"),
-                Some(KVMeta {
-                    expire_at: Some(10)
-                })
-            )
+            Marked::new_with_meta(4, b("b1"), Some(KVMeta::new_expire(10)))
         );
         assert_eq!(result, Marked::new_with_meta(6, b("b1"), None));
 
@@ -519,28 +499,18 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) = MapApiExt::update_meta(
-            &mut l,
-            s("c"),
-            Some(KVMeta {
-                expire_at: Some(20),
-            }),
-        )
-        .await?;
+        let (prev, result) =
+            MapApiExt::update_meta(&mut l, s("c"), Some(KVMeta::new_expire(20))).await?;
         assert_eq!(prev, Marked::new_with_meta(5, b("c1"), None));
         assert_eq!(
             result,
-            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta {
-                expire_at: Some(20)
-            }))
+            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
         );
 
         let got = l.str_map().get("c").await?;
         assert_eq!(
             got,
-            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta {
-                expire_at: Some(20)
-            }))
+            Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
         );
     }
 
@@ -549,7 +519,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, s("d"), Some(KVMeta { expire_at: Some(2) })).await?;
+            MapApiExt::update_meta(&mut l, s("d"), Some(KVMeta::new_expire(2))).await?;
         assert_eq!(prev, Marked::new_tombstone(0));
         assert_eq!(result, Marked::new_tombstone(0));
 

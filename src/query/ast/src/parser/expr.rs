@@ -49,7 +49,7 @@ fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
 
 pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
     let values = comma_separated_list0(expr_or_placeholder);
-    map(rule! { ( "(" ~  #values ~ ")" ) }, |(_, v, _)| v)(i)
+    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
 }
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
@@ -147,45 +147,6 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     }
 }
 
-#[allow(clippy::needless_lifetimes)]
-pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..].parse::<usize>()?;
-            if pos == 0 {
-                return Err(ErrorKind::Other("column position must be greater than 0"));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
-}
-
-/// Parse one two three idents separated by a dot, fulfilling from the right.
-///
-/// Example: `db.table.column`
-#[allow(clippy::needless_lifetimes)]
-pub fn column_ref<'a>(
-    i: Input<'a>,
-) -> IResult<'a, (Option<Identifier>, Option<Identifier>, ColumnID)> {
-    alt((
-        map(
-            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
-            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
-        ),
-        map(
-            rule! { #ident ~ "." ~ #column_id },
-            |(ident2, _, ident3)| (None, Some(ident2), ident3),
-        ),
-        map(rule! {  #column_id }, |ident3| (None, None, ident3)),
-    ))(i)
-}
-
 /// A 'flattened' AST of expressions.
 ///
 /// This is used to parse expressions in Pratt parser.
@@ -202,6 +163,10 @@ pub enum ExprElement {
         database: Option<Identifier>,
         table: Option<Identifier>,
         column: ColumnID,
+    },
+    /// `.a.b` after column ref, currently it'll be taken as column reference
+    DotAccess {
+        key: ColumnID,
     },
     /// `IS [NOT] NULL` expression
     IsNull {
@@ -300,7 +265,7 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        params: Vec<Literal>,
+        params: Vec<Expr>,
         window: Option<Window>,
         lambda: Option<Lambda>,
     },
@@ -324,6 +289,19 @@ pub enum ExprElement {
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         accessor: MapAccessor,
+    },
+    /// python/rust style function call, like `a.foo(b).bar(c)` ---> `bar(foo(a, b), c)`
+    ChainFunctionCall {
+        name: Identifier,
+        args: Vec<Expr>,
+        lambda: Option<Lambda>,
+    },
+    /// python/rust list comprehension
+    ListComprehension {
+        source: Expr,
+        param: Identifier,
+        filter: Option<Expr>,
+        result: Expr,
     },
     /// An expression between parentheses
     Group(Expr),
@@ -364,7 +342,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
         let affix = match &elem.elem {
-            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(25)),
+            ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
+            ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
+            ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::IsDistinctFrom { .. } => {
@@ -545,6 +525,44 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 exprs,
             },
+            ExprElement::ListComprehension {
+                source,
+                param,
+                filter,
+                result,
+            } => {
+                let span = transform_span(elem.span.0);
+                let mut source = source;
+
+                // array_filter(source, filter)
+                if let Some(filter) = filter {
+                    source = Expr::FunctionCall {
+                        span,
+                        distinct: false,
+                        name: Identifier::from_name("array_filter"),
+                        args: vec![source],
+                        params: vec![],
+                        window: None,
+                        lambda: Some(Lambda {
+                            params: vec![param.clone()],
+                            expr: Box::new(filter),
+                        }),
+                    };
+                }
+                // array_map(source, result)
+                Expr::FunctionCall {
+                    span,
+                    distinct: false,
+                    name: Identifier::from_name("array_map"),
+                    args: vec![source],
+                    params: vec![],
+                    window: None,
+                    lambda: Some(Lambda {
+                        params: vec![param.clone()],
+                        expr: Box::new(result),
+                    }),
+                }
+            }
             ExprElement::Map { kvs } => Expr::Map {
                 span: transform_span(elem.span.0),
                 kvs,
@@ -628,7 +646,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
     fn postfix(
         &mut self,
-        lhs: Expr,
+        mut lhs: Expr,
         elem: WithSpan<'a, ExprElement>,
     ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
@@ -636,6 +654,48 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 accessor,
+            },
+            // Lift level up the identifier
+            ExprElement::DotAccess { key } => {
+                let mut is_map_access = true;
+                if let Expr::ColumnRef {
+                    database,
+                    table,
+                    column,
+                    ..
+                } = &mut lhs
+                {
+                    if let ColumnID::Name(name) = column {
+                        is_map_access = false;
+                        *database = table.take();
+                        *table = Some(name.clone());
+                        *column = key.clone();
+                    }
+                }
+
+                if is_map_access {
+                    match key {
+                        ColumnID::Name(id) => Expr::MapAccess {
+                            span: transform_span(elem.span.0),
+                            expr: Box::new(lhs),
+                            accessor: MapAccessor::Colon { key: id },
+                        },
+                        _ => {
+                            return Err("dot access position must be after ident");
+                        }
+                    }
+                } else {
+                    lhs
+                }
+            }
+            ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
+                span: transform_span(elem.span.0),
+                distinct: false,
+                name,
+                args: [vec![lhs], args].concat(),
+                params: vec![],
+                window: None,
+                lambda,
             },
             ExprElement::IsNull { not } => Expr::IsNull {
                 span: transform_span(elem.span.0),
@@ -679,13 +739,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(column_ref, |(database, table, column)| {
-        ExprElement::ColumnRef {
-            database,
-            table,
-            column,
-        }
+    let column_ref = map(rule! {  #column_id }, |column| ExprElement::ColumnRef {
+        database: None,
+        table: None,
+        column,
     });
+
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -867,25 +926,23 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_lambda = map(
         rule! {
             #function_name
-            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+            ~ "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
         },
-        |(name, _, arg, _, param, _, expr, _)| ExprElement::FunctionCall {
+        |(name, _, arg, _, params, _, expr, _)| ExprElement::FunctionCall {
             distinct: false,
             name,
             args: vec![arg],
             params: vec![],
             window: None,
             lambda: Some(Lambda {
-                params: vec![param],
+                params,
                 expr: Box::new(expr),
             }),
         },
     );
-
     let function_call_with_window = map(
         rule! {
             #function_name
@@ -901,18 +958,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             lambda: None,
         },
     );
-
     let function_call_with_params = map(
         rule! {
             #function_name
-            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
+            ~ ("(" ~ #comma_separated_list1(subexpr(0)) ~ ")")?
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
         |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
-            params: params.map(|x| x.1).unwrap_or_default(),
+            params: params.map(|(_, x, _)| x).unwrap_or_default(),
             window: None,
             lambda: None,
         },
@@ -967,6 +1023,65 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let dot_access = map(
+        rule! {
+           "." ~ #column_id
+        },
+        |(_, key)| ExprElement::DotAccess { key },
+    );
+
+    let chain_function_call = check_experimental_chain_function(
+        true,
+        alt((
+            map(
+                rule! {
+                    "." ~ #function_name
+                    ~ "(" ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+                },
+                |(_, name, _, param, _, expr, _)| ExprElement::ChainFunctionCall {
+                    name,
+                    args: vec![],
+                    lambda: Some(Lambda {
+                        params: vec![param],
+                        expr: Box::new(expr),
+                    }),
+                },
+            ),
+            map(
+                rule! {
+                    "." ~ #function_name ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ^")"
+                },
+                |(_, name, _, args, _)| ExprElement::ChainFunctionCall {
+                    name,
+                    args,
+                    lambda: None,
+                },
+            ),
+        )),
+    );
+
+    // python style list comprehensions
+    // python: [i for i in range(10) if i%2==0 ]
+    // sql: [i for i in range(10) if i%2 = 0 ]
+    let list_comprehensions = check_experimental_list_comprehension(
+        true,
+        map(
+            rule! {
+                "[" ~ #subexpr(0) ~ FOR ~ #ident ~ IN
+                ~ #subexpr(0) ~ (IF ~ #subexpr(2))? ~ "]"
+            },
+            |(_, result, _, param, _, source, opt_filter, _)| {
+                let filter = opt_filter.map(|(_, filter)| filter);
+                ExprElement::ListComprehension {
+                    source,
+                    param,
+                    filter,
+                    result,
+                }
+            },
+        ),
+    );
+
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
@@ -1058,6 +1173,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
+    let current_timestamp = value(
+        ExprElement::FunctionCall {
+            distinct: false,
+            name: Identifier::from_name("current_timestamp"),
+            args: vec![],
+            params: vec![],
+            window: None,
+            lambda: None,
+        },
+        rule! { CURRENT_TIMESTAMP },
+    );
+
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
         rule!(
@@ -1079,30 +1206,73 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
             | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+            | #position : "`POSITION(... IN ...)`"
         ),
         rule!(
-            #position : "`POSITION(... IN ...)`"
-            | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+            #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+            | #chain_function_call : "x.function(...)"
+            | #list_comprehensions: "[expr for x in ... [if ...]]"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "<function>"
-            | #function_call_with_window : "<function>"
-            | #function_call_with_params : "<function>"
-            | #function_call : "<function>"
+            | #function_call_with_lambda : "`function(..., x -> ...)`"
+            | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+            | #function_call_with_params : "`function(...)(...)`"
+            | #function_call : "`function(...)`"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
             | #column_ref : "<column>"
+            | #dot_access : "<dot_access>"
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
-            | #array : "`[...]`"
-            | #map_expr : "`{...}`"
+            | #current_timestamp: "CURRENT_TIMESTAMP"
+            | #array : "`[<expr>, ...]`"
+            | #map_expr : "`{ <literal> : <expr>, ... }`"
         ),
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
+}
+
+pub fn column_id(i: Input) -> IResult<ColumnID> {
+    alt((
+        map_res(rule! { ColumnPosition }, |token| {
+            let name = token.text().to_string();
+            let pos = name[1..]
+                .parse::<usize>()
+                .map_err(|e| nom::Err::Failure(e.into()))?;
+            if pos == 0 {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "column position must be greater than 0",
+                )));
+            }
+            Ok(ColumnID::Position(crate::ast::ColumnPosition {
+                pos,
+                name,
+                span: Some(token.span),
+            }))
+        }),
+        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
+    ))(i)
+}
+
+/// Parse one to three idents separated by a dot, fulfilling from the right.
+///
+/// Example: `db.table.column`
+pub fn column_ref(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, ColumnID)> {
+    alt((
+        map(
+            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
+            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
+        ),
+        map(
+            rule! { #ident ~ "." ~ #column_id },
+            |(ident2, _, ident3)| (None, Some(ident2), ident3),
+        ),
+        map(rule! { #column_id }, |ident3| (None, None, ident3)),
+    ))(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
@@ -1168,20 +1338,20 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
         value(JsonOperator::QuestionAnd, rule! { "?&" }),
         value(JsonOperator::AtArrow, rule! { "@>" }),
         value(JsonOperator::ArrowAt, rule! { "<@" }),
+        value(JsonOperator::AtQuestion, rule! { "@?" }),
+        value(JsonOperator::AtAt, rule! { "@@" }),
     ))(i)
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
     let boolean = map(literal_bool, Literal::Boolean);
-    let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
 
     rule!(
         #string
         | #boolean
         | #literal_number
-        | #current_timestamp
         | #null
     )(i)
 }
@@ -1214,9 +1384,11 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
         rule! {
             LiteralInteger
         },
-        |token| Ok(u64::from_str_radix(token.text(), 10)?),
+        |token| u64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
     );
-    let hex = map_res(literal_hex_str, |lit| Ok(u64::from_str_radix(lit, 16)?));
+    let hex = map_res(literal_hex_str, |lit| {
+        u64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
+    });
 
     rule!(
         #decimal
@@ -1229,16 +1401,18 @@ pub fn literal_number(i: Input) -> IResult<Literal> {
         rule! {
             LiteralInteger
         },
-        |token| parse_uint(token.text(), 10),
+        |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
     );
 
-    let hex_uint = map_res(literal_hex_str, |str| parse_uint(str, 16));
+    let hex_uint = map_res(literal_hex_str, |str| {
+        parse_uint(str, 16).map_err(nom::Err::Failure)
+    });
 
     let decimal_float = map_res(
         rule! {
            LiteralFloat
         },
-        |token| parse_float(token.text()),
+        |token| parse_float(token.text()).map_err(nom::Err::Failure),
     );
 
     rule!(
@@ -1266,11 +1440,12 @@ pub fn literal_string(i: Input) -> IResult<String> {
                 .is_some()
             {
                 let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'')
-                    .ok_or(ErrorKind::Other("invalid escape or unicode"))?;
+                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
+                    ErrorKind::Other("invalid escape or unicode"),
+                ))?;
                 Ok(unescaped)
             } else {
-                Err(ErrorKind::ExpectToken(QuotedString))
+                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
             }
         },
     )(i)
@@ -1282,7 +1457,7 @@ pub fn literal_string_eq_ignore_case(s: &str) -> impl FnMut(Input) -> IResult<()
             if token.text()[1..token.text().len() - 1].eq_ignore_ascii_case(s) {
                 Ok(())
             } else {
-                Err(ErrorKind::ExpectToken(QuotedString))
+                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
             }
         })(i)
     }
@@ -1293,6 +1468,13 @@ pub fn at_string(i: Input) -> IResult<String> {
         let path = token.text()[1..token.text().len()].to_string();
         Ok(unescape_at_string(&path))
     })(i)
+}
+
+pub fn nullable(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ))(i)
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
@@ -1340,11 +1522,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
-                    .map_err(|_| ErrorKind::Other("precision is too large"))?,
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("precision is too large")))?,
                 scale: if let Some((_, scale)) = opt_scale {
                     scale
                         .try_into()
-                        .map_err(|_| ErrorKind::Other("scale is too large"))?
+                        .map_err(|_| nom::Err::Failure(ErrorKind::Other("scale is too large")))?
                 } else {
                     0
                 },
@@ -1390,12 +1572,16 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
     );
+    let ty_binary = value(
+        TypeName::Binary,
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
     let ty_string = value(
         TypeName::String,
-        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
+    map_res(
         alt((
             rule! {
             ( #ty_boolean
@@ -1415,22 +1601,29 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NULL? : "type name"
+            ) ~ #nullable? : "type name"
             },
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_binary
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NULL? : "type name" },
+            ) ~ #nullable? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
+        |(ty, opt_nullable)| match opt_nullable {
+            Some(true) => Ok(ty.wrap_nullable()),
+            Some(false) => {
+                if matches!(ty, TypeName::Nullable(_)) {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "ambiguous NOT NULL constraint",
+                    )))
+                } else {
+                    Ok(ty.wrap_not_null())
+                }
             }
+            None => Ok(ty),
         },
     )(i)
 }
@@ -1497,12 +1690,6 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
-    let dot = map(
-        rule! {
-           "." ~ #ident
-        },
-        |(_, key)| MapAccessor::Dot { key },
-    );
     let dot_number = map_res(
         rule! {
            LiteralFloat
@@ -1513,7 +1700,7 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
                     return Ok(MapAccessor::DotNumber { key });
                 }
             }
-            Err(ErrorKind::ExpectText("."))
+            Err(nom::Err::Error(ErrorKind::ExpectText(".")))
         },
     );
     let colon = map(
@@ -1525,7 +1712,6 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #dot
         | #dot_number
         | #colon
     )(i)
@@ -1591,6 +1777,11 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
 
 pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
+    let contains_underscore = text.contains('_');
+    if contains_underscore {
+        let text = text.replace(|p| p == '_', "");
+        return parse_uint(&text, radix);
+    }
 
     if text.is_empty() {
         return Ok(Literal::UInt64(0));

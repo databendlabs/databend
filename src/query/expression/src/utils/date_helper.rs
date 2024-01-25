@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
+
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
@@ -24,10 +26,9 @@ use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
 use chrono_tz::Tz;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use num_traits::AsPrimitive;
-use once_cell::sync::Lazy;
 
 use crate::types::date::check_date;
 use crate::types::timestamp::check_timestamp;
@@ -52,7 +53,7 @@ impl Default for TzLUT {
     }
 }
 
-static TZ_FACTORY: Lazy<TzFactory> = Lazy::new(|| {
+static TZ_FACTORY: LazyLock<TzFactory> = LazyLock::new(|| {
     let factory = TzFactory {
         luts: dashmap::DashMap::new(),
     };
@@ -275,10 +276,8 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
     if std::intrinsics::unlikely(month == 2 && day == 29) {
         new_day = last_day_of_year_month(new_year, month);
     }
-    NaiveDate::from_ymd_opt(new_year, month, new_day).ok_or(format!(
-        "Overflow on date YMD {}-{}-{}.",
-        new_year, month, new_day
-    ))
+    NaiveDate::from_ymd_opt(new_year, month, new_day)
+        .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
 }
 
 fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
@@ -296,12 +295,14 @@ fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveD
         last_day_of_year_month(new_year, (new_month0 + 1) as u32),
     );
 
-    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or(format!(
-        "Overflow on date YMD {}-{}-{}.",
-        new_year,
-        new_month0 + 1,
-        new_day
-    ))
+    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
+        format!(
+            "Overflow on date YMD {}-{}-{}.",
+            new_year,
+            new_month0 + 1,
+            new_day
+        )
+    })
 }
 
 // Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31

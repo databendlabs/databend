@@ -15,18 +15,18 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::TableSchemaRef;
-use common_formats::FieldDecoder;
-use common_formats::FileFormatOptionsExt;
-use common_formats::SeparatedTextDecoder;
-use common_io::cursor_ext::BufferReadStringExt;
-use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::TsvFileFormatParams;
-use common_storage::FileParseError;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_formats::FieldDecoder;
+use databend_common_formats::FileFormatOptionsExt;
+use databend_common_formats::SeparatedTextDecoder;
+use databend_common_io::cursor_ext::BufferReadStringExt;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_storage::FileParseError;
 use log::debug;
 
 use crate::input_formats::error_utils::get_decode_error_by_pos;
@@ -85,7 +85,7 @@ impl InputFormatTSV {
         field_delimiter: u8,
         field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
-        columns: &mut Vec<ColumnBuilder>,
+        columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
         default_values: &Option<Vec<Scalar>>,
@@ -184,9 +184,14 @@ impl InputFormatTextBase for InputFormatTSV {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
         let tsv_params = TsvFileFormatParams::downcast_unchecked(params);
-        Arc::new(SeparatedTextDecoder::create_tsv(tsv_params, options))
+        Arc::new(SeparatedTextDecoder::create_tsv(
+            tsv_params,
+            options,
+            rounding_mode,
+        ))
     }
 
     fn try_create_align_state(

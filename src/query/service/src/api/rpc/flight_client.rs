@@ -18,19 +18,19 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use common_arrow::arrow_format::flight::data::Action;
-use common_arrow::arrow_format::flight::data::FlightData;
-use common_arrow::arrow_format::flight::data::Ticket;
-use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
-use common_base::base::tokio::sync::Notify;
-use common_base::base::tokio::time::Duration;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_arrow::arrow_format::flight::data::Action;
+use databend_common_arrow::arrow_format::flight::data::FlightData;
+use databend_common_arrow::arrow_format::flight::data::Ticket;
+use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::time::Duration;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::StreamExt;
 use futures_util::future::Either;
+use minitrace::full_name;
+use minitrace::future::FutureExt;
+use minitrace::Span;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -39,6 +39,7 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::request_builder::RequestBuilder;
+use crate::pipelines::executor::WatchNotify;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -96,7 +97,7 @@ impl FlightClient {
             .with_metadata("x-query-id", query_id)?
             .with_metadata("x-fragment-id", &fragment.to_string())?
             .build();
-        let request = common_tracing::inject_span_to_tonic_request(request);
+        let request = databend_common_tracing::inject_span_to_tonic_request(request);
 
         let streaming = self.get_streaming(request).await?;
 
@@ -107,10 +108,10 @@ impl FlightClient {
     fn streaming_receiver(
         query_id: &str,
         mut streaming: Streaming<FlightData>,
-    ) -> (Arc<Notify>, Receiver<Result<FlightData>>) {
+    ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
-        let notify = Arc::new(tokio::sync::Notify::new());
-        GlobalIORuntime::instance().spawn(query_id, {
+        let notify = Arc::new(WatchNotify::new());
+        let fut = {
             let notify = notify.clone();
             async move {
                 let mut notified = Box::pin(notify.notified());
@@ -143,7 +144,10 @@ impl FlightClient {
                 drop(streaming);
                 tx.close();
             }
-        });
+        }
+        .in_span(Span::enter_with_local_parent(full_name!()));
+
+        tokio::spawn(async_backtrace::location!(String::from(query_id)).frame(fut));
 
         (notify, rx)
     }
@@ -163,7 +167,7 @@ impl FlightClient {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
         let request = Request::new(action);
-        let mut request = common_tracing::inject_span_to_tonic_request(request);
+        let mut request = databend_common_tracing::inject_span_to_tonic_request(request);
         request.set_timeout(Duration::from_secs(timeout));
 
         let response = self.inner.do_action(request).await?;
@@ -179,15 +183,21 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
-    notify: Arc<Notify>,
+    notify: Arc<WatchNotify>,
     rx: Receiver<Result<FlightData>>,
+}
+
+impl Drop for FlightReceiver {
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
         FlightReceiver {
             rx,
-            notify: Arc::new(Notify::new()),
+            notify: Arc::new(WatchNotify::new()),
         }
     }
 
@@ -238,7 +248,7 @@ impl FlightSender {
 pub enum FlightExchange {
     Dummy,
     Receiver {
-        notify: Arc<Notify>,
+        notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
     Sender(Sender<Result<FlightData, Status>>),
@@ -250,7 +260,7 @@ impl FlightExchange {
     }
 
     pub fn create_receiver(
-        notify: Arc<Notify>,
+        notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     ) -> FlightExchange {
         FlightExchange::Receiver { notify, receiver }

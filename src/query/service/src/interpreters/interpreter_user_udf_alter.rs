@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_sql::plans::AlterUDFPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_sql::plans::AlterUDFPlan;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -45,6 +45,7 @@ impl Interpreter for AlterUserUDFInterpreter {
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // Alter udf only modify the UserDefinedFunction, no need to modify ownership.
         debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_udf_execute");
 
         let plan = self.plan.clone();

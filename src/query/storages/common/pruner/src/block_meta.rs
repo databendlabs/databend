@@ -14,11 +14,11 @@
 
 use std::ops::Range;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
@@ -51,8 +51,8 @@ impl BlockMetaInfo for BlockMetaIndex {
 
 impl BlockMetaIndex {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&BlockMetaIndex> {
-        BlockMetaIndex::downcast_ref_from(info).ok_or(ErrorCode::Internal(
-            "Cannot downcast from BlockMetaInfo to BlockMetaIndex.",
-        ))
+        BlockMetaIndex::downcast_ref_from(info).ok_or_else(|| {
+            ErrorCode::Internal("Cannot downcast from BlockMetaInfo to BlockMetaIndex.")
+        })
     }
 }

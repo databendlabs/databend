@@ -24,6 +24,7 @@ pub mod dataframe;
 mod expression_parser;
 pub mod optimizer;
 pub mod plans;
+mod stream_column;
 mod udf_validator;
 
 pub use binder::parse_result_scan_args;
@@ -40,5 +41,10 @@ pub use format::format_scalar;
 pub use metadata::*;
 pub use planner::PlanExtras;
 pub use planner::Planner;
+pub use plans::insert::InsertInputSource;
 pub use plans::ScalarExpr;
+pub use plans::DELETE_NAME;
+pub use plans::INSERT_NAME;
+pub use plans::UPDATE_NAME;
 pub use semantic::*;
+pub use stream_column::*;

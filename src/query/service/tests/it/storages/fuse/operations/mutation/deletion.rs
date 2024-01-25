@@ -12,17 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
-use databend_query::test_kits::table_test_fixture::expects_ok;
-use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
 
+    fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 
     // insert
@@ -53,5 +53,6 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         expected,
     )
     .await?;
+
     Ok(())
 }

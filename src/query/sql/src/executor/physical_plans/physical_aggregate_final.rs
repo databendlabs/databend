@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -32,7 +32,7 @@ use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
-use crate::plans::RelOperator;
+use crate::plans::DummyTableScan;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -94,9 +94,7 @@ impl PhysicalPlanBuilder {
         });
 
         if agg.group_items.is_empty() && used.is_empty() {
-            let expr = SExpr::create_leaf(Arc::new(RelOperator::DummyTableScan(
-                crate::plans::DummyTableScan,
-            )));
+            let expr = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
             return self.build(&expr, required).await;
         }
 
@@ -214,6 +212,7 @@ impl PhysicalPlanBuilder {
                         PhysicalPlan::Exchange(Exchange {
                             plan_id: self.next_plan_id(),
                             kind,
+                            allow_adjust_parallelism: true,
                             ignore_exchange: false,
                             input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
                             keys: vec![RemoteExpr::ColumnRef {

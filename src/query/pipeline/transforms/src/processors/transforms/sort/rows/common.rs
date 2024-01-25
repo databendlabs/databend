@@ -12,26 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::DataSchemaRef;
-use common_expression::RowConverter as CommonRowConverter;
-use common_expression::Scalar;
-use common_expression::SortColumnDescription;
-use common_expression::SortField;
-use common_expression::Value;
+use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RowConverter as CommonRowConverter;
+use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
+use databend_common_expression::Value;
 use jsonb::convert_to_comparable;
 
 use super::RowConverter;
 use super::Rows;
 
-impl Rows for StringColumn {
+pub type CommonRows = BinaryColumn;
+
+impl Rows for BinaryColumn {
     type Item<'a> = &'a [u8];
 
     fn len(&self) -> usize {
@@ -43,17 +45,21 @@ impl Rows for StringColumn {
     }
 
     fn to_column(&self) -> Column {
-        Column::String(self.clone())
+        Column::Binary(self.clone())
     }
 
-    fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
-        col.as_string().cloned()
+    fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
+        col.as_binary().cloned()
+    }
+
+    fn data_type() -> DataType {
+        DataType::Binary
     }
 }
 
-impl RowConverter<StringColumn> for CommonRowConverter {
+impl RowConverter<BinaryColumn> for CommonRowConverter {
     fn create(
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self> {
         let sort_fields = sort_columns_descriptions
@@ -66,7 +72,7 @@ impl RowConverter<StringColumn> for CommonRowConverter {
         CommonRowConverter::new(sort_fields)
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<StringColumn> {
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
             .map(|entry| match &entry.value {
@@ -89,7 +95,7 @@ impl RowConverter<StringColumn> for CommonRowConverter {
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
                             let mut builder =
-                                StringColumnBuilder::with_capacity(col.len(), col.data().len());
+                                BinaryColumnBuilder::with_capacity(col.len(), col.data().len());
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {

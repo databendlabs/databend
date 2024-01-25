@@ -17,26 +17,37 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::UserSettingValue;
 use dashmap::DashMap;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserSettingValue;
 use itertools::Itertools;
 
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
+use crate::settings_default::SettingRange;
+use crate::SettingMode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ScopeLevel {
+    Default,
     Global,
+    Local,
     Session,
 }
 
 impl Debug for ScopeLevel {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            ScopeLevel::Default => {
+                write!(f, "DEFAULT")
+            }
             ScopeLevel::Global => {
                 write!(f, "GLOBAL")
+            }
+            ScopeLevel::Local => {
+                write!(f, "LOCAL")
             }
             ScopeLevel::Session => {
                 write!(f, "SESSION")
@@ -51,22 +62,28 @@ pub struct ChangeValue {
     pub value: UserSettingValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     pub(crate) tenant: String,
     pub(crate) changes: DashMap<String, ChangeValue>,
+    pub(crate) configs: HashMap<String, UserSettingValue>,
 }
 
 impl Settings {
     pub fn create(tenant: String) -> Arc<Settings> {
+        let configs = match GlobalConfig::try_get_instance() {
+            Some(conf) => conf.query.settings.clone(),
+            None => HashMap::new(),
+        };
         Arc::new(Settings {
             tenant,
             changes: DashMap::new(),
+            configs,
         })
     }
 
     pub fn has_setting(&self, key: &str) -> Result<bool> {
-        DefaultSettings::has_setting(key)
+        Ok(DefaultSettings::instance()?.settings.contains_key(key))
     }
 
     pub fn check_and_get_default_value(&self, key: &str) -> Result<UserSettingValue> {
@@ -79,65 +96,31 @@ impl Settings {
         }
     }
 
-    pub fn get_setting_level(&self, key: &str) -> Result<ScopeLevel> {
-        if let Some(entry) = self.changes.get(key) {
-            return Ok(entry.level.clone());
-        }
-
-        match DefaultSettings::has_setting(key)? {
-            true => Ok(ScopeLevel::Session),
-            false => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown variable: {:?}",
-                key
-            ))),
-        }
-    }
-
-    pub fn set_setting(&self, k: String, v: String) -> Result<()> {
-        if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
-            self.changes.insert(key, ChangeValue {
-                value,
-                level: ScopeLevel::Session,
-            });
-
-            return Ok(());
-        }
-
-        Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            k
-        )))
-    }
-
     pub fn unset_setting(&self, k: &str) {
         self.changes.remove(k);
     }
 
-    pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+    pub async fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {
-                self.set_setting(k.to_string(), v.to_string())?;
+                self.set_setting(k.to_string(), v.to_string()).await?;
             }
         }
 
         Ok(())
     }
 
-    pub fn get_changes(&self) -> HashMap<String, ChangeValue> {
-        let mut changes = HashMap::new();
-        for entry in self.changes.iter() {
-            changes.insert(entry.key().clone(), entry.value().clone());
-        }
-
-        changes
+    pub fn is_changed(&self) -> bool {
+        !self.changes.is_empty()
     }
 
     /// # Safety
     ///
     /// We will not validate the setting value type
-    pub unsafe fn unchecked_apply_changes(&self, changes: HashMap<String, ChangeValue>) {
-        for (name, value) in changes {
-            self.changes.insert(name, value);
+    pub unsafe fn unchecked_apply_changes(&self, changes: &Settings) {
+        for change in changes.changes.iter() {
+            self.changes
+                .insert(change.key().clone(), change.value().clone());
         }
     }
 }
@@ -148,8 +131,7 @@ pub struct SettingsItem {
     pub desc: &'static str,
     pub user_value: UserSettingValue,
     pub default_value: UserSettingValue,
-    pub possible_values: Option<Vec<&'static str>>,
-    pub display_in_show_settings: bool,
+    pub range: Option<SettingRange>,
 }
 
 pub struct SettingsIter<'a> {
@@ -177,28 +159,41 @@ impl<'a> Iterator for SettingsIter<'a> {
     type Item = SettingsItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            None => None,
-            Some((key, default_value)) => Some(match self.settings.changes.get(&key) {
-                None => SettingsItem {
-                    name: key,
-                    level: ScopeLevel::Session,
-                    desc: default_value.desc,
-                    user_value: default_value.value.clone(),
-                    default_value: default_value.value,
-                    possible_values: default_value.possible_values,
-                    display_in_show_settings: default_value.display_in_show_settings,
-                },
-                Some(change_value) => SettingsItem {
-                    name: key,
-                    level: change_value.level.clone(),
-                    desc: default_value.desc,
-                    user_value: change_value.value.clone(),
-                    default_value: default_value.value,
-                    possible_values: default_value.possible_values,
-                    display_in_show_settings: default_value.display_in_show_settings,
-                },
-            }),
+        loop {
+            return match self.inner.next() {
+                None => None,
+                Some((_, value)) if matches!(value.mode, SettingMode::Write) => {
+                    continue;
+                }
+                Some((key, default_value)) => Some(match self.settings.changes.get(&key) {
+                    Some(change_value) => SettingsItem {
+                        name: key,
+                        level: change_value.level.clone(),
+                        desc: default_value.desc,
+                        user_value: change_value.value.clone(),
+                        default_value: default_value.value,
+                        range: default_value.range,
+                    },
+                    None => match self.settings.configs.get(&key) {
+                        Some(local_value) => SettingsItem {
+                            name: key,
+                            level: ScopeLevel::Local,
+                            desc: default_value.desc,
+                            user_value: local_value.clone(),
+                            default_value: default_value.value,
+                            range: default_value.range,
+                        },
+                        None => SettingsItem {
+                            name: key,
+                            level: ScopeLevel::Default,
+                            desc: default_value.desc,
+                            user_value: default_value.value.clone(),
+                            default_value: default_value.value,
+                            range: default_value.range,
+                        },
+                    },
+                }),
+            };
         }
     }
 }

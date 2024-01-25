@@ -17,7 +17,7 @@ explain select * from (select * from numbers(1)) as t1 where number = 1
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [numbers.number (#0) = 1]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
@@ -34,11 +34,11 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 EvalScalar
 ├── output columns: [numbers.number (#0), b (#1)]
 ├── expressions: [numbers.number (#0) + 1]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: [numbers.number (#0)]
     ├── filters: [numbers.number (#0) = 1, numbers.number (#0) + 1 = 1]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
@@ -55,11 +55,11 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 EvalScalar
 ├── output columns: [numbers.number (#0), b (#1)]
 ├── expressions: [numbers.number (#0) + 1]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: [numbers.number (#0)]
     ├── filters: [numbers.number (#0) = 1]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
@@ -76,7 +76,7 @@ explain select * from numbers(1) where number = pow(1, 1 + 1)
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [to_float64(numbers.number (#0)) = 1]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
@@ -208,7 +208,7 @@ explain select a, v['b'] from t_json
 ----
 EvalScalar
 ├── output columns: [t_json.a (#0), v['b'] (#2)]
-├── expressions: [get(t_json.v (#1), 'b')]
+├── expressions: [get_by_keypath(t_json.v (#1), '{"b"}')]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json
@@ -226,7 +226,7 @@ explain select a, v['a'][0] from t_json
 ----
 EvalScalar
 ├── output columns: [t_json.a (#0), v['a'][0] (#2)]
-├── expressions: [get(get(t_json.v (#1), 'a'), 0)]
+├── expressions: [get_by_keypath(t_json.v (#1), '{"a",0}')]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json

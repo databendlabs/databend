@@ -18,18 +18,17 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
-use common_expression::BlockRowIndex;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_sinks::AsyncSink;
-use common_pipeline_sinks::AsyncSinker;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::BlockRowIndex;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
 use opendal::Operator;
 
 use crate::io;
@@ -78,11 +77,7 @@ impl AggIndexSink {
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
-            let location = unsafe {
-                String::from_utf8_unchecked(StringType::to_owned_scalar(
-                    block_name_col.index(i).unwrap(),
-                ))
-            };
+            let location = block_name_col.index(i).unwrap().to_string();
 
             self.location_data
                 .entry(location)

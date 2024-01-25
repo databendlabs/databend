@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::ExplainKind;
-use common_exception::Result;
+use databend_common_ast::ast::ExplainKind;
+use databend_common_exception::Result;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -51,7 +51,9 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::UpdateInterpreter;
@@ -234,6 +236,16 @@ impl InterpreterFactory {
             Plan::DropView(drop_view) => Ok(Arc::new(DropViewInterpreter::try_create(
                 ctx,
                 *drop_view.clone(),
+            )?)),
+
+            // Streams
+            Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
+                ctx,
+                *create_stream.clone(),
+            )?)),
+            Plan::DropStream(drop_stream) => Ok(Arc::new(DropStreamInterpreter::try_create(
+                ctx,
+                *drop_stream.clone(),
             )?)),
 
             // Indexes
@@ -459,6 +471,20 @@ impl InterpreterFactory {
             Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
+            Plan::CreatePasswordPolicy(p) => Ok(Arc::new(
+                CreatePasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterPasswordPolicy(p) => Ok(Arc::new(
+                AlterPasswordPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropPasswordPolicy(p) => Ok(Arc::new(DropPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescPasswordPolicy(p) => Ok(Arc::new(DescPasswordPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             Plan::CreateTask(p) => Ok(Arc::new(CreateTaskInterpreter::try_create(
                 ctx,

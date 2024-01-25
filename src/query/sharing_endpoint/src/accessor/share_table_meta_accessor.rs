@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 
-use common_exception::Result;
-use common_meta_app::share::TableInfoMap;
-use common_storages_share::share_table_info_location;
+use databend_common_exception::Result;
+use databend_common_meta_app::share::TableInfoMap;
+use databend_common_storages_share::share_table_info_location;
 
 use crate::accessor::SharingAccessor;
 use crate::models::TableMetaLambdaInput;
@@ -34,12 +34,9 @@ impl SharingAccessor {
         if input.request_tables.is_empty() {
             Ok(share_table_map)
         } else {
-            Ok(BTreeMap::from_iter(
-                share_table_map
-                    .into_iter()
-                    .filter(|(table_name, _table_info)| input.request_tables.contains(table_name))
-                    .map(|(table_name, table_info)| (table_name, table_info)),
-            ))
+            Ok(BTreeMap::from_iter(share_table_map.into_iter().filter(
+                |(table_name, _table_info)| input.request_tables.contains(table_name),
+            )))
         }
     }
 }

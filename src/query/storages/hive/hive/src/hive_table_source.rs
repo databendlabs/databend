@@ -16,27 +16,29 @@ use std::any::Any;
 use std::sync::Arc;
 use std::vec;
 
-use common_base::base::tokio::time::sleep;
-use common_base::base::tokio::time::Duration;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
+use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::base::tokio::time::Duration;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use log::debug;
 use opendal::Operator;
 
@@ -179,6 +181,7 @@ impl HiveTableSource {
             rows: prewhere_datablocks.iter().map(|x| x.num_rows()).sum(),
             bytes: prewhere_datablocks.iter().map(|x| x.memory_size()).sum(),
         };
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, progress_values.bytes);
         self.scan_progress.incr(&progress_values);
 
         if let Some(filter) = self.prewhere_filter.as_ref() {

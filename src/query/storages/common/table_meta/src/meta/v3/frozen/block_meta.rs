@@ -14,8 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_expression::ColumnId;
-use common_expression::Scalar;
+use databend_common_expression::converts::meta::LegacyScalar;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -103,7 +104,7 @@ pub struct NativeColumnMeta {
     pub pages: Vec<PageMeta>,
 }
 
-impl From<NativeColumnMeta> for common_arrow::native::ColumnMeta {
+impl From<NativeColumnMeta> for databend_common_arrow::native::ColumnMeta {
     fn from(value: NativeColumnMeta) -> Self {
         Self {
             offset: value.offset,
@@ -112,7 +113,7 @@ impl From<NativeColumnMeta> for common_arrow::native::ColumnMeta {
     }
 }
 
-impl From<PageMeta> for common_arrow::native::PageMeta {
+impl From<PageMeta> for databend_common_arrow::native::PageMeta {
     fn from(value: PageMeta) -> Self {
         Self {
             length: value.length,
@@ -161,22 +162,30 @@ impl From<ParquetColumnMeta> for crate::meta::v0::ColumnMeta {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
-    pub min: Vec<Scalar>,
-    pub max: Vec<Scalar>,
+    pub min: Vec<LegacyScalar>,
+    pub max: Vec<LegacyScalar>,
     pub level: i32,
 
     // currently it's only used in native engine
-    pub pages: Option<Vec<Scalar>>,
+    pub pages: Option<Vec<LegacyScalar>>,
 }
 
 impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
     fn from(value: ClusterStatistics) -> Self {
+        let min: Vec<_> = value.min.iter().map(|c| Scalar::from(c.clone())).collect();
+
+        let max: Vec<_> = value.max.iter().map(|c| Scalar::from(c.clone())).collect();
+
+        let pages = value
+            .pages
+            .map(|pages| pages.into_iter().map(Scalar::from).collect());
+
         Self {
             cluster_key_id: value.cluster_key_id,
-            min: value.min,
-            max: value.max,
+            min,
+            max,
             level: value.level,
-            pages: value.pages,
+            pages,
         }
     }
 }

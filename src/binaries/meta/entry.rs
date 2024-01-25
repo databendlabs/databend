@@ -12,27 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::StopHandle;
-use common_base::base::Stoppable;
-use common_grpc::RpcClientConf;
-use common_meta_raft_store::ondisk::OnDisk;
-use common_meta_raft_store::ondisk::DATA_VERSION;
-use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::init_sled_db;
-use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_store::MetaStoreProvider;
-use common_meta_types::Cmd;
-use common_meta_types::LogEntry;
-use common_meta_types::MetaAPIError;
-use common_meta_types::Node;
-use common_tracing::init_logging;
-use common_tracing::set_panic_hook;
+use databend_common_base::base::StopHandle;
+use databend_common_base::base::Stoppable;
+use databend_common_grpc::RpcClientConf;
+use databend_common_meta_raft_store::ondisk::OnDisk;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_sled_store::get_sled_db;
+use databend_common_meta_sled_store::init_sled_db;
+use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::Node;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::set_panic_hook;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
@@ -65,7 +66,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
                 .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
         });
         _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
-            release: common_tracing::databend_semver!(),
+            release: databend_common_tracing::databend_semver!(),
             traces_sample_rate,
             ..Default::default()
         })));
@@ -78,7 +79,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         "databend-meta-{}@{}",
         conf.raft_config.id, conf.raft_config.cluster_name
     );
-    let _guards = init_logging(&app_name_shuffle, &conf.log);
+    let mut log_labels = BTreeMap::new();
+    log_labels.insert(
+        "cluster_name".to_string(),
+        conf.raft_config.cluster_name.clone(),
+    );
+    let _guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -139,6 +145,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
+    println!("    OTLP: {}", conf.log.otlp);
     println!("    Tracing: {}", conf.log.tracing);
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);

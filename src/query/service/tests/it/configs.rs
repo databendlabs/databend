@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
-use common_config::CacheConfig;
-use common_config::CacheStorageTypeConfig;
-use common_config::CatalogConfig;
-use common_config::CatalogHiveConfig;
-use common_config::InnerConfig;
-use common_config::ThriftProtocol;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_config::CacheConfig;
+use databend_common_config::CacheStorageTypeConfig;
+use databend_common_config::CatalogConfig;
+use databend_common_config::CatalogHiveConfig;
+use databend_common_config::InnerConfig;
+use databend_common_config::ThriftProtocol;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use pretty_assertions::assert_eq;
 
 // From env, defaulting.

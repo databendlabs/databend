@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #![feature(coroutines)]
+#![feature(lazy_cell)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;
 pub mod configs;
 pub mod export;
-pub(crate) mod grpc_helper;
 pub mod message;
 pub mod meta_service;
 pub mod metrics;

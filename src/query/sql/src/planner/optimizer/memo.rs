@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use super::group::GroupState;
 use super::RelExpr;
@@ -107,7 +107,7 @@ impl Memo {
             }
         };
 
-        let m_expr = MExpr::create(
+        let m_expr = MExpr::new(
             group_index,
             self.group(group_index)?.num_exprs(),
             s_expr.plan,
@@ -148,5 +148,18 @@ impl Memo {
         let group = Group::create(group_index, relational_prop, stat_info);
         self.groups.push(group);
         group_index
+    }
+
+    /// Get an estimate of the memory size of the memo.
+    pub fn mem_size(&self) -> usize {
+        // Since all the `RelOperator` are interned,
+        // we only need to count the size of `m_expr_lookup_table`.
+        // We assume the `RelOperator`s are the major part of the memo.
+        self.m_expr_lookup_table.len() * std::mem::size_of::<RelOperator>()
+    }
+
+    /// Get the number of groups in the memo.
+    pub fn num_groups(&self) -> usize {
+        self.groups.len()
     }
 }

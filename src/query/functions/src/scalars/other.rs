@@ -17,46 +17,46 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::convert_byte_size;
-use common_base::base::convert_number_size;
-use common_base::base::uuid::Uuid;
-use common_expression::error_to_null;
-use common_expression::types::boolean::BooleanDomain;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int64Type;
-use common_expression::types::number::UInt32Type;
-use common_expression::types::number::UInt8Type;
-use common_expression::types::number::F64;
-use common_expression::types::string::StringColumn;
-use common_expression::types::ArgType;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::GenericType;
-use common_expression::types::NullType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberColumn;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::types::NumberType;
-use common_expression::types::SimpleDomain;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::ValueType;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::Column;
-use common_expression::Domain;
-use common_expression::EvalContext;
-use common_expression::Function;
-use common_expression::FunctionDomain;
-use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
+use databend_common_base::base::uuid::Uuid;
+use databend_common_expression::error_to_null;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt32Type;
+use databend_common_expression::types::number::UInt8Type;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::GenericType;
+use databend_common_expression::types::NullType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::Column;
+use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
@@ -164,7 +164,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg_core::<GenericType<0>, StringType, _, _>(
         "typeof",
         |_, _| FunctionDomain::Full,
-        |_, ctx| Value::Scalar(ctx.generics[0].sql_name().into_bytes()),
+        |_, ctx| Value::Scalar(ctx.generics[0].sql_name()),
     );
 
     registry.register_function_factory("ignore", |_, args_type| {
@@ -249,8 +249,7 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
     );
 
     fn eval_inet_aton(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<UInt32Type> {
-        vectorize_with_builder_1_arg::<StringType, UInt32Type>(|v, output, ctx| {
-            let addr_str = String::from_utf8_lossy(v);
+        vectorize_with_builder_1_arg::<StringType, UInt32Type>(|addr_str, output, ctx| {
             match addr_str.parse::<Ipv4Addr>() {
                 Ok(addr) => {
                     let addr_binary = u32::from(addr);
@@ -349,7 +348,8 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let params = params.to_vec();
+        let params: Vec<usize> = params.iter().map(|p| p.get_i64().unwrap() as _).collect();
+
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "grouping".to_string(),

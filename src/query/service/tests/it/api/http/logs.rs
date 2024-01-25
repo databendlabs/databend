@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_exception::Result;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_query::api::http::v1::logs::logs_handler;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -27,9 +27,8 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_logs() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
-            .await?;
+    // Setup.
+    let _fixture = TestFixture::setup().await?;
 
     let test_router = Route::new().at("/v1/logs", get(logs_handler));
     {
@@ -45,5 +44,6 @@ async fn test_logs() -> Result<()> {
 
         assert_eq!(response.status(), StatusCode::OK);
     }
+
     Ok(())
 }

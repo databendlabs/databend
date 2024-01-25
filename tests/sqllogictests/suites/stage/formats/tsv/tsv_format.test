@@ -1,4 +1,4 @@
-skipif clickhouse
+
 query TI
 select $1, $2 from @data/tsv/escape.tsv (file_format => 'tsv')
 ----

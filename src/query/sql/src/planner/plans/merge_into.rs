@@ -15,11 +15,18 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_ast::ast::TableAlias;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
-use common_meta_types::MetaId;
+use databend_common_ast::ast::TableAlias;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FieldIndex;
+use databend_common_meta_types::MetaId;
 
+use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
 use crate::BindContext;
 use crate::IndexType;
@@ -58,6 +65,12 @@ pub struct MergeInto {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_idx: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
+    pub merge_type: MergeIntoType,
+    pub distributed: bool,
+    pub change_join_order: bool,
+    // when we use target table as build side, we need to remove rowid columns.
+    pub row_id_index: IndexType,
+    pub split_idx: IndexType,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -69,7 +82,74 @@ impl std::fmt::Debug for MergeInto {
             .field("table_id", &self.table_id)
             .field("join", &self.input)
             .field("matched", &self.matched_evaluators)
-            .field("unmateched", &self.unmatched_evaluators)
+            .field("unmatched", &self.unmatched_evaluators)
+            .field("distributed", &self.distributed)
             .finish()
+    }
+}
+
+pub const INSERT_NAME: &str = "number of rows inserted";
+pub const UPDATE_NAME: &str = "number of rows updated";
+pub const DELETE_NAME: &str = "number of rows deleted";
+
+impl MergeInto {
+    // the order of output should be (insert, update, delete),this is
+    // consistent with snowflake.
+    fn merge_into_mutations(&self) -> (bool, bool, bool) {
+        let insert = matches!(self.merge_type, MergeIntoType::FullOperation)
+            || matches!(self.merge_type, MergeIntoType::InsertOnly);
+        let mut update = false;
+        let mut delete = false;
+        for evaluator in &self.matched_evaluators {
+            if evaluator.update.is_none() {
+                delete = true
+            } else {
+                update = true
+            }
+        }
+        (insert, update, delete)
+    }
+
+    fn merge_into_table_schema(&self) -> Result<DataSchemaRef> {
+        let (insert, update, delete) = self.merge_into_mutations();
+
+        let fields = [
+            (
+                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32)),
+                insert,
+            ),
+            (
+                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::Int32)),
+                update,
+            ),
+            (
+                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32)),
+                delete,
+            ),
+        ];
+
+        // Filter and collect the fields to include in the schema.
+        // Only fields with a corresponding true value in the mutation states are included.
+        let schema_fields: Vec<DataField> = fields
+            .iter()
+            .filter_map(
+                |(field, include)| {
+                    if *include { Some(field.clone()) } else { None }
+                },
+            )
+            .collect();
+
+        // Check if any fields are included. If none, return an error. Otherwise, return the schema.
+        if schema_fields.is_empty() {
+            Err(ErrorCode::BadArguments(
+                "at least one matched or unmatched clause for merge into",
+            ))
+        } else {
+            Ok(DataSchemaRefExt::create(schema_fields))
+        }
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        self.merge_into_table_schema().unwrap()
     }
 }

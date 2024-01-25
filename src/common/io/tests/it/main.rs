@@ -1,5 +1,5 @@
 #![feature(cursor_remaining)]
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #![allow(clippy::uninlined_format_args)]
+#![feature(assert_matches)]
+
+extern crate core;
 
 mod binary_read;
 mod binary_write;
+mod bincode_serialization;
+mod borsh_serialization;
 mod cursor_ext;
 mod escape;
+mod serialization_format_compatability;

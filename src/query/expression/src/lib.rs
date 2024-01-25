@@ -16,6 +16,7 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::arc_with_non_send_sync)]
+#![allow(internal_features)]
 // FIXME: we should avoid this by implementing Ord correctly.
 #![allow(clippy::non_canonical_partial_ord_impl)]
 #![allow(incomplete_features)]
@@ -37,16 +38,17 @@
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
-#![feature(trait_upcasting)]
+#![feature(lazy_cell)]
+#![feature(try_blocks)]
 
 #[allow(dead_code)]
 mod block;
 
 pub mod aggregate;
-mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
 mod expression;
+pub mod filter;
 mod function;
 mod kernels;
 mod property;
@@ -64,6 +66,7 @@ pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
+pub use crate::filter::*;
 pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;

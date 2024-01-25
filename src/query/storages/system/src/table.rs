@@ -15,25 +15,25 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_pipeline_sources::EmptySource;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SystemTablePart;
@@ -336,7 +336,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
 
         #[cfg(debug_assertions)]
         {
-            use common_expression::types::DataType;
+            use databend_common_expression::types::DataType;
             let table_info = self.inner.get_table_info();
             let data_types: Vec<DataType> = block
                 .columns()

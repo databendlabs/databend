@@ -1,17 +1,18 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   schedule:
     - cron: "0 22 * * *"
   workflow_dispatch:
     inputs:
-      tags:
+      tag:
         description: The tags to be released
         required: false
         type: string
+      stable:
+        description: Make a stable release
+        required: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -28,64 +29,93 @@ jobs:
     name: create release
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.generated-tag.outputs.tag }}
+      version: ${{ steps.bump.outputs.tag }}
+      sha: ${{ steps.bump.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Get latest tag
-        id: get-latest-tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "tag=`gh release list -L 1 | cut -f 1`" >> $GITHUB_OUTPUT
       - name: Bump version
-        id: generated-tag
-        uses: actions/github-script@v6
+        id: bump
+        uses: actions/github-script@v7
         with:
           script: |
             if (context.ref.startsWith("refs/tags/")) {
               let tag = context.ref.replace("refs/tags/", "");
               core.setOutput('tag', tag);
-              console.log(`This event pushed a tag ${tag}, return directly.`)
+              core.info(`Tag event triggered by ${tag}.`);
               return
             }
-
-            if ("${{ github.event.inputs.tags }}") {
-              let tag = "${{ github.event.inputs.tags }}";
-              core.setOutput('tag', tag);
-              console.log(`This event triggered by workflow_dispatch with a tag ${tag}, return directly.`)
-              return
+            if ("${{ inputs.stable }}" == "true") {
+              if ("${{ inputs.tag }}") {
+                // trigger stable release by workflow_dispatch with a tag
+                let tag = "${{ inputs.tag }}";
+                let result = /v(\d+)\.(\d+)\.(\d+)-nightly/g.exec(tag);
+                if (result === null) {
+                  core.setFailed(`The tag ${tag} to stablize is invalid, ignoring`);
+                  return
+                }
+                let major = result[1];
+                let minor = result[2];
+                let patch = result[3];
+                let stable_tag = `v${major}.${minor}.${patch}`;
+                core.setOutput('tag', stable_tag);
+                let ref = await github.rest.git.getRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `tags/${tag}`,
+                });
+                core.setOutput('sha', ref.data.object.sha);
+                core.info(`Stable release ${stable_tag} from ${tag} (${ref.data.object.sha})`);
+              } else {
+                core.setFailed("Stable release must be triggered with a nightly tag")
+              }
+            } else {
+              if ("${{ inputs.tag }}") {
+                let tag = "${{ inputs.tag }}";
+                core.setOutput('tag', tag);
+                core.info(`Release create manually with tag ${tag}`);
+              } else {
+                let releases = await github.rest.repos.listReleases({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 1,
+                });
+                let tag = releases.data[0].tag_name;
+                let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
+                if (result === null) {
+                  core.setFailed(`The previous tag ${tag} is invalid, ignoring`);
+                  return
+                }
+                let major = result[1];
+                let minor = result[2];
+                let patch = (parseInt(result[3]) + 1).toString();
+                let next_tag = `v${major}.${minor}.${patch}-nightly`;
+                core.setOutput('tag', next_tag);
+                core.setOutput('sha', context.sha);
+                core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
+              }
             }
-
-            let tag = "${{ steps.get-latest-tag.outputs.tag }}";
-            let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
-            if (result === null) {
-              throw `The previous tag ${{ steps.get-latest-tag.outputs.tag }} is invalid, ignoring`;
-            }
-
-            let major = result[1];
-            let minor = result[2];
-            let patch = (parseInt(result[3]) + 1).toString();
-            let next_tag = `v${major}.${minor}.${patch}-nightly`;
-
-            console.log(`This event is triggered, return generated ${next_tag}.`)
-            core.setOutput('tag', next_tag)
-      - name: Create github release if not exist
-        # Only create release when the tag is not exist
-        if: 'steps.generated-tag.outputs.tag != steps.get-latest-tag.outputs.tag'
-        # Allow this action failure
-        # continue-on-error: true
-        # Reference: https://cli.github.com/manual/gh_release_create
+      - name: Create release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # we need workflow:write permission to create release if there were any workflow changes
+          # which is not possible for github actions token
+          GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
         run: |
-          echo "Create a release for ${{ steps.generated-tag.outputs.tag }}"
-          gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
+          echo "Creating release ${{ steps.bump.outputs.tag }} from ${{ steps.bump.outputs.sha }}"
+          if [[ "${{ inputs.stable }}" == "true" ]]; then
+            echo "Stable release"
+            previous=$(gh release list --limit 1 --exclude-pre-releases | cut -f 1)
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest
+          else
+            echo "Nightly release"
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --prerelease
+          fi
 
   changelog:
     runs-on: ubuntu-latest
+    if: inputs.stable
     needs: create_release
     steps:
       - name: Checkout Docs
@@ -100,13 +130,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p docs/release-notes
-          df="docs/release-notes/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
+          mkdir -p docs/release-stable
+          df="docs/release-stable/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
           echo "---" > $df
           gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
           sed -i -E '/^asset:/d' $df
-          git add docs/release-notes/
+          sed -i -E 's_https://github.com/datafuselabs/databend/pull/([0-9]+)_[#\1](https://github.com/datafuselabs/databend/pull/\1)_g' $df
+          git add docs/release-stable
           git status
       - uses: peter-evans/create-pull-request@v4
         with:
@@ -116,78 +147,6 @@ jobs:
           commit-message: "chore(docs): Update Release Notes - ${{ env.DATE }}"
           branch-suffix: random
           delete-branch: true
-
-  macos:
-    runs-on: macos-latest
-    needs: create_release
-    env:
-      RUNNER_PROVIDER: github
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x86_64
-          - aarch64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Get target
-        id: target
-        run: echo 'target=${{ matrix.arch }}-apple-darwin' >> $GITHUB_OUTPUT
-      - name: Install coreutils for macOS sha256sum
-        run: brew install coreutils
-      - name: Build Release
-        uses: ./.github/actions/build_macos
-        with:
-          target: ${{ steps.target.outputs.target }}
-          artifacts: sqllogictests,metactl,meta,query
-          upload: false
-      - name: Basic Sqllogic Test
-        if: matrix.arch == 'x86_64'
-        shell: bash
-        env:
-          TEST_HANDLERS: http
-        run: |
-          mkdir -p target/release
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,metactl,query,sqllogictests} ./target/release/
-          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
-      - name: Pack binaries
-        run: |
-          brew install gnu-tar
-          sudo /usr/sbin/purge
-          target=${{ steps.target.outputs.target }}
-          version=${{ needs.create_release.outputs.version }}
-          mkdir -p release/${target}/{bin,configs,scripts}
-          cp ./target/${target}/release/databend-* release/${target}/bin/
-          rm -f release/${target}/bin/*.d
-          cp ./scripts/distribution/configs/databend-* release/${target}/configs/
-          cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
-          gtar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs scripts readme.txt
-      - name: generate sha256sums
-        run: |
-          target=${{ steps.target.outputs.target }}
-          version=${{ needs.create_release.outputs.version }}
-          sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
-      - name: post sha256
-        uses: actions/upload-artifact@v3
-        with:
-          name: sha256sums
-          path: sha256-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
-          retention-days: 1
-      - name: Publish Binaries
-        uses: ./.github/actions/publish_binary
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-        with:
-          version: ${{ needs.create_release.outputs.version }}
-          target: ${{ steps.target.outputs.target }}
 
   linux:
     runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
@@ -208,9 +167,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Get target
         id: target
         run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
@@ -298,9 +255,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Get target
         id: target
         run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
@@ -357,9 +312,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Download binaries for usage
         id: download_binaries
         env:
@@ -385,16 +339,35 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Get Image Tags
+        id: tags
+        uses: actions/github-script@v7
+        env:
+          REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
+          REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
+          VERSION: ${{ needs.create_release.outputs.version }}
+          STABLE: ${{ inputs.stable }}
+        with:
+          script: |
+            const version = process.env.VERSION;
+            const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
+            const stable = process.env.STABLE;
+            let tags = [];
+            for (const repo of repos) {
+              tags.push(`${repo}:${version}`);
+              if (stable === 'true') {
+                tags.push(`${repo}:latest`);
+              } else {
+                tags.push(`${repo}:nightly`);
+              }
+            }
+            core.setOutput('tags', tags.join(','));
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:latest
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}
-            ${{ steps.login.outputs.ecr_repo }}:latest
-            ${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/Dockerfile
@@ -424,9 +397,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Download binaries for usage
         id: download_binaries
         env:
@@ -452,24 +424,39 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: get image tags
-        id: get_image_tags
-        shell: bash
-        run: |
-          _tags="${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
-          _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
-          if [[ "${{ matrix.distro }}" == "debian" ]]; then
-            _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}"
-            _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}"
-            _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:latest"
-            _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:latest"
-          fi
-          echo "IMAGE_TAGS=${_tags}" >> $GITHUB_OUTPUT
+      - name: Get Image Tags
+        id: tags
+        uses: actions/github-script@v7
+        env:
+          DISTRO: ${{ matrix.distro }}
+          REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
+          REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
+          VERSION: ${{ needs.create_release.outputs.version }}
+          STABLE: ${{ inputs.stable }}
+        with:
+          script: |
+            const version = process.env.VERSION;
+            const distro = process.env.DISTRO;
+            const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
+            const stable = process.env.STABLE;
+            let tags = [];
+            for (const repo of repos) {
+              tags.push(`${repo}:${version}-${distro}`);
+              if (distro === 'debian') {
+                tags.push(`${repo}:${version}`);
+                if (stable === 'true') {
+                  tags.push(`${repo}:latest`);
+                } else {
+                  tags.push(`${repo}:nightly`);
+                }
+              }
+            }
+            core.setOutput('tags', tags.join(','));
       - name: push service image
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: ${{ steps.get_image_tags.outputs.IMAGE_TAGS }}
+          tags: ${{ steps.tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
@@ -487,6 +474,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Install nfpm@latest
         run: |
           curl -sSLo nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.26.0/nfpm_2.26.0_Linux_x86_64.tar.gz
@@ -535,9 +524,12 @@ jobs:
 
   deb:
     runs-on: ubuntu-latest
+    if: inputs.stable
     needs: [create_release, distribution]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - uses: ./.github/actions/publish_deb
         env:
           GH_TOKEN: ${{ github.token }}
@@ -550,11 +542,13 @@ jobs:
           gpg_signing_key: ${{ secrets.GPG_KEY_DEB }}
 
   sha256sums:
-    needs: [create_release, linux, macos, distribution]
+    needs: [create_release, linux, distribution]
     runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - name: download sha256sums
         uses: actions/download-artifact@v3
         with:
@@ -590,6 +584,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - name: Download artifact for release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -615,6 +611,7 @@ jobs:
           name: test-sqlsmith
 
   bindings_python:
+    if: inputs.stable
     needs: create_release
     uses: ./.github/workflows/bindings.python.yml
     secrets: inherit
@@ -630,15 +627,17 @@ jobs:
       - docker_combined
       - docker_separate
       - distribution
-      - deb
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.version }}
       - run: |
           status="${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled') || 'success' }}"
           jq -n -f .github/release-report.jq \
             --arg title "[Release] ${{ needs.create_release.outputs.version }}" \
             --arg content "Build result: ${status}" \
             --arg link "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg page "https://github.com/datafuselabs/databend/releases/tag/${{ needs.create_release.outputs.version }}" \
             > /tmp/release-report.json
           curl -X POST "${{ secrets.RELEASE_REPORT_WEBHOOK }}" \
             -H 'Content-Type: application/json' \

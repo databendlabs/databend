@@ -15,17 +15,20 @@
 use std::str::FromStr;
 
 use chrono_tz;
-use common_ast::ast::AlterTaskOptions;
-use common_ast::ast::AlterTaskStmt;
-use common_ast::ast::CreateTaskStmt;
-use common_ast::ast::DescribeTaskStmt;
-use common_ast::ast::DropTaskStmt;
-use common_ast::ast::ExecuteTaskStmt;
-use common_ast::ast::ScheduleOptions;
-use common_ast::ast::ShowTasksStmt;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use cron;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::AlterTaskStmt;
+use databend_common_ast::ast::CreateTaskStmt;
+use databend_common_ast::ast::DescribeTaskStmt;
+use databend_common_ast::ast::DropTaskStmt;
+use databend_common_ast::ast::ExecuteTaskStmt;
+use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
@@ -36,15 +39,38 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_scheduler_option(schedule_opts: &ScheduleOptions) -> Result<()> {
-    if let common_ast::ast::ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
-        if cron::Schedule::from_str(cron_expr).is_err() {
+fn verify_task_sql(sql: &String) -> Result<()> {
+    let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
+        ErrorCode::SyntaxException(format!(
+            "syntax error for task formatted sql: {}, error: {:?}",
+            sql, e
+        ))
+    })?;
+    parse_sql(&tokens, Dialect::PostgreSQL).map_err(|e| {
+        ErrorCode::SyntaxException(format!(
+            "syntax error for task formatted sql: {}, error: {:?}",
+            sql, e
+        ))
+    })?;
+    Ok(())
+}
+
+fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
+    if schedule_opts.is_none() {
+        return Ok(());
+    }
+    let schedule_opts = schedule_opts.clone().unwrap();
+    if let ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
+        if cron::Schedule::from_str(&cron_expr).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid cron expression {}",
                 cron_expr
             )));
         }
-        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(time_zone).is_err() {
+        if let Some(time_zone) = time_zone
+            && !time_zone.is_empty()
+            && chrono_tz::Tz::from_str(&time_zone).is_err()
+        {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
                 time_zone
@@ -67,11 +93,20 @@ impl Binder {
             schedule_opts,
             suspend_task_after_num_failures,
             comments,
+            after,
+            when_condition,
             sql,
+            session_parameters,
         } = stmt;
-
+        if (schedule_opts.is_none() && after.is_empty())
+            || (schedule_opts.is_some() && !after.is_empty())
+        {
+            return Err(ErrorCode::SyntaxException(
+                "task must be defined with either given time schedule as a root task or run after other task as a DAG".to_string(),
+            ));
+        }
         verify_scheduler_option(schedule_opts)?;
-
+        verify_task_sql(sql)?;
         let tenant = self.ctx.get_tenant();
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
@@ -80,7 +115,10 @@ impl Binder {
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
             suspend_task_after_num_failures: *suspend_task_after_num_failures,
+            after: after.clone(),
+            when_condition: when_condition.clone(),
             comment: comments.clone(),
+            session_parameters: session_parameters.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))
@@ -102,20 +140,26 @@ impl Binder {
             schedule,
             suspend_task_after_num_failures,
             comments,
+            session_parameters,
         } = options
         {
             if warehouse.is_none()
                 && schedule.is_none()
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
+                && session_parameters.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),
                 ));
             }
-            if let Some(schedule) = schedule {
+            if schedule.is_some() {
                 verify_scheduler_option(schedule)?;
             }
+        }
+
+        if let AlterTaskOptions::ModifyAs(sql) = options {
+            verify_task_sql(sql)?;
         }
 
         let tenant = self.ctx.get_tenant();

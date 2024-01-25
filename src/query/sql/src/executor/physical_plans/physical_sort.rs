@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -27,14 +31,15 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
+    /// A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub order_by: Vec<SortDesc>,
-    // limit = Limit.limit + Limit.offset
+    /// limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
-    // If the sort plan is after the exchange plan
-    pub after_exchange: bool,
+    /// If the sort plan is after the exchange plan.
+    /// It's [None] if the sorting plan is in single node mode.
+    pub after_exchange: Option<bool>,
     pub pre_projection: Option<Vec<IndexType>>,
 
     // Only used for explain
@@ -42,20 +47,55 @@ pub struct Sort {
 }
 
 impl Sort {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        if let Some(proj) = &self.pre_projection {
-            let fields = proj
-                .iter()
-                .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
-                .cloned()
-                .collect::<Vec<_>>();
-            if fields.len() < input_schema.fields().len() {
-                // Only if the projection is not a full projection, we need to add a projection transform.
-                return Ok(DataSchemaRefExt::create(fields));
+    fn order_col_type(&self, schema: &DataSchema) -> Result<DataType> {
+        if self.order_by.len() == 1 {
+            let order_by_field = schema.field_with_name(&self.order_by[0].order_by.to_string())?;
+            if matches!(
+                order_by_field.data_type(),
+                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+            ) {
+                return Ok(order_by_field.data_type().clone());
             }
         }
-        Ok(input_schema)
+        Ok(DataType::Binary)
+    }
+
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        if matches!(self.after_exchange, Some(true)) {
+            // If the plan is after exchange plan in cluster mode,
+            // the order column is at the last of the input schema.
+            debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
+            debug_assert_eq!(
+                fields.last().unwrap().data_type(),
+                &self.order_col_type(&input_schema)?
+            );
+            fields.pop();
+        } else {
+            if let Some(proj) = &self.pre_projection {
+                let fileted_fields = proj
+                    .iter()
+                    .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if fileted_fields.len() < fields.len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    fields = fileted_fields
+                }
+            }
+
+            if matches!(self.after_exchange, Some(false)) {
+                // If the plan is before exchange plan in cluster mode,
+                // the order column should be added to the output schema.
+                fields.push(DataField::new(
+                    ORDER_COL_NAME,
+                    self.order_col_type(&input_schema)?,
+                ));
+            }
+        }
+
+        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

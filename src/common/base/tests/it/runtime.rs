@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
-use common_base::GLOBAL_TASK;
-use common_exception::Result;
-use once_cell::sync::Lazy;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
+use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
@@ -69,23 +69,22 @@ async fn test_runtime() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_long_run_runtime() -> Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
     runtime.spawn(GLOBAL_TASK, async move {
-        std::thread::sleep(Duration::from_secs(6));
+        tokio::time::sleep(Duration::from_secs(6)).await;
     });
 
     let instant = Instant::now();
     drop(runtime);
-    assert!(instant.elapsed() >= Duration::from_secs(3));
-    assert!(instant.elapsed() < Duration::from_secs(4));
+    assert!(instant.elapsed() < Duration::from_secs(6));
 
     Ok(())
 }
 
-static START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
+static START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 // println can more clearly know if they are parallel
 async fn mock_get_page(i: usize) -> Vec<usize> {

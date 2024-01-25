@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_exception::Result;
-use common_meta_app::principal::UserIdentity;
-use common_users::UserApiProvider;
+use databend_common_base::base::tokio;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
@@ -27,7 +27,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -72,7 +72,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
 
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
     let status = get_status(&ep).await;

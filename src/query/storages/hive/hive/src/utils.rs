@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Scalar;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
@@ -31,7 +31,7 @@ pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<S
                 str_field_to_scalar(value, c.as_ref())
             }
         }
-        DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
+        DataType::String => Ok(Scalar::String(value.to_string())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {
                 let num = value.parse::<u8>().unwrap();

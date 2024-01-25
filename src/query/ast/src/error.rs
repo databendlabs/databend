@@ -18,8 +18,8 @@ use std::fmt::Write;
 use std::num::IntErrorKind;
 use std::num::ParseIntError;
 
-use common_exception::pretty_print_error;
-use common_exception::Range;
+use databend_common_exception::pretty_print_error;
+use databend_common_exception::Range;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 
@@ -33,7 +33,7 @@ const MAX_DISPLAY_ERROR_COUNT: usize = 60;
 /// through a parse tree. This take a deepest error at `alt` combinator.
 #[derive(Clone, Debug)]
 pub struct Error<'a> {
-    /// The span of the next token when encountering an error.
+    /// The span of the next token of the last valid one when encountering an error.
     pub span: Range,
     /// List of errors tried in various branches that consumed
     /// the same (farthest) length of input.
@@ -76,7 +76,7 @@ impl Backtrace {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BacktraceInner {
-    /// The span of the next token when encountering an error.
+    /// The span of the next token of the last valid one when encountering an error.
     span: Range,
     /// List of errors tried in various branches that consumed
     /// the same (farthest) length of input.
@@ -186,9 +186,14 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
     let mut labels = vec![];
 
     // Plain text error has the highest priority. Only display it if exists.
-    for kind in &inner.errors {
+    for (span, kind) in error
+        .errors
+        .iter()
+        .map(|err| (error.span, err))
+        .chain(inner.errors.iter().map(|err| (inner.span, err)))
+    {
         if let ErrorKind::Other(msg) = kind {
-            labels = vec![(inner.span, msg.to_string())];
+            labels = vec![(span, msg.to_string())];
             break;
         }
     }

@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::Span;
+use databend_common_exception::Span;
 
+use super::Lambda;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
-use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
@@ -92,6 +92,8 @@ pub struct SelectStmt {
     pub having: Option<Expr>,
     // `WINDOW` clause
     pub window_list: Option<Vec<WindowDefinition>>,
+    // `QUALIFY` clause
+    pub qualify: Option<Expr>,
 }
 
 /// Group by Clause.
@@ -142,35 +144,61 @@ pub struct OrderByExpr {
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectTarget {
-    // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
+    // Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
     AliasedExpr {
         expr: Box<Expr>,
         alias: Option<Identifier>,
     },
 
-    // Qualified name, e.g. `SELECT t.a, t.* exclude t.a FROM t`.
-    // For simplicity, wildcard is involved.
-    QualifiedName {
+    // Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
+    // Columns("pattern_str")
+    // Columns(lambda expression)
+    // For simplicity, star wildcard is involved.
+    StarColumns {
         qualified: QualifiedName,
-        exclude: Option<Vec<ColumnID>>,
+        column_filter: Option<ColumnFilter>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ColumnFilter {
+    Excludes(Vec<Identifier>),
+    Lambda(Lambda),
+}
+
+impl ColumnFilter {
+    pub fn get_excludes(&self) -> Option<&[Identifier]> {
+        if let ColumnFilter::Excludes(ex) = self {
+            Some(ex)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_lambda(&self) -> Option<&Lambda> {
+        if let ColumnFilter::Lambda(l) = self {
+            Some(l)
+        } else {
+            None
+        }
+    }
 }
 
 impl SelectTarget {
     pub fn is_star(&self) -> bool {
         match self {
             SelectTarget::AliasedExpr { .. } => false,
-            SelectTarget::QualifiedName { qualified, .. } => {
+            SelectTarget::StarColumns { qualified, .. } => {
                 matches!(qualified.last(), Some(Indirection::Star(_)))
             }
         }
     }
 
-    pub fn exclude(&mut self, exclude: Vec<ColumnID>) {
+    pub fn exclude(&mut self, exclude: Vec<Identifier>) {
         match self {
             SelectTarget::AliasedExpr { .. } => unreachable!(),
-            SelectTarget::QualifiedName { exclude: e, .. } => {
-                *e = Some(exclude);
+            SelectTarget::StarColumns { column_filter, .. } => {
+                *column_filter = Some(ColumnFilter::Excludes(exclude));
             }
         }
     }
@@ -181,7 +209,7 @@ impl SelectTarget {
                 Expr::FunctionCall { window, .. } => window.is_some(),
                 _ => false,
             },
-            SelectTarget::QualifiedName { .. } => false,
+            SelectTarget::StarColumns { .. } => false,
         }
     }
 
@@ -193,7 +221,7 @@ impl SelectTarget {
                 }
                 _ => None,
             },
-            SelectTarget::QualifiedName { .. } => None,
+            SelectTarget::StarColumns { .. } => None,
         }
     }
 }
@@ -583,17 +611,23 @@ impl Display for SelectTarget {
                     write!(f, " AS {ident}")?;
                 }
             }
-            SelectTarget::QualifiedName { qualified, exclude } => {
-                write_dot_separated_list(f, qualified)?;
-                if let Some(cols) = exclude {
-                    // EXCLUDE
-                    if !cols.is_empty() {
-                        write!(f, " EXCLUDE (")?;
-                        write_comma_separated_list(f, cols)?;
-                        write!(f, ")")?;
-                    }
+            SelectTarget::StarColumns {
+                qualified,
+                column_filter,
+            } => match column_filter {
+                Some(ColumnFilter::Excludes(excludes)) => {
+                    write_dot_separated_list(f, qualified)?;
+                    write!(f, " EXCLUDE (")?;
+                    write_comma_separated_list(f, excludes)?;
+                    write!(f, ")")?;
                 }
-            }
+                Some(ColumnFilter::Lambda(lambda)) => {
+                    write!(f, "COLUMNS({lambda})")?;
+                }
+                None => {
+                    write_dot_separated_list(f, qualified)?;
+                }
+            },
         }
         Ok(())
     }

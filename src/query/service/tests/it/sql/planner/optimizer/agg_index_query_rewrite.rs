@@ -14,37 +14,38 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Engine;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
-use common_base::base::tokio;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
-use common_sql::optimizer::agg_index;
-use common_sql::optimizer::HeuristicOptimizer;
-use common_sql::optimizer::SExpr;
-use common_sql::optimizer::DEFAULT_REWRITE_RULES;
-use common_sql::plans::AggIndexInfo;
-use common_sql::plans::CreateTablePlan;
-use common_sql::plans::Plan;
-use common_sql::plans::RelOperator;
-use common_sql::BindContext;
-use common_sql::Binder;
-use common_sql::Metadata;
-use common_sql::MetadataRef;
-use common_sql::NameResolutionContext;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Dialect;
+use databend_common_base::base::tokio;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_sql::optimizer::agg_index;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::RecursiveOptimizer;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::DEFAULT_REWRITE_RULES;
+use databend_common_sql::plans::AggIndexInfo;
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::BindContext;
+use databend_common_sql::Binder;
+use databend_common_sql::Metadata;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::NameResolutionContext;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use parking_lot::RwLock;
-use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 #[derive(Default)]
 struct TestSuite {
@@ -70,6 +71,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
             TableField::new("c", TableDataType::Number(NumberDataType::Int32)),
         ]),
         engine: Engine::Fuse,
+        engine_options: Default::default(),
         storage_params: None,
         read_only_attach: false,
         part_prefix: "".to_string(),
@@ -372,6 +374,105 @@ fn get_test_suites() -> Vec<TestSuite> {
             index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
+        // query: sort-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select to_string(c + 1) as s from t order by s",
+            index: "select c + 1 from t",
+            is_matched: true,
+            index_selection: vec![],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec!["gt(index_col_1 (#1), 1)"],
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select avg(a + 1) from t group by b order by b",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            ..Default::default()
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select sum(a) from t where a > 1 group by b order by b",
+            index: "select a from t",
+            is_matched: false,
+            ..Default::default()
+        },
+        // query: eval-sort-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t where b > 0",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec!["gt(index_col_1 (#1), 1)"],
+        },
+        // query: eval-sort-agg-scan, index: eval-agg-scan
+        TestSuite {
+            query: "select b, sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a, b from t where b > 1",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 1 from t group by b order by b",
+            index: "select sum(a), b from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: false,
+            ..Default::default()
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t where c > 1 group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t where b > 0 group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
+        },
     ]
 }
 
@@ -382,11 +483,12 @@ async fn test_query_rewrite() -> Result<()> {
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {
@@ -455,8 +557,11 @@ async fn plan_sql(
     } = plan
     {
         let s_expr = if optimize {
-            let optimizer = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-            optimizer.optimize(*s_expr, &DEFAULT_REWRITE_RULES)?
+            RecursiveOptimizer::new(
+                &DEFAULT_REWRITE_RULES,
+                &OptimizerContext::new(ctx.clone(), metadata.clone()),
+            )
+            .run(&s_expr)?
         } else {
             *s_expr
         };
@@ -476,13 +581,13 @@ fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {
 fn format_selection(info: &AggIndexInfo) -> Vec<String> {
     info.selection
         .iter()
-        .map(|sel| common_sql::format_scalar(&sel.scalar))
+        .map(|sel| databend_common_sql::format_scalar(&sel.scalar))
         .collect()
 }
 
 fn format_filter(info: &AggIndexInfo) -> Vec<String> {
     info.predicates
         .iter()
-        .map(common_sql::format_scalar)
+        .map(databend_common_sql::format_scalar)
         .collect()
 }

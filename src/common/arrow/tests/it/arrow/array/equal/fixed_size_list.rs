@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::FixedSizeListArray;
-use common_arrow::arrow::array::MutableFixedSizeListArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
-use common_arrow::arrow::array::TryExtend;
+use databend_common_arrow::arrow::array::FixedSizeListArray;
+use databend_common_arrow::arrow::array::MutableFixedSizeListArray;
+use databend_common_arrow::arrow::array::MutablePrimitiveArray;
+use databend_common_arrow::arrow::array::TryExtend;
 
 use super::test_equal;
 

@@ -14,15 +14,16 @@
 
 //! Supporting utilities for tests.
 
-use common_meta_kvapi::kvapi;
-use common_meta_types::anyerror::AnyError;
-use common_meta_types::MetaAPIError;
-use common_meta_types::MetaDataError;
-use common_meta_types::MetaDataReadError;
-use common_meta_types::MetaError;
-use common_proto_conv::FromToProto;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaDataError;
+use databend_common_meta_types::MetaDataReadError;
+use databend_common_meta_types::MetaError;
+use databend_common_proto_conv::FromToProto;
 
 use crate::kv_app_error::KVAppError;
+use crate::util::deserialize_u64;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
@@ -31,7 +32,6 @@ pub(crate) async fn get_kv_data<T>(
 ) -> Result<T, KVAppError>
 where
     T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
 {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
@@ -42,6 +42,26 @@ where
     Err(KVAppError::MetaError(MetaError::APIError(
         MetaAPIError::DataError(MetaDataError::ReadError(MetaDataReadError::new(
             "get_kv_data",
+            "not found",
+            &AnyError::error(""),
+        ))),
+    )))
+}
+
+/// Get existing u64 value by key. Panic if key is absent.
+pub(crate) async fn get_kv_u64_data(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    key: &impl kvapi::Key,
+) -> Result<u64, KVAppError> {
+    let res = kv_api.get_kv(&key.to_string_key()).await?;
+    if let Some(res) = res {
+        let s = deserialize_u64(&res.data)?;
+        return Ok(*s);
+    };
+
+    Err(KVAppError::MetaError(MetaError::APIError(
+        MetaAPIError::DataError(MetaDataError::ReadError(MetaDataReadError::new(
+            "get_kv_u64_data",
             "not found",
             &AnyError::error(""),
         ))),

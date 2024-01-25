@@ -65,7 +65,7 @@ copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'tsv' f
 ----
 tsv/complex_types.tsv 1 0 NULL NULL
 
-skipif clickhouse
+
 query
 select * from complex
 ----
@@ -80,7 +80,7 @@ create stage csv_types file_format = (type = 'csv');
 statement ok
 copy into @csv_types from complex;
 
-skipif clickhouse
+
 query
 select $1 from @csv_types
 ----
@@ -90,9 +90,9 @@ statement ok
 drop file format if exists csv_raw
 
 statement ok
-create file format csv_raw type = 'csv' field_delimiter='#' quote= '&'
+create file format csv_raw type = 'csv' field_delimiter='#' quote= '`'
 
-skipif clickhouse
+
 query
 select $1 from @csv_types (file_format => 'csv_raw');
 ----
@@ -110,13 +110,13 @@ create file format csv_special type = 'csv' field_delimiter='|' quote= '\''
 statement ok
 copy into @csv_types from complex file_format = (format_name= 'csv_special');
 
-skipif clickhouse
+
 query
 select $1 from @csv_types(file_format => 'csv_special');
 ----
 (('c        d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)])
 
-skipif clickhouse
+
 query
 select $1 from @csv_types(file_format => 'csv_raw');
 ----

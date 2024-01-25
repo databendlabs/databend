@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,4 +24,5 @@ pub mod metasrv_grpc_schema_api;
 pub mod metasrv_grpc_schema_api_follower_follower;
 pub mod metasrv_grpc_schema_api_leader_follower;
 pub mod metasrv_grpc_tls;
+pub mod metasrv_grpc_transaction;
 pub mod metasrv_grpc_watch;

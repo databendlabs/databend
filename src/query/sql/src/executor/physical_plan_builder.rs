@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::FunctionContext;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -99,10 +99,6 @@ impl PhysicalPlanBuilder {
                 self.build_union_all(s_expr, union_all, required, stat_info)
                     .await
             }
-            RelOperator::RuntimeFilterSource(runtime_filter) => {
-                self.build_runtime_filter(s_expr, runtime_filter, required)
-                    .await
-            }
             RelOperator::ProjectSet(project_set) => {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
@@ -110,9 +106,6 @@ impl PhysicalPlanBuilder {
             RelOperator::CteScan(cte_scan) => self.build_cte_scan(cte_scan, required).await,
             RelOperator::MaterializedCte(cte) => {
                 self.build_materialized_cte(s_expr, cte, required).await
-            }
-            RelOperator::Lambda(lambda) => {
-                self.build_lambda(s_expr, lambda, required, stat_info).await
             }
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await

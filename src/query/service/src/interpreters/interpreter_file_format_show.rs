@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -54,14 +54,11 @@ impl Interpreter for ShowFileFormatsInterpreter {
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let names = formats
-            .iter()
-            .map(|x| x.name.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
 
         let options = formats
             .iter()
-            .map(|x| x.file_format_params.to_string().as_bytes().to_vec())
+            .map(|x| x.file_format_params.to_string())
             .collect::<Vec<_>>();
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

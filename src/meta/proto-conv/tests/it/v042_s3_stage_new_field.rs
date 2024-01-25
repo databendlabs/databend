@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app as mt;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::storage::StorageParams;
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::storage::StorageParams;
 use minitrace::func_name;
 use mt::storage::StorageS3Config;
 
@@ -47,10 +49,10 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "test".to_string(),
                 region: "test".to_string(),
-                allow_anonymous: true,
                 ..Default::default()
             }),
         },
+        is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,
@@ -66,6 +68,7 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: true,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         number_of_files: 100,
@@ -73,6 +76,7 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             username: "databend".to_string(),
             hostname: "databend.rs".to_string(),
         }),
+        created_on: DateTime::<Utc>::default(),
     };
 
     common::test_load_old(func_name!(), stage_info_v42.as_slice(), 42, want())?;

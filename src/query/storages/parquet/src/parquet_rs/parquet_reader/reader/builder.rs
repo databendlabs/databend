@@ -14,13 +14,14 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::ParquetReadOptions;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::TopK;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::TableSchemaRef;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::TopK;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchemaRef;
 use opendal::Operator;
 use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::ProjectionMask;
@@ -55,6 +56,7 @@ pub struct ParquetRSReaderBuilder<'a> {
     options: ParquetReadOptions,
     pruner: Option<ParquetRSPruner>,
     topk: Option<&'a TopK>,
+    partition_columns: Vec<String>,
 
     // Can be reused to build multiple readers.
     built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>)>,
@@ -102,6 +104,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             built_predicate: None,
             built_topk: None,
             built_output: None,
+            partition_columns: vec![],
         }
     }
 
@@ -125,6 +128,11 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         self
     }
 
+    pub fn with_partition_columns(mut self, partition_columns: Vec<String>) -> Self {
+        self.partition_columns = partition_columns;
+        self
+    }
+
     fn build_predicate(&mut self) -> Result<()> {
         if self.built_predicate.is_some() {
             return Ok(());
@@ -136,6 +144,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
                     &prewhere,
                     &self.table_schema,
                     &self.schema_desc,
+                    &self.partition_columns,
                 )
             })
             .transpose()?;
@@ -153,7 +162,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(())
     }
 
-    fn build_output(&mut self) -> Result<()> {
+    pub(crate) fn build_output(&mut self) -> Result<()> {
         if self.built_output.is_some() {
             return Ok(());
         }
@@ -204,8 +213,10 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
+        let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
         Ok(ParquetRSFullReader {
             op: self.op.clone(),
+            output_schema: output_schema.clone(),
             predicate,
             projection,
             field_paths,
@@ -260,10 +271,12 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         })
     }
 
-    fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
-        let (projection, _, _, output_field_paths) = self.built_output.as_ref().unwrap();
+    pub fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
+        let (projection, _, schema, output_field_paths) = self.built_output.as_ref().unwrap();
+        let data_schema = DataSchema::from(schema);
         NoPretchPolicyBuilder::create(
             &self.schema_desc,
+            data_schema,
             projection.clone(),
             output_field_paths.clone(),
         )

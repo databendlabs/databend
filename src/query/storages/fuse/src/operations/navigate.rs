@@ -17,18 +17,18 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use common_catalog::table::NavigationPoint;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::schema::TableStatistics;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableStatistics;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
 use opendal::Metakey;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -143,7 +143,8 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let retention =
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
@@ -239,9 +240,9 @@ impl FuseTable {
                 modified <= retention_point
             })
             .await?;
-        let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
-            "No historical data found at given point",
-        ))?;
+        let location = location.ok_or_else(|| {
+            ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
+        })?;
         Ok((location, files))
     }
 

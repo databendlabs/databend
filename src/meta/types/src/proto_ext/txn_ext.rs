@@ -13,6 +13,20 @@
 // limitations under the License.
 
 use crate::protobuf as pb;
+use crate::SeqV;
+use crate::TxnRequest;
+
+impl TxnRequest {
+    /// Creates a transaction request that performs the specified operations
+    /// unconditionally.
+    pub fn unconditional(ops: Vec<pb::TxnOp>) -> Self {
+        Self {
+            condition: vec![],
+            if_then: ops,
+            else_then: vec![],
+        }
+    }
+}
 
 impl pb::TxnCondition {
     /// Create a txn condition that checks if the `seq` matches.
@@ -43,6 +57,22 @@ impl pb::TxnOp {
                 value,
                 prev_value: true,
                 expire_at,
+                ttl_ms: None,
+            })),
+        }
+    }
+
+    /// Create a txn operation that puts a record with ttl.
+    ///
+    /// `ttl` is relative expire time while `expire_at` is absolute expire time.
+    pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl_ms: Option<u64>) -> pb::TxnOp {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
+                key: key.to_string(),
+                value,
+                prev_value: true,
+                expire_at: None,
+                ttl_ms,
             })),
         }
     }
@@ -59,6 +89,15 @@ impl pb::TxnOp {
                 key: key.to_string(),
                 prev_value: true,
                 match_seq: seq,
+            })),
+        }
+    }
+
+    /// Create a new `TxnOp` with a `Get` operation.
+    pub fn get(key: impl ToString) -> Self {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
+                key: key.to_string(),
             })),
         }
     }
@@ -85,6 +124,24 @@ impl pb::TxnOpResponse {
                 key: key.to_string(),
                 prev_value,
             })),
+        }
+    }
+
+    pub fn get(key: impl ToString, value: Option<SeqV>) -> Self {
+        pb::TxnOpResponse {
+            response: Some(pb::txn_op_response::Response::Get(pb::TxnGetResponse {
+                key: key.to_string(),
+                value: value.map(pb::SeqV::from),
+            })),
+        }
+    }
+}
+
+impl pb::TxnGetResponse {
+    pub fn new(key: impl ToString, value: Option<pb::SeqV>) -> Self {
+        Self {
+            key: key.to_string(),
+            value,
         }
     }
 }

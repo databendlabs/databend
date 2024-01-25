@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::DataSchemaRef;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+
+use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
@@ -26,6 +28,8 @@ pub struct ExchangeSource {
     // Fragment ID of source fragment
     pub source_fragment_id: usize,
     pub query_id: String,
+
+    pub table_index: IndexType,
 }
 
 impl ExchangeSource {

@@ -1,1 +1,0 @@
-{"error":{"code":"500","message":"BadBytes. Code: 1046, Text = Number of columns in file (3) does not match that of the corresponding table (2)\nat file 'clickhouse_insert', line 0."}}

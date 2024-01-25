@@ -15,7 +15,9 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
 #![feature(cursor_remaining)]
+#![feature(lazy_cell)]
 
+mod binary;
 mod clickhouse;
 mod common_settings;
 mod delimiter;

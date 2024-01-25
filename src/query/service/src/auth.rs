@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_users::JwtAuthenticator;
-use common_users::UserApiProvider;
+use databend_common_base::base::GlobalInstance;
+use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_users::JwtAuthenticator;
+use databend_common_users::UserApiProvider;
 
 use crate::sessions::Session;
 
@@ -108,7 +108,7 @@ impl AuthMgr {
                         let ensure_user = jwt
                             .custom
                             .ensure_user
-                            .ok_or(ErrorCode::AuthenticateFailure(e.message()))?;
+                            .ok_or_else(|| ErrorCode::AuthenticateFailure(e.message()))?;
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                         if let Some(ref roles) = ensure_user.roles {
@@ -131,25 +131,36 @@ impl AuthMgr {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(n, "%");
                 let user = user_api
-                    .get_user_with_client_ip(&tenant, identity, client_ip.as_deref())
+                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
-                let user = match &user.auth_info {
-                    AuthInfo::None => user,
+                // Check password policy for login
+                UserApiProvider::instance()
+                    .check_login_password(&tenant, identity.clone(), &user)
+                    .await?;
+
+                let authed = match &user.auth_info {
+                    AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
                     } => match p {
-                        None => return Err(ErrorCode::AuthenticateFailure("password required")),
+                        None => Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {
                             if *h == t.hash(p) {
-                                user
+                                Ok(())
                             } else {
-                                return Err(ErrorCode::AuthenticateFailure("wrong password"));
+                                Err(ErrorCode::AuthenticateFailure("wrong password"))
                             }
                         }
                     },
-                    _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                    _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
+                UserApiProvider::instance()
+                    .update_user_login_result(&tenant, identity, authed.is_ok())
+                    .await?;
+
+                authed?;
+
                 session.set_authed_user(user, None).await?;
             }
         };

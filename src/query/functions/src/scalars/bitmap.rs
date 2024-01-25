@@ -17,26 +17,26 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::ops::Sub;
 
-use common_expression::types::bitmap::BitmapType;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::ArrayType;
-use common_expression::types::BooleanType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::types::ALL_SIGNED_INTEGER_TYPES;
-use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::vectorize_with_builder_2_arg;
-use common_expression::vectorize_with_builder_3_arg;
-use common_expression::with_signed_integer_mapped_type;
-use common_expression::with_unsigned_integer_mapped_type;
-use common_expression::EvalContext;
-use common_expression::FunctionDomain;
-use common_expression::FunctionRegistry;
-use common_io::parse_bitmap;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::bitmap::BitmapType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ALL_SIGNED_INTEGER_TYPES;
+use databend_common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::with_signed_integer_mapped_type;
+use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_io::parse_bitmap;
 use itertools::join;
 use roaring::RoaringTreemap;
 
@@ -45,7 +45,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_bitmap",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
-            match parse_bitmap(s) {
+            match parse_bitmap(s.as_bytes()) {
                 Ok(rb) => {
                     rb.serialize_into(&mut builder.data).unwrap();
                 }
@@ -377,7 +377,7 @@ enum LogicOp {
 fn bitmap_logic_operate(
     arg1: &[u8],
     arg2: &[u8],
-    builder: &mut StringColumnBuilder,
+    builder: &mut BinaryColumnBuilder,
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {

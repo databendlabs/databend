@@ -56,7 +56,9 @@ runs:
         rustup-components: rust-std rustfmt
         args: ${{ steps.opts.outputs.BUILD_ARGS }}
         docker-options: --env RUSTC_WRAPPER=sccache --env SCCACHE_GCS_RW_MODE=READ_WRITE --env SCCACHE_GCS_BUCKET=databend-ci --env SCCACHE_GCS_KEY_PREFIX=cache/sccache/
-        before-script-linux: ../../scripts/setup/dev_setup.sh -yb
+        before-script-linux: |
+          unset RUSTC_WRAPPER
+          ../../scripts/setup/dev_setup.sh -yb
 
     - name: Run tests
       working-directory: src/bendpy

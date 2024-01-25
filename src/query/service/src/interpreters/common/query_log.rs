@@ -16,12 +16,13 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_config::GlobalConfig;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_storages_system::LogType;
-use common_storages_system::QueryLogElement;
-use common_storages_system::QueryLogQueue;
+use databend_common_config::GlobalConfig;
+use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_storages_system::LogType;
+use databend_common_storages_system::QueryLogElement;
+use databend_common_storages_system::QueryLogQueue;
 use log::error;
 use log::info;
 use serde_json;
@@ -59,7 +60,7 @@ impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
         // log the query log in JSON format
-        info!(target: "query", "{}", event_str);
+        info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         QueryLogQueue::instance()?.append_data(event)
@@ -113,6 +114,10 @@ impl InterpreterQueryLog {
         let agg_spilled_bytes = 0u64;
         let group_by_spilled_rows = 0u64;
         let group_by_spilled_bytes = 0u64;
+
+        let bytes_from_storage = 0;
+        let bytes_from_disk_cache = 0;
+        let bytes_from_mem_cache = 0;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -175,6 +180,10 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            bytes_from_remote_disk: bytes_from_storage,
+            bytes_from_local_disk: bytes_from_disk_cache,
+            bytes_from_memory: bytes_from_mem_cache,
+
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -182,13 +191,19 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles: false,
         })
     }
 
-    pub fn log_finish(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+    pub fn log_finish(
+        ctx: &QueryContext,
+        now: SystemTime,
+        err: Option<ErrorCode>,
+        has_profiles: bool,
+    ) -> Result<()> {
         ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
@@ -239,6 +254,11 @@ impl InterpreterQueryLog {
         // Result.
         let result_rows = ctx.get_result_progress_value().rows as u64;
         let result_bytes = ctx.get_result_progress_value().bytes as u64;
+
+        let data_cache_metrics = ctx.get_data_cache_metrics().as_values();
+        let bytes_from_remote_disk = data_cache_metrics.bytes_from_remote_disk as u64;
+        let bytes_from_local_disk = data_cache_metrics.bytes_from_local_disk as u64;
+        let bytes_from_memory = data_cache_metrics.bytes_from_memory as u64;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -305,6 +325,10 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            bytes_from_remote_disk,
+            bytes_from_local_disk,
+            bytes_from_memory,
+
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -313,9 +337,10 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: "".to_string(),
+            server_version: DATABEND_COMMIT_VERSION.to_string(),
             session_settings,
             extra: "".to_string(),
+            has_profiles,
         })
     }
 }

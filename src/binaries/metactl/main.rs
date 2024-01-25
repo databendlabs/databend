@@ -15,23 +15,20 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod grpc;
-use common_tracing::QueryLogConfig;
-use common_tracing::TracingConfig;
 use grpc::export_meta;
 
 mod snapshot;
 
-use std::time::Duration;
+use std::collections::BTreeMap;
 
 use clap::Parser;
-use common_base::base::tokio;
-use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_raft_store::config::RaftConfig;
-use common_tracing::init_logging;
-use common_tracing::Config as LogConfig;
-use common_tracing::FileConfig;
-use common_tracing::StderrConfig;
+use databend_common_base::base::tokio;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config as LogConfig;
+use databend_common_tracing::FileConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -57,6 +54,15 @@ pub struct Config {
 
     #[clap(long)]
     pub export: bool,
+
+    /// The N.O. json strings in a export stream item.
+    ///
+    /// Set this to a smaller value if you get gRPC message body too large error.
+    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
+    ///
+    /// By default it is 32.
+    #[clap(long)]
+    pub export_chunk_size: Option<u64>,
 
     #[clap(
         long,
@@ -120,13 +126,13 @@ async fn main() -> anyhow::Result<()> {
             level: config.log_level.clone(),
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
+            limit: 48,
+            prefix_filter: "databend_".to_string(),
         },
-        stderr: StderrConfig::default(),
-        query: QueryLogConfig::default(),
-        tracing: TracingConfig::default(),
+        ..Default::default()
     };
 
-    let _guards = init_logging("metactl", &log_config);
+    let _guards = init_logging("metactl", &log_config, BTreeMap::new());
 
     if config.status {
         return show_status(&config).await;
@@ -210,15 +216,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client = MetaGrpcClient::try_create(
-            vec![addr.to_string()],
-            "root",
-            "xxx",
-            None,
-            None,
-            Duration::from_secs(10),
-            None,
-        )?;
+        let client =
+            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);
@@ -230,15 +229,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 async fn show_status(conf: &Config) -> anyhow::Result<()> {
     let addr = &conf.grpc_api_address;
 
-    let client = MetaGrpcClient::try_create(
-        vec![addr.to_string()],
-        "root",
-        "xxx",
-        None,
-        None,
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
     let res = client.get_cluster_status().await?;
     println!("BinaryVersion: {}", res.binary_version);

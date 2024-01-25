@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow::error::Result;
-use common_arrow::native::read::reader::read_meta;
-use common_arrow::native::read::reader::read_meta_async;
-use common_arrow::native::write::NativeWriter;
-use common_arrow::native::write::WriteOptions;
-use common_arrow::native::ColumnMeta;
-use common_arrow::native::CommonCompression;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::datatypes::Schema;
+use databend_common_arrow::arrow::error::Result;
+use databend_common_arrow::native::read::reader::read_meta;
+use databend_common_arrow::native::read::reader::read_meta_async;
+use databend_common_arrow::native::write::NativeWriter;
+use databend_common_arrow::native::write::WriteOptions;
+use databend_common_arrow::native::ColumnMeta;
+use databend_common_arrow::native::CommonCompression;
 
 use crate::native::io::new_test_chunk;
 use crate::native::io::WRITE_PAGE;

@@ -211,6 +211,18 @@ DROP TABLE test;
 statement ok
 CREATE TABLE test(c1 int not null, c2 int not null, a int not null);
 
+statement error 1006
+replace into test(c1, a) on(c1) values(1, 1), (2, 2);
+
+statement error 1006
+replace into test(c2, a) on(c2) values(3, 3), (4, 4);
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(c1 int not null default 0, c2 int not null default 0, a int not null default 0);
+
 statement ok
 replace into test(c1, a) on(c1) values(1, 1), (2, 2);
 
@@ -363,7 +375,7 @@ insert into test values(2, 2), (3, 2)
 
 # disable the auto re-clustering
 statement ok
-set enable_recluster_after_write = 0;
+set enable_compact_after_write = 0;
 
 statement ok
 replace into test on(a) values(3, 3), (4, 4)

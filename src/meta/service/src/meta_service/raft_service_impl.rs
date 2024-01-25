@@ -18,17 +18,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::future::TimingFutureExt;
-use common_meta_client::MetaGrpcReadReq;
-use common_meta_types::protobuf::raft_service_server::RaftService;
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::SnapshotChunkRequest;
-use common_meta_types::protobuf::StreamItem;
-use common_meta_types::InstallSnapshotRequest;
-use common_meta_types::SnapshotMeta;
-use common_meta_types::Vote;
-use common_metrics::count::Count;
+use databend_common_base::future::TimingFutureExt;
+use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_types::protobuf::raft_service_server::RaftService;
+use databend_common_meta_types::protobuf::RaftReply;
+use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::InstallSnapshotRequest;
+use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::Vote;
+use databend_common_metrics::count::Count;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
@@ -36,7 +37,6 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
@@ -96,9 +96,9 @@ impl RaftServiceImpl {
 
         let _g = snapshot_recv_inflight(&addr).counter_guard();
 
-        let chunk = snapshot_req.chunk.ok_or(GrpcHelper::invalid_arg(
-            "SnapshotChunkRequest.chunk is None",
-        ))?;
+        let chunk = snapshot_req
+            .chunk
+            .ok_or_else(|| GrpcHelper::invalid_arg("SnapshotChunkRequest.chunk is None"))?;
 
         let (vote, snapshot_meta): (Vote, SnapshotMeta) =
             GrpcHelper::parse(&snapshot_req.rpc_meta)?;
@@ -131,12 +131,14 @@ impl RaftServiceImpl {
 #[async_trait::async_trait]
 impl RaftService for RaftServiceImpl {
     async fn forward(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
 
             let res = self.meta_node.handle_forwardable_request(forward_req).await;
+
+            let res = res.map(|(_endpoint, forward_resp)| forward_resp);
 
             let raft_reply: RaftReply = res.into();
 
@@ -152,18 +154,21 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
 
-            let strm = self
+            let (endpoint, strm) = self
                 .meta_node
                 .handle_forwardable_request(forward_req)
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            Ok(Response::new(strm))
+            let mut resp = Response::new(strm);
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+
+            Ok(resp)
         }
         .in_span(root)
         .await
@@ -173,7 +178,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
@@ -196,7 +201,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         self.do_install_snapshot(request).in_span(root).await
     }
 
@@ -204,12 +209,12 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<SnapshotChunkRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         self.do_install_snapshot_v1(request).in_span(root).await
     }
 
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);

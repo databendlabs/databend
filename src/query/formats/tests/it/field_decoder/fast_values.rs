@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::ColumnBuilder;
-use common_expression::DataBlock;
-use common_expression::Scalar;
-use common_formats::FastFieldDecoderValues;
-use common_formats::FastValuesDecodeFallback;
-use common_formats::FastValuesDecoder;
-use common_io::prelude::FormatSettings;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_formats::FastFieldDecoderValues;
+use databend_common_formats::FastValuesDecodeFallback;
+use databend_common_formats::FastValuesDecoder;
+use databend_common_io::prelude::FormatSettings;
 
 struct DummyFastValuesDecodeFallback {}
 
@@ -106,10 +106,22 @@ async fn test_fast_values_decoder_multi() -> Result<()> {
                 "+----------+----------+----------+\n| Column 0 | Column 1 | Column 2 |\n+----------+----------+----------+\n| 1        | 2        | 3        |\n| 1        | 1        | 1        |\n| 1        | 1        | 1        |\n+----------+----------+----------+",
             ),
         },
+        Test {
+            data: "(1.2, -2.9, 3.55), (3.12e2, 3.45e+3, -1.9e-3);",
+            column_types: vec![
+                DataType::Number(NumberDataType::Int16),
+                DataType::Number(NumberDataType::Int16),
+                DataType::Number(NumberDataType::Int16),
+            ],
+            output: Ok(
+                "+----------+----------+----------+\n| Column 0 | Column 1 | Column 2 |\n+----------+----------+----------+\n| 1        | -3       | 4        |\n| 312      | 3450     | 0        |\n+----------+----------+----------+",
+            ),
+        },
     ];
 
     for tt in tests {
-        let field_decoder = FastFieldDecoderValues::create_for_insert(FormatSettings::default());
+        let field_decoder =
+            FastFieldDecoderValues::create_for_insert(FormatSettings::default(), true);
         let mut values_decoder = FastValuesDecoder::new(tt.data, &field_decoder);
         let fallback = DummyFastValuesDecodeFallback {};
         let mut columns = tt

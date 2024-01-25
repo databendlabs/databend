@@ -15,40 +15,43 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::vec;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::parquet::indexes::Interval;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::query_kind::QueryKind;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
-use common_expression::types::BooleanType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
-use common_expression::Scalar;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_storage::CopyStatus;
-use common_storage::FileStatus;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::parquet::indexes::Interval;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
 use opendal::services::Memory;
 use opendal::Operator;
 
 use super::source::Parquet2SourceMeta;
 use crate::parquet2::parquet_reader::BlockIterator;
-use crate::parquet2::parquet_reader::IndexedReaders;
+use crate::parquet2::parquet_reader::IndexedChunks;
 use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
@@ -56,6 +59,7 @@ use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
+use crate::ReadSettings;
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(
@@ -93,6 +97,9 @@ pub struct Parquet2DeserializeTransform {
     // used for collect num_rows for small files
     is_copy: bool,
     copy_status: Arc<CopyStatus>,
+
+    merge_read_max_gap_size: u64,
+    merge_read_max_range_size: u64,
 }
 
 impl Parquet2DeserializeTransform {
@@ -130,6 +137,10 @@ impl Parquet2DeserializeTransform {
 
                 is_copy: matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
                 copy_status: ctx.get_copy_status(),
+                merge_read_max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+                merge_read_max_range_size: ctx
+                    .get_settings()
+                    .get_storage_io_max_page_bytes_for_read()?,
             },
         )))
     }
@@ -144,6 +155,7 @@ impl Parquet2DeserializeTransform {
             bytes: data_block.memory_size(),
         };
         self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, data_block.memory_size());
         self.output_data.push(data_block);
         Ok(())
     }
@@ -172,11 +184,18 @@ impl Parquet2DeserializeTransform {
             .partition_pruner
             .prune_one_file(path, &op, data_size as u64)?;
 
+        let settings = ReadSettings {
+            max_gap_size: self.merge_read_max_gap_size,
+            max_range_size: self.merge_read_max_range_size,
+        };
+
         for part in parts {
-            let mut readers = self
-                .source_reader
-                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
-            if let Some(block) = self.process_row_group(&part, &mut readers)? {
+            let readers = self.source_reader.sync_read_columns_data_by_merge_io(
+                &settings,
+                &part,
+                &blocking_op,
+            )?;
+            if let Some(block) = self.process_row_group(&part, &mut readers.column_buffers()?)? {
                 res.push(block)
             }
         }
@@ -193,14 +212,14 @@ impl Parquet2DeserializeTransform {
     fn process_row_group(
         &mut self,
         part: &Parquet2RowGroupPart,
-        readers: &mut IndexedReaders,
+        column_chunks: &mut IndexedChunks,
     ) -> Result<Option<DataBlock>> {
         let row_selection = part
             .row_selection
             .as_ref()
             .map(|sel| intervals_to_bitmap(sel, part.num_rows));
         // this means it's empty projection
-        if readers.is_empty() {
+        if column_chunks.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
             return Ok(Some(data_block));
         }
@@ -210,9 +229,8 @@ impl Parquet2DeserializeTransform {
                 func_ctx,
                 reader,
                 filter,
-                top_k,
             }) => {
-                let chunks = reader.read_from_readers(readers)?;
+                let chunks = reader.read_from_merge_io(column_chunks)?;
 
                 // only if there is not dictionary page, we can push down the row selection
                 let can_push_down = chunks
@@ -225,19 +243,7 @@ impl Parquet2DeserializeTransform {
                 };
 
                 let mut prewhere_block = reader.deserialize(part, chunks, push_down)?;
-                // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
-                if let Some((index, sorter)) = top_k {
-                    let col = prewhere_block
-                        .get_by_offset(*index)
-                        .value
-                        .as_column()
-                        .unwrap();
-                    if sorter.never_match_any(col) {
-                        return Ok(None);
-                    }
-                }
-
-                // Step 2: Read Prewhere columns and get the filter
+                // Step 1: Read Prewhere columns and get the filter
                 let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator
                     .run(filter)
@@ -245,31 +251,16 @@ impl Parquet2DeserializeTransform {
                     .try_downcast::<BooleanType>()
                     .unwrap();
 
-                // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
+                // Step 2: Apply the filter, if it's all filtered, we can skip the remain columns.
                 if FilterHelpers::is_all_unset(&filter) {
                     return Ok(None);
                 }
-
-                // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                let filter = if let Some((index, sorter)) = top_k {
-                    let top_k_column = prewhere_block
-                        .get_by_offset(*index)
-                        .value
-                        .as_column()
-                        .unwrap();
-                    let mut bitmap =
-                        FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                    sorter.push_column(top_k_column, &mut bitmap);
-                    Value::Column(bitmap.into())
-                } else {
-                    filter
-                };
 
                 if FilterHelpers::is_all_unset(&filter) {
                     return Ok(None);
                 }
 
-                // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
+                // Step 4 Remove columns that are not needed for output. Use dummy column to replace them.
                 let mut columns = prewhere_block.columns().to_vec();
                 for (col, f) in columns.iter_mut().zip(reader.output_schema().fields()) {
                     if !self.output_schema.has_field(f.name()) {
@@ -277,8 +268,9 @@ impl Parquet2DeserializeTransform {
                     }
                 }
 
-                // Step 6: Read remain columns.
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                // Step 5: Read remain columns.
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
+
                 let can_push_down = chunks
                     .iter()
                     .all(|(id, _)| !part.column_metas[id].has_dictionary);
@@ -312,7 +304,8 @@ impl Parquet2DeserializeTransform {
             }
             None => {
                 // for now only use current_row_group when prewhere_info is None
-                let chunks = self.remain_reader.read_from_readers(readers)?;
+                // for now only use current_row_group when prewhere_info is None
+                let chunks = self.remain_reader.read_from_merge_io(column_chunks)?;
                 let mut current_row_group =
                     self.remain_reader
                         .get_deserializer(part, chunks, row_selection)?;

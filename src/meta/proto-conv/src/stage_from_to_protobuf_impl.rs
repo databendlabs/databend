@@ -19,13 +19,14 @@ use std::convert::TryFrom;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app as mt;
-use common_protos::pb;
+use databend_common_meta_app as mt;
+use databend_common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
 use crate::stage_from_to_protobuf_impl::mt::principal::FileFormatOptionsAst;
 use crate::FromToProto;
+use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
@@ -135,6 +136,7 @@ impl FromToProto for mt::principal::CopyOptions {
             max_file_size,
             disable_variant_check: p.disable_variant_check,
             return_failed_only: p.return_failed_only,
+            detailed_output: false,
         })
     }
 
@@ -197,7 +199,7 @@ impl FromToProto for mt::principal::StageInfo {
         };
         Ok(mt::principal::StageInfo {
             stage_name: p.stage_name.clone(),
-            stage_type: mt::principal::StageType::from_pb(
+            stage_type: mt::principal::StageType::from_pb_enum(
                 FromPrimitive::from_i32(p.stage_type).ok_or_else(|| Incompatible {
                     reason: format!("invalid StageType: {}", p.stage_type),
                 })?,
@@ -207,6 +209,7 @@ impl FromToProto for mt::principal::StageInfo {
                     reason: "StageInfo.stage_params cannot be None".to_string(),
                 },
             )?)?,
+            is_temporary: false,
             file_format_params,
             copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
                 || Incompatible {
@@ -219,6 +222,10 @@ impl FromToProto for mt::principal::StageInfo {
                 Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
                 None => None,
             },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
         })
     }
 
@@ -227,7 +234,7 @@ impl FromToProto for mt::principal::StageInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             stage_name: self.stage_name.clone(),
-            stage_type: mt::principal::StageType::to_pb(&self.stage_type)? as i32,
+            stage_type: mt::principal::StageType::to_pb_enum(&self.stage_type)? as i32,
             stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)?),
             file_format_params: Some(mt::principal::FileFormatParams::to_pb(
                 &self.file_format_params,
@@ -240,6 +247,7 @@ impl FromToProto for mt::principal::StageInfo {
                 Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
                 None => None,
             },
+            created_on: Some(self.created_on.to_pb()?),
         })
     }
 }
@@ -282,12 +290,9 @@ impl FromToProto for mt::principal::StageFile {
     }
 }
 
-impl FromToProto for mt::principal::StageType {
-    type PB = pb::stage_info::StageType;
-    fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
-    }
-    fn from_pb(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
+impl FromToProtoEnum for mt::principal::StageType {
+    type PBEnum = pb::stage_info::StageType;
+    fn from_pb_enum(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
             pb::stage_info::StageType::LegacyInternal => {
@@ -299,7 +304,7 @@ impl FromToProto for mt::principal::StageType {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::stage_info::StageType, Incompatible> {
+    fn to_pb_enum(&self) -> Result<pb::stage_info::StageType, Incompatible> {
         match *self {
             mt::principal::StageType::LegacyInternal => {
                 Ok(pb::stage_info::StageType::LegacyInternal)

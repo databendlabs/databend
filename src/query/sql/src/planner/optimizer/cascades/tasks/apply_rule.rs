@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use educe::Educe;
 
 use crate::optimizer::cascades::tasks::SharedCounter;
@@ -36,7 +35,7 @@ pub struct ApplyRuleTask {
     pub target_group_index: IndexType,
     pub m_expr_index: IndexType,
 
-    pub parent: Option<Rc<SharedCounter>>,
+    pub parent: Option<SharedCounter>,
 }
 
 impl ApplyRuleTask {
@@ -55,17 +54,9 @@ impl ApplyRuleTask {
         }
     }
 
-    pub fn with_parent(
-        ctx: Arc<dyn TableContext>,
-        rule_id: RuleID,
-        target_group_index: IndexType,
-        m_expr_index: IndexType,
-        parent: &Rc<SharedCounter>,
-    ) -> Self {
-        let mut task = Self::new(ctx, rule_id, target_group_index, m_expr_index);
-        parent.inc();
-        task.parent = Some(parent.clone());
-        task
+    pub fn with_parent(mut self, parent: SharedCounter) -> Self {
+        self.parent = Some(parent);
+        self
     }
 
     pub fn execute(self, optimizer: &mut CascadesOptimizer) -> Result<()> {
@@ -75,10 +66,6 @@ impl ApplyRuleTask {
         let rule = RuleFactory::create_rule(self.rule_id, optimizer.metadata.clone())?;
         m_expr.apply_rule(&optimizer.memo, &rule, &mut state)?;
         optimizer.insert_from_transform_state(self.target_group_index, state)?;
-
-        if let Some(parent) = self.parent {
-            parent.dec();
-        }
 
         Ok(())
     }

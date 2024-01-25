@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_expression::TableField;
+use databend_common_expression::TableField;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::file::metadata::RowGroupMetaData;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::parquet_rs::statistics::column::convert_column_statistics;
 
@@ -53,7 +53,7 @@ pub fn collect_row_group_stats(
                 let column_stats = column.statistics().unwrap();
                 stats_of_columns.insert(
                     *col_idx as u32,
-                    convert_column_statistics(column_stats, &field.data_type().remove_nullable()),
+                    convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
                 );
             }
         } else {
@@ -63,7 +63,7 @@ pub fn collect_row_group_stats(
                 let column_stats = column.statistics().unwrap();
                 stats_of_columns.insert(
                     col_idx as u32,
-                    convert_column_statistics(column_stats, &field.data_type().remove_nullable()),
+                    convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
                 );
             }
         }

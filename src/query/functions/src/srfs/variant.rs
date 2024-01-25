@@ -14,25 +14,29 @@
 
 use std::sync::Arc;
 
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::UInt64Type;
-use common_expression::types::VariantType;
-use common_expression::Column;
-use common_expression::FromData;
-use common_expression::Function;
-use common_expression::FunctionEval;
-use common_expression::FunctionKind;
-use common_expression::FunctionProperty;
-use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::Value;
-use common_expression::ValueRef;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use jsonb::array_length;
 use jsonb::array_values;
 use jsonb::as_str;
@@ -74,50 +78,47 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let path_arg = args[1].clone().to_owned();
                     let mut results = Vec::with_capacity(ctx.num_rows);
                     match path_arg {
-                        Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
-                            Ok(json_path) => {
-                                let selector = Selector::new(json_path, SelectorMode::All);
-                                for (row, max_nums_per_row) in
-                                    max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
-                                {
-                                    let val = unsafe { val_arg.index_unchecked(row) };
-                                    let mut builder = StringColumnBuilder::with_capacity(0, 0);
-                                    if let ScalarRef::Variant(val) = val {
-                                        selector.select(
-                                            val,
-                                            &mut builder.data,
-                                            &mut builder.offsets,
-                                        );
+                        Value::Scalar(Scalar::String(path)) => {
+                            match parse_json_path(path.as_bytes()) {
+                                Ok(json_path) => {
+                                    let selector = Selector::new(json_path, SelectorMode::All);
+                                    for (row, max_nums_per_row) in
+                                        max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                                    {
+                                        let val = unsafe { val_arg.index_unchecked(row) };
+                                        let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
+                                        if let ScalarRef::Variant(val) = val {
+                                            selector.select(
+                                                val,
+                                                &mut builder.data,
+                                                &mut builder.offsets,
+                                            );
+                                        }
+                                        let array =
+                                            Column::Variant(builder.build()).wrap_nullable(None);
+                                        let array_len = array.len();
+                                        *max_nums_per_row =
+                                            std::cmp::max(*max_nums_per_row, array_len);
+                                        results.push((
+                                            Value::Column(Column::Tuple(vec![array])),
+                                            array_len,
+                                        ));
                                     }
-                                    let array =
-                                        Column::Variant(builder.build()).wrap_nullable(None);
-                                    let array_len = array.len();
-                                    *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
-                                    results.push((
-                                        Value::Column(Column::Tuple(vec![array])),
-                                        array_len,
-                                    ));
+                                }
+                                Err(_) => {
+                                    ctx.set_error(0, format!("Invalid JSON Path '{}'", &path,));
                                 }
                             }
-                            Err(_) => {
-                                ctx.set_error(
-                                    0,
-                                    format!(
-                                        "Invalid JSON Path '{}'",
-                                        &String::from_utf8_lossy(&path),
-                                    ),
-                                );
-                            }
-                        },
+                        }
                         _ => {
                             for (row, max_nums_per_row) in
                                 max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
                             {
                                 let val = unsafe { val_arg.index_unchecked(row) };
                                 let path = unsafe { path_arg.index_unchecked(row) };
-                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                 if let ScalarRef::String(path) = path {
-                                    match parse_json_path(path) {
+                                    match parse_json_path(path.as_bytes()) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
                                                 let selector =
@@ -132,10 +133,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         Err(_) => {
                                             ctx.set_error(
                                                 row,
-                                                format!(
-                                                    "Invalid JSON Path '{}'",
-                                                    &String::from_utf8_lossy(path),
-                                                ),
+                                                format!("Invalid JSON Path '{}'", &path,),
                                             );
                                             break;
                                         }
@@ -206,18 +204,20 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "json_each".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Tuple(
-                    vec![DataType::String, DataType::Variant],
-                )))]),
+                return_type: DataType::Tuple(vec![
+                    DataType::Nullable(Box::new(DataType::String)),
+                    DataType::Nullable(Box::new(DataType::Variant)),
+                ]),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
-                            ScalarRef::Null => {
-                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
-                            }
+                            ScalarRef::Null => (
+                                Value::Scalar(Scalar::Tuple(vec![Scalar::Null, Scalar::Null])),
+                                0,
+                            ),
                             ScalarRef::Variant(val) => {
                                 unnest_variant_obj(val, row, max_nums_per_row)
                             }
@@ -233,7 +233,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "flatten".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("flatten", |_, args_type| {
+    registry.register_function_factory("flatten", |params, args_type| {
         if args_type.is_empty() || args_type.len() > 5 {
             return None;
         }
@@ -264,24 +264,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         {
             return None;
         }
+        let params: Vec<i64> = params.iter().map(|x| x.get_i64().unwrap()).collect();
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "flatten".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Tuple(
-                    vec![
-                        DataType::Number(NumberDataType::UInt64),
-                        DataType::Nullable(Box::new(DataType::String)),
-                        DataType::Nullable(Box::new(DataType::String)),
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                        DataType::Nullable(Box::new(DataType::Variant)),
-                        DataType::Nullable(Box::new(DataType::Variant)),
-                    ],
-                )))]),
+                return_type: DataType::Tuple(vec![
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                    DataType::Nullable(Box::new(DataType::String)),
+                    DataType::Nullable(Box::new(DataType::String)),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                    DataType::Nullable(Box::new(DataType::Variant)),
+                    DataType::Nullable(Box::new(DataType::Variant)),
+                ]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx, max_nums_per_row| {
+                eval: Box::new(move |args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
 
                     let mut json_path = None;
@@ -292,23 +291,18 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     if args.len() >= 2 {
                         match &args[1] {
-                            ValueRef::Scalar(ScalarRef::String(v)) => match parse_json_path(v) {
-                                Ok(jsonpath) => {
-                                    let path = unsafe { std::str::from_utf8_unchecked(v) };
-                                    let selector = Selector::new(jsonpath, SelectorMode::First);
-                                    json_path = Some((path, selector));
+                            ValueRef::Scalar(ScalarRef::String(v)) => {
+                                match parse_json_path(v.as_bytes()) {
+                                    Ok(jsonpath) => {
+                                        let selector = Selector::new(jsonpath, SelectorMode::First);
+                                        json_path = Some((v, selector));
+                                    }
+                                    Err(_) => {
+                                        ctx.set_error(0, format!("Invalid JSON Path {v:?}",));
+                                        return results;
+                                    }
                                 }
-                                Err(_) => {
-                                    ctx.set_error(
-                                        0,
-                                        format!(
-                                            "Invalid JSON Path {:?}",
-                                            String::from_utf8_lossy(v)
-                                        ),
-                                    );
-                                    return results;
-                                }
-                            },
+                            }
                             ValueRef::Column(_) => {
                                 ctx.set_error(
                                     0,
@@ -355,30 +349,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     if args.len() >= 5 {
                         match args[4] {
                             ValueRef::Scalar(ScalarRef::String(v)) => {
-                                match String::from_utf8(v.to_vec()) {
-                                    Ok(val) => match val.to_lowercase().as_str() {
-                                        "object" => {
-                                            mode = FlattenMode::Object;
-                                        }
-                                        "array" => {
-                                            mode = FlattenMode::Array;
-                                        }
-                                        "both" => {
-                                            mode = FlattenMode::Both;
-                                        }
-                                        _ => {
-                                            ctx.set_error(0, format!("Invalid mode {:?}", val));
-                                            return results;
-                                        }
-                                    },
-                                    Err(_) => {
-                                        ctx.set_error(
-                                            0,
-                                            format!(
-                                                "Invalid mode string {:?}",
-                                                String::from_utf8_lossy(v)
-                                            ),
-                                        );
+                                match v.to_lowercase().as_str() {
+                                    "object" => {
+                                        mode = FlattenMode::Object;
+                                    }
+                                    "array" => {
+                                        mode = FlattenMode::Array;
+                                    }
+                                    "both" => {
+                                        mode = FlattenMode::Both;
+                                    }
+                                    _ => {
+                                        ctx.set_error(0, format!("Invalid mode {v:?}"));
                                         return results;
                                     }
                                 }
@@ -401,28 +383,42 @@ pub fn register(registry: &mut FunctionRegistry) {
                     {
                         match arg.index(row).unwrap() {
                             ScalarRef::Null => {
-                                results.push((Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0));
+                                results.push((
+                                    Value::Scalar(Scalar::Tuple(vec![
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                        Scalar::Null,
+                                    ])),
+                                    0,
+                                ));
                             }
                             ScalarRef::Variant(val) => {
                                 let columns = match json_path {
                                     Some((path, ref selector)) => {
                                         // get inner input values by path
-                                        let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                        let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                         selector.select(
                                             val,
                                             &mut builder.data,
                                             &mut builder.offsets,
                                         );
                                         let inner_val = builder.pop().unwrap_or_default();
-                                        generator.generate((row + 1) as u64, &inner_val, path)
+                                        generator.generate(
+                                            (row + 1) as u64,
+                                            &inner_val,
+                                            path,
+                                            &params,
+                                        )
                                     }
-                                    None => generator.generate((row + 1) as u64, val, ""),
+                                    None => generator.generate((row + 1) as u64, val, "", &params),
                                 };
                                 let len = columns[0].len();
                                 *max_nums_per_row = std::cmp::max(*max_nums_per_row, len);
 
-                                let inner_col = Column::Tuple(columns).wrap_nullable(None);
-                                results.push((Value::Column(Column::Tuple(vec![inner_col])), len));
+                                results.push((Value::Column(Column::Tuple(columns)), len));
                             }
                             _ => unreachable!(),
                         }
@@ -442,7 +438,7 @@ pub(crate) fn unnest_variant_array(
     match array_values(val) {
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
-            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
@@ -466,44 +462,46 @@ fn unnest_variant_obj(
     match object_each(val) {
         Some(vals) if !vals.is_empty() => {
             let len = vals.len();
-            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
             let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
             for (key, val) in vals {
-                key_builder.put_slice(&key);
+                key_builder.put_str(&String::from_utf8_lossy(&key));
                 key_builder.commit_row();
                 val_builder.put_slice(&val);
                 val_builder.commit_row();
             }
 
-            let key_col = Column::String(key_builder.build());
-            let val_col = Column::Variant(val_builder.build());
-            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
+            let key_col = Column::String(key_builder.build()).wrap_nullable(None);
+            let val_col = Column::Variant(val_builder.build()).wrap_nullable(None);
 
-            (Value::Column(Column::Tuple(vec![tuple_col])), len)
+            (Value::Column(Column::Tuple(vec![key_col, val_col])), len)
         }
-        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
+        _ => (
+            Value::Scalar(Scalar::Tuple(vec![Scalar::Null, Scalar::Null])),
+            0,
+        ),
     }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum FlattenMode {
+enum FlattenMode {
     Both,
     Object,
     Array,
 }
 
 #[derive(Copy, Clone)]
-pub struct FlattenGenerator {
+struct FlattenGenerator {
     outer: bool,
     recursive: bool,
     mode: FlattenMode,
 }
 
 impl FlattenGenerator {
-    pub fn create(outer: bool, recursive: bool, mode: FlattenMode) -> FlattenGenerator {
+    fn create(outer: bool, recursive: bool, mode: FlattenMode) -> FlattenGenerator {
         Self {
             outer,
             recursive,
@@ -516,22 +514,59 @@ impl FlattenGenerator {
         &mut self,
         input: &[u8],
         path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
+        key_builder: &mut Option<NullableColumnBuilder<StringType>>,
+        path_builder: &mut Option<StringColumnBuilder>,
+        index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
+        rows: &mut usize,
     ) {
         match self.mode {
             FlattenMode::Object => {
-                self.flatten_object(input, path, keys, paths, indices, values, thises);
+                self.flatten_object(
+                    input,
+                    path,
+                    key_builder,
+                    path_builder,
+                    index_builder,
+                    value_builder,
+                    this_builder,
+                    rows,
+                );
             }
             FlattenMode::Array => {
-                self.flatten_array(input, path, keys, paths, indices, values, thises);
+                self.flatten_array(
+                    input,
+                    path,
+                    key_builder,
+                    path_builder,
+                    index_builder,
+                    value_builder,
+                    this_builder,
+                    rows,
+                );
             }
             FlattenMode::Both => {
-                self.flatten_array(input, path, keys, paths, indices, values, thises);
-                self.flatten_object(input, path, keys, paths, indices, values, thises);
+                self.flatten_array(
+                    input,
+                    path,
+                    key_builder,
+                    path_builder,
+                    index_builder,
+                    value_builder,
+                    this_builder,
+                    rows,
+                );
+                self.flatten_object(
+                    input,
+                    path,
+                    key_builder,
+                    path_builder,
+                    index_builder,
+                    value_builder,
+                    this_builder,
+                    rows,
+                );
             }
         }
     }
@@ -541,24 +576,49 @@ impl FlattenGenerator {
         &mut self,
         input: &[u8],
         path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
+        key_builder: &mut Option<NullableColumnBuilder<StringType>>,
+        path_builder: &mut Option<StringColumnBuilder>,
+        index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
+        rows: &mut usize,
     ) {
         if let Some(len) = array_length(input) {
             for i in 0..len {
-                let val = get_by_index(input, i).unwrap();
-                keys.push(None);
                 let inner_path = format!("{}[{}]", path, i);
-                paths.push(Some(inner_path.as_bytes().to_vec()));
-                indices.push(Some(i.try_into().unwrap()));
-                values.push(Some(val.clone()));
-                thises.push(Some(input.to_vec().clone()));
+                let val = get_by_index(input, i).unwrap();
+
+                if let Some(key_builder) = key_builder {
+                    key_builder.push_null();
+                }
+                if let Some(path_builder) = path_builder {
+                    path_builder.put_str(&inner_path);
+                    path_builder.commit_row();
+                }
+                if let Some(index_builder) = index_builder {
+                    index_builder.push(i.try_into().unwrap());
+                }
+                if let Some(value_builder) = value_builder {
+                    value_builder.put_slice(&val);
+                    value_builder.commit_row();
+                }
+                if let Some(this_builder) = this_builder {
+                    this_builder.put_slice(input);
+                    this_builder.commit_row();
+                }
+                *rows += 1;
 
                 if self.recursive {
-                    self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
+                    self.flatten(
+                        &val,
+                        &inner_path,
+                        key_builder,
+                        path_builder,
+                        index_builder,
+                        value_builder,
+                        this_builder,
+                        rows,
+                    );
                 }
             }
         }
@@ -569,11 +629,12 @@ impl FlattenGenerator {
         &mut self,
         input: &[u8],
         path: &str,
-        keys: &mut Vec<Option<Vec<u8>>>,
-        paths: &mut Vec<Option<Vec<u8>>>,
-        indices: &mut Vec<Option<u64>>,
-        values: &mut Vec<Option<Vec<u8>>>,
-        thises: &mut Vec<Option<Vec<u8>>>,
+        key_builder: &mut Option<NullableColumnBuilder<StringType>>,
+        path_builder: &mut Option<StringColumnBuilder>,
+        index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
+        value_builder: &mut Option<BinaryColumnBuilder>,
+        this_builder: &mut Option<BinaryColumnBuilder>,
+        rows: &mut usize,
     ) {
         if let Some(obj_keys) = object_keys(input) {
             if let Some(len) = array_length(&obj_keys) {
@@ -581,63 +642,143 @@ impl FlattenGenerator {
                     let key = get_by_index(&obj_keys, i).unwrap();
                     let name = as_str(&key).unwrap();
                     let val = get_by_name(input, &name, false).unwrap();
-
-                    keys.push(Some(name.as_bytes().to_vec()));
                     let inner_path = if !path.is_empty() {
                         format!("{}.{}", path, name)
                     } else {
                         name.to_string()
                     };
-                    paths.push(Some(inner_path.as_bytes().to_vec()));
-                    indices.push(None);
-                    values.push(Some(val.clone()));
-                    thises.push(Some(input.to_vec().clone()));
+
+                    if let Some(key_builder) = key_builder {
+                        key_builder.push(name.as_ref());
+                    }
+                    if let Some(path_builder) = path_builder {
+                        path_builder.put_str(&inner_path);
+                        path_builder.commit_row();
+                    }
+                    if let Some(index_builder) = index_builder {
+                        index_builder.push_null();
+                    }
+                    if let Some(value_builder) = value_builder {
+                        value_builder.put_slice(&val);
+                        value_builder.commit_row();
+                    }
+                    if let Some(this_builder) = this_builder {
+                        this_builder.put_slice(input);
+                        this_builder.commit_row();
+                    }
+                    *rows += 1;
 
                     if self.recursive {
-                        self.flatten(&val, &inner_path, keys, paths, indices, values, thises);
+                        self.flatten(
+                            &val,
+                            &inner_path,
+                            key_builder,
+                            path_builder,
+                            index_builder,
+                            value_builder,
+                            this_builder,
+                            rows,
+                        );
                     }
                 }
             }
         }
     }
 
-    pub fn generate(&mut self, seq: u64, input: &[u8], path: &str) -> Vec<Column> {
-        let mut keys: Vec<Option<Vec<u8>>> = vec![];
-        let mut paths: Vec<Option<Vec<u8>>> = vec![];
-        let mut indices: Vec<Option<u64>> = vec![];
-        let mut values: Vec<Option<Vec<u8>>> = vec![];
-        let mut thises: Vec<Option<Vec<u8>>> = vec![];
+    fn generate(&mut self, seq: u64, input: &[u8], path: &str, params: &[i64]) -> Vec<Column> {
+        // Only columns required by parent plan need a builder.
+        let mut key_builder = if params.is_empty() || params.contains(&2) {
+            Some(NullableColumnBuilder::<StringType>::with_capacity(0, &[]))
+        } else {
+            None
+        };
+        let mut path_builder = if params.is_empty() || params.contains(&3) {
+            Some(StringColumnBuilder::with_capacity(0, 0))
+        } else {
+            None
+        };
+        let mut index_builder = if params.is_empty() || params.contains(&4) {
+            Some(NullableColumnBuilder::<UInt64Type>::with_capacity(0, &[]))
+        } else {
+            None
+        };
+        let mut value_builder = if params.is_empty() || params.contains(&5) {
+            Some(BinaryColumnBuilder::with_capacity(0, 0))
+        } else {
+            None
+        };
+        let mut this_builder = if params.is_empty() || params.contains(&6) {
+            Some(BinaryColumnBuilder::with_capacity(0, 0))
+        } else {
+            None
+        };
+        let mut rows = 0;
 
         if !input.is_empty() {
             self.flatten(
                 input,
                 path,
-                &mut keys,
-                &mut paths,
-                &mut indices,
-                &mut values,
-                &mut thises,
+                &mut key_builder,
+                &mut path_builder,
+                &mut index_builder,
+                &mut value_builder,
+                &mut this_builder,
+                &mut rows,
             );
         }
 
-        if self.outer && values.is_empty() {
-            // add an empty row
-            keys.push(None);
-            paths.push(None);
-            indices.push(None);
-            values.push(None);
-            thises.push(None);
+        if self.outer && rows == 0 {
+            // add an empty row.
+            let columns = vec![
+                UInt64Type::from_opt_data(vec![Some(seq)]),
+                StringType::from_opt_data(vec![None::<&str>]),
+                StringType::from_opt_data(vec![None::<&str>]),
+                UInt64Type::from_opt_data(vec![None]),
+                VariantType::from_opt_data(vec![None]),
+                VariantType::from_opt_data(vec![None]),
+            ];
+            return columns;
         }
 
-        let seqs: Vec<u64> = [seq].repeat(values.len());
+        // Generate an empty dummy column for columns that are not needed.
+        let seq_column = UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(None);
+        let key_column = if let Some(key_builder) = key_builder {
+            NullableType::<StringType>::upcast_column(key_builder.build())
+        } else {
+            StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
+                .wrap_nullable(None)
+        };
+        let path_column = if let Some(path_builder) = path_builder {
+            StringType::upcast_column(path_builder.build()).wrap_nullable(None)
+        } else {
+            StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
+                .wrap_nullable(None)
+        };
+        let index_column = if let Some(index_builder) = index_builder {
+            NullableType::<UInt64Type>::upcast_column(index_builder.build())
+        } else {
+            UInt64Type::upcast_column(vec![0u64; rows].into()).wrap_nullable(None)
+        };
+        let value_column = if let Some(value_builder) = value_builder {
+            VariantType::upcast_column(value_builder.build()).wrap_nullable(None)
+        } else {
+            VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
+                .wrap_nullable(None)
+        };
+        let this_column = if let Some(this_builder) = this_builder {
+            VariantType::upcast_column(this_builder.build()).wrap_nullable(None)
+        } else {
+            VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
+                .wrap_nullable(None)
+        };
 
         let columns = vec![
-            UInt64Type::from_data(seqs),
-            StringType::from_opt_data(keys),
-            StringType::from_opt_data(paths),
-            UInt64Type::from_opt_data(indices),
-            VariantType::from_opt_data(values),
-            VariantType::from_opt_data(thises),
+            seq_column,
+            key_column,
+            path_column,
+            index_column,
+            value_column,
+            this_column,
         ];
         columns
     }

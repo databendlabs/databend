@@ -2,7 +2,7 @@ Error: APIError: ResponseError with 1065: error:
   --> SQL:1:8
   |
 1 | select *
-  |        ^ SELECT * with no tables specified is not valid
+  |        ^ 'SELECT *' is used without specifying any tables in the FROM clause.
 
 
 Error: APIError: ResponseError with 1025: error: 
@@ -26,8 +26,8 @@ Error: APIError: ResponseError with 1065: error:
   |        ^^^^^^^^^^^^ no overload satisfies `to_base64(UInt8)`
 
 has tried possible overloads:
-  to_base64(String) :: String            : unable to unify `UInt8` with `String`
-  to_base64(String NULL) :: String NULL  : unable to unify `UInt8` with `String`
+  to_base64(Binary) :: String            : unable to unify `UInt8` with `Binary`
+  to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
 Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')`
@@ -45,4 +45,4 @@ Error: APIError: ResponseError with 1065: error:
   |                                 ^ column c specified in USING clause does not exist in left table
 
 
-Error: APIError: ResponseError with 1025: Unknown table `default`.`t` in catalog 'default'
+Error: APIError: ResponseError with 1025: Unknown table 't'

@@ -1,5 +1,5 @@
 [package]
-name = "common-expression"
+name = "databend-common-expression"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,11 +11,11 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
-common-datavalues = { path = "../datavalues" }
-common-exception = { path = "../../common/exception" }
-common-hashtable = { path = "../../common/hashtable" }
-common-io = { path = "../../common/io" }
+databend-common-arrow = { path = "../../common/arrow" }
+databend-common-datavalues = { path = "../datavalues" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-hashtable = { path = "../../common/hashtable" }
+databend-common-io = { path = "../../common/io" }
 
 # GitHub dependencies
 
@@ -26,38 +26,40 @@ arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 async-backtrace = { workspace = true }
 base64 = "0.21.0"
+borsh = { workspace = true, features = ["derive"] }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
-dashmap = "5.4"
+dashmap = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
-ethnum = { workspace = true, features = ["serde", "macros"] }
-futures = "0.3.24"
+ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
+futures = { workspace = true }
 hex = "0.4.3"
-itertools = "0.10"
+itertools = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = "0.8.5"
 log = { workspace = true }
-match-template = "0.0.1"
-micromarshal = "0.4.0"
+match-template = { workspace = true }
+micromarshal = "0.5.0"
 num-traits = "0.2.15"
-once_cell = { workspace = true }
-ordered-float = { workspace = true, features = ["serde", "rand"] }
-rand = { version = "0.8.5", features = ["small_rng"] }
+ordered-float = { workspace = true, features = ["serde", "rand", "borsh"] }
+rand = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
+simdutf8 = "0.1.4"
 terminal_size = "0.2.6"
 tonic = { workspace = true }
-typetag = "0.2.3"
+typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
 arrow-ord = { workspace = true }
-common-ast = { path = "../ast" }
+databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
-rand = "0.8.5"
+rand = { workspace = true }
+rmp-serde = "1.1.1"

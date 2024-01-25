@@ -1,9 +1,9 @@
 query T
 select length(max_state(number)), typeof(max_state(number)) from numbers(100);
 ----
-3 VARCHAR
+10 BINARY
 
 query I
 select length(sum_state(number)), typeof(max_state(number)) from numbers(10000);
 ----
-6 VARCHAR
+9 BINARY

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_sql::plans::UnSettingPlan;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_sql::plans::UnSettingPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

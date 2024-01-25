@@ -77,7 +77,7 @@ NULL
 query T
 select parse_json('{"aa": 1, "aA": "text", "Aa": 3}')->>'aA'
 ----
-"text"
+text
 
 query T
 select parse_json('{"aa": 1, "aA": "text", "Aa": {"a":1}}')->>'Aa'
@@ -179,12 +179,12 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name')
 ----
-"databend"
+databend
 
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]')
 ----
-"ext"
+ext
 
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]')
@@ -460,7 +460,7 @@ select id, json_extract_path_text(str, '[0]') from t3
 query IT
 select id, json_extract_path_text(str, '[3][0]') from t3
 ----
-1 "a"
+1 a
 2 NULL
 
 query IT
@@ -508,6 +508,9 @@ select id, get(arr, 5) from t4
 
 statement error 1006
 select id, get(arr, 'a') from t4
+
+statement ok
+set max_block_size = 2;
 
 query ITS
 select id, json_path_query(arr, '$[2, 1 to last -1]'), typeof(json_path_query(arr, '$[2, 1 to last -1]')) from t1
@@ -671,6 +674,9 @@ select json_path_query_first(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 "a"
 NULL
 
+statement ok
+set max_block_size = 65535;
+
 query T
 SELECT arr #> '{3}' FROM t1;
 ----
@@ -694,7 +700,7 @@ SELECT arr #>> '{3}' FROM t1;
 query T
 SELECT arr #>> '{3,1}' FROM t1;
 ----
-"b"
+b
 
 query I
 SELECT obj #>> '{a}' FROM t2;

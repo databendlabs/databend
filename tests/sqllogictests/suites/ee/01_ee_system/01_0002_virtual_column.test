@@ -36,6 +36,11 @@ create virtual column (val['a'], val['b']) for t1
 statement ok
 refresh virtual column for t1
 
+query TTT
+show virtual columns from t1
+----
+test_virtual_column t1 val['a'], val['b']
+
 statement ok
 insert into t1 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
 
@@ -111,7 +116,7 @@ select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t1)t11 join 
 5 55 5 55
 
 query ITT
-SELECT r.id, get(r.val, 'a'), r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t1 AS r) AS r order by id
+SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t1 AS r) AS r order by id
 ----
 1 11 11
 2 22 22
@@ -134,6 +139,11 @@ create virtual column (val['a'], val['b']) for t2
 
 statement ok
 refresh virtual column for t2
+
+query TTT
+show virtual columns from t2
+----
+test_virtual_column t2 val['a'], val['b']
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
@@ -210,7 +220,7 @@ select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t2)t11 join 
 5 55 5 55
 
 query ITT
-SELECT r.id, get(r.val, 'a'), r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t2 AS r) AS r order by id
+SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t2 AS r) AS r order by id
 ----
 1 11 11
 2 22 22

@@ -4,7 +4,7 @@ set max_threads = 8;
 
 onlyif mysql
 statement ok
-set spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
+set aggregate_spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
 
 onlyif mysql
 query TIFS
@@ -24,4 +24,4 @@ unset max_threads;
 
 onlyif mysql
 statement ok
-set spilling_bytes_threshold_per_proc = 0;
+set aggregate_spilling_bytes_threshold_per_proc = 0;

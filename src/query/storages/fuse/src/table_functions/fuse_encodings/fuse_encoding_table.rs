@@ -15,22 +15,22 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PushDownInfo;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::DataBlock;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
 
 use super::FuseEncoding;
 use crate::sessions::TableContext;
@@ -38,7 +38,6 @@ use crate::table_functions::parse_db_tb_col_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::Table;
 
@@ -47,8 +46,6 @@ const FUSE_FUNC_ENCODING: &str = "fuse_encoding";
 pub struct FuseEncodingTable {
     table_info: TableInfo,
     arg_database_name: String,
-    arg_table_name: String,
-    arg_column_name: String,
 }
 
 impl FuseEncodingTable {
@@ -58,8 +55,7 @@ impl FuseEncodingTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name, arg_column_name) =
-            parse_db_tb_col_args(&table_args, FUSE_FUNC_ENCODING)?;
+        let arg_database_name = parse_db_tb_col_args(&table_args, FUSE_FUNC_ENCODING)?;
 
         let engine = FUSE_FUNC_ENCODING.to_owned();
 
@@ -78,8 +74,6 @@ impl FuseEncodingTable {
         Ok(Arc::new(FuseEncodingTable {
             table_info,
             arg_database_name,
-            arg_table_name,
-            arg_column_name,
         }))
     }
 }
@@ -105,11 +99,7 @@ impl Table for FuseEncodingTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        let args = vec![
-            string_literal(self.arg_database_name.as_str()),
-            string_literal(self.arg_table_name.as_str()),
-            string_literal(self.arg_column_name.as_str()),
-        ];
+        let args = vec![string_literal(self.arg_database_name.as_str())];
         Some(TableArgs::new_positioned(args))
     }
 
@@ -126,9 +116,8 @@ impl Table for FuseEncodingTable {
                     ctx.clone(),
                     output,
                     self.arg_database_name.to_owned(),
-                    self.arg_table_name.to_owned(),
-                    self.arg_column_name.to_owned(),
                     plan.push_downs.as_ref().and_then(|x| x.limit),
+                    plan.push_downs.as_ref().and_then(|x| x.filters.clone()),
                 )
             },
             1,
@@ -142,9 +131,8 @@ struct FuseEncodingSource {
     finish: bool,
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
-    arg_table_name: String,
-    arg_column_name: String,
     limit: Option<usize>,
+    filters: Option<Filters>,
 }
 
 impl FuseEncodingSource {
@@ -152,17 +140,15 @@ impl FuseEncodingSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         arg_database_name: String,
-        arg_table_name: String,
-        arg_column_name: String,
         limit: Option<usize>,
+        filters: Option<Filters>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, Self {
             ctx,
             finish: false,
-            arg_table_name,
             arg_database_name,
-            arg_column_name,
             limit,
+            filters,
         })
     }
 }
@@ -180,28 +166,28 @@ impl AsyncSource for FuseEncodingSource {
 
         self.finish = true;
         let tenant_id = self.ctx.get_tenant();
-        let tbl = self
+        let tbls = self
             .ctx
             .get_catalog(CATALOG_DEFAULT)
             .await?
-            .get_table(
-                tenant_id.as_str(),
-                self.arg_database_name.as_str(),
-                self.arg_table_name.as_str(),
-            )
+            .get_database(tenant_id.as_str(), self.arg_database_name.as_str())
+            .await?
+            .list_tables()
             .await?;
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        if matches!(tbl.storage_format, FuseStorageFormat::Parquet) {
-            return Err(ErrorCode::Unimplemented(
-                "Parquet encoding is not supported yet",
-            ));
-        }
+
+        let fuse_tables = tbls
+            .iter()
+            .map(|tbl| {
+                let tbl = FuseTable::try_from_table(tbl.as_ref()).unwrap();
+                tbl
+            })
+            .collect::<Vec<_>>();
         Ok(Some(
             FuseEncoding::new(
                 self.ctx.clone(),
-                tbl,
-                self.arg_column_name.clone(),
+                fuse_tables,
                 self.limit,
+                self.filters.clone(),
             )
             .get_blocks()
             .await?,

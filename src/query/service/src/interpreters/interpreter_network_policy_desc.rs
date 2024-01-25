@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::types::StringType;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_sql::plans::DescNetworkPolicyPlan;
-use common_users::UserApiProvider;
+use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_sql::plans::DescNetworkPolicyPlan;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,10 +53,10 @@ impl Interpreter for DescNetworkPolicyInterpreter {
             .get_network_policy(&tenant, self.plan.name.as_str())
             .await?;
 
-        let names = vec![network_policy.name.as_bytes().to_vec()];
-        let allowed_ip_lists = vec![network_policy.allowed_ip_list.join(",").as_bytes().to_vec()];
-        let blocked_ip_lists = vec![network_policy.blocked_ip_list.join(",").as_bytes().to_vec()];
-        let comments = vec![network_policy.comment.as_bytes().to_vec()];
+        let names = vec![network_policy.name.clone()];
+        let allowed_ip_lists = vec![network_policy.allowed_ip_list.join(",").clone()];
+        let blocked_ip_lists = vec![network_policy.blocked_ip_list.join(",").clone()];
+        let comments = vec![network_policy.comment.clone()];
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),

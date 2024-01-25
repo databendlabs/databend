@@ -20,8 +20,8 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
-use common_exception::ErrorCode;
-use common_exception::Result;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -85,8 +85,8 @@ impl UDFFlightClient {
         let flight_info = self.inner.get_flight_info(request).await?.into_inner();
         let schema = flight_info
             .try_decode_schema()
-            .and_then(|schema| DataSchema::try_from(&schema))
-            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))?;
+            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))
+            .and_then(|schema| DataSchema::try_from(&schema))?;
 
         let fields_num = schema.fields().len();
         if fields_num == 0 {

@@ -53,7 +53,7 @@ runs:
         artifacts="meta,metactl,query"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact with sanitizer ..."
-          cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          cargo -Zbuild-std -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --manifest-path src/binaries/Cargo.toml --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 

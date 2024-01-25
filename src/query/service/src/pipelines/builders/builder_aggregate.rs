@@ -14,28 +14,25 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::with_hash_method;
-use common_expression::with_mappedhash_method;
-use common_expression::AggregateFunctionRef;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::HashMethodKind;
-use common_expression::HashTableConfig;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::query_spill_prefix;
-use common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use common_pipeline_transforms::processors::ProfileStub;
-use common_pipeline_transforms::processors::Transformer;
-use common_sql::executor::physical_plans::AggregateExpand;
-use common_sql::executor::physical_plans::AggregateFinal;
-use common_sql::executor::physical_plans::AggregateFunctionDesc;
-use common_sql::executor::physical_plans::AggregatePartial;
-use common_sql::executor::PhysicalPlan;
-use common_sql::IndexType;
-use common_storage::DataOperator;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::with_hash_method;
+use databend_common_expression::with_mappedhash_method;
+use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::HashMethodKind;
+use databend_common_expression::HashTableConfig;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_sql::executor::physical_plans::AggregateExpand;
+use databend_common_sql::executor::physical_plans::AggregateFinal;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::AggregatePartial;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::IndexType;
+use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
@@ -119,17 +116,9 @@ impl PipelineBuilder {
 
         if params.group_columns.is_empty() {
             return self.main_pipeline.add_transform(|input, output| {
-                let transform = PartialSingleStateAggregator::try_create(input, output, &params)?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                Ok(ProcessorPtr::create(
+                    PartialSingleStateAggregator::try_create(input, output, &params)?,
+                ))
             });
         }
 
@@ -144,38 +133,30 @@ impl PipelineBuilder {
         let partial_agg_config = HashTableConfig::default().with_partial(true);
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = match params.aggregate_functions.is_empty() {
-                true => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                        self.ctx.clone(),
-                        method,
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    ),
-                }),
-                false => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformPartialAggregate::try_create(
-                        self.ctx.clone(),
-                        method,
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    ),
-                }),
-            }?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    aggregate.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
+                            self.ctx.clone(),
+                            method,
+                            input,
+                            output,
+                            params.clone(),
+                            partial_agg_config.clone(),
+                        ),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformPartialAggregate::try_create(
+                            self.ctx.clone(),
+                            method,
+                            input,
+                            output,
+                            params.clone(),
+                            partial_agg_config.clone(),
+                        ),
+                    }),
+                }?,
+            ))
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
@@ -183,39 +164,31 @@ impl PipelineBuilder {
             let operator = DataOperator::instance().operator();
             let location_prefix = query_spill_prefix(&self.ctx.get_tenant());
             self.main_pipeline.add_transform(|input, output| {
-                let transform = match params.aggregate_functions.is_empty() {
-                    true => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
-                            self.ctx.clone(),
-                            input,
-                            output,
-                            method,
-                            operator.clone(),
-                            location_prefix.clone()
-                        ),
-                    }),
-                    false => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
-                            self.ctx.clone(),
-                            input,
-                            output,
-                            method,
-                            operator.clone(),
-                            params.clone(),
-                            location_prefix.clone()
-                        ),
-                    }),
-                };
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                Ok(ProcessorPtr::create(
+                    match params.aggregate_functions.is_empty() {
+                        true => with_mappedhash_method!(|T| match method.clone() {
+                            HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                                self.ctx.clone(),
+                                input,
+                                output,
+                                method,
+                                operator.clone(),
+                                location_prefix.clone()
+                            ),
+                        }),
+                        false => with_mappedhash_method!(|T| match method.clone() {
+                            HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                                self.ctx.clone(),
+                                input,
+                                output,
+                                method,
+                                operator.clone(),
+                                params.clone(),
+                                location_prefix.clone()
+                            ),
+                        }),
+                    },
+                ))
             })?;
         }
 
@@ -253,31 +226,10 @@ impl PipelineBuilder {
             self.build_pipeline(&aggregate.input)?;
             self.main_pipeline.try_resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
-                let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                Ok(ProcessorPtr::create(
+                    FinalSingleStateAggregator::try_create(input, output, &params)?,
+                ))
             })?;
-
-            // Append a profile stub to record the output rows and bytes
-            if self.enable_profiling {
-                self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(Transformer::create(
-                        input,
-                        output,
-                        ProfileStub::new(aggregate.plan_id, self.proc_profs.clone())
-                            .accumulate_output_rows()
-                            .accumulate_output_bytes(),
-                    )))
-                })?;
-            }
 
             return Ok(());
         }
@@ -305,14 +257,7 @@ impl PipelineBuilder {
 
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                        self.enable_profiling,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )
+                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
             false => with_hash_method!(|T| match method {
@@ -327,14 +272,7 @@ impl PipelineBuilder {
                     }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                        self.enable_profiling,
-                        aggregate.plan_id,
-                        self.proc_profs.clone(),
-                    )
+                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
         }

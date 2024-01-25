@@ -9,7 +9,7 @@ copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'tsv' f
 ----
 tsv/complex_types.tsv 1 0 NULL NULL
 
-skipif clickhouse
+
 query 
 select * from complex
 ----
@@ -24,7 +24,7 @@ create stage tsv_types file_format = (type = 'tsv');
 statement ok
 copy into @tsv_types from complex;
 
-skipif clickhouse
+
 query 
 select $1 from @tsv_types
 ----
@@ -36,7 +36,7 @@ remove @tsv_types
 statement ok
 copy into @tsv_types from complex file_format = (type = 'tsv' field_delimiter=',');
 
-skipif clickhouse
+
 query 
 select $1 from @tsv_types(file_format => 'tsv');
 ----

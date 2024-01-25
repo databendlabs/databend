@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -20,12 +19,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use common_config::GlobalConfig;
-use common_exception::Result;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserInfo;
-use common_settings::ChangeValue;
-use common_settings::Settings;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_settings::Settings;
 use parking_lot::RwLock;
 
 use super::SessionType;
@@ -99,17 +97,6 @@ impl SessionContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
-    }
-
-    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.settings.get_changes()
-    }
-
-    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        unsafe {
-            self.settings.unchecked_apply_changes(changes);
-        }
-        Ok(())
     }
 
     // Get current catalog name.

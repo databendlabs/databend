@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(int_roundings)]
+#![allow(internal_features)]
+#![allow(clippy::useless_asref)]
 #![allow(clippy::uninlined_format_args)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
@@ -22,7 +25,6 @@
 #![feature(box_patterns)]
 #![feature(sync_unsafe_cell)]
 #![feature(option_get_or_insert_default)]
-#![feature(result_option_inspect)]
 #![feature(result_flattening)]
 #![feature(iterator_try_reduce)]
 #![feature(cursor_remaining)]
@@ -33,6 +35,8 @@
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
+#![feature(lazy_cell)]
+#![feature(variant_count)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 
@@ -45,6 +49,7 @@ pub mod clusters;
 pub mod databases;
 pub mod interpreters;
 pub mod local;
+pub mod locks;
 pub mod metrics;
 pub mod pipelines;
 pub mod schedulers;
@@ -57,6 +62,6 @@ pub mod test_kits;
 
 mod global_services;
 
-pub use common_sql as sql;
-pub use common_storages_factory as storages;
+pub use databend_common_sql as sql;
+pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;

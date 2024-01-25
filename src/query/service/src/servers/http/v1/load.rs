@@ -15,20 +15,20 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use common_base::base::tokio;
-use common_base::base::tokio::io::AsyncRead;
-use common_base::base::tokio::io::AsyncReadExt;
-use common_base::base::unescape_string;
-use common_base::base::ProgressValues;
-use common_base::runtime::TrySpawn;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_pipeline_sources::input_formats::InputContext;
-use common_pipeline_sources::input_formats::StreamingReadBatch;
-use common_sql::plans::InsertInputSource;
-use common_sql::plans::Plan;
-use common_sql::Planner;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::io::AsyncRead;
+use databend_common_base::base::tokio::io::AsyncReadExt;
+use databend_common_base::base::unescape_string;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_pipeline_sources::input_formats::InputContext;
+use databend_common_pipeline_sources::input_formats::StreamingReadBatch;
+use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use futures::StreamExt;
 use log::debug;
 use log::info;
@@ -97,7 +97,7 @@ pub async fn streaming_load(
         "new streaming load request:, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
-    let session = ctx.get_session(SessionType::HTTPStreamingLoad);
+    let session = ctx.upgrade_session(SessionType::HTTPStreamingLoad)?;
     let context = session
         .create_query_context()
         .await
@@ -122,6 +122,7 @@ pub async fn streaming_load(
             let value = unescape_string(unquote).map_err(InternalServerError)?;
             settings
                 .set_setting(key.to_string(), value.to_string())
+                .await
                 .map_err(InternalServerError)?
         }
     }

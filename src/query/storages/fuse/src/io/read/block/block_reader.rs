@@ -15,25 +15,26 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnId;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_sql::field_default_value;
-use common_storage::ColumnNode;
-use common_storage::ColumnNodes;
+use databend_common_arrow::arrow::datatypes::Field;
+use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
+use databend_common_arrow::parquet::metadata::SchemaDescriptor;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_sql::field_default_value;
+use databend_common_storage::ColumnNode;
+use databend_common_storage::ColumnNodes;
 use opendal::Operator;
+
+use crate::MergeIOReadResult;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -47,6 +48,8 @@ pub struct BlockReader {
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
+    // used for mutation to update stream columns.
+    pub update_stream_columns: bool,
     pub put_cache: bool,
 }
 
@@ -84,6 +87,7 @@ impl BlockReader {
         schema: TableSchemaRef,
         projection: Projection,
         query_internal_columns: bool,
+        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         // init projected_schema and default_vals of schema.fields
@@ -120,7 +124,7 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
@@ -142,6 +146,7 @@ impl BlockReader {
             parquet_schema_descriptor,
             default_vals,
             query_internal_columns,
+            update_stream_columns,
             put_cache,
         }))
     }
@@ -157,11 +162,14 @@ impl BlockReader {
         let mut indices = BTreeMap::new();
         for column in columns {
             for (i, index) in column.leaf_indices.iter().enumerate() {
-                let f: TableField = (&column.field).into();
-                let data_type: DataType = f.data_type().into();
+                let f = DataField::try_from(&column.field).unwrap();
                 indices.insert(
                     *index,
-                    (column.leaf_column_ids[i], column.field.clone(), data_type),
+                    (
+                        column.leaf_column_ids[i],
+                        column.field.clone(),
+                        f.data_type().clone(),
+                    ),
                 );
             }
         }
@@ -170,6 +178,10 @@ impl BlockReader {
 
     pub fn query_internal_columns(&self) -> bool {
         self.query_internal_columns
+    }
+
+    pub fn update_stream_columns(&self) -> bool {
+        self.update_stream_columns
     }
 
     pub fn schema(&self) -> TableSchemaRef {
@@ -181,7 +193,35 @@ impl BlockReader {
     }
 
     pub fn data_schema(&self) -> DataSchema {
-        let fields = self.data_fields();
-        DataSchema::new(fields)
+        self.schema().into()
+    }
+
+    pub fn report_cache_metrics<'a>(
+        &self,
+        merged_result: &MergeIOReadResult,
+        ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,
+    ) {
+        let bytes_read_from_storage: usize = ranges
+            .map(|range| range.end as usize - range.start as usize)
+            .sum();
+
+        let cache_metrics = self.ctx.get_data_cache_metrics();
+        let read_from_disk_cache: usize = merged_result
+            .cached_column_data
+            .iter()
+            .map(|(_, bytes)| bytes.len())
+            .sum();
+
+        let read_from_in_mem_cache_array: usize = merged_result
+            .cached_column_array
+            .iter()
+            .map(|(_, sized_array)| sized_array.1)
+            .sum();
+
+        cache_metrics.add_cache_metrics(
+            bytes_read_from_storage,
+            read_from_disk_cache,
+            read_from_in_mem_cache_array,
+        );
     }
 }

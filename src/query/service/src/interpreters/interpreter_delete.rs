@@ -16,60 +16,51 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::lock::Lock;
-use common_catalog::plan::Filters;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
-use common_expression::ROW_ID_COL_NAME;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::CatalogInfo;
-use common_meta_app::schema::TableInfo;
-use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::physical_plans::CommitSink;
-use common_sql::executor::physical_plans::DeleteSource;
-use common_sql::executor::physical_plans::Exchange;
-use common_sql::executor::physical_plans::FragmentKind;
-use common_sql::executor::physical_plans::MutationKind;
-use common_sql::executor::PhysicalPlan;
-use common_sql::optimizer::CascadesOptimizer;
-use common_sql::optimizer::DPhpy;
-use common_sql::optimizer::HeuristicOptimizer;
-use common_sql::optimizer::SExpr;
-use common_sql::optimizer::DEFAULT_REWRITE_RULES;
-use common_sql::optimizer::RESIDUAL_RULES;
-use common_sql::plans::BoundColumnRef;
-use common_sql::plans::ConstantExpr;
-use common_sql::plans::EvalScalar;
-use common_sql::plans::FunctionCall;
-use common_sql::plans::RelOperator;
-use common_sql::plans::ScalarItem;
-use common_sql::plans::SubqueryDesc;
-use common_sql::BindContext;
-use common_sql::ColumnBinding;
-use common_sql::MetadataRef;
-use common_sql::ScalarExpr;
-use common_sql::Visibility;
-use common_storages_factory::Table;
-use common_storages_fuse::operations::MutationBlockPruningContext;
-use common_storages_fuse::pruning::create_segment_location_vector;
-use common_storages_fuse::FuseLazyPartInfo;
-use common_storages_fuse::FuseTable;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::DeleteSource;
+use databend_common_sql::executor::physical_plans::Exchange;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::optimizer::optimize_query;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::BoundColumnRef;
+use databend_common_sql::plans::ConstantExpr;
+use databend_common_sql::plans::EvalScalar;
+use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarItem;
+use databend_common_sql::plans::SubqueryDesc;
+use databend_common_sql::BindContext;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::Visibility;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::debug;
-use log::info;
-use storages_common_locks::LockManager;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -106,33 +97,34 @@ impl Interpreter for DeleteInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "delete_interpreter_execute");
 
         let is_distributed = !self.ctx.get_cluster().is_empty();
-        let catalog_name = self.plan.catalog_name.as_str();
 
+        let catalog_name = self.plan.catalog_name.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
 
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-
-        // refresh table.
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
-
-        // check mutability
-        tbl.check_mutable()?;
 
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
+        // refresh table.
+        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+
+        // check mutability
+        tbl.check_mutable()?;
+
         let selection = if !self.plan.subquery_desc.is_empty() {
-            let support_row_id = tbl.support_row_id_column();
+            let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
-                return Err(ErrorCode::from_string(
-                    "table doesn't support row_id, so it can't use delete with subquery"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::from_string(format!(
+                    "Delete with subquery is not supported for the table '{}', which lacks row_id support.",
+                    tbl.name(),
+                )));
             }
             let table_index = self.plan.metadata.read().get_table_index(
                 Some(self.plan.database_name.as_str()),
@@ -192,14 +184,13 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
-        let fuse_table =
-            tbl.as_any()
-                .downcast_ref::<FuseTable>()
-                .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support DELETE FROM",
-                    tbl.name(),
-                    tbl.get_table_info().engine(),
-                )))?;
+        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support DELETE FROM",
+                tbl.name(),
+                tbl.get_table_info().engine(),
+            ))
+        })?;
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
@@ -212,41 +203,21 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?
         {
+            let cluster = self.ctx.get_cluster();
+            let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
+            let partitions = fuse_table
+                .mutation_read_partitions(
+                    self.ctx.clone(),
+                    snapshot.clone(),
+                    col_indices.clone(),
+                    filters.clone(),
+                    is_lazy,
+                    true,
+                )
+                .await?;
+
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
             let filters = filters.unwrap();
-            let cluster = self.ctx.get_cluster();
-            let partitions = if cluster.is_empty() || snapshot.segments.len() < cluster.nodes.len()
-            {
-                let projection = Projection::Columns(col_indices.clone());
-                let prune_ctx = MutationBlockPruningContext {
-                    segment_locations: create_segment_location_vector(
-                        snapshot.segments.clone(),
-                        None,
-                    ),
-                    block_count: Some(snapshot.summary.block_count as usize),
-                };
-                let (partitions, info) = fuse_table
-                    .do_mutation_block_pruning(
-                        self.ctx.clone(),
-                        Some(filters.clone()),
-                        projection,
-                        prune_ctx,
-                        true,
-                        true,
-                    )
-                    .await?;
-                info!(
-                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                    info.num_whole_block_mutation
-                );
-                partitions
-            } else {
-                let mut segments = Vec::with_capacity(snapshot.segments.len());
-                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                    segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
-                }
-                Partitions::create(PartitionsShuffleKind::Mod, segments, true)
-            };
             let physical_plan = Self::build_physical_plan(
                 filters,
                 partitions,
@@ -259,8 +230,7 @@ impl Interpreter for DeleteInterpreter {
             )?;
 
             build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         }
 
         build_res.main_pipeline.add_lock_guard(lock_guard);
@@ -298,6 +268,7 @@ impl DeleteInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
         }
@@ -308,8 +279,10 @@ impl DeleteInterpreter {
             table_info,
             catalog_info,
             mutation_kind: MutationKind::Delete,
+            update_stream_meta: vec![],
             merge_meta,
             need_lock: false,
+            deduplicated_label: None,
         })))
     }
 }
@@ -323,7 +296,7 @@ pub async fn subquery_filter(
     // Select `_row_id` column
     let input_expr = subquery_desc.input_expr.clone();
 
-    let expr = SExpr::create_unary(
+    let mut s_expr = SExpr::create_unary(
         Arc::new(RelOperator::EvalScalar(EvalScalar {
             items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -339,26 +312,18 @@ pub async fn subquery_filter(
     let mut bind_context = Box::new(BindContext::new());
     bind_context.add_column_binding(row_id_column_binding.clone());
 
-    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
-    let mut expr = heuristic.optimize(expr, &DEFAULT_REWRITE_RULES)?;
-    let mut dphyp_optimized = false;
-    if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(expr.clone()))?;
-        if optimized {
-            expr = (*dp_res).clone();
-            dphyp_optimized = true;
-        }
-    }
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), dphyp_optimized)?;
-    expr = cascades.optimize(expr)?;
-    expr = heuristic.optimize(expr, &RESIDUAL_RULES)?;
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
+        .with_enable_distributed_optimization(false)
+        .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
+        .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+
+    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
         ctx.clone(),
         *bind_context,
-        expr,
+        s_expr,
         metadata.clone(),
         None,
         false,

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::Int32Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::ScalarRef;
-use common_pipeline_core::query_spill_prefix;
-use common_storage::DataOperator;
+use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
+use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_storage::DataOperator;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerType;
@@ -31,7 +31,8 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_with_partition() -> Result<()> {
-    let fixture = TestFixture::new().await?;
+    let fixture = TestFixture::setup().await?;
+
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
     let spiller_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -71,5 +72,6 @@ async fn test_spill_with_partition() -> Result<()> {
             }
         }
     }
+
     Ok(())
 }

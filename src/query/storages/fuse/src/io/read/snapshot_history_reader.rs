@@ -15,19 +15,20 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use databend_common_exception::ErrorCode;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::FormatVersion;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::stream;
-use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 
 pub type TableSnapshotStream = Pin<
     Box<
-        dyn stream::Stream<Item = common_exception::Result<(Arc<TableSnapshot>, FormatVersion)>>
-            + Send,
+        dyn stream::Stream<
+                Item = databend_common_exception::Result<(Arc<TableSnapshot>, FormatVersion)>,
+            > + Send,
     >,
 >;
 

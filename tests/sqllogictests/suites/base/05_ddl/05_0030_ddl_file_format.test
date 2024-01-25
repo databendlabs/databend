@@ -13,11 +13,11 @@ CREATE FILE FORMAT if not exists test_format TYPE=CSV
 statement error 2509
 CREATE FILE FORMAT test_format TYPE=CSV
 
-skipif clickhouse
+
 query TT
 show FILE FORMATS;
 ----
-test_format TYPE = CSV COMPRESSION = None HEADERS= 0 FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' NAN_DISPLAY = 'NaN' ESCAPE = '\\' QUOTE = '\"'
+test_format TYPE = CSV COMPRESSION = None FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' QUOTE = '\"' ESCAPE = '\\' SKIP_HEADER= 0 OUTPUT_HEADER= false NULL_DISPLAY = '\\N' NAN_DISPLAY = 'NaN'  EMPTY_FIELD_AS = NULL BINARY_FORMAT = hex ERROR_ON_COLUMN_COUNT_MISMATCH = true
 
 statement ok
 DROP FILE FORMAT test_format

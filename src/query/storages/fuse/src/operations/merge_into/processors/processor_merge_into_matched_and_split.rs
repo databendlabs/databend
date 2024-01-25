@@ -17,30 +17,33 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::table_context::TableContext;
-use common_exception::Result;
-use common_expression::types::BooleanType;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::Expr;
-use common_expression::FieldIndex;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
-use common_metrics::storage::*;
-use common_pipeline_core::processors::Event;
-use common_pipeline_core::processors::InputPort;
-use common_pipeline_core::processors::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ProcessorPtr;
-use common_pipeline_core::PipeItem;
-use common_sql::evaluator::BlockOperator;
-use common_sql::executor::physical_plans::MatchExpr;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RawExpr;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::*;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::MatchExpr;
+use databend_common_storage::MergeStatus;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
+use crate::operations::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;
@@ -65,7 +68,7 @@ enum MutationKind {
 // if we use hash shuffle join strategy, the enum
 // type can't be parser when transform data between nodes.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MixRowNumberKindAndLog {
+pub struct MixRowIdKindAndLog {
     pub log: Option<MutationLogs>,
     // kind's range is [0,1,2], 0 stands for log
     // 1 stands for row_id_update, 2 stands for row_id_delete,
@@ -73,9 +76,9 @@ pub struct MixRowNumberKindAndLog {
 }
 
 #[typetag::serde(name = "mix_row_id_kind_and_log")]
-impl BlockMetaInfo for MixRowNumberKindAndLog {
+impl BlockMetaInfo for MixRowIdKindAndLog {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        MixRowNumberKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
+        MixRowIdKindAndLog::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -120,6 +123,7 @@ pub struct MatchedSplitProcessor {
     output_data_row_id_data: Vec<DataBlock>,
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
+    target_build_optimization: bool,
 }
 
 impl MatchedSplitProcessor {
@@ -130,6 +134,7 @@ impl MatchedSplitProcessor {
         field_index_of_input_schema: HashMap<FieldIndex, usize>,
         input_schema: DataSchemaRef,
         target_table_schema: DataSchemaRef,
+        target_build_optimization: bool,
     ) -> Result<Self> {
         let mut ops = Vec::<MutationKind>::new();
         for item in matched.iter() {
@@ -142,6 +147,7 @@ impl MatchedSplitProcessor {
                         ctx.get_function_context()?,
                         row_id_idx,
                         input_schema.num_fields(),
+                        target_build_optimization,
                     ),
                 }))
             } else {
@@ -181,6 +187,7 @@ impl MatchedSplitProcessor {
             row_id_idx,
             update_projections,
             target_table_schema,
+            target_build_optimization,
         })
     }
 
@@ -259,9 +266,18 @@ impl Processor for MatchedSplitProcessor {
         }
     }
 
-    // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            //  we receive a partial unmodified block data meta.
+            if data_block.get_meta().is_some() && data_block.is_empty() {
+                assert!(self.target_build_optimization);
+                let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+                if meta_index.is_some() {
+                    self.output_data_row_id_data.push(data_block);
+                    return Ok(());
+                }
+            }
+
             if data_block.is_empty() {
                 return Ok(());
             }
@@ -308,11 +324,21 @@ impl Processor for MatchedSplitProcessor {
             current_block = current_block.filter_boolean_value(&filter)?;
             if !current_block.is_empty() {
                 // add updated row_ids
-                self.output_data_row_id_data.push(DataBlock::new_with_meta(
-                    vec![current_block.get_by_offset(self.row_id_idx).clone()],
-                    current_block.num_rows(),
-                    Some(Box::new(RowIdKind::Update)),
-                ));
+                self.ctx.add_merge_status(MergeStatus {
+                    insert_rows: 0,
+                    update_rows: current_block.num_rows(),
+                    deleted_rows: 0,
+                });
+
+                // for target build optimization, there is only one matched clause without condition. we won't read rowid.
+                if !self.target_build_optimization {
+                    self.output_data_row_id_data.push(DataBlock::new_with_meta(
+                        vec![current_block.get_by_offset(self.row_id_idx).clone()],
+                        current_block.num_rows(),
+                        Some(Box::new(RowIdKind::Update)),
+                    ));
+                }
+
                 let op = BlockOperator::Project {
                     projection: self.update_projections.clone(),
                 };
@@ -351,18 +377,23 @@ impl MatchedSplitProcessor {
         let cast_exprs = current_columns
             .iter()
             .enumerate()
-            .map(|(idx, col)| Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::ColumnRef {
-                    span: None,
-                    id: idx,
-                    data_type: col.data_type.clone(),
-                    display_name: "".to_string(),
-                }),
-                dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+            .map(|(idx, col)| {
+                check(
+                    &RawExpr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(RawExpr::ColumnRef {
+                            span: None,
+                            id: idx,
+                            data_type: col.data_type.clone(),
+                            display_name: "".to_string(),
+                        }),
+                        dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+                    },
+                    &BUILTIN_FUNCTIONS,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let cast_operator = BlockOperator::Map {
             exprs: cast_exprs,
             projections: Some((current_columns.len()..current_columns.len() * 2).collect()),

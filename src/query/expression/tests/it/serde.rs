@@ -14,17 +14,21 @@
 
 use std::vec;
 
-use common_exception::Result;
-use common_expression::arrow::deserialize_column;
-use common_expression::arrow::serialize_column;
-use common_expression::types::DataType;
-use common_expression::types::StringType;
-use common_expression::Column;
-use common_expression::FromData;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::Result;
+use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_io::prelude::borsh_serialize_into_buf;
 
 #[test]
 fn test_serde_column() -> Result<()> {
@@ -39,15 +43,15 @@ fn test_serde_column() -> Result<()> {
     {
         let json = serde_json::to_vec(&plan).unwrap();
         let new_plan = serde_json::from_slice::<Plan>(&json).unwrap();
-        assert!(plan == new_plan);
+        assert_eq!(plan, new_plan);
     }
 
     {
         let mut vs = vec![];
-        serialize_into_buf(&mut vs, &plan).unwrap();
-        let mut vs = vs.as_slice();
-        let new_plan: Plan = deserialize_from_slice(&mut vs).unwrap();
-        assert!(plan == new_plan);
+        bincode_serialize_into_buf(&mut vs, &plan).unwrap();
+        let vs = vs.as_slice();
+        let new_plan: Plan = bincode_deserialize_from_slice(vs).unwrap();
+        assert_eq!(plan, new_plan);
     }
     Ok(())
 }
@@ -79,6 +83,32 @@ fn test_serde_bin_column() -> Result<()> {
         let data = serialize_column(&col);
         let t = deserialize_column(&data).unwrap();
         assert_eq!(col, t);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_borsh_serde_column() -> Result<()> {
+    #[derive(BorshSerialize, BorshDeserialize, Eq, PartialEq, Debug)]
+    struct Plan {
+        column: Column,
+    }
+
+    let column = StringType::from_data(vec!["SM CASE", "a", "b", "e", "f", "g"]);
+    let plan = Plan { column };
+
+    {
+        let json = borsh::to_vec(&plan).unwrap();
+        let new_plan = borsh::from_slice::<Plan>(&json).unwrap();
+        assert!(plan == new_plan);
+    }
+
+    {
+        let mut vs = vec![];
+        borsh_serialize_into_buf(&mut vs, &plan).unwrap();
+        let vs = vs.as_slice();
+        let new_plan: Plan = borsh_deserialize_from_slice(vs).unwrap();
+        assert!(plan == new_plan);
     }
     Ok(())
 }

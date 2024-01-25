@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
-
 use nom::branch::alt;
 use nom::combinator::map;
 
@@ -42,8 +40,6 @@ use crate::util::dot_separated_idents_1_to_3;
 use crate::util::ident;
 use crate::util::IResult;
 use crate::Input;
-
-const MAX_COPIED_FILES_NUM: usize = 2000;
 
 fn table_triple(i: Input) -> IResult<TableIdentifier> {
     map(dot_separated_idents_1_to_3, TableIdentifier::from_tuple)(i)
@@ -116,6 +112,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
                 file_format: Default::default(),
                 single: Default::default(),
                 max_file_size: Default::default(),
+                detailed_output: false,
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -165,9 +162,7 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
         ),
         map(
             rule! { MAX_FILES ~ "=" ~ #literal_u64 },
-            |(_, _, max_files)| {
-                CopyIntoTableOption::MaxFiles(min(MAX_COPIED_FILES_NUM, max_files as usize))
-            },
+            |(_, _, max_files)| CopyIntoTableOption::MaxFiles(max_files as usize),
         ),
         map(
             rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },
@@ -203,6 +198,10 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
             |(_, _, max_file_size)| CopyIntoLocationOption::MaxFileSize(max_file_size as usize),
+        ),
+        map(
+            rule! { DETAILED_OUTPUT ~ "=" ~ #literal_bool },
+            |(_, _, detailed_output)| CopyIntoLocationOption::DetailedOutput(detailed_output),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)

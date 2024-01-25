@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(dead_code)]
 #![recursion_limit = "256"]
+#![feature(lazy_cell)]
 
 pub mod count;
 pub mod counter;
@@ -51,6 +53,7 @@ pub use crate::metrics::cluster;
 /// Metrics.
 pub use crate::metrics::http;
 pub use crate::metrics::interpreter;
+pub use crate::metrics::lock;
 pub use crate::metrics::mysql;
 pub use crate::metrics::openai;
 pub use crate::metrics::session;
