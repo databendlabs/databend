@@ -1180,7 +1180,7 @@ insert into lineitem_target_origin_400_blocks1 select * from lineitem_random lim
 query T
 select count(*) from lineitem_target_origin_400_blocks1;
 ----
-4000000
+400000
 
 statement ok
 insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
