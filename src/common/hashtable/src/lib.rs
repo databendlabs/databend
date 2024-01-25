@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(internal_features)]
+#![allow(clippy::ptr_arg)]
 #![feature(core_intrinsics)]
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]

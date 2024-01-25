@@ -85,7 +85,7 @@ impl InputFormatTSV {
         field_delimiter: u8,
         field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
-        columns: &mut Vec<ColumnBuilder>,
+        columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
         default_values: &Option<Vec<Scalar>>,

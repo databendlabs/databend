@@ -64,6 +64,13 @@ impl StreamHandler for RealStreamHandler {
             .get_table(&tenant, &plan.table_database, &plan.table_name)
             .await?;
         let table_info = table.get_table_info();
+        if table_info.options().contains_key("TRANSIENT") {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The table '{}.{}' is transient, can't create stream",
+                plan.table_database, plan.table_name
+            )));
+        }
+
         let table_version = table_info.ident.seq;
         let table_id = table_info.ident.table_id;
         let schema = table_info.schema().clone();

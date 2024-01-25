@@ -49,7 +49,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         span: Span,
-        values: &Vec<Vec<AExpr>>,
+        values: &[Vec<AExpr>],
     ) -> Result<(SExpr, BindContext)> {
         bind_values(
             self.ctx.clone(),
@@ -69,7 +69,7 @@ pub async fn bind_values(
     metadata: MetadataRef,
     bind_context: &mut BindContext,
     span: Span,
-    values: &Vec<Vec<AExpr>>,
+    values: &[Vec<AExpr>],
 ) -> Result<(SExpr, BindContext)> {
     if values.is_empty() {
         return Err(ErrorCode::SemanticError(

@@ -37,6 +37,8 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use log::debug;
 use opendal::Operator;
 
@@ -179,6 +181,7 @@ impl HiveTableSource {
             rows: prewhere_datablocks.iter().map(|x| x.num_rows()).sum(),
             bytes: prewhere_datablocks.iter().map(|x| x.memory_size()).sum(),
         };
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, progress_values.bytes);
         self.scan_progress.incr(&progress_values);
 
         if let Some(filter) = self.prewhere_filter.as_ref() {

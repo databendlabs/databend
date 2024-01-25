@@ -107,12 +107,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let create_task = map(
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident ~ #task_warehouse_option
+            ~ #ident
+            ~ #task_warehouse_option
             ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
             ~ (AFTER ~ #comma_separated_list0(literal_string))?
             ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ (#set_table_option)?
             ~ AS ~ #statement
         },
         |(
@@ -126,11 +128,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             when_conditions,
             suspend_opt,
             comment_opt,
+            session_opts,
             _,
             sql,
         )| {
             let sql = format!("{}", sql.stmt);
-
+            let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
@@ -144,6 +147,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 },
                 when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
+                session_parameters: session_opts,
             })
         },
     );
@@ -2861,19 +2865,14 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(retain_hours_opt, dry_run_opt, opt_limit)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |(dry_run_opt, opt_limit)| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
             VacuumDropTableOption {
-                retain_hours,
                 dry_run,
                 limit: opt_limit.map(|(_, limit)| limit as usize),
             }
@@ -2884,21 +2883,14 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)?
+            (DRY ~ ^RUN)?
         },
-        |(retain_hours_opt, dry_run_opt)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |dry_run_opt| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
-            VacuumTableOption {
-                retain_hours,
-                dry_run,
-            }
+            VacuumTableOption { dry_run }
         },
     ),))(i)
 }
@@ -2956,12 +2948,16 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
+             ~ (#set_table_option)?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment)| AlterTaskOptions::Set {
-            warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-            schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-            suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-            comments: comment.map(|(_, _, comment)| comment),
+        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+            AlterTaskOptions::Set {
+                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
+                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
+                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
+                comments: comment.map(|(_, _, comment)| comment),
+                session_parameters: session_opts,
+            }
         },
     );
     let unset = map(

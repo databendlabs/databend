@@ -68,8 +68,8 @@ impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
         let max: Scalar = value.max.into();
 
         Self {
-            min: min.into(),
-            max: max.into(),
+            min,
+            max,
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,

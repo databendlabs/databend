@@ -99,6 +99,8 @@ impl IdGenerator {
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = PREFIX_ID_GEN;
 
+    type ValueType = ();
+
     fn to_string_key(&self) -> String {
         kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
             .push_raw(&self.resource)

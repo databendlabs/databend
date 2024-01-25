@@ -8668,7 +8668,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: None,
             dry_run: None,
         },
     },
@@ -8676,9 +8675,9 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
+VACUUM TABLE t DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -8692,16 +8691,6 @@ VacuumTable(
             ),
         },
         option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..23,
-                    ),
-                    lit: UInt64(
-                        4,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8711,58 +8700,15 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t RETAIN 40 HOURS;
+VACUUM DROP TABLE;
 ---------- Output ---------
-VACUUM TABLE t RETAIN 40 HOURS
----------- AST ------------
-VacuumTable(
-    VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            name: "t",
-            quote: None,
-            span: Some(
-                13..14,
-            ),
-        },
-        option: VacuumTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        22..24,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
-            dry_run: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE RETAIN 20 HOURS;
----------- Output ---------
-VACUUM DROP TABLE RETAIN 20 HOURS
+VACUUM DROP TABLE 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        20,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8771,25 +8717,15 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+VACUUM DROP TABLE DRY RUN;
 ---------- Output ---------
-VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+VACUUM DROP TABLE DRY RUN
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        25..27,
-                    ),
-                    lit: UInt64(
-                        30,
-                    ),
-                },
-            ),
             dry_run: Some(
                 (),
             ),
@@ -8800,9 +8736,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+VACUUM DROP TABLE FROM db 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8817,16 +8753,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: None,
         },
@@ -8835,9 +8761,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10;
+VACUUM DROP TABLE FROM db LIMIT 10;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db RETAIN 40 HOURS LIMIT 10
+VACUUM DROP TABLE FROM db  LIMIT 10
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -8852,16 +8778,6 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            retain_hours: Some(
-                Literal {
-                    span: Some(
-                        33..35,
-                    ),
-                    lit: UInt64(
-                        40,
-                    ),
-                },
-            ),
             dry_run: None,
             limit: Some(
                 10,
@@ -13856,9 +13772,9 @@ AlterNetworkPolicy(
 
 
 ---------- Input ----------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 900 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 900 SECOND database = 'target' timezone = 'America/Los Angeles' SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13874,6 +13790,10 @@ CreateTask(
                 900,
             ),
         ),
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
         suspend_task_after_num_failures: Some(
             3,
         ),
@@ -13888,7 +13808,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13904,6 +13824,7 @@ CreateTask(
                 15,
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: Some(
             3,
         ),
@@ -13918,7 +13839,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 1215 SECOND SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 1215 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -13934,6 +13855,7 @@ CreateTask(
                 1215,
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: Some(
             3,
         ),
@@ -13965,6 +13887,7 @@ CreateTask(
                 ),
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "serverless + cron",
         after: [],
@@ -13992,6 +13915,7 @@ CreateTask(
                 None,
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "",
         after: [],
@@ -14019,6 +13943,7 @@ CreateTask(
                 None,
             ),
         ),
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "",
         after: [],
@@ -14041,6 +13966,7 @@ CreateTask(
             warehouse: None,
         },
         schedule_opts: None,
+        session_parameters: {},
         suspend_task_after_num_failures: None,
         comments: "",
         after: [
@@ -14050,6 +13976,32 @@ CreateTask(
         when_condition: Some(
             "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
         ),
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS VACUUM TABLE t 
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
+        suspend_task_after_num_failures: None,
+        comments: "",
+        after: [],
+        when_condition: None,
         sql: "VACUUM TABLE t ",
     },
 )
@@ -14145,6 +14097,7 @@ AlterTask(
             comments: Some(
                 "serverless + cron",
             ),
+            session_parameters: None,
         },
     },
 )
@@ -14174,6 +14127,7 @@ AlterTask(
             comments: Some(
                 "serverless + cron",
             ),
+            session_parameters: None,
         },
     },
 )
@@ -14202,6 +14156,32 @@ AlterTask(
             ),
             comments: Some(
                 "serverless + cron",
+            ),
+            session_parameters: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'
+---------- Output ---------
+ALTER TASK MyTask1 database = 'newDB' timezone = 'America/Los_Angeles'
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask1",
+        options: Set {
+            warehouse: None,
+            schedule: None,
+            suspend_task_after_num_failures: None,
+            comments: None,
+            session_parameters: Some(
+                {
+                    "database": "newDB",
+                    "timezone": "America/Los_Angeles",
+                },
             ),
         },
     },

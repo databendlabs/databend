@@ -67,7 +67,10 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
                 cron_expr
             )));
         }
-        if let Some(time_zone) = time_zone && !time_zone.is_empty() && chrono_tz::Tz::from_str(&time_zone).is_err() {
+        if let Some(time_zone) = time_zone
+            && !time_zone.is_empty()
+            && chrono_tz::Tz::from_str(&time_zone).is_err()
+        {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
                 time_zone
@@ -93,6 +96,7 @@ impl Binder {
             after,
             when_condition,
             sql,
+            session_parameters,
         } = stmt;
         if (schedule_opts.is_none() && after.is_empty())
             || (schedule_opts.is_some() && !after.is_empty())
@@ -114,6 +118,7 @@ impl Binder {
             after: after.clone(),
             when_condition: when_condition.clone(),
             comment: comments.clone(),
+            session_parameters: session_parameters.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))
@@ -135,12 +140,14 @@ impl Binder {
             schedule,
             suspend_task_after_num_failures,
             comments,
+            session_parameters,
         } = options
         {
             if warehouse.is_none()
                 && schedule.is_none()
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
+                && session_parameters.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),

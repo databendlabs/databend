@@ -1,5 +1,5 @@
-cargo-audit@0.18.2
+cargo-audit@0.18.3
 cargo-machete@0.6.0
-cargo-nextest@0.9.61
+cargo-nextest@0.9.67
 taplo-cli@0.8.1
-typos-cli@1.16.20
+typos-cli@1.17.2

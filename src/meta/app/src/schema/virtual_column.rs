@@ -127,12 +127,15 @@ impl ListVirtualColumnsReq {
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::VirtualColumnMeta;
     use crate::schema::VirtualColumnNameIdent;
     use crate::schema::PREFIX_VIRTUAL_COLUMN;
 
     /// <prefix>/<tenant>/<table_id>
     impl kvapi::Key for VirtualColumnNameIdent {
         const PREFIX: &'static str = PREFIX_VIRTUAL_COLUMN;
+
+        type ValueType = VirtualColumnMeta;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

@@ -137,6 +137,8 @@ pub struct TransformWindow<T: Number> {
 
     // If `is_empty_frame`, the window function result of non-NULL rows will be NULL.
     is_empty_frame: bool,
+    // If window function is ranking function
+    is_ranking: bool,
 }
 
 impl<T: Number> TransformWindow<T> {
@@ -332,8 +334,8 @@ impl<T: Number> TransformWindow<T> {
         self.frame_ended = self.partition_ended;
     }
 
-    // Advance the current row to the next row
-    // if the current row is the last row of the current block, advance the current block and row = 0
+    /// Advance the current row to the next row
+    /// if the current row is the last row of the current block, advance the current block and row = 0
     fn advance_row(&self, mut row: RowPtr) -> RowPtr {
         debug_assert!(row.block >= self.first_block);
 
@@ -360,6 +362,7 @@ impl<T: Number> TransformWindow<T> {
         row
     }
 
+    /// calculate peer_group_end
     fn advance_peer_group_end(&mut self, mut row: RowPtr) {
         if !self.need_peer {
             return;
@@ -434,11 +437,14 @@ impl<T: Number> TransformWindow<T> {
                 break;
             }
         }
+
         // Release memory that is no longer needed.
-        let first_used_block = self
-            .next_output_block
-            .min(self.prev_frame_start.block)
-            .min(self.current_row.block);
+        let first_used_block = if self.is_ranking {
+            self.next_output_block.min(self.peer_group_start.block)
+        } else {
+            self.next_output_block.min(self.prev_frame_start.block)
+        }
+        .min(self.current_row.block);
 
         if self.first_block < first_used_block {
             self.blocks.drain(..first_used_block - self.first_block);
@@ -655,6 +661,12 @@ impl TransformWindow<u64> {
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
+        let is_ranking = matches!(
+            func,
+            WindowFunctionImpl::RowNumber
+                | WindowFunctionImpl::Rank
+                | WindowFunctionImpl::DenseRank
+        );
 
         let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
         let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
@@ -698,6 +710,7 @@ impl TransformWindow<u64> {
             current_dense_rank: 1,
             input_is_finished: false,
             is_empty_frame,
+            is_ranking,
         })
     }
 }
@@ -719,6 +732,12 @@ where T: Number + ResultTypeOfUnary
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
+        let is_ranking = matches!(
+            func,
+            WindowFunctionImpl::RowNumber
+                | WindowFunctionImpl::Rank
+                | WindowFunctionImpl::DenseRank
+        );
 
         // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
         let need_check_null_frame = if order_by.len() == 1 {
@@ -768,6 +787,7 @@ where T: Number + ResultTypeOfUnary
             current_dense_rank: 1,
             input_is_finished: false,
             is_empty_frame,
+            is_ranking,
         })
     }
 
@@ -950,6 +970,8 @@ where T: Number + ResultTypeOfUnary
                 } else if self.is_null_frame {
                     // Only one null frame can exist in one partition, so we don't need to check it again.
                     self.need_check_null_frame = false;
+                } else if self.is_ranking {
+                    self.peer_group_start = self.current_row;
                 }
 
                 // execute only once for each partition.
@@ -975,7 +997,7 @@ where T: Number + ResultTypeOfUnary
                 if self.is_empty_frame && !self.is_null_frame {
                     // Non-NULL empty frame, no need to advance bounds.
                     self.func.reset();
-                } else {
+                } else if !self.is_ranking {
                     self.advance_frame_start();
                     if !self.frame_started {
                         debug_assert!(!self.input_is_finished);
@@ -1250,6 +1272,7 @@ mod tests {
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
     use databend_common_pipeline_core::processors::Event;
@@ -1263,6 +1286,47 @@ mod tests {
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
+
+    fn get_ranking_transform_window(
+        bounds: (FrameBound<u64>, FrameBound<u64>),
+    ) -> Result<TransformWindow<u64>> {
+        let func = WindowFunctionInfo::DenseRank;
+        TransformWindow::try_create_range(
+            InputPort::create(),
+            OutputPort::create(),
+            func,
+            vec![],
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: false,
+                nulls_first: false,
+                is_nullable: false,
+            }],
+            bounds,
+        )
+    }
+
+    fn get_transform_window_without_partition(
+        _unit: WindowFuncFrameUnits,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
+        arg_type: DataType,
+    ) -> Result<TransformWindow<u64>> {
+        let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
+        let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
+        TransformWindow::try_create_rows(
+            InputPort::create(),
+            OutputPort::create(),
+            func,
+            vec![],
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: false,
+                nulls_first: false,
+                is_nullable: false,
+            }],
+            bounds,
+        )
+    }
 
     fn get_transform_window(
         _unit: WindowFuncFrameUnits,
@@ -1420,6 +1484,236 @@ mod tests {
             transform.advance_frame_end();
             assert!(transform.frame_ended);
             assert_eq!(transform.frame_end, RowPtr::new(0, 3));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_release() -> Result<()> {
+        // ranking function release early
+        {
+            let mut transform = get_ranking_transform_window((
+                FrameBound::Preceding(None),
+                FrameBound::CurrentRow,
+            ))?;
+
+            // peer for 3 cross three blocks
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 3, 3]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "| 2        | 2        |",
+                    "| 2        | 2        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+            transform.add_block(None)?;
+            transform.check_outputs();
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 3        |",
+                    "| 4        | 4        |",
+                    "| 4        | 4        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        // ranking function release early
+        {
+            let mut transform = get_ranking_transform_window((
+                FrameBound::Preceding(None),
+                FrameBound::CurrentRow,
+            ))?;
+
+            // peer not cross any blocks
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![2, 2, 2]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 3, 3]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "| 1        | 1        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 2        | 2        |",
+                    "| 2        | 2        |",
+                    "| 2        | 2        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+            transform.add_block(None)?;
+            transform.check_outputs();
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "| 3        | 3        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        // normal agg function
+        {
+            let mut transform = get_transform_window_without_partition(
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::CurrentRow),
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 1);
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+            assert_eq!(transform.blocks.len(), 2);
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 2        |",
+                    "| 1        | 3        |",
+                    "| 2        | 5        |",
+                    "| 2        | 7        |",
+                    "| 3        | 10       |",
+                    "| 3        | 13       |",
+                    "| 3        | 16       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 19       |",
+                    "| 4        | 23       |",
+                    "| 4        | 27       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
         }
 
         Ok(())

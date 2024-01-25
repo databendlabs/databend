@@ -15,6 +15,7 @@
 use std::cmp::min;
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -111,11 +112,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
-        let hours = match self.plan.option.retain_hours {
-            Some(hours) => hours as i64,
-            None => ctx.get_settings().get_retention_period()? as i64,
-        };
-        let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
+        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+
+        let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
             "vacuum drop table from db {:?}, retention_time: {:?}",

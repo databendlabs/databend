@@ -1704,7 +1704,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let db_meta = {
                 let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<DatabaseId, DatabaseMeta>(d)?;
+                let (k, v) = deserialize_struct_get_response::<DatabaseId>(d)?;
                 assert_eq!(key_dbid, k);
 
                 v.ok_or_else(|| {
@@ -1744,7 +1744,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut tb_id_list = {
                 let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdListKey, TableIdList>(d)?;
+                let (k, v) = deserialize_struct_get_response::<TableIdListKey>(d)?;
                 assert_eq!(key_table_id_list, k);
 
                 v.unwrap_or_default()
