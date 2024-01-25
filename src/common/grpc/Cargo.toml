@@ -19,13 +19,13 @@ databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 anyerror = { workspace = true }
+hickory-resolver = "0.24"
 hyper = "0.14.20"
 jwt-simple = "0.11.0"
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-hickory-resolver = "0.24"
 
 [build-dependencies]
 
