@@ -99,6 +99,9 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///           Always return the previous value;
 ///           field index is reserved, no compatibility changes.
 ///
+/// - 2024-01-25: since TODO:
+///   server: add export_v1() to let client specify export chunk size;
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:

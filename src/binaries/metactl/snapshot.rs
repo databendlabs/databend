@@ -506,7 +506,12 @@ async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> 
 
     let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 
-    export_meta(grpc_api_addr.to_string().as_str(), config.db.clone()).await?;
+    export_meta(
+        grpc_api_addr.to_string().as_str(),
+        config.db.clone(),
+        config.export_chunk_size,
+    )
+    .await?;
     Ok(())
 }
 
