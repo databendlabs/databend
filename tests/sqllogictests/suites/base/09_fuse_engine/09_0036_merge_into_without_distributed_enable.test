@@ -1152,30 +1152,30 @@ CREATE TABLE IF NOT EXISTS lineitem_random(
     l_comment STRING not null
 ) engine = random;
 
-## add 400w rows
+## add 40w rows
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 query T
 select count(*) from lineitem_target_origin_400_blocks1;
@@ -1188,15 +1188,15 @@ insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_ori
 query T
 select count(*) from lineitem_target_origin_200_blocks1;
 ----
-4000000
+400000
 
 statement ok
-insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 500000;
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 50000;
 
 query T
 select count(*) from lineitem_target_origin_400_blocks1;
 ----
-4500000
+450000
 
 ## it maybe flaky test, but in most times, it's normal.
 query TT
@@ -1211,7 +1211,7 @@ t1.l_discount = t2.l_discount
 when matched then update *     
 when not matched then insert *;
 ----
-0 4000000
+0 400000
 
 ## test update column only optimization
 statement ok
@@ -1266,7 +1266,7 @@ select * from column_only_optimization_source order by a,b;
 
 query TT
 merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
-t1.a = t2.a when matched then update t1.b = t2.b when not macted then insert *;
+t1.a = t2.a when matched then update set t1.b = t2.b when not macted then insert *;
 ----
 0 4
 

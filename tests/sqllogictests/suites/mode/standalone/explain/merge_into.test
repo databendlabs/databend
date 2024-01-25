@@ -102,12 +102,11 @@ target_table: default.default.column_only_optimization_target
 └── HashJoin: LEFT OUTER
     ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
     ├── non-equi conditions: []
-    ├── Exchange(Merge)
-    │   └── LogicalGet
-    │       ├── table: default.default.column_only_optimization_source
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    ├── LogicalGet
+    │   ├── table: default.default.column_only_optimization_source
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
     └── LogicalGet
         ├── table: default.default.column_only_optimization_target
         ├── filters: []
@@ -128,12 +127,11 @@ target_table: default.default.column_only_optimization_target
 └── HashJoin: LEFT OUTER
     ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
     ├── non-equi conditions: []
-    ├── Exchange(Merge)
-    │   └── LogicalGet
-    │       ├── table: default.default.column_only_optimization_source
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    ├── LogicalGet
+    │   ├── table: default.default.column_only_optimization_source
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
     └── LogicalGet
         ├── table: default.default.column_only_optimization_target
         ├── filters: []
