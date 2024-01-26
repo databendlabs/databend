@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mgr;
-mod proc;
-mod prof;
-
-pub use mgr::QueryProfileManager;
-pub use proc::*;
-pub use prof::*;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum CreateOption {
+    CreateIfNotExists(bool),
+    CreateOrReplace,
+}

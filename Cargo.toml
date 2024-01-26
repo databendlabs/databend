@@ -46,7 +46,6 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
-    "src/query/profile",
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/common/blocks",
@@ -109,7 +108,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a0669bf" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "e21b273" }
 
 opendal = { version = "0.44.2", features = [
     "layers-minitrace",

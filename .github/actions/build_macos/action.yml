@@ -44,7 +44,7 @@ runs:
     - name: Build Debug for all artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
-      run: cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }}
+      run: cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }}
 
     - name: Build Debug for specific artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
@@ -52,10 +52,10 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         echo "==> building libs ..."
-        cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --lib
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --bin databend-$artifact
         done
 
     - name: Build Release
@@ -64,10 +64,10 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         echo "==> building libs ..."
-        cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --release --lib
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --release --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --release --bin databend-$artifact
         done
 
     - name: Upload artifact

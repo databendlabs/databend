@@ -174,15 +174,16 @@ impl RefreshIndexInterpreter {
             });
 
             // then, find the last refresh position.
-            let last = match source.parts.partitions.binary_search_by(|p| {
-                let fp = FusePartInfo::from_part(p).unwrap();
-                fp.create_on
-                    .partial_cmp(&self.plan.index_meta.updated_on)
-                    .unwrap()
-            }) {
-                Ok(i) => i + 1,
-                Err(i) => i,
-            };
+            let last = source
+                .parts
+                .partitions
+                .binary_search_by(|p| {
+                    let fp = FusePartInfo::from_part(p).unwrap();
+                    fp.create_on
+                        .partial_cmp(&self.plan.index_meta.updated_on)
+                        .unwrap()
+                })
+                .map_or_else(|i| i, |i| i + 1);
 
             // finally, skip the refreshed partitions.
             source.parts.partitions = match self.plan.limit {
@@ -291,7 +292,7 @@ impl Interpreter for RefreshIndexInterpreter {
         query_plan = replace_read_source.replace(&query_plan)?;
 
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &query_plan, false).await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &query_plan).await?;
 
         let input_schema = query_plan.output_schema()?;
 

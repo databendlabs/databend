@@ -92,8 +92,7 @@ impl Interpreter for MergeIntoInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Add table lock before execution.
         // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
@@ -143,6 +142,7 @@ impl MergeIntoInterpreter {
             change_join_order,
             split_idx,
             row_id_index,
+            can_try_update_column_only,
             ..
         } = &self.plan;
         let mut columns_set = columns_set.clone();
@@ -364,6 +364,10 @@ impl MergeIntoInterpreter {
                 None
             };
 
+            if *can_try_update_column_only {
+                assert!(condition.is_none());
+            }
+
             // update
             let update_list = if let Some(update_list) = &item.update {
                 // use update_plan to get exprs
@@ -412,6 +416,7 @@ impl MergeIntoInterpreter {
                         )
                     })
                     .collect_vec();
+                //
                 Some(update_list)
             } else {
                 // delete
@@ -456,6 +461,7 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization,
+                can_try_update_column_only: *can_try_update_column_only,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -482,6 +488,7 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now..
+                can_try_update_column_only: *can_try_update_column_only,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation

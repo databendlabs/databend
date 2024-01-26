@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -24,11 +27,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-
-static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
-static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
-static COST_FACTOR_AGGREGATE_PER_ROW: f64 = 5.0;
-static COST_FACTOR_NETWORK_PER_ROW: f64 = 50.0;
 
 #[derive(Default)]
 pub struct DefaultCostModel {
@@ -52,15 +50,19 @@ impl CostModel for DefaultCostModel {
 }
 
 impl DefaultCostModel {
-    pub fn new() -> Self {
-        DefaultCostModel {
-            compute_per_row: COST_FACTOR_COMPUTE_PER_ROW,
-            hash_table_per_row: COST_FACTOR_HASH_TABLE_PER_ROW,
-            aggregate_per_row: COST_FACTOR_AGGREGATE_PER_ROW,
-            network_per_row: COST_FACTOR_NETWORK_PER_ROW,
+    pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let hash_table_per_row = settings.get_cost_factor_hash_table_per_row()? as f64;
+        let aggregate_per_row = settings.get_cost_factor_aggregate_per_row()? as f64;
+        let network_per_row = settings.get_cost_factor_network_per_row()? as f64;
+        Ok(DefaultCostModel {
+            compute_per_row: 1.0,
+            hash_table_per_row,
+            aggregate_per_row,
+            network_per_row,
             cluster_peers: 1,
             degree_of_parallelism: 8,
-        }
+        })
     }
 
     pub fn with_cluster_peers(mut self, cluster_peers: usize) -> Self {

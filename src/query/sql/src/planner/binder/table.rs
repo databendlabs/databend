@@ -80,7 +80,7 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_table_meta::table::ChangeAction;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
@@ -100,6 +100,7 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
+use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -135,24 +136,11 @@ impl Binder {
                 }
             }
         }
-        let catalog = CATALOG_DEFAULT;
-        let database = "system";
-        let tenant = self.ctx.get_tenant();
-        let table_meta = self
-            .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
-            .await?;
-        let table_index = self.metadata.write().add_table(
-            CATALOG_DEFAULT.to_owned(),
-            database.to_string(),
-            table_meta,
-            None,
-            false,
-            false,
-            false,
-        );
-
-        self.bind_base_table(bind_context, database, table_index, None)
-            .await
+        let bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        Ok((
+            SExpr::create_leaf(Arc::new(DummyTableScan.into())),
+            bind_context,
+        ))
     }
 
     fn check_view_dep(bind_context: &BindContext, database: &str, view_name: &str) -> Result<()> {
@@ -312,13 +300,13 @@ impl Binder {
                 }
             }
             "STREAM" => {
-                let change_action = match table_alias_name.as_deref() {
-                    Some("_change_append") => Some(ChangeAction::Append),
-                    Some("_change_insert") => Some(ChangeAction::Insert),
-                    Some("_change_delete") => Some(ChangeAction::Delete),
+                let change_type = match table_alias_name.as_deref() {
+                    Some("_change_append") => Some(ChangeType::Append),
+                    Some("_change_insert") => Some(ChangeType::Insert),
+                    Some("_change_delete") => Some(ChangeType::Delete),
                     _ => None,
                 };
-                if change_action.is_some() {
+                if change_type.is_some() {
                     let table_index = self.metadata.write().add_table(
                         catalog,
                         database.clone(),
@@ -329,12 +317,7 @@ impl Binder {
                         false,
                     );
                     let (s_expr, mut bind_context) = self
-                        .bind_base_table(
-                            bind_context,
-                            database.as_str(),
-                            table_index,
-                            change_action,
-                        )
+                        .bind_base_table(bind_context, database.as_str(), table_index, change_type)
                         .await?;
 
                     if let Some(alias) = alias {
@@ -357,12 +340,17 @@ impl Binder {
                 let query = match mode {
                     StreamMode::AppendOnly => {
                         format!(
-                            "select *, 'INSERT' as change$action, false as change$is_update, \
-                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
-                            lpad(hex(_origin_block_row_num), 6, '0')), _change_append._base_row_id) as change$row_id \
-                            from {} as _change_append where not(is_not_null(_origin_version) and \
-                            (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
-                            table_name, table_version
+                            "select *, \
+                                    'INSERT' as change$action, \
+                                    false as change$is_update, \
+                                    if(is_not_null(_origin_block_id), \
+                                       concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                       _change_append._base_row_id \
+                                    ) as change$row_id \
+                             from {}.{} as _change_append \
+                             where not(is_not_null(_origin_version) and \
+                                       (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
+                            database, table_name, table_version
                         )
                     }
                     StreamMode::Standard => {
@@ -389,24 +377,52 @@ impl Binder {
                             .join(", ");
 
                         format!(
-                            "with _change as (select * from \
-                            (select {}, _row_version, 'INSERT' as change$action, \
-                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
-                            lpad(hex(_origin_block_row_num), 6, '0')), _change_insert._base_row_id) as change$row_id \
-                            from {} as _change_insert) as A \
-                            FULL OUTER JOIN \
-                            (select {}, _row_version, 'DELETE' as d_change$action, \
-                            if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), \
-                            lpad(hex(_origin_block_row_num), 6, '0')), _change_delete._base_row_id) as d_change$row_id \
-                            from {} as _change_delete) as D \
-                            ON A.change$row_id = D.d_change$row_id \
-                            where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version) \
-                            select {}, change$action, change$row_id, d_change$action is not null as change$is_update \
-                            from _change where change$action is not null \
+                            "with _change as ( \
+                                select * \
+                                from ( \
+                                    select {}, \
+                                           _row_version, \
+                                           'INSERT' as change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              _change_insert._base_row_id \
+                                           ) as change$row_id \
+                                    from {}.{} as _change_insert \
+                                ) as A \
+                                FULL OUTER JOIN ( \
+                                    select {}, \
+                                           _row_version, \
+                                           'DELETE' as d_change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              _change_delete._base_row_id \
+                                           ) as d_change$row_id \
+                                    from {}.{} as _change_delete \
+                                ) as D \
+                                on A.change$row_id = D.d_change$row_id \
+                                where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
+                            ) \
+                            select {}, \
+                                   change$action, \
+                                   change$row_id, \
+                                   d_change$action is not null as change$is_update \
+                            from _change \
+                            where change$action is not null \
                             union all \
-                            select {}, d_change$action, d_change$row_id, change$action is not null as change$is_update \
-                            from _change where d_change$action is not null",
-                            a_cols, table_name, d_col_alias, table_name, a_cols, d_cols
+                            select {}, \
+                                   d_change$action, \
+                                   d_change$row_id, \
+                                   change$action is not null as change$is_update \
+                            from _change \
+                            where d_change$action is not null",
+                            a_cols,
+                            database,
+                            table_name,
+                            d_col_alias,
+                            database,
+                            table_name,
+                            a_cols,
+                            d_cols
                         )
                     }
                 };
@@ -653,8 +669,8 @@ impl Binder {
         bind_context: &mut BindContext,
         span: &Span,
         name: &Identifier,
-        params: &Vec<Expr>,
-        named_params: &Vec<(String, Expr)>,
+        params: &[Expr],
+        named_params: &[(String, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
@@ -1324,7 +1340,7 @@ impl Binder {
         bind_context: &BindContext,
         database_name: &str,
         table_index: IndexType,
-        change_action: Option<ChangeAction>,
+        change_type: Option<ChangeType>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
@@ -1395,7 +1411,7 @@ impl Binder {
                         statistics: stat,
                         col_stats,
                     },
-                    change_action,
+                    change_type,
                     ..Default::default()
                 }
                 .into(),
@@ -1512,8 +1528,8 @@ pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
 fn parse_table_function_args(
     span: &Span,
     func_name: &Identifier,
-    params: &Vec<Expr>,
-    named_params: &Vec<(String, Expr)>,
+    params: &[Expr],
+    named_params: &[(String, Expr)],
 ) -> Result<Vec<Expr>> {
     if func_name.name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
@@ -1546,7 +1562,7 @@ fn parse_table_function_args(
         }
 
         if !params.is_empty() {
-            args.extend(params.clone());
+            args.extend(params.iter().cloned());
         }
         Ok(args)
     } else {
@@ -1563,6 +1579,6 @@ fn parse_table_function_args(
             .set_span(*span));
         }
 
-        Ok(params.clone())
+        Ok(params.to_vec())
     }
 }

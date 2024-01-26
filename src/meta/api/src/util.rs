@@ -102,13 +102,13 @@ pub async fn get_u64_value<T: kvapi::Key>(
     }
 }
 
-pub fn deserialize_struct_get_response<K, T>(
+#[allow(clippy::type_complexity)]
+pub fn deserialize_struct_get_response<K>(
     resp: TxnGetResponse,
-) -> Result<(K, Option<SeqV<T>>), MetaError>
+) -> Result<(K, Option<SeqV<K::ValueType>>), MetaError>
 where
     K: kvapi::Key,
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
+    K::ValueType: FromToProto,
 {
     let key = K::from_str_key(&resp.key).map_err(|e| {
         let inv = InvalidReply::new(
@@ -120,7 +120,7 @@ where
 
     if let Some(pb_seqv) = resp.value {
         let seqv = SeqV::from(pb_seqv);
-        let value = deserialize_struct::<T>(&seqv.data)?;
+        let value = deserialize_struct::<K::ValueType>(&seqv.data)?;
         let seqv = SeqV::with_meta(seqv.seq, seqv.meta, value);
         Ok((key, Some(seqv)))
     } else {
@@ -153,14 +153,13 @@ where K: kvapi::Key {
 /// Get value that are encoded with FromToProto.
 ///
 /// It returns seq number and the data.
-pub async fn get_pb_value<K, T>(
+pub async fn get_pb_value<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     k: &K,
-) -> Result<(u64, Option<T>), MetaError>
+) -> Result<(u64, Option<K::ValueType>), MetaError>
 where
     K: kvapi::Key,
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
+    K::ValueType: FromToProto,
 {
     let res = kv_api.get_kv(&k.to_string_key()).await?;
 
@@ -178,7 +177,6 @@ pub async fn mget_pb_values<T>(
 ) -> Result<Vec<(u64, Option<T>)>, MetaError>
 where
     T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
 {
     let seq_bytes = kv_api.mget_kv(keys).await?;
     let mut seq_values = Vec::with_capacity(keys.len());
@@ -289,16 +287,13 @@ pub async fn fetch_id<T: kvapi::Key>(
 }
 
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
-where
-    T: FromToProto + 'static,
-    T::PB: databend_common_protos::prost::Message,
-{
+where T: FromToProto + 'static {
     let p = value.to_pb().map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
     let mut buf = vec![];
-    databend_common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+    prost::Message::encode(&p, &mut buf).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -306,11 +301,8 @@ where
 }
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
-where
-    T: FromToProto,
-    T::PB: databend_common_protos::prost::Message + Default,
-{
-    let p: T::PB = databend_common_protos::prost::Message::decode(buf).map_err(|e| {
+where T: FromToProto {
+    let p: T::PB = prost::Message::decode(buf).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;

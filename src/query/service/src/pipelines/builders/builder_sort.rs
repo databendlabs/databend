@@ -22,10 +22,8 @@ use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
@@ -89,20 +87,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(
-            plan_schema,
-            sort_desc,
-            sort.plan_id,
-            sort.limit,
-            sort.after_exchange,
-        )
+        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
     }
 
     pub(crate) fn build_sort_pipeline(
         &mut self,
         plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
-        plan_id: u32,
         limit: Option<usize>,
         after_exchange: Option<bool>,
     ) -> Result<()> {
@@ -114,18 +105,12 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.try_resize(max_threads)?;
         }
-        let prof_info = if self.enable_profiling {
-            Some((plan_id, self.proc_profs.clone()))
-        } else {
-            None
-        };
 
         let mut builder =
             SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
                 .with_partial_block_size(block_size)
                 .with_final_block_size(block_size)
-                .with_limit(limit)
-                .with_prof_info(prof_info.clone());
+                .with_limit(limit);
 
         match after_exchange {
             Some(true) => {
@@ -140,7 +125,6 @@ impl PipelineBuilder {
                         block_size,
                         limit,
                         sort_desc,
-                        prof_info,
                         true,
                     )
                 } else {
@@ -171,7 +155,6 @@ pub struct SortPipelineBuilder {
     limit: Option<usize>,
     partial_block_size: usize,
     final_block_size: usize,
-    prof_info: Option<(u32, SharedProcessorProfiles)>,
     remove_order_col_at_last: bool,
 }
 
@@ -188,7 +171,6 @@ impl SortPipelineBuilder {
             limit: None,
             partial_block_size: 0,
             final_block_size: 0,
-            prof_info: None,
             remove_order_col_at_last: false,
         }
     }
@@ -208,11 +190,6 @@ impl SortPipelineBuilder {
         self
     }
 
-    pub fn with_prof_info(mut self, prof_info: Option<(u32, SharedProcessorProfiles)>) -> Self {
-        self.prof_info = prof_info;
-        self
-    }
-
     pub fn remove_order_col_at_last(mut self) -> Self {
         self.remove_order_col_at_last = true;
         self
@@ -221,21 +198,12 @@ impl SortPipelineBuilder {
     pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         // Partial sort
         pipeline.add_transform(|input, output| {
-            let transform = TransformSortPartial::try_create(
+            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                 input,
                 output,
                 self.limit,
                 self.sort_desc.clone(),
-            )?;
-            if let Some((plan_id, prof)) = &self.prof_info {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    *plan_id,
-                    prof.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )?))
         })?;
 
         self.build_merge_sort_pipeline(pipeline, false)
@@ -310,16 +278,7 @@ impl SortPipelineBuilder {
             .with_max_memory_usage(max_memory_usage)
             .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc);
 
-            let transform = builder.build()?;
-            if let Some((plan_id, prof)) = &self.prof_info {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    *plan_id,
-                    prof.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(builder.build()?))
         })?;
 
         if may_spill {
@@ -329,7 +288,7 @@ impl SortPipelineBuilder {
                 let op = DataOperator::instance().operator();
                 let spiller =
                     Spiller::create(self.ctx.clone(), op, config.clone(), SpillerType::OrderBy);
-                let transform = create_transform_sort_spill(
+                Ok(ProcessorPtr::create(create_transform_sort_spill(
                     input,
                     output,
                     schema.clone(),
@@ -337,16 +296,7 @@ impl SortPipelineBuilder {
                     self.limit,
                     spiller,
                     output_order_col,
-                );
-                if let Some((plan_id, prof)) = &self.prof_info {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        *plan_id,
-                        prof.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                )))
             })?;
         }
 
@@ -358,7 +308,6 @@ impl SortPipelineBuilder {
                 self.final_block_size,
                 self.limit,
                 self.sort_desc,
-                self.prof_info.clone(),
                 self.remove_order_col_at_last,
             )?;
         }

@@ -24,6 +24,7 @@ use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -137,6 +138,22 @@ impl Interpreter for CreateDatabaseInterpreter {
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        // handle share cleanups with the DropDatabaseReply
+        if let Some(spec_vec) = reply.spec_vec {
+            let mut share_table_into = Vec::with_capacity(spec_vec.len());
+            for share_spec in &spec_vec {
+                share_table_into.push((share_spec.name.clone(), None));
+            }
+
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_into),
+            )
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())

@@ -71,6 +71,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -137,7 +138,7 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
             mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
@@ -406,15 +407,20 @@ impl TableContext for QueryContext {
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {
-        self.partition_queue.write().pop_front()
+        if let Some(part) = self.partition_queue.write().pop_front() {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+            return Some(part);
+        }
+
+        None
     }
 
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
-        let mut partition_queue = self.partition_queue.write();
+        let mut queue_guard = self.partition_queue.write();
 
         for _index in 0..num {
-            match partition_queue.pop_front() {
+            match queue_guard.pop_front() {
                 None => {
                     break;
                 }
@@ -423,6 +429,8 @@ impl TableContext for QueryContext {
                 }
             };
         }
+
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
 
         res
     }
@@ -593,12 +601,14 @@ impl TableContext for QueryContext {
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
             rounding_mode,
+            disable_variant_check,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),

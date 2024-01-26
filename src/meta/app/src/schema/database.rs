@@ -22,6 +22,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use super::CreateOption;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 
@@ -191,24 +192,36 @@ impl Display for DbIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
-        )
+        match self.create_option {
+            CreateOption::CreateIfNotExists(if_not_exists) => {
+                write!(
+                    f,
+                    "create_db(if_not_exists={}):{}/{}={:?}",
+                    if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_db:{}/{}={:?}",
+                    self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+        }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -320,7 +333,9 @@ mod kvapi_key_impl {
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
+    use crate::schema::DatabaseMeta;
     use crate::schema::DatabaseNameIdent;
+    use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
     use crate::schema::PREFIX_DATABASE;
     use crate::schema::PREFIX_DATABASE_BY_ID;
@@ -330,6 +345,8 @@ mod kvapi_key_impl {
     /// __fd_database/<tenant>/<db_name> -> <db_id>
     impl kvapi::Key for DatabaseNameIdent {
         const PREFIX: &'static str = PREFIX_DATABASE;
+
+        type ValueType = DatabaseId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -353,6 +370,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseId {
         const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
+        type ValueType = DatabaseMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.db_id)
@@ -373,6 +392,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseIdToName {
         const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
 
+        type ValueType = DatabaseNameIdent;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.db_id)
@@ -392,6 +413,8 @@ mod kvapi_key_impl {
     /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
     impl kvapi::Key for DbIdListKey {
         const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+
+        type ValueType = DbIdList;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

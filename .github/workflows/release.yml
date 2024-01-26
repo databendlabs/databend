@@ -110,7 +110,8 @@ jobs:
             gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest
           else
             echo "Nightly release"
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --prerelease
+            previous=$(gh release list --limit 1 | cut -f 1)
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease
           fi
 
   changelog:

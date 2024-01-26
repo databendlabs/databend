@@ -55,7 +55,8 @@ def create_task_request_to_task(id, create_task_request):
     task.after.extend(create_task_request.after)
     task.created_at = datetime.now(timezone.utc).isoformat()
     task.updated_at = datetime.now(timezone.utc).isoformat()
-
+    # add session parameters
+    task.session_parameters.update(create_task_request.session_parameters)
     return task
 
 
@@ -91,7 +92,7 @@ def create_task_run_from_task(task):
     task_run.query_id = "qwert"
     task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
     task_run.completed_time = datetime.now(timezone.utc).isoformat()
-
+    task_run.session_parameters.update(task.session_parameters)
     return task_run
 
 
@@ -210,6 +211,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                     request.suspend_task_after_num_failures
                 )
                 has_options = True
+            if request.set_session_parameters:
+                task.session_parameters.update(request.session_parameters)
+                has_options = True
             if has_options is False:
                 return task_pb2.AlterTaskResponse(
                     error=task_pb2.TaskError(
@@ -265,14 +269,17 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             root = TASK_DB[root.after[0]]
             l.insert(0, root)
         return task_pb2.GetTaskDependentsResponse(task=l)
+
     def EnableTaskDependents(self, request, context):
         print("EnableTaskDependents", request)
         task_name = request.task_name
         if task_name not in TASK_DB:
-           return task_pb2.EnableTaskDependentsResponse()
+            return task_pb2.EnableTaskDependentsResponse()
         task = TASK_DB[task_name]
         task.status = task_pb2.Task.Started
         return task_pb2.EnableTaskDependentsResponse()
+
+
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     task_pb2_grpc.add_TaskServiceServicer_to_server(TaskService(), server)

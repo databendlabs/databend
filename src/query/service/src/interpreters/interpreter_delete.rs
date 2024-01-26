@@ -230,8 +230,7 @@ impl Interpreter for DeleteInterpreter {
             )?;
 
             build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         }
 
         build_res.main_pipeline.add_lock_guard(lock_guard);

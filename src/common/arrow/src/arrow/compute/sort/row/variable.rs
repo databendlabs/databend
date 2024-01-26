@@ -59,7 +59,7 @@ pub fn encoded_len(a: Option<&[u8]>) -> usize {
 pub fn encode<'a, I: Iterator<Item = Option<&'a [u8]>>>(out: &mut Rows, i: I, opts: SortOptions) {
     for (offset, maybe_val) in out.offsets.iter_mut().skip(1).zip(i) {
         match maybe_val {
-            Some(val) if val.is_empty() => {
+            Some([]) => {
                 out.buffer[*offset] = match opts.descending {
                     true => !EMPTY_SENTINEL,
                     false => EMPTY_SENTINEL,

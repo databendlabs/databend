@@ -24,7 +24,7 @@ SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('default','t20_0011') 
 #TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=3" | $BENDSQL_CLIENT_CONNECT)
 
 ## verify
-echo "set retention_period=0; optimize table t20_0011 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t20_0011 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't20_0011')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -51,7 +51,7 @@ echo "select count(*)=3  from fuse_snapshot('default', 't20_0011')" | $BENDSQL_C
 TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=4" | $BENDSQL_CLIENT_CONNECT)
 
 ## verify
-echo "set retention_period=0; optimize table t20_0011 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t20_0011 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be at least 2 snapshots left"
 echo "select count(*)>=2  from fuse_snapshot('default', 't20_0011')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 4 rows left"

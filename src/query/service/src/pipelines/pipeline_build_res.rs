@@ -21,7 +21,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::OneBlockSource;
-use databend_common_profile::SharedProcessorProfiles;
 
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
@@ -38,10 +37,6 @@ pub struct PipelineBuildResult {
     // Containing some sub queries pipelines, must be complete pipeline
     pub sources_pipelines: Vec<Pipeline>,
 
-    /// Set of profiling spans for the query.
-    /// Will be empty if profiling is disabled.
-    pub prof_span_set: SharedProcessorProfiles,
-
     pub exchange_injector: Arc<dyn ExchangeInjector>,
     /// for local fragment data sharing
     pub builder_data: PipelineBuilderData,
@@ -52,7 +47,6 @@ impl PipelineBuildResult {
         PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
-            prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
             builder_data: PipelineBuilderData {
                 input_join_state: None,
@@ -75,7 +69,6 @@ impl PipelineBuildResult {
         Ok(PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
-            prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
             builder_data: PipelineBuilderData {
                 input_join_state: None,

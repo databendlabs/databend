@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::intrinsics::assume;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -27,7 +25,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use futures::future::select;
@@ -357,14 +355,8 @@ impl PipelineExecutor {
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
-                let enable_profiling = this.settings.enable_profiling;
                 let try_result = catch_unwind(move || -> Result<()> {
-                    let res = match enable_profiling {
-                        true => this_clone.execute_single_thread::<true>(thread_num),
-                        false => this_clone.execute_single_thread::<false>(thread_num),
-                    };
-
-                    match res {
+                    match this_clone.execute_single_thread(thread_num) {
                         Ok(_) => Ok(()),
                         Err(cause) => {
                             if log::max_level() == LevelFilter::Trace {
@@ -393,10 +385,7 @@ impl PipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread<const ENABLE_PROFILING: bool>(
-        self: &Arc<Self>,
-        thread_num: usize,
-    ) -> Result<()> {
+    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(
             thread_num,
@@ -411,28 +400,7 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let (executed_pid, is_async, elapsed) =
-                    context.execute_task::<ENABLE_PROFILING>()?;
-
-                if ENABLE_PROFILING {
-                    let node = self.graph.get_node(executed_pid);
-                    if let Some(elapsed) = elapsed {
-                        let nanos = elapsed.as_nanos();
-                        assume(nanos < 18446744073709551615_u128);
-
-                        if is_async {
-                            node.profile
-                                .wait_time
-                                .fetch_add(nanos as u64, Ordering::Relaxed);
-                        } else {
-                            node.profile
-                                .cpu_time
-                                .fetch_add(nanos as u64, Ordering::Relaxed);
-                        }
-                    }
-
-                    node.processor.record_profile(&node.profile);
-                }
+                let executed_pid = context.execute_task(&self.graph)?;
 
                 // Not scheduled graph if pipeline is finished.
                 if !self.global_tasks_queue.is_finished() {

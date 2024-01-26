@@ -24,7 +24,6 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
-            self.enable_profiling,
             self.exchange_injector.clone(),
         )?;
         // add sharing data

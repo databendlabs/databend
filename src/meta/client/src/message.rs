@@ -221,7 +221,12 @@ impl Response {
 
 /// Export all data stored in metasrv
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct ExportReq {}
+pub struct ExportReq {
+    /// Number of json strings contained in a export stream item.
+    ///
+    /// By default meta-service use 32 for this field.
+    pub chunk_size: Option<u64>,
+}
 
 /// Get a grpc-client that is initialized and has passed handshake
 ///

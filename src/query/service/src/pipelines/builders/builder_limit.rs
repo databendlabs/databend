@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::executor::physical_plans::Limit;
 
 use crate::pipelines::processors::TransformLimit;
@@ -27,18 +26,12 @@ impl PipelineBuilder {
         if limit.limit.is_some() || limit.offset != 0 {
             self.main_pipeline.try_resize(1)?;
             return self.main_pipeline.add_transform(|input, output| {
-                let transform =
-                    TransformLimit::try_create(limit.limit, limit.offset, input, output)?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                        transform,
-                        limit.plan_id,
-                        self.proc_profs.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
+                Ok(ProcessorPtr::create(TransformLimit::try_create(
+                    limit.limit,
+                    limit.offset,
+                    input,
+                    output,
+                )?))
             });
         }
         Ok(())

@@ -52,6 +52,7 @@ MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
 ├── target_build_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
@@ -112,6 +113,7 @@ MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
 ├── target_build_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
@@ -150,7 +152,7 @@ select * from target_build_optimization order by a,b,c;
 11 b11 c_11
 12 b12 c_12
 
-### test with conjunct 
+### test with conjunct
 #### we need to make sure the blocks count and layout, so we should truncate and insert again.
 statement ok
 truncate table target_build_optimization;
@@ -186,6 +188,7 @@ MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
 ├── target_build_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
@@ -267,6 +270,7 @@ MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
 ├── target_build_optimization: true
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
 └── HashJoin: LEFT OUTER
