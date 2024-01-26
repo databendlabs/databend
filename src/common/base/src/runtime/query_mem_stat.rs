@@ -24,14 +24,30 @@ thread_local! {
 pub struct QueryMemState {}
 
 impl QueryMemState {
-    pub fn attach(mem_stat: Arc<MemStat>) {
+    pub fn attach(mem_stat: Arc<MemStat>) -> QueryMemStatGuard {
         QUERY_MEM_STATE.with(|v: &RefCell<Option<Arc<MemStat>>>| {
             let mut borrow_mut = v.borrow_mut();
+            let old = borrow_mut.clone();
             *borrow_mut = Some(mem_stat);
-        });
+            QueryMemStatGuard { save: old }
+        })
     }
 
     pub fn current() -> Option<Arc<MemStat>> {
         QUERY_MEM_STATE.with(|v: &RefCell<Option<Arc<MemStat>>>| v.borrow_mut().clone())
+    }
+}
+
+pub struct QueryMemStatGuard {
+    save: Option<Arc<MemStat>>,
+}
+
+impl Drop for QueryMemStatGuard {
+    fn drop(&mut self) {
+        let saved = self.save.clone();
+        QUERY_MEM_STATE.with(|v: &RefCell<Option<Arc<MemStat>>>| {
+            let mut borrow_mut = v.borrow_mut();
+            *borrow_mut = saved;
+        })
     }
 }
