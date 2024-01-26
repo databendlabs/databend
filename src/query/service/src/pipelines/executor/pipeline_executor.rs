@@ -392,8 +392,8 @@ impl PipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
-        QueryMemState::attach(self.mem_state.clone());
-        let _entered_guard = ThreadTracker::enter(Some(self.mem_state.clone()));
+        let _query_mem_guard = QueryMemState::attach(self.mem_state.clone());
+        let _query_tracker_guard = ThreadTracker::enter(Some(self.mem_state.clone()));
 
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(
