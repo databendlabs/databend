@@ -286,14 +286,6 @@ impl HttpQuery {
             }
         };
 
-        // Ensure the builtin roles are created in the current tenant. Please note that
-        // there's a special case about sandbox_tenant, which is passed in session settings,
-        // we have to call ensure_builtin_roles() after the session settings are updated.
-        let tenant = session.get_current_tenant();
-        UserApiProvider::instance()
-            .ensure_builtin_roles(&tenant)
-            .await?;
-
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let deduplicate_label = &ctx.deduplicate_label;
