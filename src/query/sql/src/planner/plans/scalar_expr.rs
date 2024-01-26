@@ -663,9 +663,10 @@ pub trait Visitor<'a>: Sized {
     }
 }
 
+// Any `Visitor` which needs to access parent `ScalarExpr` can implement `VisitorWithParent`
 pub trait VisitorWithParent<'a>: Sized {
     fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
-        walk_expr_with_parent(self, Some(expr), expr)
+        walk_expr_with_parent(self, None, expr)
     }
 
     fn visit_with_parent(
@@ -676,11 +677,19 @@ pub trait VisitorWithParent<'a>: Sized {
         walk_expr_with_parent(self, parent, expr)
     }
 
-    fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) -> Result<()> {
+    fn visit_bound_column_ref(
+        &mut self,
+        _parent: Option<&'a ScalarExpr>,
+        _col: &'a BoundColumnRef,
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn visit_constant(&mut self, _constant: &'a ConstantExpr) -> Result<()> {
+    fn visit_constant(
+        &mut self,
+        _parent: Option<&'a ScalarExpr>,
+        _constant: &'a ConstantExpr,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -798,18 +807,18 @@ pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
     expr: &'a ScalarExpr,
 ) -> Result<()> {
     match expr {
-        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
-        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(expr),
-        ScalarExpr::WindowFunction(win_func) => visitor.visit_window_function(parent, win_func),
+        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(parent, expr),
+        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(parent, expr),
+        ScalarExpr::WindowFunction(win_func) => visitor.visit_window_function(Some(expr), win_func),
         ScalarExpr::AggregateFunction(aggregate) => {
-            visitor.visit_aggregate_function(parent, aggregate)
+            visitor.visit_aggregate_function(Some(expr), aggregate)
         }
-        ScalarExpr::LambdaFunction(lambda) => visitor.visit_lambda_function(parent, lambda),
-        ScalarExpr::FunctionCall(func) => visitor.visit_function_call(parent, func),
-        ScalarExpr::CastExpr(cast_expr) => visitor.visit_cast(parent, cast_expr),
-        ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, subquery),
-        ScalarExpr::UDFServerCall(udf) => visitor.visit_udf_server_call(parent, udf),
-        ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, udf),
+        ScalarExpr::LambdaFunction(lambda) => visitor.visit_lambda_function(Some(expr), lambda),
+        ScalarExpr::FunctionCall(func) => visitor.visit_function_call(Some(expr), func),
+        ScalarExpr::CastExpr(cast_expr) => visitor.visit_cast(Some(expr), cast_expr),
+        ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(Some(expr), subquery),
+        ScalarExpr::UDFServerCall(udf) => visitor.visit_udf_server_call(Some(expr), udf),
+        ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(Some(expr), udf),
     }
 }
 
