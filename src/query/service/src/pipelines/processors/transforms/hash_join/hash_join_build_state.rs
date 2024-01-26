@@ -211,7 +211,11 @@ impl HashJoinBuildState {
 
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let block_outer_scan_map = if self.hash_join_state.need_outer_scan() {
+        let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
+            || matches!(
+                self.hash_join_state.hash_join_desc.original_join_type,
+                Some(JoinType::RightSingle)
+            ) {
             vec![false; data_block.num_rows()]
         } else {
             vec![]
@@ -227,7 +231,12 @@ impl HashJoinBuildState {
             // Acquire lock in current scope
             let _lock = self.mutex.lock();
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-            if self.hash_join_state.need_outer_scan() {
+            if self.hash_join_state.need_outer_scan()
+                || matches!(
+                    self.hash_join_state.hash_join_desc.original_join_type,
+                    Some(JoinType::RightSingle)
+                )
+            {
                 build_state.outer_scan_map.push(block_outer_scan_map);
             }
             if self.hash_join_state.need_mark_scan() {

@@ -34,16 +34,15 @@ use crate::plans::JoinType;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     patterns: Vec<SExpr>,
-    _metadata: MetadataRef,
+    after_join_reorder: bool,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(after_join_reorder: bool) -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -80,8 +79,12 @@ impl RulePushDownFilterJoin {
                     ))),
                 )),
             )],
-            _metadata: metadata,
+
+            after_join_reorder,
         }
+    }
+    fn after_join_reorder(&self) -> bool {
+        self.after_join_reorder
     }
 }
 
@@ -92,9 +95,9 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let mut s_expr = outer_to_inner(s_expr)?;
+        let (s_expr, outer_to_inner) = outer_to_inner(self.after_join_reorder(), s_expr)?;
         // Second, check if can convert mark join to semi join
-        s_expr = convert_mark_to_semi_join(&s_expr)?;
+        let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -106,7 +109,7 @@ impl Rule for RulePushDownFilterJoin {
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
         let predicates = rewrite_predicates(&s_expr)?;
         let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
-        if !need_push {
+        if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
         result.set_applied_rule(&self.id);

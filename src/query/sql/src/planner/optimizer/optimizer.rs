@@ -96,11 +96,16 @@ impl OptimizerContext {
 pub struct RecursiveOptimizer<'a> {
     ctx: &'a OptimizerContext,
     rules: &'static [RuleID],
+    after_join_reorder: bool,
 }
 
 impl<'a> RecursiveOptimizer<'a> {
     pub fn new(rules: &'static [RuleID], ctx: &'a OptimizerContext) -> Self {
-        Self { ctx, rules }
+        Self {
+            ctx,
+            rules,
+            after_join_reorder: false,
+        }
     }
 
     /// Run the optimizer on the given expression.
@@ -121,9 +126,12 @@ impl<'a> RecursiveOptimizer<'a> {
 
     fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-
         for rule_id in rules {
-            let rule = RuleFactory::create_rule(*rule_id, self.ctx.metadata.clone())?;
+            let rule = RuleFactory::create_rule(
+                *rule_id,
+                self.ctx.metadata.clone(),
+                self.after_join_reorder,
+            )?;
             let mut state = TransformResult::new();
             if rule
                 .patterns()
@@ -143,6 +151,10 @@ impl<'a> RecursiveOptimizer<'a> {
         }
 
         Ok(s_expr.clone())
+    }
+
+    fn set_after_join_reorder(&mut self, after_join_reorder: bool) {
+        self.after_join_reorder = after_join_reorder;
     }
 }
 
@@ -242,6 +254,10 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         if optimized {
             s_expr = (*dp_res).clone();
             s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
+            s_expr.clear_applied_rules();
+            let mut optimizer = RecursiveOptimizer::new(&[RuleID::PushDownFilterJoin], &opt_ctx);
+            optimizer.set_after_join_reorder(true);
+            s_expr = optimizer.run(&s_expr)?;
             dphyp_optimized = true;
         }
     }
@@ -370,7 +386,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     // 3. for full merge into, we use right outer join
     // for now, let's import the statistic info to determine left join or right join
     // we just do optimization for the top join (target and source),won't do recursive optimization.
-    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone(), false)?;
     let mut state = TransformResult::new();
     // we will reorder the join order according to the cardinality of target and source.
     rule.apply(&join_sexpr, &mut state)?;

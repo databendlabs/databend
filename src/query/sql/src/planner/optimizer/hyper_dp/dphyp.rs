@@ -709,6 +709,9 @@ impl DPhpy {
             RelOperator::Join(_) => {
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
+                if self.filters.is_empty() {
+                    return Ok(new_s_expr);
+                }
                 // Add filters to `new_s_expr`, then push down filters if possible
                 let mut predicates = vec![];
                 for filter in self.filters.iter() {
@@ -757,7 +760,8 @@ impl DPhpy {
 
     fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
+        let rule =
+            RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone(), false)?;
         let mut state = TransformResult::new();
         if rule
             .patterns()
