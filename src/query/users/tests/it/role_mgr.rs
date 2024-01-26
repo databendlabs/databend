@@ -53,7 +53,7 @@ async fn test_role_manager() -> Result<()> {
 
     // get role
     {
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(tenant, &role_name).await?;
         assert_eq!(role.name, "test-role1");
     }
 
@@ -79,7 +79,7 @@ async fn test_role_manager() -> Result<()> {
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(tenant, &role_name).await?;
         assert!(
             role.grants
                 .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
@@ -97,9 +97,43 @@ async fn test_role_manager() -> Result<()> {
             )
             .await?;
 
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(tenant, &role_name).await?;
         assert_eq!(role.grants.entries().len(), 0);
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_ensure_builtin_roles() -> Result<()> {
+    let conf = RpcClientConf::default();
+    let tenant = "tenant1";
+    let role_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+
+    // revoke super privilege from account_admin
+    role_mgr
+        .revoke_privileges_from_role(
+            tenant,
+            "account_admin",
+            GrantObject::Global,
+            UserPrivilegeType::Super.into(),
+        )
+        .await?;
+    let account_admin = role_mgr.get_role(tenant, "account_admin").await?;
+    assert!(
+        !account_admin
+            .grants
+            .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
+    );
+
+    // ensure builtin roles, account_admin should recover the super privilege
+    role_mgr.ensure_builtin_roles(tenant).await?;
+    let account_admin = role_mgr.get_role(tenant, "account_admin").await?;
+    assert!(
+        account_admin
+            .grants
+            .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
+    );
 
     Ok(())
 }

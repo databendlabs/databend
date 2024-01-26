@@ -34,15 +34,18 @@ pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
+    pub async fn get_role(&self, tenant: &str, role: &str) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
-        let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
+        let role_data = client
+            .get_role(&role.to_string(), MatchSeq::GE(0))
+            .await?
+            .data;
         Ok(role_data)
     }
 
     #[async_backtrace::framed]
     pub async fn get_role_optional(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
-        match self.get_role(tenant, role.to_string()).await {
+        match self.get_role(tenant, role).await {
             Ok(r) => Ok(Some(r)),
             Err(err) => {
                 if err.code() == ErrorCode::UNKNOWN_ROLE {
@@ -132,7 +135,7 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_role(&self, tenant: &str, role: String) -> Result<bool> {
+    pub async fn exists_role(&self, tenant: &str, role: &str) -> Result<bool> {
         match self.get_role(tenant, role).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -153,7 +156,7 @@ impl UserApiProvider {
         role_info: RoleInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
-        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
+        if if_not_exists && self.exists_role(tenant, &role_info.name).await? {
             return Ok(0);
         }
 
@@ -179,7 +182,7 @@ impl UserApiProvider {
         new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
-        self.get_role(tenant, new_role.to_string()).await?;
+        self.get_role(tenant, new_role).await?;
 
         let client = self.get_role_api_client(tenant)?;
         client

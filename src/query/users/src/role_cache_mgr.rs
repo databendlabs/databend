@@ -125,7 +125,7 @@ impl RoleCacheManager {
         };
 
         // cache manager would not look into built-in roles.
-        let role = self.user_manager.get_role(tenant, owner.role).await?;
+        let role = self.user_manager.get_role(tenant, &owner.role).await?;
         Ok(Some(role))
     }
 

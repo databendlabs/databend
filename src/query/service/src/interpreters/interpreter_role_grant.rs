@@ -56,7 +56,7 @@ impl Interpreter for GrantRoleInterpreter {
         // TODO: check privileges
 
         // Check if the grant role exists.
-        user_mgr.get_role(&tenant, plan.role.clone()).await?;
+        user_mgr.get_role(&tenant, &plan.role).await?;
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
