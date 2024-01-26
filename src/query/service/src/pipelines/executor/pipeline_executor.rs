@@ -18,10 +18,13 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::QueryMemState;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -64,6 +67,7 @@ pub struct PipelineExecutor {
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
+    mem_state: Arc<MemStat>,
 }
 
 impl PipelineExecutor {
@@ -183,6 +187,7 @@ impl PipelineExecutor {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
+        let query_id = settings.query_id.clone();
         Ok(Arc::new(PipelineExecutor {
             graph,
             threads_num,
@@ -195,6 +200,7 @@ impl PipelineExecutor {
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
+            mem_state: MemStat::create(format!("QueryMemStat-{}", query_id)),
         }))
     }
 
@@ -386,6 +392,9 @@ impl PipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
+        QueryMemState::attach(self.mem_state.clone());
+        let _entered_guard = ThreadTracker::enter(Some(self.mem_state.clone()));
+
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(
             thread_num,
@@ -420,6 +429,10 @@ impl PipelineExecutor {
 
     pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
         self.graph.get_proc_profiles()
+    }
+
+    pub fn get_mem_state(&self) -> Arc<MemStat> {
+        self.mem_state.clone()
     }
 }
 
