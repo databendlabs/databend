@@ -294,7 +294,11 @@ impl Processor for TransformHashJoinProbe {
 
                 if self.input_port.has_data() {
                     let data = self.input_port.pull_data().unwrap()?;
-                    self.input_data.push_back(data);
+                    let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
+                    self.input_data.extend(sub_blocks);
+                    if let Some(remain) = remain_block {
+                        self.input_data.push_back(remain);
+                    }
                     return Ok(Event::Async);
                 }
 
