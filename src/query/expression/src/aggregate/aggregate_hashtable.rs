@@ -163,7 +163,7 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> usize {
         if self.current_radix_bits == self.config.max_radix_bits
-            && self.should_disable_expand_hash_table() || !self.config.partial_agg
+            && self.should_disable_expand_hash_table()
         {
             // directly append rows
             state.set_incr_empty_vector(row_count);
@@ -490,7 +490,7 @@ impl AggregateHashTable {
             return true;
         }
 
-        if self.config.partial_agg || self.len() < L2_MAX_ROWS_IN_HT {
+        if !self.config.partial_agg || self.len() < L2_MAX_ROWS_IN_HT {
             return false;
         }
 
