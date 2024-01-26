@@ -290,10 +290,7 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t(a int)
-
-statement ok
-insert into t values(1), (2), (3), (3)
+create table t (a int, b int, c string, d int, e int, f string)
 
 # range frame (can not push down limit)
 query T
@@ -370,6 +367,27 @@ CompoundBlockOperator(Project) × 1 processor
                       Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
                         DeserializeDataTransform × 1 processor
                           SyncReadParquetDataSource × 1 processor
+
+# row fetch with window function
+query T
+explain pipeline select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3;
+----
+CompoundBlockOperator(Project) × 1 processor
+  TransformRowsFetcher × 1 processor
+    LimitTransform × 1 processor
+      Merge (TransformSortMergeLimit × 4 processors) to (LimitTransform × 1)
+        TransformSortMergeLimit × 4 processors
+          SortPartialTransform × 4 processors
+            Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
+              Transform Window × 1 processor
+                Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+                  TransformSortMerge × 4 processors
+                    SortPartialTransform × 4 processors
+                      Merge (TransformFilter × 1 processor) to (SortPartialTransform × 4)
+                        TransformFilter × 1 processor
+                          AddInternalColumnsTransform × 1 processor
+                            DeserializeDataTransform × 1 processor
+                              SyncReadParquetDataSource × 1 processor
 
 statement ok
 DROP DATABASE test_explain_window;

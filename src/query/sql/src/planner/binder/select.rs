@@ -880,9 +880,7 @@ impl Binder {
             // we need create a `EvalScalar` for physical window inputs, so we should keep the window
             // used cols not be pruned.
             if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                if !s.scalar.used_columns().is_subset(&non_lazy_cols) {
-                    non_lazy_cols.extend(s.scalar.used_columns())
-                }
+                non_lazy_cols.extend(s.scalar.used_columns())
             } else {
                 select_cols.extend(s.scalar.used_columns())
             }
