@@ -24,6 +24,9 @@ use std::time::Instant;
 
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::QueryMemState;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -50,6 +53,7 @@ pub struct ProcessorAsyncTask {
     instant: Instant,
     last_nanos: usize,
     inner: BoxFuture<'static, Result<()>>,
+    query_mem_stat: Option<Arc<MemStat>>,
 }
 
 impl ProcessorAsyncTask {
@@ -134,6 +138,7 @@ impl ProcessorAsyncTask {
             last_nanos: instant.elapsed().as_nanos() as usize,
             instant,
             inner: inner.boxed(),
+            query_mem_stat: QueryMemState::current(),
         }
     }
 }
@@ -142,6 +147,8 @@ impl Future for ProcessorAsyncTask {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let _query_tracker_guard = ThreadTracker::enter(self.query_mem_stat.clone());
+
         if self.queue.is_finished() {
             return Poll::Ready(());
         }
