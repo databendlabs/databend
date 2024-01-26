@@ -45,7 +45,7 @@ impl From<&TableSchema> for ArrowSchema {
             .iter()
             .map(ArrowField::from)
             .collect::<Vec<_>>();
-        ArrowSchema::from(fields)
+        ArrowSchema::from(fields).with_metadata(schema.metadata.clone())
     }
 }
 
@@ -56,7 +56,7 @@ impl From<&DataSchema> for ArrowSchema {
             .iter()
             .map(ArrowField::from)
             .collect::<Vec<_>>();
-        ArrowSchema::from(fields)
+        ArrowSchema::from(fields).with_metadata(schema.metadata.clone())
     }
 }
 
@@ -90,7 +90,7 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
         ),
         TableDataType::Boolean => ArrowDataType::Boolean,
         TableDataType::Binary => ArrowDataType::LargeBinary,
-        TableDataType::String => ArrowDataType::LargeBinary,
+        TableDataType::String => ArrowDataType::LargeUtf8,
         TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
             NumberDataType::TYPE => ArrowDataType::TYPE,
         }),
@@ -303,7 +303,7 @@ impl Column {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                    databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data().clone(),

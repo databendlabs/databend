@@ -30,11 +30,12 @@ use crate::ErrorKind;
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
     let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-
+    let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
     rule! (
         #literal_string
         | #ident_to_string
         | #u64_to_string
+        | #boolean_to_string
     )(i)
 }
 
@@ -83,6 +84,11 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
 
+    let ident_options = map(
+        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
+        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+    );
+
     let string_options = map(
         rule! {
             (TYPE
@@ -93,7 +99,6 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | QUOTE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
-                | EMPTY_FIELD_AS
                 | ESCAPE
                 | NULL_FIELD_AS
                 | MISSING_FIELD_AS
@@ -111,7 +116,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let bool_options = map(
         rule! {
-            ERROR_ON_COLUMN_COUNT_MISMATCH ~ ^"=" ~ ^#literal_bool
+            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), v.to_string()),
     );
@@ -129,7 +134,14 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { ((#option_type | #option_compression | #string_options | #int_options | #bool_options | #none_options) ~ ","?)* },
+        rule! { ((
+        #option_type
+        | #option_compression
+        | #ident_options
+        | #string_options
+        | #int_options
+        | #bool_options
+        | #none_options) ~ ","?)* },
         |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
     )(i)
 }

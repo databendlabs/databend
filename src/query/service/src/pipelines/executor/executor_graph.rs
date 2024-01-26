@@ -23,8 +23,8 @@ use databend_common_base::runtime::TrackedFuture;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::EventCause;
+use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use log::debug;
@@ -207,6 +207,12 @@ impl ExecutingGraph {
                     let output_trigger = graph[source_node].create_trigger(edge_index);
                     graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
 
+                    if graph[source_node].profile.plan_id.is_some()
+                        && graph[source_node].profile.plan_id != graph[target_node].profile.plan_id
+                    {
+                        graph[source_node].outputs_port[source_port].record_profile();
+                    }
+
                     connect(
                         &graph[target_node].inputs_port[target_port],
                         &graph[source_node].outputs_port[source_port],
@@ -275,6 +281,8 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
+
+                Profile::track_profile(&node.profile);
 
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
@@ -386,6 +394,7 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
+            let node_profile = executor.graph.get_node_profile(proc.id()).clone();
             let process_future = proc.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -396,6 +405,7 @@ impl ScheduleQueue {
                     global_queue,
                     workers_condvar,
                     weak_executor,
+                    node_profile,
                     process_future,
                 ))
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
@@ -443,8 +453,8 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub(crate) fn get_node(&self, pid: NodeIndex) -> &Node {
-        &self.0.graph[pid]
+    pub(crate) fn get_node_profile(&self, pid: NodeIndex) -> &Arc<Profile> {
+        &self.0.graph[pid].profile
     }
 
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {

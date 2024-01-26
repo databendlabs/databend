@@ -21,7 +21,6 @@ use async_trait::unboxed_simple;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -78,11 +77,7 @@ impl AggIndexSink {
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
-            let location = unsafe {
-                String::from_utf8_unchecked(StringType::to_owned_scalar(
-                    block_name_col.index(i).unwrap(),
-                ))
-            };
+            let location = block_name_col.index(i).unwrap().to_string();
 
             self.location_data
                 .entry(location)

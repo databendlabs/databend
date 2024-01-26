@@ -432,7 +432,7 @@ fn compute_render_widths(
 fn render_head(
     schema: &DataSchemaRef,
     widths: &mut [usize],
-    column_map: &mut Vec<i32>,
+    column_map: &mut [i32],
     header: &mut Vec<Cell>,
     aligns: &mut Vec<CellAlignment>,
 ) {

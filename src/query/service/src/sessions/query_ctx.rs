@@ -36,6 +36,7 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -43,6 +44,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -69,6 +71,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -135,7 +138,7 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
             mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
@@ -399,16 +402,25 @@ impl TableContext for QueryContext {
         *status = info.to_string();
     }
 
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
+    }
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
-        self.partition_queue.write().pop_front()
+        if let Some(part) = self.partition_queue.write().pop_front() {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+            return Some(part);
+        }
+
+        None
     }
 
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
-        let mut partition_queue = self.partition_queue.write();
+        let mut queue_guard = self.partition_queue.write();
 
         for _index in 0..num {
-            match partition_queue.pop_front() {
+            match queue_guard.pop_front() {
                 None => {
                     break;
                 }
@@ -417,6 +429,8 @@ impl TableContext for QueryContext {
                 }
             };
         }
+
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
 
         res
     }
@@ -537,6 +551,10 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_effective_roles().await
+    }
+
     fn get_current_session_id(&self) -> String {
         self.get_current_session().get_id()
     }
@@ -583,12 +601,14 @@ impl TableContext for QueryContext {
         let tz = TzFactory::instance().get_by_name(&tz)?;
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
             rounding_mode,
+            disable_variant_check,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),
@@ -910,6 +930,11 @@ impl TableContext for QueryContext {
         queries_profile
     }
 
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
+        let mut merge_into_join = self.shared.merge_into_join.write();
+        *merge_into_join = join;
+    }
+
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
@@ -927,6 +952,15 @@ impl TableContext for QueryContext {
                     v.get_mut().add_bloom(filter);
                 }
             }
+        }
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let merge_into_join = self.shared.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
+            is_distributed: merge_into_join.is_distributed,
+            target_tbl_idx: merge_into_join.target_tbl_idx,
         }
     }
 

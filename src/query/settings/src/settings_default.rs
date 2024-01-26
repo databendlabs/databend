@@ -25,6 +25,13 @@ use once_cell::sync::OnceCell;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
+// Default value of cost factor settings
+#[allow(dead_code)]
+static COST_FACTOR_COMPUTE_PER_ROW: u64 = 1;
+static COST_FACTOR_HASH_TABLE_PER_ROW: u64 = 10;
+static COST_FACTOR_AGGREGATE_PER_ROW: u64 = 5;
+static COST_FACTOR_NETWORK_PER_ROW: u64 = 50;
+
 // Settings for readability and writability of tags.
 // we will not be able to safely get its value when set to only write.
 // we will not be able to safely set its value when set to only read.
@@ -110,6 +117,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let data_retention_time_in_days_max= Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
@@ -143,12 +151,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("retention_period", DefaultSettingValue {
-                    // unit of retention_period is hour
-                    value: UserSettingValue::UInt64(12),
-                    desc: "Sets the retention period in hours.",
+                ("data_retention_time_in_days", DefaultSettingValue {
+                    // unit of retention_period is day
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Sets the data retention time in days.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
@@ -271,10 +279,10 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("collation", DefaultSettingValue {
-                    value: UserSettingValue::String("binary".to_owned()),
-                    desc: "Sets the character collation. Available values include \"binary\" and \"utf8\".",
+                    value: UserSettingValue::String("utf8".to_owned()),
+                    desc: "Sets the character collation. Available values include \"utf8\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["binary", "utf8"])),
+                    range: Some(SettingRange::String(vec!["utf8"])),
                 }),
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -285,6 +293,12 @@ impl DefaultSettings {
                 ("prefer_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables broadcast join.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("enforce_broadcast_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce broadcast join.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -485,7 +499,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1000),
+                    value: UserSettingValue::UInt64(50),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: None,
@@ -624,6 +638,30 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("disable_variant_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable variant check to allow insert invalid JSON values",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("cost_factor_hash_table_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
+                    desc: "Cost factor of building hash table for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_aggregate_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_AGGREGATE_PER_ROW),
+                    desc: "Cost factor of grouping operation for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_network_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_NETWORK_PER_ROW),
+                    desc: "Cost factor of transmit via network for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+               })
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -640,6 +678,16 @@ impl DefaultSettings {
                 true => 48,
                 false => std::cmp::min(num_cpus, 64),
             },
+        }
+    }
+
+    /// The maximum number of days that data can be retained.
+    /// The max is read from the global config:data_retention_time_in_days_max
+    /// If the global config is not set, the default value is 90 days.
+    fn data_retention_time_in_days_max() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => 90,
+            Some(conf) => conf.query.data_retention_time_in_days_max,
         }
     }
 

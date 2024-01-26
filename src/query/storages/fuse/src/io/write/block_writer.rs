@@ -60,7 +60,7 @@ pub fn serialize_block(
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = schema.to_arrow();
+            let arrow_schema = schema.as_ref().into();
             let leaf_column_ids = schema.to_leaf_column_ids();
 
             let mut default_compress_ratio = Some(2.10f64);
@@ -211,7 +211,7 @@ impl BlockBuilder {
                 .as_ref()
                 .map(|v| v.size)
                 .unwrap_or_default(),
-            compression: self.write_settings.table_compression.try_into()?,
+            compression: self.write_settings.table_compression.into(),
             create_on: Some(Utc::now()),
         };
 

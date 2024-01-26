@@ -43,8 +43,18 @@ message HandshakeResponse {
   bytes payload = 2;
 }
 
+// Request meta-service to export all data in a stream.
+message ExportRequest {
+  // The number of lines of json string contained in a stream item.
+  // Note that too many lines in a stream item may cause "gRPC message too large" error.
+  // The default chunk_size is 32.
+  optional uint64 chunk_size = 10;
+}
+
 // Data chunk for export/import meta data
-message ExportedChunk { repeated string data = 10; }
+message ExportedChunk {
+  repeated string data = 10;
+}
 
 message WatchRequest {
   // key is the key to register for watching.
@@ -238,6 +248,19 @@ service MetaService {
   // The exported data is a list of json strings in form of `(tree_name,
   // sub_tree_prefix, key, value)`.
   rpc Export(Empty) returns (stream ExportedChunk);
+
+  // Export all meta data.
+  //
+  // Including raft hard state, logs and state machine.
+  // The exported data is a list of json strings in form of:
+  // `(tree_name, {"<key_space>":{"key":<key>,"value":<value>}})`.
+  //
+  // ```text
+  // ["raft_log",{"Logs":{"key":83,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":83},"payload":{"Normal":{"txid":null,"time_ms":1667290974891,"cmd":{"UpsertKV":{"key":"__fd_clusters/test_tenant/test_cluster/databend_query/KMZ4VvqDFVExlZFThKDzZ1","seq":{"GE":1},"value":"AsIs","value_meta":{"expire_at":1667291034}}}}}}}}]
+  // ["state_machine/0",{"Nodes":{"key":1,"value":{"name":"1","endpoint":{"addr":"localhost","port":28103},"grpc_api_advertise_address":"0.0.0.0:9191"}}}]
+  // ```
+  rpc ExportV1(ExportRequest) returns (stream ExportedChunk);
+
 
   // Add watch key stream.
   // Whenever the watch key data updated, client will be notified across the

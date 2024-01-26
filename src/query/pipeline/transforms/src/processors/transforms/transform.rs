@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -45,8 +44,6 @@ pub trait Transform: Send {
     fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
-
-    fn record_profile(&self, _: &Profile) {}
 }
 
 pub struct Transformer<T: Transform + 'static> {
@@ -124,10 +121,6 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
         }
 
         Ok(())
-    }
-
-    fn record_profile(&self, profile: &Profile) {
-        self.transform.record_profile(profile)
     }
 }
 

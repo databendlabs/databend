@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 use super::column_stat::ColumnStatSet;
 use crate::plans::ScalarExpr;
@@ -22,7 +24,7 @@ use crate::IndexType;
 pub type ColumnSet = HashSet<IndexType>;
 pub type TableSet = HashSet<IndexType>;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {
     pub distribution: Distribution,
 }
@@ -30,6 +32,12 @@ pub struct RequiredProperty {
 impl RequiredProperty {
     pub fn satisfied_by(&self, physical: &PhysicalProperty) -> bool {
         self.distribution.satisfied_by(&physical.distribution)
+    }
+}
+
+impl Display for RequiredProperty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{ dist: {} }}", self.distribution)
     }
 }
 
@@ -71,12 +79,12 @@ pub struct RelationalProperty {
     pub orderings: Vec<SortItem>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalProperty {
     pub distribution: Distribution,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Distribution {
     Any,
     Random,
@@ -100,14 +108,32 @@ impl Distribution {
             (Distribution::Any, _)
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
-            | (Distribution::Broadcast, Distribution::Broadcast) => true,
+            | (Distribution::Broadcast, Distribution::Broadcast)
+            | (Distribution::Hash(_), Distribution::Broadcast) => true,
 
-            // TODO(leiysky): this is actually broken by https://github.com/datafuselabs/databend/pull/7451
-            // , would be fixed later.
-            // (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => keys
-            //     .iter()
-            //     .all(|key| other_keys.iter().any(|other_key| key == other_key)),
+            (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => {
+                keys == other_keys
+            }
             _ => false,
+        }
+    }
+}
+
+impl Display for Distribution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Distribution::Any => write!(f, "Any"),
+            Distribution::Random => write!(f, "Random"),
+            Distribution::Serial => write!(f, "Serial"),
+            Distribution::Broadcast => write!(f, "Broadcast"),
+            Distribution::Hash(ref keys) => write!(
+                f,
+                "Hash({})",
+                keys.iter()
+                    .map(|s| s.as_raw_expr().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }

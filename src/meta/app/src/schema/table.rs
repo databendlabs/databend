@@ -32,7 +32,6 @@ use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
-use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
@@ -84,6 +83,10 @@ impl TableNameIdent {
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
+    }
+
+    pub fn tenant(&self) -> &str {
+        &self.tenant
     }
 
     pub fn table_name(&self) -> String {
@@ -239,7 +242,6 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
-    pub owner: Option<Ownership>,
 }
 
 impl TableMeta {
@@ -354,7 +356,6 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
-            owner: None,
         }
     }
 }
@@ -786,6 +787,14 @@ impl Display for CountTablesKey {
     }
 }
 
+impl CountTablesKey {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+        }
+    }
+}
+
 /// count tables for a tenant
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CountTablesReq {
@@ -855,28 +864,26 @@ pub struct TruncateTableReq {
 pub struct TruncateTableReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TableCopiedFileLockKey {
-    pub table_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::primitive::Id;
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
+    use crate::schema::LeastVisibleTime;
     use crate::schema::LeastVisibleTimeKey;
-    use crate::schema::TableCopiedFileLockKey;
+    use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
+    use crate::schema::TableIdList;
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
+    use crate::schema::TableMeta;
     use crate::schema::PREFIX_TABLE;
     use crate::schema::PREFIX_TABLE_BY_ID;
     use crate::schema::PREFIX_TABLE_COPIED_FILES;
-    use crate::schema::PREFIX_TABLE_COPIED_FILES_LOCK;
     use crate::schema::PREFIX_TABLE_COUNT;
     use crate::schema::PREFIX_TABLE_ID_LIST;
     use crate::schema::PREFIX_TABLE_ID_TO_NAME;
@@ -885,6 +892,8 @@ mod kvapi_key_impl {
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
         const PREFIX: &'static str = PREFIX_TABLE;
+
+        type ValueType = TableId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -908,6 +917,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for TableIdToName {
         const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
 
+        type ValueType = DBIdTableName;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.table_id)
@@ -928,6 +939,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for TableId {
         const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
+        type ValueType = TableMeta;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.table_id)
@@ -947,6 +960,8 @@ mod kvapi_key_impl {
     /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
     impl kvapi::Key for TableIdListKey {
         const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+
+        type ValueType = TableIdList;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -970,6 +985,8 @@ mod kvapi_key_impl {
     impl kvapi::Key for CountTablesKey {
         const PREFIX: &'static str = PREFIX_TABLE_COUNT;
 
+        type ValueType = Id;
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_raw(&self.tenant)
@@ -989,6 +1006,8 @@ mod kvapi_key_impl {
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
     impl kvapi::Key for TableCopiedFileNameIdent {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+
+        type ValueType = TableCopiedFileInfo;
 
         fn to_string_key(&self) -> String {
             // TODO: file is not escaped!!!
@@ -1010,29 +1029,11 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_table_copied_file_lock/table_id -> ""
-    impl kvapi::Key for TableCopiedFileLockKey {
-        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableCopiedFileLockKey { table_id })
-        }
-    }
-
     /// "__fd_table_lvt/table_id"
     impl kvapi::Key for LeastVisibleTimeKey {
         const PREFIX: &'static str = PREFIX_TABLE_LVT;
+
+        type ValueType = LeastVisibleTime;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

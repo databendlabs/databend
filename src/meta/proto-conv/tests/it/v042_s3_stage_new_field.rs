@@ -49,7 +49,6 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "test".to_string(),
                 region: "test".to_string(),
-                allow_anonymous: true,
                 ..Default::default()
             }),
         },
@@ -69,6 +68,7 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: true,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         number_of_files: 100,

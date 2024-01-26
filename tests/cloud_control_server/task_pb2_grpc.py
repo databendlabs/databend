@@ -49,6 +49,16 @@ class TaskServiceStub(object):
             request_serializer=task__pb2.ShowTaskRunsRequest.SerializeToString,
             response_deserializer=task__pb2.ShowTaskRunsResponse.FromString,
         )
+        self.GetTaskDependents = channel.unary_unary(
+            "/taskproto.TaskService/GetTaskDependents",
+            request_serializer=task__pb2.GetTaskDependentsRequest.SerializeToString,
+            response_deserializer=task__pb2.GetTaskDependentsResponse.FromString,
+        )
+        self.EnableTaskDependents = channel.unary_unary(
+            "/taskproto.TaskService/EnableTaskDependents",
+            request_serializer=task__pb2.EnableTaskDependentsRequest.SerializeToString,
+            response_deserializer=task__pb2.EnableTaskDependentsResponse.FromString,
+        )
 
 
 class TaskServiceServicer(object):
@@ -96,6 +106,18 @@ class TaskServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def GetTaskDependents(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def EnableTaskDependents(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_TaskServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -133,6 +155,16 @@ def add_TaskServiceServicer_to_server(servicer, server):
             servicer.ShowTaskRuns,
             request_deserializer=task__pb2.ShowTaskRunsRequest.FromString,
             response_serializer=task__pb2.ShowTaskRunsResponse.SerializeToString,
+        ),
+        "GetTaskDependents": grpc.unary_unary_rpc_method_handler(
+            servicer.GetTaskDependents,
+            request_deserializer=task__pb2.GetTaskDependentsRequest.FromString,
+            response_serializer=task__pb2.GetTaskDependentsResponse.SerializeToString,
+        ),
+        "EnableTaskDependents": grpc.unary_unary_rpc_method_handler(
+            servicer.EnableTaskDependents,
+            request_deserializer=task__pb2.EnableTaskDependentsRequest.FromString,
+            response_serializer=task__pb2.EnableTaskDependentsResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -338,6 +370,64 @@ class TaskService(object):
             "/taskproto.TaskService/ShowTaskRuns",
             task__pb2.ShowTaskRunsRequest.SerializeToString,
             task__pb2.ShowTaskRunsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
+
+    @staticmethod
+    def GetTaskDependents(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/taskproto.TaskService/GetTaskDependents",
+            task__pb2.GetTaskDependentsRequest.SerializeToString,
+            task__pb2.GetTaskDependentsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
+
+    @staticmethod
+    def EnableTaskDependents(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/taskproto.TaskService/EnableTaskDependents",
+            task__pb2.EnableTaskDependentsRequest.SerializeToString,
+            task__pb2.EnableTaskDependentsResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -56,11 +56,7 @@ fn test_agg_hashtable() {
     let m: usize = 4;
     for n in [100, 1000, 10_000, 100_000] {
         let columns = vec![
-            StringType::from_data(
-                (0..n)
-                    .map(|x| format!("{}", x % m).as_bytes().to_vec())
-                    .collect_vec(),
-            ),
+            StringType::from_data((0..n).map(|x| format!("{}", x % m)).collect_vec()),
             Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()),
             Int32Type::from_data((0..n).map(|x| (x % m) as i32).collect_vec()),
             Int16Type::from_data((0..n).map(|x| (x % m) as i16).collect_vec()),

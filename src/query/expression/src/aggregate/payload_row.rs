@@ -17,16 +17,16 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
 use crate::store;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
-use crate::types::string::StringColumn;
 use crate::types::ArgType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
@@ -293,8 +293,8 @@ pub unsafe fn row_match_column(
     }
 }
 
-unsafe fn row_match_string_column(
-    col: &StringColumn,
+unsafe fn row_match_binary_column(
+    col: &BinaryColumn,
     validity: Option<&Bitmap>,
     address: &[*const u8],
     select_vector: &mut SelectVector,
@@ -321,7 +321,7 @@ unsafe fn row_match_string_column(
                 let address = address[idx].add(col_offset + 4);
                 let len = core::ptr::read::<u32>(len_address as _) as usize;
 
-                let value = StringType::index_column_unchecked(col, idx);
+                let value = BinaryType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
@@ -349,7 +349,7 @@ unsafe fn row_match_string_column(
 
             let len = core::ptr::read::<u32>(len_address as _) as usize;
 
-            let value = StringType::index_column_unchecked(col, idx);
+            let value = BinaryType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {

@@ -125,6 +125,9 @@ pub struct QueryLogElement {
     pub agg_spilled_rows: u64,
     pub group_by_spilled_bytes: u64,
     pub group_by_spilled_rows: u64,
+    pub bytes_from_remote_disk: u64,
+    pub bytes_from_local_disk: u64,
+    pub bytes_from_memory: u64,
 
     // Client.
     pub client_info: String,
@@ -250,6 +253,18 @@ impl SystemLogElement for QueryLogElement {
                 "memory_usage",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
+            TableField::new(
+                "bytes_from_remote_disk",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_from_local_disk",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_from_memory",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
             // Client.
             TableField::new("client_info", TableDataType::String),
             TableField::new("client_address", TableDataType::String),
@@ -280,45 +295,45 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.handler_type.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.handler_type.clone()).as_ref());
         // User.
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.tenant_id.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.tenant_id.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.cluster_id.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.cluster_id.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.node_id.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.node_id.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.sql_user.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.sql_user.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.sql_user_quota.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.sql_user_quota.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.sql_user_privileges.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.sql_user_privileges.clone()).as_ref());
         // Query.
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.query_id.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.query_id.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.query_kind.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.query_kind.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.query_text.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.query_text.clone()).as_ref());
         columns
             .next()
             .unwrap()
@@ -339,23 +354,23 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.current_database.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.current_database.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.databases.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.databases.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.tables.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.tables.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.columns.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.columns.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.projections.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.projections.clone()).as_ref());
         // Stats.
         columns
             .next()
@@ -437,19 +452,35 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::UInt64(self.memory_usage)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_remote_disk)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_local_disk)).as_ref());
+
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.bytes_from_memory)).as_ref());
+
         // Client.
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.client_info.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.client_info.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.client_address.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.client_address.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.user_agent.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.user_agent.clone()).as_ref());
         // Exception.
         columns
             .next()
@@ -458,26 +489,26 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.exception_text.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.exception_text.clone()).as_ref());
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.stack_trace.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.stack_trace.clone()).as_ref());
         // Server.
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.server_version.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.server_version.clone()).as_ref());
         // Session settings
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.session_settings.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.session_settings.clone()).as_ref());
         // Extra.
         columns
             .next()
             .unwrap()
-            .push(Scalar::String(self.extra.as_bytes().to_vec()).as_ref());
+            .push(Scalar::String(self.extra.clone()).as_ref());
         columns
             .next()
             .unwrap()

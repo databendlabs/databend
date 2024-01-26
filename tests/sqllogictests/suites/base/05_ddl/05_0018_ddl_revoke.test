@@ -69,6 +69,23 @@ SHOW GRANTS FOR 'test-priv'
 GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
 
 statement ok
+REVOKE CREATE ON a.* FROM 'test-priv'
+
+statement ok
+REVOKE CREATE ON a.* FROM 'test-priv'
+
+statement error 1061
+REVOKE CREATE ON a.* FROM role 'account_admin'
+
+statement ok
+REVOKE CREATE ON a.* FROM role 'public'
+
+query T
+SHOW GRANTS FOR 'test-priv'
+----
+GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
+
+statement ok
 REVOKE SELECT ON b.* FROM 'test-priv'
 
 statement ok

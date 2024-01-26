@@ -42,17 +42,17 @@ impl SyncSystemTable for CreditsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let names: Vec<Vec<u8>> = env!("DATABEND_CREDITS_NAMES")
+        let names: Vec<String> = env!("DATABEND_CREDITS_NAMES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
-        let versions: Vec<Vec<u8>> = env!("DATABEND_CREDITS_VERSIONS")
+        let versions: Vec<String> = env!("DATABEND_CREDITS_VERSIONS")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
-        let licenses: Vec<Vec<u8>> = env!("DATABEND_CREDITS_LICENSES")
+        let licenses: Vec<String> = env!("DATABEND_CREDITS_LICENSES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
+            .map(|x| x.trim().to_string())
             .collect();
 
         Ok(DataBlock::new_from_columns(vec![

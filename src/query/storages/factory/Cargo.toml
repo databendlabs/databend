@@ -27,4 +27,6 @@ databend-common-storages-view = { path = "../view" }
 
 databend-storages-common-index = { path = "../common/index" }
 
+async-trait = { workspace = true }
 dashmap = { workspace = true }
+tokio = { workspace = true }

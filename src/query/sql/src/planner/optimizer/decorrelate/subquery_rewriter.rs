@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -67,13 +68,15 @@ pub struct FlattenInfo {
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
+    pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
 }
 
 impl SubqueryRewriter {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
         Self {
+            ctx,
             metadata,
             derived_columns: Default::default(),
         }
@@ -339,7 +342,8 @@ impl SubqueryRewriter {
                 } else {
                     column_ref
                 };
-
+                // After finishing rewriting subquery, we should clear the derived columns.
+                self.derived_columns.clear();
                 Ok((scalar, s_expr))
             }
             ScalarExpr::UDFServerCall(udf) => {
@@ -501,6 +505,7 @@ impl SubqueryRewriter {
                             output_column.data_type,
                             Visibility::Visible,
                         )
+                        .table_index(output_column.table_index)
                         .build(),
                     }),
                     &subquery.data_type,

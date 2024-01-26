@@ -39,8 +39,8 @@ impl FuseTableColumnStatisticsProvider {
                     .as_ref()
                     .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
                 let stat = BasicColumnStatistics {
-                    min: Datum::from_scalar(stat.min().clone()),
-                    max: Datum::from_scalar(stat.max().clone()),
+                    min: Datum::from_scalar(stat.min),
+                    max: Datum::from_scalar(stat.max),
                     ndv: Some(ndv),
                     null_count: stat.null_count,
                 };

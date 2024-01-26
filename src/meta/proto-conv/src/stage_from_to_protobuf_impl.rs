@@ -26,6 +26,7 @@ use num::FromPrimitive;
 use crate::reader_check_msg;
 use crate::stage_from_to_protobuf_impl::mt::principal::FileFormatOptionsAst;
 use crate::FromToProto;
+use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
@@ -135,6 +136,7 @@ impl FromToProto for mt::principal::CopyOptions {
             max_file_size,
             disable_variant_check: p.disable_variant_check,
             return_failed_only: p.return_failed_only,
+            detailed_output: false,
         })
     }
 
@@ -197,7 +199,7 @@ impl FromToProto for mt::principal::StageInfo {
         };
         Ok(mt::principal::StageInfo {
             stage_name: p.stage_name.clone(),
-            stage_type: mt::principal::StageType::from_pb(
+            stage_type: mt::principal::StageType::from_pb_enum(
                 FromPrimitive::from_i32(p.stage_type).ok_or_else(|| Incompatible {
                     reason: format!("invalid StageType: {}", p.stage_type),
                 })?,
@@ -232,7 +234,7 @@ impl FromToProto for mt::principal::StageInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             stage_name: self.stage_name.clone(),
-            stage_type: mt::principal::StageType::to_pb(&self.stage_type)? as i32,
+            stage_type: mt::principal::StageType::to_pb_enum(&self.stage_type)? as i32,
             stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)?),
             file_format_params: Some(mt::principal::FileFormatParams::to_pb(
                 &self.file_format_params,
@@ -288,12 +290,9 @@ impl FromToProto for mt::principal::StageFile {
     }
 }
 
-impl FromToProto for mt::principal::StageType {
-    type PB = pb::stage_info::StageType;
-    fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
-    }
-    fn from_pb(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
+impl FromToProtoEnum for mt::principal::StageType {
+    type PBEnum = pb::stage_info::StageType;
+    fn from_pb_enum(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
             pb::stage_info::StageType::LegacyInternal => {
@@ -305,7 +304,7 @@ impl FromToProto for mt::principal::StageType {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::stage_info::StageType, Incompatible> {
+    fn to_pb_enum(&self) -> Result<pb::stage_info::StageType, Incompatible> {
         match *self {
             mt::principal::StageType::LegacyInternal => {
                 Ok(pb::stage_info::StageType::LegacyInternal)

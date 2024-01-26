@@ -1,0 +1,18 @@
+query T
+show grants for role 'role1';
+----
+GRANT SELECT ON 'default'.'default'.* TO ROLE `role1`
+GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `role1`
+
+statement ok
+grant ownership on default.t to role 'role2'
+
+query T
+show grants for role 'role1';
+----
+GRANT SELECT ON 'default'.'default'.* TO ROLE `role1`
+
+query T
+show grants for role 'role2';
+----
+GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `role2`

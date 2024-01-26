@@ -26,8 +26,10 @@ databend-common-meta-types = { path = "../types" }
 databend-common-metrics = { path = "../../common/metrics" }
 databend-common-tracing = { path = "../../common/tracing" }
 
+anyerror = { workspace = true }
 derive_more = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }

@@ -25,8 +25,12 @@ use databend_common_cloud_control::pb::DescribeTaskRequest;
 use databend_common_cloud_control::pb::DescribeTaskResponse;
 use databend_common_cloud_control::pb::DropTaskRequest;
 use databend_common_cloud_control::pb::DropTaskResponse;
+use databend_common_cloud_control::pb::EnableTaskDependentsRequest;
+use databend_common_cloud_control::pb::EnableTaskDependentsResponse;
 use databend_common_cloud_control::pb::ExecuteTaskRequest;
 use databend_common_cloud_control::pb::ExecuteTaskResponse;
+use databend_common_cloud_control::pb::GetTaskDependentsRequest;
+use databend_common_cloud_control::pb::GetTaskDependentsResponse;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
 use databend_common_cloud_control::pb::ShowTaskRunsResponse;
 use databend_common_cloud_control::pb::ShowTasksRequest;
@@ -78,6 +82,7 @@ impl TaskService for MockTaskService {
                 last_suspended_at: None,
                 after: vec![],
                 when_condition: None,
+                session_parameters: Default::default(),
             }),
             error: None,
         }))
@@ -125,6 +130,23 @@ impl TaskService for MockTaskService {
             task_runs: vec![],
             error: None,
         }))
+    }
+
+    async fn get_task_dependents(
+        &self,
+        _request: Request<GetTaskDependentsRequest>,
+    ) -> std::result::Result<Response<GetTaskDependentsResponse>, Status> {
+        Ok(Response::new(GetTaskDependentsResponse {
+            task: vec![],
+            error: None,
+        }))
+    }
+
+    async fn enable_task_dependents(
+        &self,
+        _request: Request<EnableTaskDependentsRequest>,
+    ) -> std::result::Result<Response<EnableTaskDependentsResponse>, Status> {
+        Ok(Response::new(EnableTaskDependentsResponse { error: None }))
     }
 }
 
@@ -175,6 +197,7 @@ async fn test_task_client_success_cases() -> Result<()> {
         if_not_exist: false,
         after: vec![],
         when_condition: None,
+        session_parameters: Default::default(),
     });
 
     let response = client.create_task(request).await?;

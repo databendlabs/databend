@@ -237,12 +237,12 @@ impl Domain {
                 has_true: this.has_true || other.has_true,
             }),
             (Domain::String(this), Domain::String(other)) => Domain::String(StringDomain {
-                min: this.min.as_slice().min(&other.min).to_vec(),
+                min: this.min.as_str().min(&other.min).to_string(),
                 max: this
                     .max
                     .as_ref()
                     .zip(other.max.as_ref())
-                    .map(|(self_max, other_max)| self_max.max(other_max).to_vec()),
+                    .map(|(self_max, other_max)| self_max.max(other_max).to_string()),
             }),
             (Domain::Timestamp(this), Domain::Timestamp(other)) => {
                 Domain::Timestamp(SimpleDomain {
@@ -493,32 +493,59 @@ impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
 
 impl SimpleDomainCmp for StringDomain {
     fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_eq(&d2)
     }
 
     fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_noteq(&d2)
     }
 
     fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_gt(&d2)
     }
 
     fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_gte(&d2)
     }
 
     fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_lt(&d2)
     }
 
     fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        let (d1, d2) = self.unify(other);
+        let (d1, d2) = unify_string(self, other);
         d1.domain_lte(&d2)
     }
+}
+
+pub fn unify_string(
+    lhs: &StringDomain,
+    rhs: &StringDomain,
+) -> (SimpleDomain<String>, SimpleDomain<String>) {
+    let mut max = lhs.min.as_str().max(&rhs.min);
+    if let Some(lhs_max) = &lhs.max {
+        max = max.max(lhs_max);
+    }
+    if let Some(rhs_max) = &rhs.max {
+        max = max.max(rhs_max);
+    }
+
+    let mut max = max.to_string();
+    max.push('\0');
+
+    (
+        SimpleDomain {
+            min: lhs.min.clone(),
+            max: lhs.max.clone().unwrap_or_else(|| max.clone()),
+        },
+        SimpleDomain {
+            min: rhs.min.clone(),
+            max: rhs.max.clone().unwrap_or_else(|| max.clone()),
+        },
+    )
 }

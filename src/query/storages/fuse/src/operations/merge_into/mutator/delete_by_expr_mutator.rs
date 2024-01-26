@@ -32,6 +32,8 @@ pub struct DeleteByExprMutator {
     row_id_idx: usize,
     func_ctx: FunctionContext,
     origin_input_columns: usize,
+    // if use target_build_optimization, we don't need to give row ids to `matched mutator`
+    target_build_optimization: bool,
 }
 
 impl DeleteByExprMutator {
@@ -40,12 +42,14 @@ impl DeleteByExprMutator {
         func_ctx: FunctionContext,
         row_id_idx: usize,
         origin_input_columns: usize,
+        target_build_optimization: bool,
     ) -> Self {
         Self {
             expr,
             row_id_idx,
             func_ctx,
             origin_input_columns,
+            target_build_optimization,
         }
     }
 
@@ -72,16 +76,20 @@ impl DeleteByExprMutator {
     }
 
     pub(crate) fn get_row_id_block(&self, block: DataBlock) -> DataBlock {
-        DataBlock::new(
-            vec![block.get_by_offset(self.row_id_idx).clone()],
-            block.num_rows(),
-        )
+        if self.target_build_optimization {
+            DataBlock::empty()
+        } else {
+            DataBlock::new(
+                vec![block.get_by_offset(self.row_id_idx).clone()],
+                block.num_rows(),
+            )
+        }
     }
 
     fn get_result_block(
         &self,
         predicate: &Value<BooleanType>,
-        predicate_not: &Value<BooleanType>,
+        predicate_not: &Value<BooleanType>, // the rows which can be processed at this time.
         data_block: DataBlock,
     ) -> Result<(DataBlock, DataBlock)> {
         let res_block = data_block.clone().filter_boolean_value(predicate)?;
@@ -121,6 +129,7 @@ impl DeleteByExprMutator {
                     &self.func_ctx,
                     data_block.num_rows(),
                 )?;
+                // the rows can be processed by this time
                 let res: Value<BooleanType> = res.try_downcast().unwrap();
                 let (res_not, _) = get_not(res.clone(), &self.func_ctx, data_block.num_rows())?;
 

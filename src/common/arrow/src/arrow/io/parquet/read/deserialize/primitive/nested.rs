@@ -187,7 +187,6 @@ pub struct NestedIter<T, I, P, F>
 where
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {
@@ -205,7 +204,6 @@ impl<T, I, P, F> NestedIter<T, I, P, F>
 where
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {
@@ -234,7 +232,6 @@ impl<T, I, P, F> Iterator for NestedIter<T, I, P, F>
 where
     I: Pages,
     T: NativeType,
-
     P: ParquetNativeType,
     F: Copy + Fn(P) -> T,
 {

@@ -374,6 +374,105 @@ fn get_test_suites() -> Vec<TestSuite> {
             index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
+        // query: sort-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select to_string(c + 1) as s from t order by s",
+            index: "select c + 1 from t",
+            is_matched: true,
+            index_selection: vec![],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec!["gt(index_col_1 (#1), 1)"],
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-scan
+        TestSuite {
+            query: "select avg(a + 1) from t group by b order by b",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            ..Default::default()
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-scan
+        TestSuite {
+            query: "select sum(a) from t where a > 1 group by b order by b",
+            index: "select a from t",
+            is_matched: false,
+            ..Default::default()
+        },
+        // query: eval-sort-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select a from t where b > 1 order by a",
+            index: "select a, b from t where b > 0",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec!["gt(index_col_1 (#1), 1)"],
+        },
+        // query: eval-sort-agg-scan, index: eval-agg-scan
+        TestSuite {
+            query: "select b, sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-filter-scan
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b order by b",
+            index: "select a, b from t where b > 1",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) from t group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 1 from t group by b order by b",
+            index: "select sum(a), b from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
+        },
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: false,
+            ..Default::default()
+        },
+        // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+        TestSuite {
+            query: "select sum(a) + 1 from t where c > 1 group by b order by b",
+            index: "select b, sum(a) from t where c > 1 group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
+            query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
+            index: "select b, sum(a) from t where b > 0 group by b",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
+        },
     ]
 }
 
@@ -389,7 +488,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {

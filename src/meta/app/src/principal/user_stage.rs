@@ -205,7 +205,7 @@ impl FromStr for StageFileFormatType {
 
 impl ToString for StageFileFormatType {
     fn to_string(&self) -> String {
-        format!("{:?}", *self)
+        format!("{:?}", *self).to_uppercase()
     }
 }
 
@@ -478,10 +478,13 @@ pub struct CopyOptions {
     pub max_files: usize,
     pub split_size: usize,
     pub purge: bool,
-    pub single: bool,
-    pub max_file_size: usize,
     pub disable_variant_check: bool,
     pub return_failed_only: bool,
+
+    // unload only
+    pub max_file_size: usize,
+    pub single: bool,
+    pub detailed_output: bool,
 }
 
 impl CopyOptions {

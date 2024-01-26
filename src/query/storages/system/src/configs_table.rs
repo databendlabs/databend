@@ -134,11 +134,6 @@ impl SyncSystemTable for ConfigsTable {
             storage_config_value,
         );
 
-        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let groups: Vec<Vec<u8>> = groups.iter().map(|x| x.as_bytes().to_vec()).collect();
-        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(groups),
             StringType::from_data(names),

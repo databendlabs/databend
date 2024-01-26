@@ -29,6 +29,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::TableIdent;
@@ -41,48 +42,41 @@ use crate::table::AsyncSystemTable;
 
 pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
-    let mut name: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut name: Vec<String> = Vec::with_capacity(tasks.len());
     let mut id: Vec<u64> = Vec::with_capacity(tasks.len());
-    let mut owner: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
-    let mut status: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
-    let mut after: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut owner: Vec<String> = Vec::with_capacity(tasks.len());
+    let mut comment: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+    let mut warehouse: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+    let mut schedule: Vec<Option<String>> = Vec::with_capacity(tasks.len());
+    let mut status: Vec<String> = Vec::with_capacity(tasks.len());
+    let mut definition: Vec<String> = Vec::with_capacity(tasks.len());
+    let mut condition_text: Vec<String> = Vec::with_capacity(tasks.len());
+    let mut after: Vec<String> = Vec::with_capacity(tasks.len());
     let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
-
+    let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     for task in tasks {
         let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
         created_on.push(tsk.created_at.timestamp_micros());
-        name.push(tsk.task_name.into_bytes());
+        name.push(tsk.task_name);
         id.push(tsk.task_id);
-        owner.push(tsk.owner.into_bytes());
-        comment.push(tsk.comment.map(|s| s.into_bytes()));
-        warehouse.push(
-            tsk.warehouse_options
-                .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
-        );
-        schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
-        status.push(tsk.status.to_string().into_bytes());
-        definition.push(tsk.query_text.into_bytes());
-        condition_text.push(tsk.condition_text.into_bytes());
+        owner.push(tsk.owner);
+        comment.push(tsk.comment);
+        warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse));
+        schedule.push(tsk.schedule_options);
+        status.push(tsk.status.to_string());
+        definition.push(tsk.query_text);
+        condition_text.push(tsk.condition_text);
         // join by comma
-        after.push(
-            tsk.after
-                .into_iter()
-                .collect::<Vec<_>>()
-                .join(",")
-                .into_bytes(),
-        );
+        after.push(tsk.after.into_iter().collect::<Vec<_>>().join(","));
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
+        let serialized_params = serde_json::to_vec(&tsk.session_params).unwrap();
+        session_params.push(Some(serialized_params));
     }
 
     Ok(DataBlock::new_from_columns(vec![
@@ -101,6 +95,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),
         TimestampType::from_opt_data(last_suspended_on),
+        VariantType::from_opt_data(session_params),
     ]))
 }
 

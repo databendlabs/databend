@@ -24,7 +24,6 @@ mod meta;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
-pub use meta::read_metas_in_parallel;
 pub use meta::read_metas_in_parallel_for_copy;
 pub use meta::read_parquet_metas_batch;
 pub use parquet_reader::InMemoryRowGroup;

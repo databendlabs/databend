@@ -51,16 +51,19 @@ impl SyncSystemTable for BacktraceTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let local_node = ctx.get_cluster().local_id.clone().into_bytes();
+        let local_node = ctx.get_cluster().local_id.clone();
         let (tasks, polling_tasks) = get_all_tasks(false);
         let tasks_size = tasks.len() + polling_tasks.len();
 
-        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
-        let mut queries_id: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
-        let mut queries_status: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
-        let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
+        let mut nodes: Vec<String> = Vec::with_capacity(tasks_size);
+        let mut queries_id: Vec<String> = Vec::with_capacity(tasks_size);
+        let mut queries_status: Vec<String> = Vec::with_capacity(tasks_size);
+        let mut stacks: Vec<String> = Vec::with_capacity(tasks_size);
 
-        for (status, mut tasks) in [("PENDING", tasks), ("RUNNING", polling_tasks)] {
+        for (status, mut tasks) in [
+            ("PENDING".to_string(), tasks),
+            ("RUNNING".to_string(), polling_tasks),
+        ] {
             tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
 
             for item in tasks.into_iter().rev() {
@@ -102,9 +105,9 @@ impl SyncSystemTable for BacktraceTable {
                 }
 
                 nodes.push(local_node.clone());
-                stacks.push(stack_frames.into_bytes());
-                queries_id.push(query_id.into_bytes());
-                queries_status.push(status.as_bytes().to_vec());
+                stacks.push(stack_frames);
+                queries_id.push(query_id);
+                queries_status.push(status.clone());
             }
         }
 

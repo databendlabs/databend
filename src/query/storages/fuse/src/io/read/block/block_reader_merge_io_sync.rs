@@ -39,7 +39,7 @@ impl BlockReader {
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
-        raw_ranges: Vec<(ColumnId, Range<u64>)>,
+        raw_ranges: &[(ColumnId, Range<u64>)],
     ) -> Result<MergeIOReadResult> {
         let path = location.to_string();
 
@@ -78,7 +78,7 @@ impl BlockReader {
             table_data_cache,
         );
 
-        for (raw_idx, raw_range) in &raw_ranges {
+        for (raw_idx, raw_range) in raw_ranges {
             let column_id = *raw_idx as ColumnId;
             let column_range = raw_range.start..raw_range.end;
 
@@ -129,8 +129,11 @@ impl BlockReader {
         }
 
         let mut merge_io_result =
-            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, ranges)?;
+            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, &ranges)?;
         merge_io_result.cached_column_array = cached_column_array;
+
+        self.report_cache_metrics(&merge_io_result, ranges.iter().map(|(_, r)| r));
+
         Ok(merge_io_result)
     }
 

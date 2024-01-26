@@ -34,7 +34,23 @@ impl Binder {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         // rewrite show functions to select * from system.functions ...
         let query = format!(
-            "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name {}",
+            "SELECT name, is_aggregate, description FROM system.functions {} ORDER BY name {}",
+            show_limit, limit_str,
+        );
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_user_functions(
+        &mut self,
+        bind_context: &mut BindContext,
+        show_options: &Option<ShowOptions>,
+    ) -> Result<Plan> {
+        let (show_limit, limit_str) = get_show_options(show_options, None);
+        // rewrite show user functions to select * from system.user_functions ...
+        let query = format!(
+            "SELECT name, is_aggregate, description, arguments, language FROM system.user_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)

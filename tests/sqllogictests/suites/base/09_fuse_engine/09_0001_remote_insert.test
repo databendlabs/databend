@@ -109,7 +109,7 @@ SELECT segment_count, block_count, row_count from FUSE_SNAPSHOT('db1', 't4') lim
 3 3 300
 
 statement ok
-SET auto_compaction_imperfect_blocks_threshold = 1000;
+SET auto_compaction_imperfect_blocks_threshold = 50;
 
 statement ok
 DROP TABLE t1

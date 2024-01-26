@@ -17,10 +17,11 @@ use ethnum::i256;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -168,10 +169,10 @@ impl Payload {
             },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
-            DataType::Binary => Column::Binary(self.flush_string_column(col_offset, state)),
+            DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
-            DataType::Bitmap => Column::Bitmap(self.flush_string_column(col_offset, state)),
-            DataType::Variant => Column::Variant(self.flush_string_column(col_offset, state)),
+            DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
+            DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),
             DataType::Array(_) => todo!(),
             DataType::Map(_) => todo!(),
@@ -206,13 +207,13 @@ impl Payload {
         T::upcast_column(col)
     }
 
-    fn flush_string_column(
+    fn flush_binary_column(
         &self,
         col_offset: usize,
         state: &mut PayloadFlushState,
-    ) -> StringColumn {
+    ) -> BinaryColumn {
         let len = state.probe_state.row_count;
-        let mut string_builder = StringColumnBuilder::with_capacity(len, len * 4);
+        let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
 
         unsafe {
             for idx in 0..len {
@@ -224,10 +225,18 @@ impl Payload {
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
-                string_builder.put_slice(scalar);
-                string_builder.commit_row();
+                binary_builder.put_slice(scalar);
+                binary_builder.commit_row();
             }
         }
-        string_builder.build()
+        binary_builder.build()
+    }
+
+    fn flush_string_column(
+        &self,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+    ) -> StringColumn {
+        unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
     }
 }

@@ -59,7 +59,7 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
             let block_1 = block.clone().filter_boolean_value(&filter)?;
 
             // 3.2 Execute the filter expr by `FilterExecutor`.
-            let (select_expr, has_or) = build_select_expr(&expr);
+            let (select_expr, has_or) = build_select_expr(&expr).into();
             let mut filter_executor = FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),

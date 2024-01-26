@@ -122,11 +122,11 @@ impl<'a> ClusteringInformation<'a> {
                                 constant_block_count += 1;
                             }
                             points_map
-                                .entry(cluster_stats.min())
+                                .entry(cluster_stats.min().clone())
                                 .and_modify(|v| v.0.push(index))
                                 .or_insert((vec![index], vec![]));
                             points_map
-                                .entry(cluster_stats.max())
+                                .entry(cluster_stats.max().clone())
                                 .and_modify(|v| v.1.push(index))
                                 .or_insert((vec![], vec![index]));
                             index += 1;
@@ -218,7 +218,7 @@ impl<'a> ClusteringInformation<'a> {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(cluster_key.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(cluster_key.clone())),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

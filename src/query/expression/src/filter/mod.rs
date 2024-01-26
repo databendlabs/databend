@@ -15,6 +15,7 @@
 mod filter_executor;
 mod select;
 mod select_expr;
+mod select_expr_permutation;
 mod select_op;
 mod select_value;
 mod selector;

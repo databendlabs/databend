@@ -29,6 +29,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -213,6 +215,19 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                         metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
                                         metrics_inc_aggregate_spill_read_milliseconds(
                                             instant.elapsed().as_millis() as u64,
+                                        );
+
+                                        Profile::record_usize_profile(
+                                            ProfileStatisticsName::SpillReadCount,
+                                            1,
+                                        );
+                                        Profile::record_usize_profile(
+                                            ProfileStatisticsName::SpillReadBytes,
+                                            data.len(),
+                                        );
+                                        Profile::record_usize_profile(
+                                            ProfileStatisticsName::SpillReadTime,
+                                            instant.elapsed().as_millis() as usize,
                                         );
                                     }
 

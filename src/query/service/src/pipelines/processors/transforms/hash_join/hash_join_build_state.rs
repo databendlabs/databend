@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnVec;
@@ -40,15 +41,16 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
-use databend_common_expression::HashMethodSingleString;
+use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringHashJoinHashMap;
 use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
@@ -69,7 +71,7 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
-use crate::pipelines::processors::transforms::hash_join::SingleStringHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -141,7 +143,7 @@ impl HashJoinBuildState {
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
-        if hash_join_state.hash_join_desc.join_type == JoinType::Inner
+        if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type)
             && ctx.get_settings().get_join_spilling_threshold()? == 0
         {
             let is_cluster = !ctx.get_cluster().is_empty();
@@ -156,6 +158,7 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
+
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
@@ -181,13 +184,16 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
+
         let input_rows = input.num_rows();
-        buffer.push(input);
         let old_size = self
             .hash_join_state
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
+
+        self.merge_into_try_build_block_info_index(input.clone(), old_size);
+        buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
             return Ok(());
@@ -211,7 +217,7 @@ impl HashJoinBuildState {
             vec![]
         };
 
-        let block_mark_scan_map = if self.hash_join_state.need_outer_scan() {
+        let block_mark_scan_map = if self.hash_join_state.need_mark_scan() {
             vec![MARKER_KIND_FALSE; data_block.num_rows()]
         } else {
             vec![]
@@ -227,8 +233,11 @@ impl HashJoinBuildState {
             if self.hash_join_state.need_mark_scan() {
                 build_state.mark_scan_map.push(block_mark_scan_map);
             }
+
             build_state.generation_state.build_num_rows += data_block.num_rows();
             build_state.generation_state.chunks.push(data_block);
+
+            self.merge_into_try_add_chunk_offset(build_state);
         }
         Ok(())
     }
@@ -322,16 +331,16 @@ impl HashJoinBuildState {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
+                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSerializer::default(),
                     })
                 }
-                HashMethodKind::SingleString(_) => {
+                HashMethodKind::SingleBinary(_) => {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
-                    HashJoinHashTable::SingleString(SingleStringHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSingleString::default(),
+                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
+                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        hash_method: HashMethodSingleBinary::default(),
                     })
                 }
                 HashMethodKind::KeysU8(hash_method) => {
@@ -386,6 +395,7 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
+            self.merge_into_try_generate_matched_memory();
         }
         Ok(())
     }
@@ -477,16 +487,17 @@ impl HashJoinBuildState {
             }};
         }
 
-        macro_rules! insert_string_key {
+        macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
                 let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::String(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::String(col) ) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
-                    // must return `Column::String` | `Column::Variant` | `Column::Bitmap`.
+                    // must return `Column::Binary` | `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
                 };
                 let valid_num = match &$valids {
@@ -688,10 +699,10 @@ impl HashJoinBuildState {
         }
 
         match hashtable {
-            HashJoinHashTable::Serializer(table) => insert_string_key! {
+            HashJoinHashTable::Serializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
-            HashJoinHashTable::SingleString(table) => insert_string_key! {
+            HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {
@@ -799,10 +810,12 @@ impl HashJoinBuildState {
             .iter()
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
         {
-            if !build_key.data_type().remove_nullable().is_numeric() {
+            if !build_key.data_type().remove_nullable().is_numeric()
+                && !build_key.data_type().remove_nullable().is_string()
+            {
                 return Ok(());
             }
-            if let Expr::ColumnRef { id, .. } = probe_key {
+            if let Some(Expr::ColumnRef { id, .. }) = probe_key {
                 let mut columns = Vec::with_capacity(data_blocks.len());
                 for block in data_blocks.iter() {
                     if block.num_columns() == 0 {
@@ -855,8 +868,10 @@ impl HashJoinBuildState {
             if let Some(distinct_build_column) =
                 dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
             {
-                if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
-                    runtime_filter.add_inlist(filter);
+                if let Some(probe_key) = probe_key {
+                    if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
+                        runtime_filter.add_inlist(filter);
+                    }
                 }
             }
         }
@@ -875,8 +890,11 @@ impl HashJoinBuildState {
             .build_keys
             .iter()
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
+            .filter_map(|(b, p)| p.as_ref().map(|p| (b, p)))
         {
-            if !build_key.data_type().remove_nullable().is_numeric() {
+            if !build_key.data_type().remove_nullable().is_numeric()
+                && !build_key.data_type().remove_nullable().is_string()
+            {
                 return Ok(());
             }
             if let Expr::ColumnRef { .. } = probe_key {
@@ -895,51 +913,69 @@ impl HashJoinBuildState {
                     return Ok(());
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
+                if build_key_column.len() == 0 {
+                    return Ok(());
+                }
                 // Generate min max filter using build column
                 let min_max = build_key_column.remove_nullable().domain();
                 let min_max_filter = match min_max {
                     Domain::Number(domain) => match domain {
                         NumberDomain::UInt8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::UInt64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int8(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int16(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Int64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float32(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                         NumberDomain::Float64(simple_domain) => {
-                            let (min, max) = (simple_domain.min, simple_domain.max);
+                            let min = Scalar::Number(NumberScalar::from(simple_domain.min));
+                            let max = Scalar::Number(NumberScalar::from(simple_domain.max));
                             min_max_filter(min, max, probe_key)?
                         }
                     },
+                    Domain::String(domain) => {
+                        let min = Scalar::String(domain.min);
+                        let max = Scalar::String(domain.max.unwrap());
+                        min_max_filter(min, max, probe_key)?
+                    }
                     _ => unreachable!(),
                 };
                 if let Some(min_max_filter) = min_max_filter {
@@ -949,4 +985,15 @@ impl HashJoinBuildState {
         }
         Ok(())
     }
+}
+
+pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
+    matches!(
+        join_type,
+        JoinType::Inner
+            | JoinType::Right
+            | JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::LeftMark
+    )
 }

@@ -19,7 +19,6 @@ package databend_proto;
 import "config.proto";
 import "user.proto";
 import "metadata.proto";
-import "owner.proto";
 
 message DbIdTableName {
   uint64 ver = 100;
@@ -116,7 +115,9 @@ message TableMeta {
 
   map<string, string> column_mask_policy = 29;
 
-  optional Ownership owner = 30;
+  // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
+  // optional Ownership owner = 30;
+  reserved 30;
 }
 
 // Save table name id list history.

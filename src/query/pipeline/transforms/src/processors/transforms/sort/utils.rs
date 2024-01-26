@@ -42,17 +42,23 @@ fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> Data
         let order_by_field = schema.field(desc[0].offset);
         if matches!(
             order_by_field.data_type(),
-            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::Binary
+                | DataType::String
         ) {
             return order_by_field.data_type().clone();
         }
     }
-    DataType::String
+    DataType::Binary
 }
 
 #[inline(always)]
 pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
-    if let Some(f) = schema.fields.last() && f.name() == ORDER_COL_NAME {
+    if let Some(f) = schema.fields.last()
+        && f.name() == ORDER_COL_NAME
+    {
         schema
     } else {
         let mut fields = schema.fields().clone();

@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,6 +32,7 @@ use crate::principal::StageFileFormatType;
 const OPT_FIELD_DELIMITER: &str = "field_delimiter";
 const OPT_RECORDE_DELIMITER: &str = "record_delimiter";
 const OPT_SKIP_HEADER: &str = "skip_header";
+const OPT_OUTPUT_HEADER: &str = "output_header";
 const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
@@ -40,6 +42,7 @@ const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
+const OPT_BINARY_FORMAT: &str = "binary_format";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -62,16 +65,19 @@ impl FileFormatOptionsAst {
     }
 
     fn take_type(&mut self) -> Result<StageFileFormatType> {
-        let typ = match self.options.remove("type") {
-            Some(t) => t,
-            None => self.options.remove("format").ok_or_else(|| {
-                ErrorCode::IllegalFileFormat(format!(
-                    "Missing type in file format options: {:?}",
-                    self.options
-                ))
-            })?,
-        };
-        StageFileFormatType::from_str(&typ).map_err(ErrorCode::IllegalFileFormat)
+        match (self.options.remove("type"), self.options.remove("format")) {
+            (Some(t), None) | (None, Some(t)) => {
+                StageFileFormatType::from_str(&t).map_err(ErrorCode::IllegalFileFormat)
+            }
+            (Some(_), Some(_)) => Err(ErrorCode::IllegalFileFormat(
+                "Invalid FILE_FORMAT options: both TYPE and FORMAT option are present. \
+                Please only use the TYPE to specify the file format type. The FORMAT option is deprecated.",
+            )),
+            (None, None) => Err(ErrorCode::IllegalFileFormat(
+                "Invalid FILE_FORMAT options: FILE_FORMAT must include at least one of the TYPE or NAME option. \
+                Currently, neither is specified.",
+            )),
+        }
     }
 
     fn take_compression(&mut self) -> Result<StageFileCompression> {
@@ -92,7 +98,7 @@ impl FileFormatOptionsAst {
         match self.options.remove(key) {
             Some(v) => Ok(bool::from_str(&v.to_lowercase()).map_err(|_| {
                 ErrorCode::IllegalFileFormat(format!(
-                    "Invalid boolean value {} for option {}",
+                    "Invalid boolean value {} for option {}.",
                     v, key
                 ))
             })?),
@@ -207,10 +213,17 @@ impl FileFormatParams {
                     .map(|s| EmptyFieldAs::from_str(&s))
                     .transpose()?
                     .unwrap_or_default();
+                let binary_format = ast
+                    .options
+                    .remove(OPT_BINARY_FORMAT)
+                    .map(|s| BinaryFormat::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
                 let error_on_column_count_mismatch = ast.take_bool(
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
+                let output_header = ast.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
@@ -222,6 +235,8 @@ impl FileFormatParams {
                     quote,
                     error_on_column_count_mismatch,
                     empty_field_as,
+                    binary_format,
+                    output_header,
                 })
             }
             StageFileFormatType::Tsv => {
@@ -253,36 +268,54 @@ impl FileFormatParams {
         if old {
             Ok(params)
         } else {
-            params.check()?;
+            params.check().map_err(|msg| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid {} option value: {msg}",
+                    params.get_type().to_string()
+                ))
+            })?;
             if ast.options.is_empty() {
                 Ok(params)
             } else {
                 Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported options for {:?} {:?}",
+                    "Unsupported options for {:?}:  {:?}",
                     typ, ast.options
                 )))
             }
         }
     }
 
-    pub fn check(&self) -> Result<()> {
+    pub fn check(&self) -> std::result::Result<(), String> {
+        macro_rules! check_option {
+            ($params:expr, $option_name:ident) => {{
+                let v = &$params.$option_name;
+                paste! { let check_fn  = [<check_$option_name>]; }
+                check_fn(v).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{v}'. {msg}",
+                        stringify!($option_name).to_ascii_uppercase(),
+                    )
+                })
+            }};
+        }
+
         match self {
             FileFormatParams::Tsv(p) => {
-                check_str_len(&p.field_delimiter, 1, 1, "TSV", "field_delimiter")?;
-                check_str_len(&p.quote, 1, 1, "TSV", "quote")?;
-                check_str_len(&p.escape, 1, 1, "TSV", "escape")?;
-                check_nan_display(&p.nan_display)?;
-                check_record_delimiter(&p.record_delimiter)?;
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
             }
             FileFormatParams::Csv(p) => {
-                check_str_len(&p.field_delimiter, 1, 1, "CSV", "field_delimiter")?;
-                check_str_len(&p.quote, 1, 1, "CSV", "quote")?;
-                check_str_len(&p.escape, 0, 1, "CSV", "escape")?;
-                check_nan_display(&p.nan_display)?;
-                check_record_delimiter(&p.record_delimiter)?;
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
             }
             FileFormatParams::Xml(p) => {
-                check_str_len(&p.row_tag, 1, 1014, "XML", "row_tag")?;
+                check_option!(p, row_tag)?;
             }
             _ => {}
         }
@@ -309,14 +342,22 @@ impl TryFrom<FileFormatOptionsAst> for FileFormatParams {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CsvFileFormatParams {
     pub compression: StageFileCompression,
-    pub headers: u64,
+
+    // basic
     pub field_delimiter: String,
     pub record_delimiter: String,
-    pub null_display: String,
-    pub nan_display: String,
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+
+    // header
+    pub headers: u64,
+    pub output_header: bool,
+
+    // field
+    pub binary_format: BinaryFormat,
+    pub null_display: String,
+    pub nan_display: String,
     pub empty_field_as: EmptyFieldAs,
 }
 
@@ -333,6 +374,8 @@ impl Default for CsvFileFormatParams {
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
             empty_field_as: Default::default(),
+            output_header: false,
+            binary_format: Default::default(),
         }
     }
 }
@@ -414,17 +457,16 @@ pub enum NullAs {
     Error,
     /// only valid for nullable column
     Null,
-    /// defined when creating table
+    /// defined when creating table, fallback to type default if no schema there
     FieldDefault,
-    TypeDefault,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EmptyFieldAs {
     #[default]
-    FieldDefault,
     Null,
     String,
+    FieldDefault,
 }
 
 impl FromStr for EmptyFieldAs {
@@ -436,7 +478,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "invalid value ({s}) for empty_field_as, available values field_default|null|string."
+                "Invalid option value. EMPTY_FILED_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
@@ -445,9 +487,9 @@ impl FromStr for EmptyFieldAs {
 impl Display for EmptyFieldAs {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FieldDefault => write!(f, "field_default"),
-            Self::Null => write!(f, "null"),
-            Self::String => write!(f, "string"),
+            Self::FieldDefault => write!(f, "FILED_DEFAULT"),
+            Self::Null => write!(f, "NULL"),
+            Self::String => write!(f, "STRING"),
         }
     }
 }
@@ -456,7 +498,8 @@ impl NullAs {
     fn parse(s: Option<&str>, option_name: &str, default: Self) -> Result<Self> {
         match s {
             Some(v) => v.parse::<NullAs>().map_err(|_| {
-                ErrorCode::InvalidArgument(format!("invalid value ({v}) for {option_name}"))
+                let msg = format!("Invalid option value: {option_name} is set to {v}. The valid values are ERROR | NULL | FIELD_DEFAULT.");
+                ErrorCode::InvalidArgument(msg)
             }),
             None => Ok(default),
         }
@@ -471,7 +514,6 @@ impl FromStr for NullAs {
             "error" => Ok(NullAs::Error),
             "null" => Ok(NullAs::Null),
             "field_default" => Ok(NullAs::FieldDefault),
-            "type_default" => Ok(NullAs::TypeDefault),
             _ => Err(()),
         }
     }
@@ -480,10 +522,39 @@ impl FromStr for NullAs {
 impl Display for NullAs {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NullAs::Error => write!(f, "error"),
-            NullAs::Null => write!(f, "null"),
-            NullAs::FieldDefault => write!(f, "field_default"),
-            NullAs::TypeDefault => write!(f, "type_default"),
+            NullAs::Error => write!(f, "ERROR"),
+            NullAs::Null => write!(f, "NULL"),
+            NullAs::FieldDefault => write!(f, "FIELD_DEFAULT"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum BinaryFormat {
+    #[default]
+    Hex,
+    Base64,
+}
+
+impl FromStr for BinaryFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "hex" => Ok(Self::Hex),
+            "base64" => Ok(Self::Base64),
+            _ => Err(ErrorCode::InvalidArgument(format!(
+                "Invalid option value: BINARY_FORMAT is set to {s}. The valid values are HEX | BASE64."
+            ))),
+        }
+    }
+}
+
+impl Display for BinaryFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Hex => write!(f, "hex"),
+            Self::Base64 => write!(f, "base64"),
         }
     }
 }
@@ -524,10 +595,10 @@ impl NdJsonFileFormatParams {
         null_field_as: Option<&str>,
     ) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::FieldDefault)?;
+        let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::Null)?;
         if matches!(null_field_as, NullAs::Error) {
             return Err(ErrorCode::InvalidArgument(
-                "NULL_FIELD_AS cannot be `error`",
+                "Invalid option value: NULL_FIELD_AS is set to ERROR. The valid values are NULL | FIELD_DEFAULT.",
             ));
         }
         Ok(Self {
@@ -565,11 +636,6 @@ pub struct ParquetFileFormatParams {
 impl ParquetFileFormatParams {
     pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        if !matches!(missing_field_as, NullAs::Error | NullAs::FieldDefault) {
-            return Err(ErrorCode::InvalidArgument(
-                "MISSING_FIELD_AS for parquet only accept ERROR|FIELD_DEFAULT for now",
-            ));
-        };
         Ok(Self { missing_field_as })
     }
 }
@@ -580,93 +646,116 @@ impl Display for FileFormatParams {
             FileFormatParams::Csv(params) => {
                 write!(
                     f,
-                    "TYPE = CSV COMPRESSION = {:?} HEADERS= {} FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' NAN_DISPLAY = '{}' ESCAPE = '{}' QUOTE = '{}'",
+                    "TYPE = CSV COMPRESSION = {:?} \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
+                     SKIP_HEADER= {} OUTPUT_HEADER= {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}'  EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
-                    params.headers,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
-                    escape_string(&params.nan_display),
+                    escape_string(&params.quote),
                     escape_string(&params.escape),
-                    escape_string(&params.quote)
+                    params.headers,
+                    params.output_header,
+                    escape_string(&params.null_display),
+                    escape_string(&params.nan_display),
+                    params.empty_field_as,
+                    params.binary_format,
+                    params.error_on_column_count_mismatch,
                 )
             }
             FileFormatParams::Tsv(params) => {
                 write!(
                     f,
-                    "TYPE = TSV COMPRESSION = {:?} HEADERS= {} FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' NAN_DISPLAY = '{}' ESCAPE = '{}' QUOTE = '{}'",
+                    "TYPE = TSV COMPRESSION = {:?} \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}'  QUOTE = '{}' \
+                     SKIP_HEADER = {} \
+                     NAN_DISPLAY = '{}'",
                     params.compression,
-                    params.headers,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
-                    escape_string(&params.nan_display),
                     escape_string(&params.escape),
-                    escape_string(&params.quote)
+                    escape_string(&params.quote),
+                    params.headers,
+                    escape_string(&params.nan_display),
                 )
             }
             FileFormatParams::Xml(params) => {
                 write!(
                     f,
-                    "TYPE = XML, COMPRESSION = {:?}, ROW_TAG = '{}'",
+                    "TYPE = XML COMPRESSION = {:?} ROW_TAG = '{}'",
                     params.compression, params.row_tag
                 )
             }
             FileFormatParams::Json(params) => {
-                write!(f, "TYPE = JSON, COMPRESSION = {:?}", params.compression)
+                write!(f, "TYPE = JSON COMPRESSION = {:?}", params.compression)
             }
             FileFormatParams::NdJson(params) => {
-                write!(f, "TYPE = NDJSON, COMPRESSION = {:?}", params.compression)
+                write!(
+                    f,
+                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AA = {}",
+                    params.compression, params.missing_field_as, params.null_field_as
+                )
             }
-            FileFormatParams::Parquet(_) => {
-                write!(f, "TYPE = PARQUET")
+            FileFormatParams::Parquet(params) => {
+                write!(
+                    f,
+                    "TYPE = PARQUET MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }
 }
 
-pub fn check_str_len(
-    option: &str,
-    min: usize,
-    max: usize,
-    fmt_name: &str,
-    option_name: &str,
-) -> Result<()> {
+pub fn check_row_tag(option: &str) -> std::result::Result<(), String> {
     let len = option.as_bytes().len();
-    if len < min || len > max {
-        Err(ErrorCode::InvalidArgument(format!(
-            "len of option {option_name} for {fmt_name} must in [{min}, {max}], got {option}"
-        )))
+    let (max, min) = (1024, 1);
+    if len > max || len < min {
+        Err("Expecting a non-empty string containing at most 1024 characters.".to_string())
     } else {
         Ok(())
+    }
+}
+
+pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
+    if option.len() == 1 && (!option.as_bytes()[0].is_ascii_alphanumeric()) {
+        Ok(())
+    } else {
+        Err("Expecting a single one-byte, non-alphanumeric character.".into())
     }
 }
 
 /// `\r\n` or u8
-pub fn check_record_delimiter(option: &str) -> Result<()> {
-    match option.len() {
-        1 => {}
-        2 => {
-            if option != "\r\n" {
-                return Err(ErrorCode::InvalidArgument(
-                    "record_delimiter with two chars can only be '\\r\\n'",
-                ));
-            };
-        }
-        _ => {
-            return Err(ErrorCode::InvalidArgument(
-                "record_delimiter must be one char or '\\r\\n'",
-            ));
-        }
+pub fn check_record_delimiter(option: &str) -> std::result::Result<(), String> {
+    if (option.len() == 1 && (!option.as_bytes()[0].is_ascii_alphanumeric())) || option == "\r\n" {
+        Ok(())
+    } else {
+        Err("Expecting a single one-byte, non-alphanumeric character or '\\r\\n'.".into())
     }
-    Ok(())
 }
 
-fn check_nan_display(nan_display: &str) -> Result<()> {
-    let lower = nan_display.to_lowercase();
-    if lower != "nan" && lower != "null" {
-        Err(ErrorCode::InvalidArgument(
-            "nan_display must be literal `nan` or `null` (case-insensitive)",
-        ))
-    } else {
-        Ok(())
+fn check_nan_display(nan_display: &str) -> std::result::Result<(), String> {
+    check_choices(nan_display, &["nan", "NaN", "null", "NULL"])
+}
+
+pub fn check_quote(option: &str) -> std::result::Result<(), String> {
+    check_choices(option, &["\'", "\"", "`"])
+}
+
+pub fn check_escape(option: &str) -> std::result::Result<(), String> {
+    check_choices(option, &["\\", ""])
+}
+
+pub fn check_choices(v: &str, choices: &[&str]) -> std::result::Result<(), String> {
+    if !choices.contains(&v) {
+        let choices = choices
+            .iter()
+            .map(|s| format!("'{}'", escape_string(s)))
+            .collect::<Vec<_>>();
+        let choices = choices.join(", ");
+        return Err(format!("The valid values are {choices}."));
     }
+    Ok(())
 }

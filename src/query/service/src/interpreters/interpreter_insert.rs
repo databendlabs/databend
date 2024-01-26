@@ -230,12 +230,9 @@ impl Interpreter for InsertInterpreter {
                     }
                 };
 
-                let mut build_res = build_query_pipeline_without_render_result_set(
-                    &self.ctx,
-                    &insert_select_plan,
-                    false,
-                )
-                .await?;
+                let mut build_res =
+                    build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
+                        .await?;
 
                 table.commit_insertion(
                     self.ctx.clone(),

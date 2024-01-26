@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
@@ -211,6 +212,9 @@ pub struct QueryConfig {
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
 
+    /// Max data retention time in days.
+    pub data_retention_time_in_days_max: u64,
+
     /// (azure) openai
     pub openai_api_key: String,
     pub openai_api_version: String,
@@ -223,6 +227,8 @@ pub struct QueryConfig {
     pub udf_server_allow_list: Vec<String>,
 
     pub cloud_control_grpc_server_address: Option<String>,
+
+    pub settings: HashMap<String, UserSettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -290,6 +296,8 @@ impl Default for QueryConfig {
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
             cloud_control_grpc_server_address: None,
+            data_retention_time_in_days_max: 90,
+            settings: HashMap::new(),
         }
     }
 }

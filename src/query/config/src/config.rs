@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
@@ -715,14 +716,6 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-external-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
-
-    #[clap(
-        long = "storage-s3-allow-anonymous",
-        value_name = "VALUE",
-        default_value_t
-    )]
-    #[serde(rename = "allow_anonymous")]
-    pub s3_allow_anonymous: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -747,7 +740,6 @@ impl Debug for S3StorageConfig {
                 &mask_string(&self.secret_access_key, 3),
             )
             .field("master_key", &mask_string(&self.master_key, 3))
-            .field("allow_anonymous", &self.s3_allow_anonymous)
             .finish()
     }
 }
@@ -766,7 +758,6 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: inner.enable_virtual_host_style,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
-            s3_allow_anonymous: inner.allow_anonymous,
         }
     }
 }
@@ -788,7 +779,6 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
-            allow_anonymous: self.s3_allow_anonymous,
         })
     }
 }
@@ -1314,6 +1304,66 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SettingValue {
+    UInt64(u64),
+    String(String),
+}
+
+impl Serialize for SettingValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        match self {
+            SettingValue::UInt64(v) => serializer.serialize_u64(*v),
+            SettingValue::String(v) => serializer.serialize_str(v),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SettingValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        deserializer.deserialize_any(SettingVisitor)
+    }
+}
+
+impl From<SettingValue> for UserSettingValue {
+    fn from(v: SettingValue) -> Self {
+        match v {
+            SettingValue::UInt64(v) => UserSettingValue::UInt64(v),
+            SettingValue::String(v) => UserSettingValue::String(v),
+        }
+    }
+}
+
+struct SettingVisitor;
+
+impl<'de> serde::de::Visitor<'de> for SettingVisitor {
+    type Value = SettingValue;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "integer or string")
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        Ok(SettingValue::UInt64(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        if value < 0 {
+            return Err(E::custom("setting value must be positive"));
+        }
+        Ok(SettingValue::UInt64(value as u64))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        Ok(SettingValue::String(value.to_string()))
+    }
+}
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
@@ -1493,6 +1543,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
 
+    /// Max retention time in days for data, default is 90 days.
+    #[clap(long, value_name = "VALUE", default_value = "90")]
+    pub(crate) data_retention_time_in_days_max: u64,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1590,6 +1644,9 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
+
+    #[clap(skip)]
+    pub settings: HashMap<String, SettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -1657,6 +1714,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
             openai_api_chat_base_url: self.openai_api_chat_base_url,
             openai_api_embedding_base_url: self.openai_api_embedding_base_url,
@@ -1667,6 +1725,11 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
+            settings: self
+                .settings
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         })
     }
 }
@@ -1732,6 +1795,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
+            data_retention_time_in_days_max: 90,
+
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
@@ -1744,6 +1809,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            //
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_chat_base_url: inner.openai_api_chat_base_url,
             openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
@@ -1754,6 +1820,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
+            settings: HashMap::new(),
         }
     }
 }
@@ -1940,6 +2007,15 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-limit", value_name = "VALUE", default_value = "48")]
     #[serde(rename = "limit")]
     pub file_limit: usize,
+
+    /// Log prefix filter
+    #[clap(
+        long = "log-file-prefix-filter",
+        value_name = "VALUE",
+        default_value = "databend_"
+    )]
+    #[serde(rename = "prefix_filter")]
+    pub file_prefix_filter: String,
 }
 
 impl Default for FileLogConfig {
@@ -1958,6 +2034,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -1970,6 +2047,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_prefix_filter: inner.prefix_filter,
         }
     }
 }

@@ -27,6 +27,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::NodeId;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -88,6 +89,19 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     }
 
     Ok(res)
+}
+
+pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, MetaClientError> {
+    let client = MetaGrpcClient::try_create(
+        addresses,
+        "root",
+        "xxx",
+        None,
+        Some(Duration::from_secs(10)),
+        None,
+    )?;
+
+    Ok(client)
 }
 
 pub fn next_port() -> u16 {
@@ -194,7 +208,6 @@ impl MetaSrvTestContext {
             "xxx",
             None,
             Some(Duration::from_secs(10)),
-            Duration::from_secs(10),
             None,
         )?;
         Ok(client)
@@ -244,16 +257,8 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(
-            vec![addr],
-            "root",
-            "xxx",
-            None,
-            None,
-            Duration::from_secs(10),
-            None,
-        )
-        .unwrap();
+        let client =
+            MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None).unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

@@ -20,7 +20,6 @@ use grpc::export_meta;
 mod snapshot;
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use clap::Parser;
 use databend_common_base::base::tokio;
@@ -55,6 +54,15 @@ pub struct Config {
 
     #[clap(long)]
     pub export: bool,
+
+    /// The N.O. json strings in a export stream item.
+    ///
+    /// Set this to a smaller value if you get gRPC message body too large error.
+    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
+    ///
+    /// By default it is 32.
+    #[clap(long)]
+    pub export_chunk_size: Option<u64>,
 
     #[clap(
         long,
@@ -119,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         },
         ..Default::default()
     };
@@ -207,15 +216,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client = MetaGrpcClient::try_create(
-            vec![addr.to_string()],
-            "root",
-            "xxx",
-            None,
-            None,
-            Duration::from_secs(10),
-            None,
-        )?;
+        let client =
+            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);
@@ -227,15 +229,8 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 async fn show_status(conf: &Config) -> anyhow::Result<()> {
     let addr = &conf.grpc_api_address;
 
-    let client = MetaGrpcClient::try_create(
-        vec![addr.to_string()],
-        "root",
-        "xxx",
-        None,
-        None,
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
 
     let res = client.get_cluster_status().await?;
     println!("BinaryVersion: {}", res.binary_version);

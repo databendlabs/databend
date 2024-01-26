@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(internal_features)]
+#![allow(clippy::unconditional_recursion)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(binary_heap_as_slice)]

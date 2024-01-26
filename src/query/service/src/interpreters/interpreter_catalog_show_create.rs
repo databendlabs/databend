@@ -72,18 +72,12 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let block = DataBlock::new(
             vec![
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(name))),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.into_bytes())),
+                    Value::Scalar(Scalar::String(catalog_type)),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(catalog_type.into_bytes())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(option.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(option))),
             ],
             1,
         );

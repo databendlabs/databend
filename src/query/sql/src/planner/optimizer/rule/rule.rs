@@ -39,6 +39,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitUnion,
         RuleID::PushDownLimitExpression,
         RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitWindow,
         RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
@@ -46,6 +47,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
+        RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
         RuleID::SplitAggregate,
@@ -54,9 +56,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
     ]
 });
-
-pub static RESIDUAL_RULES: LazyLock<Vec<RuleID>> =
-    LazyLock::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
 
 pub type RulePtr = Box<dyn Rule>;
 
@@ -93,9 +92,11 @@ pub enum RuleID {
     PushDownLimitOuterJoin,
     PushDownLimitExpression,
     PushDownLimitSort,
+    PushDownLimitWindow,
     PushDownLimitAggregate,
     PushDownLimitScan,
     PushDownSortScan,
+    SemiToInnerJoin,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateSort,
@@ -130,6 +131,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
+            RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
@@ -149,6 +151,7 @@ impl Display for RuleID {
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
+            RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
         }
     }
 }

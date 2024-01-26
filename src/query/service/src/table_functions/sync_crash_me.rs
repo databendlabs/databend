@@ -61,10 +61,10 @@ impl SyncCrashMeTable {
         let args = table_args.expect_all_positioned(table_func_name, None)?;
         if args.len() == 1 {
             let arg = args[0].clone();
-            panic_message =
-                Some(String::from_utf8(arg.into_string().map_err(|_| {
-                    ErrorCode::BadArguments("Expected string argument.")
-                })?)?);
+            panic_message = Some(
+                arg.into_string()
+                    .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
+            );
         }
 
         let table_info = TableInfo {
@@ -119,7 +119,7 @@ impl Table for SyncCrashMeTable {
 
     fn table_args(&self) -> Option<TableArgs> {
         let args = match &self.panic_message {
-            Some(s) => vec![Scalar::String(s.as_bytes().to_vec())],
+            Some(s) => vec![Scalar::String(s.clone())],
             None => vec![],
         };
         Some(TableArgs::new_positioned(args))

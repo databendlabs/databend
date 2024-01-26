@@ -74,11 +74,11 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(info.clone())),
                 ),
             ],
             1,

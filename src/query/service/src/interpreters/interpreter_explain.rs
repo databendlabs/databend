@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
@@ -22,9 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_profile::QueryProfileManager;
-use databend_common_profile::SharedProcessorProfiles;
-use databend_common_sql::executor::ProfileHelper;
+use databend_common_pipeline_core::processors::profile::PlanProfile;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
@@ -260,7 +259,7 @@ impl ExplainInterpreter {
         }
 
         let result = plan
-            .format(metadata.clone(), SharedProcessorProfiles::default())?
+            .format(metadata.clone(), Default::default())?
             .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -283,7 +282,7 @@ impl ExplainInterpreter {
         // Format root pipeline
         let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
             .lines()
-            .map(|s| s.as_bytes().to_vec())
+            .map(|l| l.to_string())
             .collect::<Vec<_>>();
         let column = StringType::from_data(line_split_result);
         blocks.push(DataBlock::new_from_columns(vec![column]));
@@ -291,7 +290,7 @@ impl ExplainInterpreter {
         for pipeline in build_res.sources_pipelines.iter() {
             let line_split_result = format!("\n{}", pipeline.display_indent())
                 .lines()
-                .map(|s| s.as_bytes().to_vec())
+                .map(|l| l.to_string())
                 .collect::<Vec<_>>();
             let column = StringType::from_data(line_split_result);
             blocks.push(DataBlock::new_from_columns(vec![column]));
@@ -313,14 +312,11 @@ impl ExplainInterpreter {
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), false);
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
-        let line_split_result = display_string
-            .lines()
-            .map(|s| s.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
@@ -331,7 +327,7 @@ impl ExplainInterpreter {
         let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
             let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
-            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone(), false);
+            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
             root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
 
             let ident = fragments_actions.display_indent(&update.metadata);
@@ -339,10 +335,7 @@ impl ExplainInterpreter {
         } else {
             "Nothing to update".to_string()
         };
-        let line_split_result = display_string
-            .lines()
-            .map(|s| s.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
@@ -357,46 +350,68 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr, required).await?;
-        let mut build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
-        let prof_span_set = build_res.prof_span_set.clone();
+        // Drain the data
+        let query_profiles = self.execute_and_get_profiles(build_res)?;
 
+        let result = plan
+            .format(metadata.clone(), query_profiles)?
+            .format_pretty()?;
+        let line_split_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    fn execute_and_get_profiles(
+        &self,
+        mut build_res: PipelineBuildResult,
+    ) -> Result<HashMap<u32, PlanProfile>> {
         let settings = self.ctx.get_settings();
         let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(&settings, query_id.clone())?;
 
-        // Drain the data
-        if build_res.main_pipeline.is_complete_pipeline()? {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
+        match build_res.main_pipeline.is_complete_pipeline()? {
+            true => {
+                let mut pipelines = build_res.sources_pipelines;
+                pipelines.push(build_res.main_pipeline);
 
-            let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-            complete_executor.execute()?;
-        } else {
-            let mut pulling_executor =
-                PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-            pulling_executor.start();
-            while (pulling_executor.pull_data()?).is_some() {}
+                let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                executor.execute()?;
+                self.ctx.add_query_profiles(
+                    &executor
+                        .get_inner()
+                        .get_profiles()
+                        .iter()
+                        .filter(|x| x.plan_id.is_some())
+                        .map(|x| PlanProfile::create(x))
+                        .collect::<Vec<_>>(),
+                );
+            }
+            false => {
+                let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+                executor.start();
+                while (executor.pull_data()?).is_some() {}
+                self.ctx.add_query_profiles(
+                    &executor
+                        .get_inner()
+                        .get_profiles()
+                        .iter()
+                        .filter(|x| x.plan_id.is_some())
+                        .map(|x| PlanProfile::create(x))
+                        .collect::<Vec<_>>(),
+                );
+            }
         }
 
-        let profile = ProfileHelper::build_query_profile(
-            &query_id,
-            metadata,
-            &plan,
-            &prof_span_set.lock().unwrap(),
-        )?;
-
-        // Record the query profile
-        let prof_mgr = QueryProfileManager::instance();
-        prof_mgr.insert(Arc::new(profile));
-
-        let result = plan
-            .format(metadata.clone(), prof_span_set)?
-            .format_pretty()?;
-        let line_split_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+        Ok(self
+            .ctx
+            .get_query_profiles()
+            .into_iter()
+            .filter(|x| x.id.is_some())
+            .map(|x| (x.id.unwrap(), x))
+            .collect::<HashMap<_, _>>())
     }
 
     async fn explain_query(

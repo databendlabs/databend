@@ -15,6 +15,7 @@
 //! Schema types
 
 mod catalog;
+mod create_option;
 mod database;
 mod index;
 mod least_visible_time;
@@ -23,6 +24,7 @@ mod ownership;
 mod table;
 mod virtual_column;
 pub use catalog::*;
+pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
@@ -86,7 +88,6 @@ pub use table::SetTableColumnMaskPolicyAction;
 pub use table::SetTableColumnMaskPolicyReply;
 pub use table::SetTableColumnMaskPolicyReq;
 pub use table::TableCopiedFileInfo;
-pub use table::TableCopiedFileLockKey;
 pub use table::TableCopiedFileNameIdent;
 pub use table::TableId;
 pub use table::TableIdList;
@@ -134,7 +135,6 @@ const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
-const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
 const PREFIX_INDEX: &str = "__fd_index";
 const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
 const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";

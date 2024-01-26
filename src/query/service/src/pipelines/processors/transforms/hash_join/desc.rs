@@ -35,11 +35,14 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) join_type: JoinType,
+    /// when we have non-equal conditions for hash join,
+    /// for example `a = b and c = d and e > f`, we will use `and_filters`
+    /// to wrap `e > f` as a other_predicate to do next step's check.
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_keys_rt: Vec<Expr<String>>,
+    pub(crate) probe_keys_rt: Vec<Option<Expr<String>>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
 }
@@ -59,10 +62,10 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        let probe_keys_rt: Vec<Expr<String>> = join
+        let probe_keys_rt: Vec<Option<Expr<String>>> = join
             .probe_keys_rt
             .iter()
-            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
+            .map(|k| k.as_ref().map(|v| v.as_expr(&BUILTIN_FUNCTIONS)))
             .collect();
 
         Ok(HashJoinDesc {

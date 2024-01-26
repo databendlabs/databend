@@ -25,6 +25,8 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -120,6 +122,10 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
                         bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
                 }
 
                 if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {

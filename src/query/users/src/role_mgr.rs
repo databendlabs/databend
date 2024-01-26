@@ -34,11 +34,6 @@ impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
-        let builtin_roles = self.builtin_roles();
-        if let Some(role_info) = builtin_roles.get(&role) {
-            return Ok(role_info.clone());
-        }
-
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
@@ -47,20 +42,28 @@ impl UserApiProvider {
     // Get the tenant all roles list.
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
-        let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .get_role_api_client(tenant)?
             .get_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
-        // overwrite the builtin roles.
-        let mut roles = seq_roles
-            .into_iter()
-            .map(|r| r.data)
-            .filter(|r| !builtin_roles.contains_key(&r.name))
-            .collect::<Vec<_>>();
-        roles.extend(builtin_roles.values().cloned());
+        let mut roles = seq_roles.into_iter().map(|r| r.data).collect::<Vec<_>>();
         roles.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(roles)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_ownerships(&self, tenant: &str) -> Result<HashMap<OwnershipObject, String>> {
+        let seq_owns = self
+            .get_role_api_client(tenant)?
+            .get_ownerships()
+            .await
+            .map_err(|e| e.add_message_back("(while get ownerships)."))?;
+
+        let roles: HashMap<OwnershipObject, String> = seq_owns
+            .into_iter()
+            .map(|r| (r.data.object, r.data.role))
+            .collect();
         Ok(roles)
     }
 
@@ -95,40 +98,13 @@ impl UserApiProvider {
         match add_role.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::USER_ALREADY_EXISTS {
+                if if_not_exists && e.code() == ErrorCode::ROLE_ALREADY_EXISTS {
                     Ok(0)
                 } else {
                     Err(e.add_message_back("(while add role)"))
                 }
             }
         }
-    }
-
-    // Currently we have two builtin roles:
-    // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
-    //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
-    // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
-    //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-    fn builtin_roles(&self) -> HashMap<String, RoleInfo> {
-        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-        account_admin.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_global(),
-        );
-        account_admin.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
-        );
-        account_admin.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_udf(),
-        );
-        let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-
-        let mut result = HashMap::new();
-        result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
-        result.insert(BUILTIN_ROLE_PUBLIC.into(), public);
-        result
     }
 
     #[async_backtrace::framed]

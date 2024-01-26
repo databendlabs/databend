@@ -38,6 +38,7 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::plans::SortItem;
 use crate::plans::UDFServerCall;
 use crate::plans::VisitorMut;
 use crate::ColumnEntry;
@@ -67,7 +68,18 @@ pub fn try_rewrite(
         .collect::<HashMap<_, _>>();
 
     let query_predicates = query_info.predicates.map(distinguish_predicates);
+    let query_sort_items = query_info.formatted_sort_items();
     let query_group_items = query_info.formatted_group_items();
+
+    if query_info.aggregation.is_some() {
+        // if have agg funcs, check sort items are subset of group items.
+        if !query_sort_items
+            .iter()
+            .all(|item| query_group_items.contains(item))
+        {
+            return Ok(None);
+        }
+    }
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, sql, plan) in index_plans.iter() {
@@ -78,6 +90,7 @@ pub fn try_rewrite(
 
         // 1. Check query output and try to rewrite it.
         let index_selection = index_info.formatted_selection()?;
+
         // group items should be in selection.
         if !query_group_items
             .iter()
@@ -124,7 +137,7 @@ pub fn try_rewrite(
                             &index_selection,
                             &query_info.format_scalar(&agg.scalar),
                         ) {
-                            rewritten.column.data_type = Box::new(DataType::String);
+                            rewritten.column.data_type = Box::new(DataType::Binary);
                             new_selection.push(ScalarItem {
                                 index: agg.index,
                                 scalar: rewritten.into(),
@@ -201,10 +214,15 @@ pub fn try_rewrite(
             }
             (Some((qe, qr, qo)), None) => {
                 if !qe.is_empty() {
-                    continue;
+                    let preds = qe
+                        .iter()
+                        .flat_map(|(left, right)| [(*left).clone(), (*right).clone()])
+                        .collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if !qo.is_empty() {
-                    continue;
+                    let preds = qo.iter().map(|p| (*p).clone()).collect::<Vec<_>>();
+                    new_predicates.extend(preds);
                 }
                 if let Some(preds) = check_predicates_range(
                     qr,
@@ -244,8 +262,8 @@ pub fn try_rewrite(
                         // If the item is an aggregation function,
                         // the actual data in the index is the temp state of the function.
                         // (E.g. `sum` function will store serialized `sum_state` in index data.)
-                        // So the data type will be `String`.
-                        return Ok(TableField::new(&idx.to_string(), TableDataType::String));
+                        // So the data type will be `Binary`.
+                        return Ok(TableField::new(&idx.to_string(), TableDataType::Binary));
                     }
                 }
 
@@ -367,13 +385,56 @@ fn rewrite_scalar_index(
 /// [`Range`] is to represent the value range of a column according to the predicates.
 ///
 /// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, Debug)]
 struct Range<'a> {
     min: Option<&'a Scalar>,
     min_close: bool,
     max: Option<&'a Scalar>,
     max_close: bool,
 }
+
+impl<'a> PartialEq for Range<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        // We cannot compare Scalar directly because when the NumberScalar types
+        // are different but the internal values are the same, the comparison
+        // result is false.
+        // So we need to compare the internal values of the Scalar, for example,
+        // `NumberScalar(UInt8(1)) == NumberScalar(UInt32(1))` should return true.
+        fn scalar_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
+            match (left, right) {
+                (Some(left), Some(right)) => {
+                    if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                        match (left.is_integer(), right.is_integer()) {
+                            (true, true) => {
+                                left.integer_to_i128().unwrap() == right.integer_to_i128().unwrap()
+                            }
+                            (false, false) => {
+                                left.float_to_f64().unwrap() == right.float_to_f64().unwrap()
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        left == right
+                    }
+                }
+                (None, None) => true,
+                _ => false,
+            }
+        }
+
+        if self.min_close != other.min_close
+            || self.max_close != other.max_close
+            || !scalar_equal(self.min, other.min)
+            || !scalar_equal(self.max, other.max)
+        {
+            return false;
+        }
+
+        true
+    }
+}
+
+impl<'a> Eq for Range<'a> {}
 
 impl<'a> Range<'a> {
     fn new(val: &'a Scalar, op: &str) -> Self {
@@ -444,9 +505,31 @@ impl<'a> Range<'a> {
             return false;
         }
 
+        // We need to compare the internal values of the Scalar, for example,
+        // `NumberScalar(UInt8(2)) > NumberScalar(UInt32(1))` should return true.
         match (self.min, other.min) {
-            (Some(m1), Some(m2)) => {
-                if m1 > m2 || (m1 == m2 && !self.min_close && other.min_close) {
+            (Some(left), Some(right)) => {
+                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                    match (left.is_integer(), right.is_integer()) {
+                        (true, true) => {
+                            let left = left.integer_to_i128().unwrap();
+                            let right = right.integer_to_i128().unwrap();
+                            if left > right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        (false, false) => {
+                            let left = left.float_to_f64().unwrap();
+                            let right = right.float_to_f64().unwrap();
+                            if left > right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        _ => return false,
+                    }
+                } else if left > right || (left == right && self.min_close && !other.min_close) {
                     return false;
                 }
             }
@@ -457,8 +540,28 @@ impl<'a> Range<'a> {
         }
 
         match (self.max, other.max) {
-            (Some(m1), Some(m2)) => {
-                if m1 < m2 || (m1 == m2 && !self.max_close && other.max_close) {
+            (Some(left), Some(right)) => {
+                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
+                    match (left.is_integer(), right.is_integer()) {
+                        (true, true) => {
+                            let left = left.integer_to_i128().unwrap();
+                            let right = right.integer_to_i128().unwrap();
+                            if left < right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        (false, false) => {
+                            let left = left.float_to_f64().unwrap();
+                            let right = right.float_to_f64().unwrap();
+                            if left < right || (left == right && self.min_close && !other.min_close)
+                            {
+                                return false;
+                            }
+                        }
+                        _ => return false,
+                    }
+                } else if left < right || (left == right && self.min_close && !other.min_close) {
                     return false;
                 }
             }
@@ -601,6 +704,7 @@ pub struct RewriteInfomartion<'a> {
     table_index: IndexType,
     pub selection: &'a EvalScalar,
     pub predicates: Option<&'a [ScalarExpr]>,
+    pub sort_items: Option<&'a [SortItem]>,
     pub aggregation: Option<AggregationInfo<'a>>,
 }
 
@@ -632,6 +736,18 @@ impl RewriteInfomartion<'_> {
             let mut cols = Vec::with_capacity(agg.group_items.len());
             for item in agg.group_items.iter() {
                 cols.push(self.format_scalar(&item.scalar));
+            }
+            cols.sort();
+            return cols;
+        }
+        vec![]
+    }
+
+    fn formatted_sort_items(&self) -> Vec<String> {
+        if let Some(sorts) = self.sort_items {
+            let mut cols = Vec::with_capacity(sorts.len());
+            for item in sorts {
+                cols.push(format_col_name(item.index));
             }
             cols.sort();
             return cols;
@@ -728,6 +844,7 @@ fn collect_information(s_expr: &SExpr) -> Result<RewriteInfomartion<'_>> {
             table_index: 0,
             selection: eval,
             predicates: None,
+            sort_items: None,
             aggregation: None,
         };
         collect_information_impl(s_expr.child(0)?, &mut info)?;
@@ -756,6 +873,10 @@ fn collect_information_impl<'a>(
             } else {
                 collect_information_impl(child, info)
             }
+        }
+        RelOperator::Sort(sort) => {
+            info.sort_items.replace(&sort.items);
+            collect_information_impl(s_expr.child(0)?, info)
         }
         RelOperator::Filter(filter) => {
             info.predicates.replace(&filter.predicates);

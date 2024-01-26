@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -91,6 +92,7 @@ impl FieldJsonAstDecoder {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
+            ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value),
             ColumnBuilder::Map(c) => self.read_map(c, value),
@@ -292,7 +294,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
                 let rb = parse_bitmap(v.as_bytes())?;
@@ -316,7 +318,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         let v = jsonb::Value::from(value);
         v.write_to_vec(&mut column.data);
         column.commit_row();
@@ -354,7 +356,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_tuple(&self, fields: &mut Vec<ColumnBuilder>, value: &Value) -> Result<()> {
+    fn read_tuple(&self, fields: &mut [ColumnBuilder], value: &Value) -> Result<()> {
         match value {
             Value::Object(obj) => {
                 if fields.len() != obj.len() {

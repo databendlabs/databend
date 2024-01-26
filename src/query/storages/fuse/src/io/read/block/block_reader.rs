@@ -34,6 +34,8 @@ use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
+use crate::MergeIOReadResult;
+
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
 pub struct BlockReader {
@@ -122,7 +124,7 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
@@ -191,7 +193,35 @@ impl BlockReader {
     }
 
     pub fn data_schema(&self) -> DataSchema {
-        let fields = self.data_fields();
-        DataSchema::new(fields)
+        self.schema().into()
+    }
+
+    pub fn report_cache_metrics<'a>(
+        &self,
+        merged_result: &MergeIOReadResult,
+        ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,
+    ) {
+        let bytes_read_from_storage: usize = ranges
+            .map(|range| range.end as usize - range.start as usize)
+            .sum();
+
+        let cache_metrics = self.ctx.get_data_cache_metrics();
+        let read_from_disk_cache: usize = merged_result
+            .cached_column_data
+            .iter()
+            .map(|(_, bytes)| bytes.len())
+            .sum();
+
+        let read_from_in_mem_cache_array: usize = merged_result
+            .cached_column_array
+            .iter()
+            .map(|(_, sized_array)| sized_array.1)
+            .sum();
+
+        cache_metrics.add_cache_metrics(
+            bytes_read_from_storage,
+            read_from_disk_cache,
+            read_from_in_mem_cache_array,
+        );
     }
 }

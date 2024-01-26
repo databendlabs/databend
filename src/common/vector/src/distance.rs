@@ -49,3 +49,37 @@ pub fn l2_distance(from: &[f32], to: &[f32]) -> Result<f32> {
         .sum::<f32>()
         .sqrt())
 }
+
+pub fn cosine_distance_64(from: &[f64], to: &[f64]) -> Result<f64> {
+    if from.len() != to.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            from.len(),
+            to.len(),
+        )));
+    }
+
+    let a = ArrayView::from(from);
+    let b = ArrayView::from(to);
+    let aa_sum = (&a * &a).sum();
+    let bb_sum = (&b * &b).sum();
+
+    Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
+}
+
+pub fn l2_distance_64(from: &[f64], to: &[f64]) -> Result<f64> {
+    if from.len() != to.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            from.len(),
+            to.len(),
+        )));
+    }
+
+    Ok(from
+        .iter()
+        .zip(to.iter())
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f64>()
+        .sqrt())
+}

@@ -107,7 +107,7 @@ impl Memo {
             }
         };
 
-        let m_expr = MExpr::create(
+        let m_expr = MExpr::new(
             group_index,
             self.group(group_index)?.num_exprs(),
             s_expr.plan,

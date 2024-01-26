@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use log::debug;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TableArgs {
@@ -78,7 +79,7 @@ impl TableArgs {
                     .into_string()
                     .map_err(|_| ErrorCode::BadArguments("Expected string argument"))?;
 
-                Ok(String::from_utf8(arg)?)
+                Ok(arg)
             })
             .collect::<Result<Vec<_>>>()
     }
@@ -88,6 +89,7 @@ impl TableArgs {
     /// Returns the map of named args.
     pub fn expect_all_named(&self, func_name: &str) -> Result<HashMap<String, Scalar>> {
         if !self.positioned.is_empty() {
+            debug!("{:?} accept named args only", self.positioned);
             Err(ErrorCode::BadArguments(format!(
                 "{} accept named args only",
                 func_name

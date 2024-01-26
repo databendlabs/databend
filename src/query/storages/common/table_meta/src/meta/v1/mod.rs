@@ -19,5 +19,4 @@ mod table_snapshot_statistics;
 pub use segment::BlockMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

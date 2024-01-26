@@ -137,7 +137,7 @@ impl Table for TenantQuotaTable {
         let args = self
             .args
             .iter()
-            .map(|s| Scalar::String(s.as_bytes().to_vec()))
+            .map(|s| Scalar::String(s.clone()))
             .collect();
         Some(TableArgs::new_positioned(args))
     }

@@ -54,7 +54,7 @@ impl TransformExchangeDeserializer {
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
     ) -> ProcessorPtr {
-        let arrow_schema = Arc::new(schema.to_arrow());
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let ipc_schema = IpcSchema {
             fields: ipc_fields,
@@ -66,7 +66,7 @@ impl TransformExchangeDeserializer {
             output,
             TransformExchangeDeserializer {
                 ipc_schema,
-                arrow_schema,
+                arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
             },
         ))
@@ -126,6 +126,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::CopyStatus { .. } => unreachable!(),
             DataPacket::MergeStatus { .. } => unreachable!(),
             DataPacket::QueryProfiles(_) => unreachable!(),
+            DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
         }
     }

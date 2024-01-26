@@ -3,15 +3,16 @@ description: "Setup BendSQL for CI"
 runs:
   using: "composite"
   steps:
-    - name: Download and Install for Ubuntu
+    - name: Download and Install for Linux
       if: runner.os == 'Linux'
       shell: bash
       run: |
         if bendsql -V; then
           exit 0
         fi
-        curl --retry 5 -Lo /tmp/bendsql.deb https://github.com/datafuselabs/bendsql/releases/download/v0.11.1/bendsql_0.11.1_amd64.deb
-        sudo dpkg -i /tmp/bendsql.deb
+        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.12.4/bendsql-x86_64-unknown-linux-gnu.tar.gz
+        tar -xzf /tmp/bendsql.tar.gz -C /tmp
+        mv /tmp/bendsql /usr/local/bin/bendsql
         bendsql --version
     - name: Download and Install for macOS
       if: runner.os == 'macOS'
@@ -20,7 +21,7 @@ runs:
         if bendsql -V; then
           exit 0
         fi
-        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.11.1/bendsql-x86_64-apple-darwin.tar.gz
+        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.12.4/bendsql-x86_64-apple-darwin.tar.gz
         tar -xzf /tmp/bendsql.tar.gz -C /tmp
         mv /tmp/bendsql /usr/local/bin/bendsql
         bendsql --version

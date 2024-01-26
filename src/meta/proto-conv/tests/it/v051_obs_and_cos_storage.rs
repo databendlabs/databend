@@ -71,6 +71,7 @@ fn test_decode_v51_obs_stage() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: false,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -120,6 +121,7 @@ fn test_decode_v51_cos_stage() -> anyhow::Result<()> {
             max_file_size: 0,
             disable_variant_check: false,
             return_failed_only: false,
+            detailed_output: false,
         },
         comment: "test".to_string(),
         ..Default::default()

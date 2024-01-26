@@ -203,7 +203,7 @@ impl VirtualColumnRewriter {
                             return Some(());
                         }
                         let name = match constant.value.clone() {
-                            Scalar::String(v) => match parse_key_paths(&v) {
+                            Scalar::String(v) => match parse_key_paths(v.as_bytes()) {
                                 Ok(key_paths) => {
                                     let mut name = String::new();
                                     name.push_str(&base_column.column_name);
