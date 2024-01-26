@@ -815,7 +815,6 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
-            || !bind_context.windows.window_functions.is_empty()
         {
             return Ok(());
         }
@@ -859,20 +858,6 @@ impl Binder {
             return Ok(());
         }
 
-        let mut select_cols = HashSet::with_capacity(select_list.items.len());
-        for s in select_list.items.iter() {
-            select_cols.extend(s.scalar.used_columns())
-        }
-
-        // If there are derived columns, we can't use lazy materialization.
-        // (As the derived columns may come from a CTE, the rows fetcher can't know where to fetch the data.)
-        if select_cols
-            .iter()
-            .any(|col| matches!(metadata.column(*col), ColumnEntry::DerivedColumn(_)))
-        {
-            return Ok(());
-        }
-
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
             if let Some(scalar) = scalar_items.get(&o.index) {
@@ -884,14 +869,41 @@ impl Binder {
             }
         }
 
+        let mut non_lazy_cols = order_by_cols;
+        non_lazy_cols.extend(where_cols);
+
+        let mut select_cols = HashSet::with_capacity(select_list.items.len());
+        for s in select_list.items.iter() {
+            // The TableScan's schema uses name_mapping to prune columns,
+            // all lazy columns will be skipped to add to name_mapping in TableScan.
+            // When build physical window plan, if window's order by or partition by proviede,
+            // we need create a `EvalScalar` for physical window inputs, so we should keep the window
+            // used cols not be pruned.
+            if let ScalarExpr::WindowFunction(_) = &s.scalar {
+                if !s.scalar.used_columns().is_subset(&non_lazy_cols) {
+                    non_lazy_cols.extend(s.scalar.used_columns())
+                }
+            } else {
+                select_cols.extend(s.scalar.used_columns())
+            }
+        }
+
+        // If there are derived columns, we can't use lazy materialization.
+        // (As the derived columns may come from a CTE, the rows fetcher can't know where to fetch the data.)
+        if select_cols
+            .iter()
+            .any(|col| matches!(metadata.column(*col), ColumnEntry::DerivedColumn(_)))
+        {
+            return Ok(());
+        }
+
         let internal_cols = cols
             .iter()
             .filter(|col| matches!(col, ColumnEntry::InternalColumn(_)))
             .map(|col| col.index())
             .collect::<HashSet<_>>();
 
-        let mut non_lazy_cols = order_by_cols;
-        non_lazy_cols.extend(where_cols);
+        // add internal_cols to non_lazy_cols
         non_lazy_cols.extend(internal_cols);
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
