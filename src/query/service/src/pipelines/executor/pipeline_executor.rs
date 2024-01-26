@@ -188,6 +188,12 @@ impl PipelineExecutor {
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
         let query_id = settings.query_id.clone();
+        let mem_stat = MemStat::create(format!("QueryMemStat-{}", query_id));
+
+        if settings.enable_check_max_memory_usage {
+            mem_stat.set_limit(settings.max_memory_usage as i64);
+        }
+
         Ok(Arc::new(PipelineExecutor {
             graph,
             threads_num,
@@ -200,7 +206,7 @@ impl PipelineExecutor {
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
-            mem_state: MemStat::create(format!("QueryMemStat-{}", query_id)),
+            mem_state: mem_stat,
         }))
     }
 

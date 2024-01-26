@@ -117,7 +117,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
-            let data_retention_time_in_days_max= Self::data_retention_time_in_days_max();
+            let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
@@ -654,7 +654,13 @@ impl DefaultSettings {
                     desc: "Cost factor of transmit via network for a data row",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-               })
+                }),
+                ("enable_limit_query_memory_usage", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable maximum memory usage for checking queries",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                })
             ]);
 
             Ok(Arc::new(DefaultSettings {

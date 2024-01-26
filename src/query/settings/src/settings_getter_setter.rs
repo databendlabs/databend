@@ -587,4 +587,8 @@ impl Settings {
     pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_network_per_row")
     }
+
+    pub fn get_enable_limit_query_memory_usage(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_limit_query_memory_usage")? == 1)
+    }
 }
