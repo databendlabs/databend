@@ -26,7 +26,6 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_users::UserApiProvider;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
