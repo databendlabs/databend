@@ -54,6 +54,7 @@ MergeInto:
 target_table: default.default.t1
 ├── distributed: false
 ├── target_build_optimization: false
+├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
 └── HashJoin: RIGHT OUTER

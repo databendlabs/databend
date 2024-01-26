@@ -61,6 +61,9 @@ pub enum Statement {
     ShowFunctions {
         show_options: Option<ShowOptions>,
     },
+    ShowUserFunctions {
+        show_options: Option<ShowOptions>,
+    },
     ShowTableFunctions {
         show_options: Option<ShowOptions>,
     },
@@ -384,6 +387,12 @@ impl Display for Statement {
             }
             Statement::ShowFunctions { show_options } => {
                 write!(f, "SHOW FUNCTIONS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowUserFunctions { show_options } => {
+                write!(f, "SHOW USER FUNCTIONS")?;
                 if let Some(show_options) = show_options {
                     write!(f, " {show_options}")?;
                 }

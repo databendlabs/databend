@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
@@ -354,6 +355,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
+    let show_user_functions = map(
+        rule! {
+            SHOW ~ USER ~ FUNCTIONS ~ #show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowUserFunctions { show_options },
+    );
     let show_table_functions = map(
         rule! {
             SHOW ~ TABLE_FUNCTIONS ~ #show_options?
@@ -498,15 +505,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
         },
     );
-    let create_database = map(
+
+    let create_database = map_res(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ (OR ~ REPLACE)? ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
         },
-        |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
-            match create_database_option {
+        |(_, opt_or_replace, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            let statement = match create_database_option {
                 Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        if_not_exists: opt_if_not_exists.is_some(),
+                        create_option,
                         catalog,
                         database,
                         engine: Some(engine),
@@ -516,7 +527,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 }
                 Some(CreateDatabaseOption::FromShare(share_name)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        if_not_exists: opt_if_not_exists.is_some(),
+                        create_option,
                         catalog,
                         database,
                         engine: None,
@@ -525,16 +536,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
-                    if_not_exists: opt_if_not_exists.is_some(),
+                    create_option,
                     catalog,
                     database,
                     engine: None,
                     options: vec![],
                     from_share: None,
                 }),
-            }
+            };
+
+            Ok(statement)
         },
     );
+
     let drop_database = map(
         rule! {
             DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2
@@ -1765,12 +1779,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     let statement_body = alt((
+        // query, explain,show
         rule!(
-            #map(query, |query| Statement::Query(Box::new(query)))
+        #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-            | #delete : "`DELETE FROM <table> [WHERE ...]`"
-            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
@@ -1780,10 +1793,13 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
+        ),
+        // database
+        rule!(
+            #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
-            | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
+            | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
@@ -1805,6 +1821,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
+            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -1832,14 +1850,13 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
+        // view,stream,index
         rule!(
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
-        ),
-        rule!(
-            #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
@@ -1863,6 +1880,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
@@ -1962,6 +1980,23 @@ AS
             format: opt_format.map(|(_, format)| format.name),
         },
     )(i)
+}
+
+fn parse_create_option(
+    opt_or_replace: bool,
+    opt_if_not_exists: bool,
+) -> Result<CreateOption, nom::Err<ErrorKind>> {
+    if opt_or_replace && opt_if_not_exists {
+        return Err(nom::Err::Failure(ErrorKind::Other(
+            "option IF NOT EXISTS and OR REPLACE are incompatible.",
+        )));
+    }
+
+    if opt_or_replace {
+        Ok(CreateOption::CreateOrReplace)
+    } else {
+        Ok(CreateOption::CreateIfNotExists(opt_if_not_exists))
+    }
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will

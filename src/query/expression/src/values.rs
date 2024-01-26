@@ -403,7 +403,21 @@ impl Scalar {
     }
 
     pub fn is_nested_scalar(&self) -> bool {
-        matches!(self, Self::Array(_) | Self::Map(_) | Self::Tuple(_))
+        match self {
+            Scalar::Null
+            | Scalar::EmptyArray
+            | Scalar::EmptyMap
+            | Scalar::Number(_)
+            | Scalar::Decimal(_)
+            | Scalar::Timestamp(_)
+            | Scalar::Date(_)
+            | Scalar::Boolean(_)
+            | Scalar::Binary(_)
+            | Scalar::String(_)
+            | Scalar::Bitmap(_)
+            | Scalar::Variant(_) => false,
+            Scalar::Array(_) | Scalar::Map(_) | Scalar::Tuple(_) => true,
+        }
     }
 
     pub fn is_positive(&self) -> bool {

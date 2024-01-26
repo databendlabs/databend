@@ -340,6 +340,7 @@ pub enum RewriteKind {
     ShowStreams(String),
 
     ShowFunctions,
+    ShowUserFunctions,
     ShowTableFunctions,
 
     ShowUsers,

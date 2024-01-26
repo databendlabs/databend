@@ -55,6 +55,7 @@ pub struct Window {
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
+    pub limit: Option<usize>,
 }
 
 impl Window {
@@ -357,6 +358,7 @@ impl PhysicalPlanBuilder {
             partition_by: partition_items,
             order_by: order_by_items,
             window_frame: w.frame.clone(),
+            limit: w.limit,
         }))
     }
 }

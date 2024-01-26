@@ -2305,7 +2305,6 @@ dependencies = [
  "serfig",
  "tokio",
  "tokio-stream",
- "tonic 0.10.2",
  "url",
 ]
 
@@ -3226,21 +3225,12 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
- "databend-common-profile",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=e21b273)",
  "match-template",
  "rand 0.8.5",
  "serde",
  "typetag",
-]
-
-[[package]]
-name = "databend-common-profile"
-version = "0.1.0"
-dependencies = [
- "dashmap",
- "databend-common-base",
 ]
 
 [[package]]
@@ -3354,7 +3344,6 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
- "databend-common-profile",
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-delta",
@@ -3486,6 +3475,7 @@ dependencies = [
  "backoff",
  "bytes",
  "chrono",
+ "criterion",
  "databend-common-arrow",
  "databend-common-base",
  "databend-common-cache",
@@ -3824,7 +3814,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
- "databend-common-profile",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
@@ -4201,7 +4190,6 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
- "databend-common-profile",
  "databend-common-settings",
  "databend-common-sharing",
  "databend-common-sql",
@@ -4481,14 +4469,12 @@ dependencies = [
  "async-trait-fn",
  "bincode 1.3.3",
  "chrono",
- "criterion",
  "databend-common-arrow",
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
- "databend-common-storages-fuse",
  "enum-as-inner 0.5.1",
  "futures",
  "futures-util",

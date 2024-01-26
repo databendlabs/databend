@@ -304,8 +304,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         let (physical_plan, files, update_stream_meta) =
             self.build_physical_plan(&self.plan).await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Build commit insertion pipeline.
         {

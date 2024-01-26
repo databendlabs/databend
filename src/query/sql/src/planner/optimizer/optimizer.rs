@@ -402,6 +402,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             target_tbl_idx: plan.target_table_idx,
         })
     }
+
     // try to optimize distributed join, only if
     // - distributed optimization is enabled
     // - no local table scan

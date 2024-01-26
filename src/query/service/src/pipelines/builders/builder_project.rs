@@ -19,7 +19,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::EmptySink;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Project;
@@ -90,24 +89,14 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()? as usize;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformSRF::try_create(
+            Ok(ProcessorPtr::create(TransformSRF::try_create(
                 input,
                 output,
                 self.func_ctx.clone(),
                 project_set.projections.clone(),
                 srf_exprs.clone(),
                 max_block_size,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    project_set.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )))
         })
     }
 }

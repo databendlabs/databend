@@ -95,6 +95,16 @@ impl MetaService for GrpcServiceForTestImpl {
         unimplemented!()
     }
 
+    type ExportV1Stream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + 'static>>;
+
+    async fn export_v1(
+        &self,
+        _request: Request<databend_common_meta_types::protobuf::ExportRequest>,
+    ) -> Result<Response<Self::ExportStream>, Status> {
+        unimplemented!()
+    }
+
     type WatchStream =
         Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + 'static>>;
 
