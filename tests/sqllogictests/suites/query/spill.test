@@ -125,6 +125,12 @@ statement ok
 select * from t1, t2 where t1.a = t2.a;
 
 statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
 set max_block_size = 65536;
 
 statement ok
