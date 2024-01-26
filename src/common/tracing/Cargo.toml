@@ -25,9 +25,9 @@ humantime = "2.1.0"
 log = { workspace = true }
 minitrace = { workspace = true }
 minitrace-opentelemetry = "0.6"
-opentelemetry = { version = "0.20", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.13", features = ["trace", "logs", "grpc-tonic"] }
-opentelemetry_sdk = { version = "0.20", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry = { version = "0.21", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.14", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }

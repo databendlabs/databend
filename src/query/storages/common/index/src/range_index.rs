@@ -200,11 +200,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);
-            let kv_domain = inner_domain.as_tuple().unwrap();
-            Domain::Map(Some((
-                Box::new(kv_domain[0].clone()),
-                Box::new(kv_domain[1].clone()),
-            )))
+            Domain::Map(Some(Box::new(inner_domain)))
         }
         _ => {
             let stat = stats[0];
