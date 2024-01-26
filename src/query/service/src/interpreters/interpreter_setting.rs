@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SettingPlan;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -69,6 +71,32 @@ impl Interpreter for SettingInterpreter {
                         false => {
                             settings
                                 .set_setting(var.variable.clone(), tz.to_string())
+                                .await
+                        }
+                    }?;
+
+                    true
+                }
+                "sandbox_tenant" => {
+                    let settings = self.ctx.get_shared_settings();
+
+                    let config = GlobalConfig::instance();
+                    let tenant = var.value.clone();
+                    if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
+                        UserApiProvider::instance()
+                            .ensure_builtin_roles(&tenant)
+                            .await?;
+                    }
+
+                    match var.is_global {
+                        true => {
+                            settings
+                                .set_global_setting(var.variable.clone(), var.value.clone())
+                                .await
+                        }
+                        false => {
+                            settings
+                                .set_setting(var.variable.clone(), var.value.clone())
                                 .await
                         }
                     }?;
