@@ -29,14 +29,7 @@ typetag = { workspace = true }
 zstd = "0.12.3"
 
 [dev-dependencies]
-criterion = "0.4"
-databend-common-storages-fuse = { path = "../../fuse" }
 pot = "2.0.0"
 
 [features]
 dev = ["snap"]
-
-[[bench]]
-name = "bench"
-harness = false
-required-features = ["dev"]
