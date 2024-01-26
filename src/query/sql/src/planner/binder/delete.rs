@@ -223,9 +223,13 @@ impl Binder {
             fn visit_subquery(
                 &mut self,
                 parent: Option<&'a ScalarExpr>,
+                current: &'a ScalarExpr,
                 subquery: &'a SubqueryExpr,
             ) -> Result<()> {
                 self.subqueries.push((parent, subquery));
+                if let Some(child_expr) = subquery.child_expr.as_ref() {
+                    self.visit_with_parent(Some(current), child_expr)?;
+                }
                 Ok(())
             }
         }
