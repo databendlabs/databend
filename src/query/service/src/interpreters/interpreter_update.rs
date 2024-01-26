@@ -108,8 +108,7 @@ impl Interpreter for UpdateInterpreter {
         let mut build_res = PipelineBuildResult::create();
         if let Some(physical_plan) = physical_plan {
             build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),

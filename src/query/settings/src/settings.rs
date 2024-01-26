@@ -32,8 +32,8 @@ use crate::SettingMode;
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ScopeLevel {
     Default,
-    Global,
     Local,
+    Global,
     Session,
 }
 
@@ -43,11 +43,11 @@ impl Debug for ScopeLevel {
             ScopeLevel::Default => {
                 write!(f, "DEFAULT")
             }
-            ScopeLevel::Global => {
-                write!(f, "GLOBAL")
-            }
             ScopeLevel::Local => {
                 write!(f, "LOCAL")
+            }
+            ScopeLevel::Global => {
+                write!(f, "GLOBAL")
             }
             ScopeLevel::Session => {
                 write!(f, "SESSION")

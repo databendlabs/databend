@@ -166,8 +166,7 @@ impl Interpreter for ReclusterTableInterpreter {
             )?;
 
             let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             assert!(build_res.main_pipeline.is_complete_pipeline()?);
             build_res.set_max_threads(max_threads);
 
