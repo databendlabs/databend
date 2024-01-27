@@ -1093,15 +1093,15 @@ select * from tt1_;
 
 ## issue#14474
 statement ok
-create table tt1 (a bool not null default true, b int not null default 1);
+create table target_tt1 (a bool not null default true, b int not null default 1);
 
 query T
-merge into tt1 using(select false, 10) as tt2(a, b) on (tt1.b = 1) when not matched then insert (b) values (20);
+merge into target_tt1 using(select false, 10) as tt2(a, b) on (target_tt1.b = 1) when not matched then insert (b) values (20);
 ----
 1
 
 query TT
-select * from tt1;
+select * from target_tt1;
 ----
 1 20
 
