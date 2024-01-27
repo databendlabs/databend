@@ -39,9 +39,6 @@ use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
@@ -50,8 +47,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
-use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
     meta: MetaStore,
@@ -90,24 +85,8 @@ impl UserApiProvider {
             idm_config,
         };
 
-        // init built-in role
-        // Currently we have two builtin roles:
-        // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
-        //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
-        // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
-        //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-        {
-            let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-            account_admin.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            );
-            user_mgr.add_role(tenant, account_admin, true).await?;
-
-            let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-            user_mgr.add_role(tenant, public, true).await?;
-        }
-
+        // create builtin roles account_admin & public if not exists.
+        user_mgr.ensure_builtin_roles(tenant).await?;
         Ok(Arc::new(user_mgr))
     }
 
