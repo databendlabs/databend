@@ -37,7 +37,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type Scalar = (K::Scalar, V::Scalar);
     type ScalarRef<'a> = (K::ScalarRef<'a>, V::ScalarRef<'a>);
     type Column = KvColumn<K, V>;
-    type Domain = ();
+    type Domain = (K::Domain, V::Domain);
     type ColumnIterator<'a> = KvIterator<'a, K, V>;
     type ColumnBuilder = KvColumnBuilder<K, V>;
 
@@ -56,7 +56,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Tuple(fields) => Some((
+            ScalarRef::Tuple(fields) if fields.len() == 2 => Some((
                 K::try_downcast_scalar(&fields[0])?,
                 V::try_downcast_scalar(&fields[1])?,
             )),
@@ -66,7 +66,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         match col {
-            Column::Tuple(fields) => Some(KvColumn {
+            Column::Tuple(fields) if fields.len() == 2 => Some(KvColumn {
                 keys: K::try_downcast_column(&fields[0])?,
                 values: V::try_downcast_column(&fields[1])?,
             }),
@@ -76,7 +76,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Undefined => Some(()),
+            Domain::Tuple(fields) if fields.len() == 2 => Some((
+                K::try_downcast_domain(&fields[0])?,
+                V::try_downcast_domain(&fields[1])?,
+            )),
             _ => None,
         }
     }
@@ -104,8 +107,8 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         ])
     }
 
-    fn upcast_domain((): Self::Domain) -> Domain {
-        Domain::Undefined
+    fn upcast_domain((k, v): Self::Domain) -> Domain {
+        Domain::Tuple(vec![K::upcast_domain(k), V::upcast_domain(v)])
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -170,7 +173,9 @@ impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
         DataType::Tuple(vec![K::data_type(), V::data_type()])
     }
 
-    fn full_domain() -> Self::Domain {}
+    fn full_domain() -> Self::Domain {
+        (K::full_domain(), V::full_domain())
+    }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         KvColumnBuilder::with_capacity(capacity, generics)
@@ -339,10 +344,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Map(Some((key_domain, val_domain))) => Some(Some((
-                K::try_downcast_domain(key_domain)?,
-                V::try_downcast_domain(val_domain)?,
-            ))),
+            Domain::Map(Some(domain)) => Some(Some(KvPair::<K, V>::try_downcast_domain(domain)?)),
             Domain::Map(None) => Some(None),
             _ => None,
         }
@@ -369,12 +371,9 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Map(domain.map(|(key_domain, val_domain)| {
-            (
-                Box::new(K::upcast_domain(key_domain)),
-                Box::new(V::upcast_domain(val_domain)),
-            )
-        }))
+        Domain::Map(
+            domain.map(|domain| Box::new(<KvPair<K, V> as ValueType>::upcast_domain(domain))),
+        )
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -427,11 +426,11 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.memory_size()
+        <MapInternal<K, V> as ValueType>::scalar_memory_size(scalar)
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
+        <MapInternal<K, V> as ValueType>::column_memory_size(col)
     }
 }
 
