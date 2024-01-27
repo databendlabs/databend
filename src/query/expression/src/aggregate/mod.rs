@@ -48,8 +48,8 @@ pub(crate) const BATCH_SIZE: usize = 2048;
 pub(crate) const LOAD_FACTOR: f64 = 1.5;
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
-pub(crate) const L2_MAX_ROWS_IN_HT: usize = 1024 * 1024 / 8;
-pub(crate) const L3_MAX_ROWS_IN_HT: usize = 16 * 1024 * 1024 / 8;
+pub(crate) const L2_MAX_ROWS_IN_HT: usize = 1024 * 1024 / 8 / 2;
+pub(crate) const L3_MAX_ROWS_IN_HT: usize = 16 * 1024 * 1024 / 8 / 2;
 
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {

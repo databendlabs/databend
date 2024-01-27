@@ -133,38 +133,30 @@ impl PipelineBuilder {
         let partial_agg_config = HashTableConfig::default().with_partial(true);
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = match params.aggregate_functions.is_empty() {
-                true => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                        self.ctx.clone(),
-                        method,
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    ),
-                }),
-                false => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformPartialAggregate::try_create(
-                        self.ctx.clone(),
-                        method,
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                    ),
-                }),
-            }?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    aggregate.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
+                            self.ctx.clone(),
+                            method,
+                            input,
+                            output,
+                            params.clone(),
+                            partial_agg_config.clone()
+                        ),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformPartialAggregate::try_create(
+                            self.ctx.clone(),
+                            method,
+                            input,
+                            output,
+                            params.clone(),
+                            partial_agg_config.clone()
+                        ),
+                    }),
+                }?,
+            ))
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first

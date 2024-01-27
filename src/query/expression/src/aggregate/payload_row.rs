@@ -97,9 +97,19 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
-        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
+                store(data.len() as u32, address[index].add(offset) as *mut u8);
+                store(
+                    data.as_ptr() as u64,
+                    address[index].add(offset + 4) as *mut u8,
+                );
+            }
+        }
+        Column::String(v) => {
+            for index in select_vector.iter().take(rows).copied() {
+                let data = arena.alloc_str(v.index_unchecked(index));
                 store(data.len() as u32, address[index].add(offset) as *mut u8);
                 store(
                     data.as_ptr() as u64,
@@ -272,8 +282,23 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Bitmap(v) | Column::String(v) | Column::Binary(v) | Column::Variant(v) => {
-            row_match_string_column(
+        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) => {
+            row_match_binary_column(
+                v,
+                validity,
+                address,
+                select_vector,
+                temp_vector,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
+        Column::String(v) => {
+            let v = &BinaryColumn::from(v.clone());
+            row_match_binary_column(
                 v,
                 validity,
                 address,
