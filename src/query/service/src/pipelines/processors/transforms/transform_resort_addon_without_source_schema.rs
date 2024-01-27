@@ -39,10 +39,10 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
-// this processpr will recieve 3 kinds of blocks:
+// this processor will receive 3 kinds of blocks:
 // 1. from update, in this case, the block has entire target_table schema, no need to do anything
 // 2. from insert, we should fill the default values
-// 3. from target_build_optimziation, we also have entire target_table schema, no need to do anything
+// 3. from target_build_optimization, we also have entire target_table schema, no need to do anything
 // so for 1 and 3, the block's meta is none.
 // but for 2, we have source_schema_index
 pub struct TransformResortAddOnWithoutSourceSchema {
@@ -149,7 +149,6 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
     const NAME: &'static str = "AddOnWithoutSourceSchemaTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        println!("data_block:\n {:?}", block);
         // see the comment details of `TransformResortAddOnWithoutSourceSchema`.
         if block.get_meta().is_none() {
             return Ok(block.clone());
