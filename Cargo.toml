@@ -100,7 +100,6 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
-
     "src/bendpy",
     # sqlsmith
     "src/tests/sqlsmith",
@@ -110,7 +109,7 @@ members = [
 # databend maintains
 jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "e21b273" }
 
-opendal = { version = "0.44.2", features = [
+opendal = { git = "https://github.com/apache/opendal.git", rev = "e94f068", features = [
     "layers-minitrace",
     "layers-prometheus-client",
     "layers-async-backtrace",

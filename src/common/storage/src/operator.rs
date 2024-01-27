@@ -102,15 +102,32 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
-        .layer(
-            TimeoutLayer::new()
-                // Return timeout error if the operation failed to finish in
-                // 10s
-                .with_timeout(Duration::from_secs(10))
-                // Return timeout error if the request speed is less than
-                // 1 KiB/s.
-                .with_speed(1024),
-        )
+        .layer({
+            let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(10);
+            let retry_io_timeout = env::var("_DATABEND_INTERNAL_RETRY_IO_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(10);
+
+            let timeout_layer = TimeoutLayer::new();
+
+            if retry_timeout != 0 {
+                // Return timeout error if the operation timeout
+                timeout_layer.with_timeout(Duration::from_secs(retry_timeout));
+            }
+
+            if retry_io_timeout != 0 {
+                // Return timeout error if the io operation timeout
+                timeout_layer.with_io_timeout(Duration::from_secs(retry_io_timeout));
+            }
+
+            // Return timeout error if the request speed is less than
+            // 1 KiB/s.
+            timeout_layer.with_speed(1024)
+        })
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add async backtrace
