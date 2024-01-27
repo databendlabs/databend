@@ -80,7 +80,11 @@ impl<R: Reporter> Reporter for StructLogReporter<R> {
 pub fn pretty_print_trace(spans: &[&SpanRecord]) {
     debug_assert!(spans.iter().map(|span| span.trace_id).all_equal());
 
-    let mut tree = build_tree(spans).unwrap();
+    let mut tree = if let Some(tree) = build_tree(spans) {
+        tree
+    } else {
+        return;
+    };
     let has_event = remove_no_event(&mut tree);
     if !has_event {
         return;
