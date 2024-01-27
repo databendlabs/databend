@@ -44,8 +44,15 @@ where Self: Transform
         output_schema: DataSchemaRef,
         table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
-        let expression_transform =
-            build_expression_transform(input_schema.clone(), output_schema, table, ctx)?;
+        let mut _trigger_non_null_error = (false, String::from(""));
+        let expression_transform = build_expression_transform(
+            input_schema.clone(),
+            output_schema,
+            table,
+            ctx,
+            false,
+            &mut _trigger_non_null_error,
+        )?;
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,

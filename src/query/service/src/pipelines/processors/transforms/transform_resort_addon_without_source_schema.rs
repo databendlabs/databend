@@ -49,6 +49,8 @@ pub struct TransformResortAddOnWithoutSourceSchema {
     expression_transforms: Vec<CompoundBlockOperator>,
     // data_schemas[i] means the i-th op's result block's schema.
     data_schemas: HashMap<usize, DataSchemaRef>,
+    trigger_non_null_errors: Vec<(bool, String)>,
+    target_table_name: String,
 }
 
 pub fn build_expression_transform(
@@ -56,6 +58,8 @@ pub fn build_expression_transform(
     output_schema: DataSchemaRef,
     table: Arc<dyn Table>,
     ctx: Arc<QueryContext>,
+    need_runtime_not_null_constraint: bool, /* for merge into, we should return error in pipeline running phase. */
+    trigger_non_null_error: &mut (bool, String),
 ) -> Result<CompoundBlockOperator> {
     let mut exprs = Vec::with_capacity(output_schema.fields().len());
     for f in output_schema.fields().iter() {
@@ -72,13 +76,16 @@ pub fn build_expression_transform(
                 // but for pg or snowflake, if a field is non-null, it will return
                 // a non-null error (it means they will give a null as the default value).
                 if !f.is_nullable() {
-                    // if we have a user-specified default expr, it must satisfy the non-null constraint
-                    // in table-create phase. So we just consider default_expr is none.
-                    return Err(ErrorCode::BadArguments(format!(
-                        "null value in column `{}` of table `{}` violates not-null constraint",
-                        f.name(),
-                        table.name()
-                    )));
+                    *trigger_non_null_error = (true, f.name().to_string());
+                    if !need_runtime_not_null_constraint {
+                        // if we have a user-specified default expr, it must satisfy the non-null constraint
+                        // in table-create phase. So we just consider default_expr is none.
+                        return Err(ErrorCode::BadArguments(format!(
+                            "null value in column `{}` of table `{}` violates not-null constraint",
+                            f.name(),
+                            table.name()
+                        )));
+                    }
                 }
                 let default_value = Scalar::default_value(f.data_type());
                 Expr::Constant {
@@ -123,15 +130,20 @@ where Self: Transform
     ) -> Result<ProcessorPtr> {
         let mut expression_transforms = Vec::with_capacity(unmatched.len());
         let mut data_schemas = HashMap::with_capacity(unmatched.len());
+        let mut trigger_non_null_errors = Vec::with_capacity(unmatched.len());
         for (idx, item) in unmatched.iter().enumerate() {
             let input_schema = item.0.clone();
             data_schemas.insert(idx, input_schema.clone());
+            let mut trigger_non_null_error = (false, String::from(""));
             let expression_transform = build_expression_transform(
                 input_schema,
                 output_schema.clone(),
                 table.clone(),
                 ctx.clone(),
+                true,
+                &mut trigger_non_null_error,
             )?;
+            trigger_non_null_errors.push(trigger_non_null_error);
             expression_transforms.push(expression_transform);
         }
         Ok(ProcessorPtr::create(Transformer::create(
@@ -140,6 +152,8 @@ where Self: Transform
             Self {
                 data_schemas,
                 expression_transforms,
+                trigger_non_null_errors,
+                target_table_name: table.name().to_string(),
             },
         )))
     }
@@ -155,6 +169,13 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
         }
         let input_schema_idx =
             SourceSchemaIndex::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
+        if self.trigger_non_null_errors[input_schema_idx].0 {
+            let trigger = &self.trigger_non_null_errors[input_schema_idx];
+            return Err(ErrorCode::BadArguments(format!(
+                "null value in column `{}` of table `{}` violates not-null constraint",
+                &trigger.1, &self.target_table_name
+            )));
+        }
         block = self.expression_transforms[input_schema_idx].transform(block)?;
         let input_schema = self.data_schemas.get(&input_schema_idx).unwrap();
         let columns = block.columns()[input_schema.num_fields()..].to_owned();
