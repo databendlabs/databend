@@ -160,7 +160,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
                 && BlockMetaIndex::downcast_from(data_block.take_meta().unwrap()).is_some();
             if no_need_add_status {
                 // no need to give source schema, the data block's schema is complete, so we won'f fill default
-                // field values.
+                // field values.The computed field will be processed in `TransformResortAddOnWithoutSourceSchema`.
                 self.output_data.push(data_block);
                 return Ok(());
             }

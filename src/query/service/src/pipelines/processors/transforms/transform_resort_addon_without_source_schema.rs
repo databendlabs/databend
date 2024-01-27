@@ -51,6 +51,10 @@ pub struct TransformResortAddOnWithoutSourceSchema {
     data_schemas: HashMap<usize, DataSchemaRef>,
     trigger_non_null_errors: Vec<(bool, String)>,
     target_table_name: String,
+    // for update block and target_build_optimization block,
+    // if target_table has computed expr, we need this.
+    computed_expression_transform: CompoundBlockOperator,
+    target_table_schema_with_computed: DataSchemaRef,
 }
 
 pub fn build_expression_transform(
@@ -127,14 +131,15 @@ where Self: Transform
         output_schema: DataSchemaRef,
         unmatched: UnMatchedExprs,
         table: Arc<dyn Table>,
+        target_table_schema_with_computed: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let mut expression_transforms = Vec::with_capacity(unmatched.len());
         let mut data_schemas = HashMap::with_capacity(unmatched.len());
         let mut trigger_non_null_errors = Vec::with_capacity(unmatched.len());
+        let mut trigger_non_null_error = (false, String::from(""));
         for (idx, item) in unmatched.iter().enumerate() {
             let input_schema = item.0.clone();
             data_schemas.insert(idx, input_schema.clone());
-            let mut trigger_non_null_error = (false, String::from(""));
             let expression_transform = build_expression_transform(
                 input_schema,
                 output_schema.clone(),
@@ -143,9 +148,17 @@ where Self: Transform
                 true,
                 &mut trigger_non_null_error,
             )?;
-            trigger_non_null_errors.push(trigger_non_null_error);
+            trigger_non_null_errors.push(trigger_non_null_error.clone());
             expression_transforms.push(expression_transform);
         }
+        let computed_expression_transform = build_expression_transform(
+            target_table_schema_with_computed.clone(),
+            output_schema,
+            table.clone(),
+            ctx,
+            true,
+            &mut trigger_non_null_error,
+        )?;
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
@@ -154,6 +167,8 @@ where Self: Transform
                 expression_transforms,
                 trigger_non_null_errors,
                 target_table_name: table.name().to_string(),
+                computed_expression_transform,
+                target_table_schema_with_computed,
             },
         )))
     }
@@ -165,7 +180,10 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         // see the comment details of `TransformResortAddOnWithoutSourceSchema`.
         if block.get_meta().is_none() {
-            return Ok(block.clone());
+            block = self.computed_expression_transform.transform(block)?;
+            let columns =
+                block.columns()[self.target_table_schema_with_computed.num_fields()..].to_owned();
+            return Ok(DataBlock::new(columns, block.num_rows()));
         }
         let input_schema_idx =
             SourceSchemaIndex::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();

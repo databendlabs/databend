@@ -198,6 +198,7 @@ impl PipelineBuilder {
                         Arc::new(DataSchema::from(table_default_schema)),
                         unmatched.clone(),
                         tbl.clone(),
+                        Arc::new(DataSchema::from(tbl.schema())),
                     )
                 },
                 1,
@@ -667,6 +668,7 @@ impl PipelineBuilder {
                     Arc::new(DataSchema::from(table_default_schema)),
                     unmatched.clone(),
                     tbl.clone(),
+                    Arc::new(DataSchema::from(table.schema())),
                 )
             },
             fill_default_len,
