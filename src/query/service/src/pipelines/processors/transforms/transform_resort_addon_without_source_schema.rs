@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -23,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_expression::SourceSchemaIndex;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
@@ -30,16 +32,23 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_exprs;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::UnMatchedExprs;
 
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
+// this processpr will recieve 3 kinds of blocks:
+// 1. from update, in this case, the block has entire target_table schema, no need to do anything
+// 2. from insert, we should fill the default values
+// 3. from target_build_optimziation, we also have entire target_table schema, no need to do anything
+// so for 1 and 3, the block's meta is none.
+// but for 2, we have source_schema_index
 pub struct TransformResortAddOnWithoutSourceSchema {
-    output_schema: DataSchemaRef,
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
+    expression_transforms: Vec<CompoundBlockOperator>,
+    // data_schemas[i] means the i-th op's result block's schema.
+    data_schemas: HashMap<usize, DataSchemaRef>,
 }
 
 pub fn build_expression_transform(
@@ -109,15 +118,28 @@ where Self: Transform
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
+        unmatched: UnMatchedExprs,
         table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
+        let mut expression_transforms = Vec::with_capacity(unmatched.len());
+        let mut data_schemas = HashMap::with_capacity(unmatched.len());
+        for (idx, item) in unmatched.iter().enumerate() {
+            let input_schema = item.0.clone();
+            data_schemas.insert(idx, input_schema.clone());
+            let expression_transform = build_expression_transform(
+                input_schema,
+                output_schema.clone(),
+                table.clone(),
+                ctx.clone(),
+            )?;
+            expression_transforms.push(expression_transform);
+        }
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             Self {
-                output_schema,
-                ctx,
-                table,
+                data_schemas,
+                expression_transforms,
             },
         )))
     }
@@ -127,15 +149,15 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
     const NAME: &'static str = "AddOnWithoutSourceSchemaTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        let input_schema =
-            DataSchemaRef::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
-        block = build_expression_transform(
-            input_schema.clone(),
-            self.output_schema.clone(),
-            self.table.clone(),
-            self.ctx.clone(),
-        )?
-        .transform(block)?;
+        println!("data_block:\n {:?}", block);
+        // see the comment details of `TransformResortAddOnWithoutSourceSchema`.
+        if block.get_meta().is_none() {
+            return Ok(block.clone());
+        }
+        let input_schema_idx =
+            SourceSchemaIndex::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
+        block = self.expression_transforms[input_schema_idx].transform(block)?;
+        let input_schema = self.data_schemas.get(&input_schema_idx).unwrap();
         let columns = block.columns()[input_schema.num_fields()..].to_owned();
         Ok(DataBlock::new(columns, block.num_rows()))
     }

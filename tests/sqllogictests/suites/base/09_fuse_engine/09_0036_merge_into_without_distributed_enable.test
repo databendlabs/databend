@@ -1103,7 +1103,46 @@ merge into tt1 using(select false, 10) as tt2(a, b) on (tt1.b = 1) when not matc
 query TT
 select * from tt1;
 ----
-true 20
+1 20
+
+## test multi insert clauses with specified default values
+statement ok
+create table target_default_values(a int default 12,b string default 'yes');
+
+statement ok
+create table source_default_values(a int default 12,b string default 'yes');
+
+statement ok
+insert into target_default_values values(1,'a');
+
+statement ok
+insert into target_default_values values(2,'b');
+
+statement ok
+insert into source_default_values values(1,'c');
+
+statement ok
+insert into source_default_values values(3,'d');
+
+statement ok
+insert into source_default_values values(2,'e');
+
+statement ok
+insert into source_default_values values(4,'f');
+
+query TTT
+merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a' 
+then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched 
+then insert(b) values(t2.b);
+----
+2 1 1
+
+query TT
+select * from target_default_values order by a,b;
+----
+1 c
+3 yes
+12 f
 
 ## add more tests cases for distributed modes.
 statement ok
