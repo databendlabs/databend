@@ -64,6 +64,8 @@ pub struct Window {
     pub order_by: Vec<WindowOrderByInfo>,
     // window frames
     pub frame: WindowFuncFrame,
+    // limit for potentially possible push-down
+    pub limit: Option<usize>,
 }
 
 impl Window {

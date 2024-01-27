@@ -17,8 +17,6 @@ use databend_common_exception::Result;
 use super::rewrite::RuleCommuteJoin;
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
-use super::rewrite::RuleInferFilter;
-use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
@@ -41,6 +39,7 @@ use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::optimizer::rule::rewrite::RulePushDownLimitUnion;
+use crate::optimizer::rule::rewrite::RulePushDownLimitWindow;
 use crate::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::optimizer::rule::rewrite::RuleSemiToInnerJoin;
 use crate::optimizer::rule::rewrite::RuleSplitAggregate;
@@ -71,6 +70,7 @@ impl RuleFactory {
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
+            RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new())),
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
@@ -81,10 +81,6 @@ impl RuleFactory {
             RuleID::NormalizeAggregate => Ok(Box::new(RuleNormalizeAggregate::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
-            RuleID::NormalizeDisjunctiveFilter => {
-                Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
-            }
-            RuleID::InferFilter => Ok(Box::new(RuleInferFilter::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
             RuleID::CommuteJoinBaseTable => Ok(Box::new(RuleCommuteJoinBaseTable::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),

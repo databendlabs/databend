@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Join;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
@@ -134,6 +135,27 @@ impl Binder {
         }
 
         Ok(Plan::MergeInto(Box::new(plan)))
+    }
+
+    fn can_try_update_column_only(&self, matched_clauses: &[MatchedClause]) -> bool {
+        if matched_clauses.len() == 1 {
+            let matched_clause = &matched_clauses[0];
+            if matched_clause.selection.is_none() {
+                if let MatchOperation::Update {
+                    update_list,
+                    is_star,
+                } = &matched_clause.operation
+                {
+                    let mut is_column_only = true;
+                    for update_expr in update_list {
+                        is_column_only =
+                            is_column_only && matches!(update_expr.expr, Expr::ColumnRef { .. });
+                    }
+                    return is_column_only || *is_star;
+                }
+            }
+        }
+        false
     }
 
     async fn bind_merge_into_with_join_type(
@@ -422,6 +444,7 @@ impl Binder {
             change_join_order: false,
             row_id_index: column_binding.index,
             split_idx,
+            can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
         })
     }
 

@@ -36,7 +36,7 @@ pub trait RoleApi: Sync + Send {
     ///
     /// Seq number ensures there is no other write happens between get and set.
     #[allow(clippy::ptr_arg)]
-    async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
+    async fn update_role_with<F>(&self, role: &str, seq: MatchSeq, f: F) -> Result<Option<u64>>
     where F: FnOnce(&mut RoleInfo) + Send;
 
     /// Grant ownership would transfer ownership of a object from one role to another role

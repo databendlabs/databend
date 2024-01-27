@@ -25,6 +25,7 @@ use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
 use minitrace::prelude::*;
+use opentelemetry_otlp::WithExportConfig;
 use serde_json::Map;
 
 use crate::loggers::new_file_log_writer;
@@ -107,19 +108,17 @@ pub fn init_logging(
                 .unwrap();
             let reporter = rt.block_on(async {
                 minitrace_opentelemetry::OpenTelemetryReporter::new(
-                    opentelemetry_otlp::SpanExporter::new_tonic(
-                        opentelemetry_otlp::ExportConfig {
-                            endpoint: otlp_endpoint,
-                            protocol: opentelemetry_otlp::Protocol::Grpc,
-                            timeout: Duration::from_secs(
-                                opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                            ),
-                        },
-                        opentelemetry_otlp::TonicConfig::default(),
-                    )
-                    .expect("initialize otlp exporter"),
+                    opentelemetry_otlp::new_exporter()
+                        .tonic()
+                        .with_endpoint(otlp_endpoint)
+                        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+                        .with_timeout(Duration::from_secs(
+                            opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                        ))
+                        .build_span_exporter()
+                        .expect("initialize oltp exporter"),
                     opentelemetry::trace::SpanKind::Server,
-                    Cow::Owned(opentelemetry::sdk::Resource::new([
+                    Cow::Owned(opentelemetry_sdk::Resource::new([
                         opentelemetry::KeyValue::new("service.name", trace_name.clone()),
                     ])),
                     opentelemetry::InstrumentationLibrary::new(

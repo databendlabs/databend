@@ -34,7 +34,7 @@ impl Binder {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         // rewrite show functions to select * from system.functions ...
         let query = format!(
-            "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name {}",
+            "SELECT name, is_aggregate, description FROM system.functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)

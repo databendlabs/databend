@@ -32,6 +32,8 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
+use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::util::contains_local_table_scan;
@@ -226,6 +228,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         )?;
     }
 
+    // Pull up and infer filter.
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
+
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
 
@@ -240,6 +245,10 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             dphyp_optimized = true;
         }
     }
+
+    // Deduplicate join conditions.
+    s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
+
     let mut cascades = CascadesOptimizer::new(
         opt_ctx.table_ctx.clone(),
         opt_ctx.metadata.clone(),
@@ -402,6 +411,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             target_tbl_idx: plan.target_table_idx,
         })
     }
+
     // try to optimize distributed join, only if
     // - distributed optimization is enabled
     // - no local table scan

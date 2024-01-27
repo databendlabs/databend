@@ -704,12 +704,16 @@ fn window_to_format_tree(
         FormatTreeNode::new(format!("frame: [{frame}]")),
     ];
 
+    if let Some(limit) = plan.limit {
+        children.push(FormatTreeNode::new(format!("limit: [{limit}]")))
+    }
+
     append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
-        "Window".to_string(), // todo(ariesdevil): show full window expression.
+        "Window".to_string(),
         children,
     ))
 }

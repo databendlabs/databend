@@ -25,13 +25,11 @@ use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
-        RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::NormalizeAggregate,
         RuleID::EliminateFilter,
         RuleID::EliminateSort,
         RuleID::MergeFilter,
-        RuleID::InferFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
@@ -39,6 +37,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitUnion,
         RuleID::PushDownLimitExpression,
         RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitWindow,
         RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
@@ -77,8 +76,6 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeAggregate,
     NormalizeScalarFilter,
-    NormalizeDisjunctiveFilter,
-    InferFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
@@ -91,6 +88,7 @@ pub enum RuleID {
     PushDownLimitOuterJoin,
     PushDownLimitExpression,
     PushDownLimitSort,
+    PushDownLimitWindow,
     PushDownLimitAggregate,
     PushDownLimitScan,
     PushDownSortScan,
@@ -129,6 +127,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
+            RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
@@ -138,8 +137,6 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::NormalizeAggregate => write!(f, "NormalizeAggregate"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
-            RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
-            RuleID::InferFilter => write!(f, "InferFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 
