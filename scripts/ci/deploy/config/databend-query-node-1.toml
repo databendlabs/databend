@@ -78,6 +78,10 @@ format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
 
+[log.structlog]
+on = true
+dir = "./.databend/structlog_1"
+
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
 endpoints = ["0.0.0.0:9191"]
