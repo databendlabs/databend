@@ -33,6 +33,12 @@ pub struct StructLogReporter<R: Reporter> {
     inner: R,
 }
 
+impl Default for StructLogReporter<DummyReporter> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StructLogReporter<DummyReporter> {
     pub fn new() -> Self {
         Self {
@@ -172,7 +178,7 @@ fn remove_no_event(node: &mut TreeNode) -> bool {
     if node.record.is_event() {
         return true;
     }
-    node.children.retain_mut(|child| remove_no_event(child));
+    node.children.retain_mut(remove_no_event);
     !node.children.is_empty()
 }
 
@@ -230,7 +236,7 @@ fn write_tree(
     } else {
         write!(buf, " ")?; // Single line, continue on the same line
     }
-    write_properties(buf, &node.record.properties())?;
+    write_properties(buf, node.record.properties())?;
     writeln!(buf)?;
 
     // Process children

@@ -242,14 +242,12 @@ pub fn init_logging(
     }
 
     // Error logger
-    if cfg.structlog.on {
-        if !cfg.structlog.dir.is_empty() {
-            let (structlog_log_file, flush_guard) =
-                new_file_log_writer(&cfg.structlog.dir, log_name, cfg.file.limit);
-            guards.push(Box::new(flush_guard));
-            structlog_logger =
-                structlog_logger.chain(Box::new(structlog_log_file) as Box<dyn Write + Send>);
-        }
+    if cfg.structlog.on && !cfg.structlog.dir.is_empty() {
+        let (structlog_log_file, flush_guard) =
+            new_file_log_writer(&cfg.structlog.dir, log_name, cfg.file.limit);
+        guards.push(Box::new(flush_guard));
+        structlog_logger =
+            structlog_logger.chain(Box::new(structlog_log_file) as Box<dyn Write + Send>);
     }
 
     let logger = fern::Dispatch::new()

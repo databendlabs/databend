@@ -73,7 +73,7 @@ impl log::Log for MinitraceLogger {
         );
         if message.contains('\n') {
             // Align multi-line log messages with the first line after `level``.
-            message = message.replace("\n", "\n                                  ");
+            message = message.replace('\n', "\n                                  ");
         }
         minitrace::Event::add_to_local_parent(message, || []);
     }
