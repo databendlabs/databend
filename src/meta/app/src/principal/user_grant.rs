@@ -232,16 +232,6 @@ impl UserGrantSet {
         self.roles.remove(role);
     }
 
-    pub fn find_object_granted_privileges(&self, object: &GrantObject) -> UserPrivilegeSet {
-        let mut privileges = UserPrivilegeSet::empty();
-        for entry in self.entries.iter() {
-            if entry.matches_entry(object) {
-                privileges |= entry.privileges.into();
-            }
-        }
-        privileges
-    }
-
     pub fn verify_privilege(
         &self,
         object: &GrantObject,

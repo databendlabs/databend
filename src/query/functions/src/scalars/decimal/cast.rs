@@ -500,16 +500,22 @@ where
     let max_for_precision = T::max_for_precision(size.precision);
 
     let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
-        let x = T::from_i128(x.as_()) * multiplier;
-
-        if x > max_for_precision || x < min_for_precision {
+        if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
+            if x > max_for_precision || x < min_for_precision {
+                ctx.set_error(
+                    builder.len(),
+                    concat!("Decimal overflow at line : ", line!()),
+                );
+                builder.push(T::one());
+            } else {
+                builder.push(x);
+            }
+        } else {
             ctx.set_error(
                 builder.len(),
                 concat!("Decimal overflow at line : ", line!()),
             );
             builder.push(T::one());
-        } else {
-            builder.push(x);
         }
     };
 
