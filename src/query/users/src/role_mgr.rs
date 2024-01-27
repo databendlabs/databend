@@ -23,7 +23,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_types::MatchSeq;
-use log::info;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -34,27 +33,10 @@ pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_role(&self, tenant: &str, role: &str) -> Result<RoleInfo> {
+    pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
-        let role_data = client
-            .get_role(&role.to_string(), MatchSeq::GE(0))
-            .await?
-            .data;
+        let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_role_optional(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
-        match self.get_role(tenant, role).await {
-            Ok(r) => Ok(Some(r)),
-            Err(err) => {
-                if err.code() == ErrorCode::UNKNOWN_ROLE {
-                    Ok(None)
-                } else {
-                    return Err(err);
-                }
-            }
-        }
     }
 
     // Get the tenant all roles list.
@@ -68,55 +50,6 @@ impl UserApiProvider {
         let mut roles = seq_roles.into_iter().map(|r| r.data).collect::<Vec<_>>();
         roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(roles)
-    }
-
-    /// Ensure the builtin roles account_admin and public exists. Please note that there's
-    /// a corner case that if we added another privilege type, we should add it to the
-    /// existed account_admin role.
-    ///
-    /// This function have two calling places:
-    /// 1. when the server starts
-    /// 2. when the user is authenticated
-    #[async_backtrace::framed]
-    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
-        // CREATE ROLE IF NOT EXISTS public;
-        let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-        self.add_role(tenant, public, true).await?;
-
-        // if not exists, create account_admin.
-        // if new privilege type on Global added, grant it to account_admin.
-        let existed_account_admin = self
-            .get_role_optional(tenant, BUILTIN_ROLE_ACCOUNT_ADMIN)
-            .await?;
-        if existed_account_admin.is_none() {
-            let account_admin = {
-                let mut r = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-                r.grants.grant_privileges(
-                    &GrantObject::Global,
-                    UserPrivilegeSet::available_privileges_on_global(),
-                );
-                r
-            };
-            self.add_role(tenant, account_admin, true).await?;
-        } else if existed_account_admin
-            .unwrap()
-            .grants
-            .find_object_granted_privileges(&GrantObject::Global)
-            != UserPrivilegeSet::available_privileges_on_global()
-        {
-            info!(
-                "new privilege type on GrantObject::Global detected, sync it to role account_admin"
-            );
-            self.grant_privileges_to_role(
-                tenant,
-                BUILTIN_ROLE_ACCOUNT_ADMIN,
-                GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            )
-            .await?;
-        }
-
-        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -135,7 +68,7 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_role(&self, tenant: &str, role: &str) -> Result<bool> {
+    pub async fn exists_role(&self, tenant: &str, role: String) -> Result<bool> {
         match self.get_role(tenant, role).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -156,7 +89,7 @@ impl UserApiProvider {
         role_info: RoleInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
-        if if_not_exists && self.exists_role(tenant, &role_info.name).await? {
+        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
             return Ok(0);
         }
 
@@ -182,7 +115,7 @@ impl UserApiProvider {
         new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
-        self.get_role(tenant, new_role).await?;
+        self.get_role(tenant, new_role.to_string()).await?;
 
         let client = self.get_role_api_client(tenant)?;
         client
@@ -209,7 +142,7 @@ impl UserApiProvider {
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
-        role: &str,
+        role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -226,7 +159,7 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &str,
-        role: &str,
+        role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -271,7 +204,7 @@ impl UserApiProvider {
     pub async fn revoke_role_from_role(
         &self,
         tenant: &str,
-        role: &str,
+        role: &String,
         revoke_role: &String,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;

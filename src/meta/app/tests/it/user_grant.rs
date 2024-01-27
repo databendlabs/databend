@@ -185,9 +185,6 @@ fn test_user_grant_entry() -> Result<()> {
 fn test_user_grant_set() -> Result<()> {
     let mut grants = UserGrantSet::empty();
 
-    // GRANT CREATE ON *.* TO 'user1';
-    // GRANT INSERT ON *.* TO 'user1';
-    // GRANT SELECT, CREATE ON db1.table1 TO 'user1';
     grants.grant_privileges(
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Create}).into(),
@@ -206,7 +203,6 @@ fn test_user_grant_set() -> Result<()> {
     );
     assert_eq!(2, grants.entries().len());
 
-    // REVOKE INSERT ON *.* FROM 'user1';
     grants.revoke_privileges(
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Insert}).into(),
