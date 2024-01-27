@@ -25,13 +25,11 @@ use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
-        RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::NormalizeAggregate,
         RuleID::EliminateFilter,
         RuleID::EliminateSort,
         RuleID::MergeFilter,
-        RuleID::InferFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
@@ -78,8 +76,6 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeAggregate,
     NormalizeScalarFilter,
-    NormalizeDisjunctiveFilter,
-    InferFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
@@ -141,8 +137,6 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::NormalizeAggregate => write!(f, "NormalizeAggregate"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
-            RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
-            RuleID::InferFilter => write!(f, "InferFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 

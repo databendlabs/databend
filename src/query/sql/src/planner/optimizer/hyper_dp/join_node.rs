@@ -88,6 +88,7 @@ impl JoinNode {
             from_correlated_subquery: false,
             need_hold_hash_table: false,
             broadcast: false,
+            is_lateral: false,
         });
         let children = self
             .children

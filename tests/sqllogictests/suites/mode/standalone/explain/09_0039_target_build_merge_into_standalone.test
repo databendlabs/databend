@@ -1,6 +1,12 @@
 statement ok
 set enable_experimental_merge_into = 1;
 
+statement ok
+drop table if exists target_build_optimization;
+
+statement ok
+drop table if exists source_optimization;
+
 ## Target Build Optimization Test
 statement ok
 create table target_build_optimization(a int,b string,c string);
