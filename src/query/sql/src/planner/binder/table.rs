@@ -349,7 +349,7 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                     .parse::<u64>()?;
 
-                let suffix = format!("{:8x}", Utc::now().timestamp());
+                let suffix = format!("{:08x}", Utc::now().timestamp());
                 let query = match mode {
                     StreamMode::AppendOnly => {
                         let append_alias = format!("_change_append${}", suffix);
