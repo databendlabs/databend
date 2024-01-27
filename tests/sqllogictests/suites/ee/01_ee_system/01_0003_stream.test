@@ -334,6 +334,15 @@ select a, b, change$action, change$is_update from s3 order by a
 4 4 INSERT 0
 6 5 INSERT 0
 
+query IITB
+select a, b, change$action, change$is_update from s3 as _change_delete order by a
+----
+0 1 INSERT 1
+1 1 DELETE 1
+2 2 DELETE 0
+4 4 INSERT 0
+6 5 INSERT 0
+
 statement ok
 create table t4(a int, b int)
 
