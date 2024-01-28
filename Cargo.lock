@@ -9107,7 +9107,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.44.2"
-source = "git+https://github.com/apache/opendal.git?rev=e94f068#e94f068a9977fcd20c9bb3626aaaa8be833209a8"
+source = "git+https://github.com/apache/opendal?rev=e94f068#e94f068a9977fcd20c9bb3626aaaa8be833209a8"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -9127,6 +9127,7 @@ dependencies = [
  "moka",
  "once_cell",
  "percent-encoding",
+ "prometheus",
  "prometheus-client",
  "prost 0.11.9",
  "quick-xml 0.30.0",

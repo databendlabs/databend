@@ -44,6 +44,7 @@ use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use once_cell::sync::OnceCell;
 use opendal::layers::AsyncBacktraceLayer;
+use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -121,7 +122,8 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
 
             if retry_io_timeout != 0 {
                 // Return timeout error if the io operation timeout
-                timeout_layer = timeout_layer.with_io_timeout(Duration::from_secs(retry_io_timeout));
+                timeout_layer =
+                    timeout_layer.with_io_timeout(Duration::from_secs(retry_io_timeout));
             }
 
             timeout_layer
@@ -135,10 +137,15 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(load_prometheus_client_layer())
-        .finish();
+        .layer(load_prometheus_client_layer());
 
-    Ok(op)
+    if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
+        if let Ok(permits) = permits.parse::<usize>() {
+            return Ok(op.layer(ConcurrentLimitLayer::new(permits)).finish());
+        }
+    }
+
+    Ok(op.finish())
 }
 
 /// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
