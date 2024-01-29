@@ -65,7 +65,9 @@ impl Interpreter for ShowGrantsInterpreter {
                     (user.identity().to_string(), user.grants)
                 }
                 PrincipalIdentity::Role(role) => {
-                    let role = UserApiProvider::instance().get_role(&tenant, role).await?;
+                    let role = UserApiProvider::instance()
+                        .get_role(&tenant, role.clone())
+                        .await?;
                     (format!("ROLE `{}`", role.identity()), role.grants)
                 }
             },
