@@ -59,11 +59,17 @@ impl BlockReader {
         )?;
         let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
-        for (i, field) in self.projected_schema.fields.iter().enumerate() {
+        for ((i, field), column_node) in self
+            .projected_schema
+            .fields
+            .iter()
+            .enumerate()
+            .zip(self.project_column_nodes.iter())
+        {
             let data_type = field.data_type().into();
-            let leaf_column_ids = field.leaf_column_ids();
-            if leaf_column_ids.len() > 1
-                && leaf_column_ids
+            if column_node.is_nested
+                && column_node
+                    .leaf_column_ids
                     .iter()
                     .any(|id| matches!(column_chunks.get(id), Some(DataItem::ColumnArray(_))))
             {
@@ -71,13 +77,12 @@ impl BlockReader {
                     "unexpected nested field: nested leaf field hits cached",
                 ));
             }
-
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(data)) => {
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
                         arrow_array.into();
-                    if self.put_cache && leaf_column_ids.len() == 1 {
+                    if self.put_cache && !column_node.is_nested {
                         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
