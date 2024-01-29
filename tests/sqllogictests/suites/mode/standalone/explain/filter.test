@@ -79,7 +79,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── Filter
 │       ├── output columns: [t.a (#0)]
-│       ├── filters: [false, is_true(t.a (#0) > 1)]
+│       ├── filters: [is_true(t.a (#0) > 1), false]
 │       ├── estimated rows: 0.00
 │       └── TableScan
 │           ├── table: default.default.t

@@ -28,7 +28,6 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -176,8 +175,12 @@ pub fn try_push_down_filter_join(
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-            JoinPredicate::Both { left, right, op } => {
-                if op == ComparisonOp::Equal {
+            JoinPredicate::Both {
+                left,
+                right,
+                is_equal_op,
+            } => {
+                if is_equal_op {
                     if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
                         join.join_type = JoinType::Inner;
                         join.left_conditions.push(left.clone());

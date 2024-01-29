@@ -209,6 +209,7 @@ impl Binder {
         }
 
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
+        let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
@@ -229,6 +230,7 @@ impl Binder {
             if join_type == JoinType::Cross {
                 join_type = JoinType::Inner;
             }
+            is_lateral = true;
         }
 
         let logical_join = Join {
@@ -240,6 +242,7 @@ impl Binder {
             from_correlated_subquery: false,
             need_hold_hash_table: false,
             broadcast: false,
+            is_lateral,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
