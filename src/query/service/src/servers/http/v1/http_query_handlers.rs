@@ -232,7 +232,8 @@ async fn query_final_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -273,7 +274,8 @@ async fn query_cancel_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -308,7 +310,8 @@ async fn query_state_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
 
     async {
         let http_query_manager = HttpQueryManager::instance();
@@ -337,7 +340,8 @@ async fn query_page_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -369,7 +373,8 @@ pub(crate) async fn query_handler(
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&ctx.query_id);
-    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
+    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()))
+        .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
