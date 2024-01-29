@@ -1,5 +1,5 @@
 query 
-select * from @data/parquet/alltypes_plain.parquet
+select * from @data/parquet/alltypes_plain.parquet (pattern => '')
 ----
 4 1 0 0 0 0 0.0 0.0 03/01/09 0 2009-03-01 00:00:00.000000
 5 0 1 1 1 10 1.1 10.1 03/01/09 1 2009-03-01 00:01:00.000000
@@ -11,7 +11,7 @@ select * from @data/parquet/alltypes_plain.parquet
 1 0 1 1 1 10 1.1 10.1 01/01/09 1 2009-01-01 00:01:00.000000
 
 query 
-select id from  @data/parquet/alltypes_plain.parquet where tinyint_col = 0 order by timestamp_col limit 5
+select id from  @data/parquet/alltypes_plain.parquet (pattern=>'') where tinyint_col = 0 order by timestamp_col limit 5
 ----
 0
 2
@@ -22,7 +22,7 @@ statement ok
 drop view if exists view_parquet
 
 statement ok
-create view view_parquet as select * from @data/parquet/alltypes_plain.parquet  (FILE_FORMAT=>'parquet')
+create view view_parquet as select * from @data/parquet/alltypes_plain.parquet  (FILE_FORMAT=>'parquet', pattern=>'')
 
 query 
 select * from view_parquet
