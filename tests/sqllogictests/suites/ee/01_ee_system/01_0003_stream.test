@@ -385,6 +385,14 @@ select a, b from default.s4
 statement ok
 drop stream default.s4
 
+######################
+# end of issue 14431 #
+######################
+
+###############
+# issue 14506 #
+###############
+
 statement ok
 create table t6(a int, `B` int, `c` int)
 
@@ -419,7 +427,7 @@ statement ok
 drop stream s6
 
 ######################
-# end of issue 14431 #
+# end of issue 14506 #
 ######################
 
 statement error 2733
