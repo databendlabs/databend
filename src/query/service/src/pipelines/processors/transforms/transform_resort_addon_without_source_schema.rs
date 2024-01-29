@@ -46,11 +46,10 @@ use crate::sessions::QueryContext;
 // so for 1 and 3, the block's meta is none.
 // but for 2, we have source_schema_index
 pub struct TransformResortAddOnWithoutSourceSchema {
-    expression_transforms: Vec<CompoundBlockOperator>,
+    expression_transforms: Vec<Option<CompoundBlockOperator>>,
     // data_schemas[i] means the i-th op's result block's schema.
     data_schemas: HashMap<usize, DataSchemaRef>,
-    trigger_non_null_errors: Vec<(bool, String)>,
-    target_table_name: String,
+    trigger_non_null_errors: Vec<Option<ErrorCode>>,
     // for update block and target_build_optimization block,
     // if target_table has computed expr, we need this.
     computed_expression_transform: CompoundBlockOperator,
@@ -62,8 +61,6 @@ pub fn build_expression_transform(
     output_schema: DataSchemaRef,
     table: Arc<dyn Table>,
     ctx: Arc<QueryContext>,
-    need_runtime_not_null_constraint: bool, /* for merge into, we should return error in pipeline running phase. */
-    trigger_non_null_error: &mut (bool, String),
 ) -> Result<CompoundBlockOperator> {
     let mut exprs = Vec::with_capacity(output_schema.fields().len());
     for f in output_schema.fields().iter() {
@@ -80,16 +77,13 @@ pub fn build_expression_transform(
                 // but for pg or snowflake, if a field is non-null, it will return
                 // a non-null error (it means they will give a null as the default value).
                 if !f.is_nullable() {
-                    *trigger_non_null_error = (true, f.name().to_string());
-                    if !need_runtime_not_null_constraint {
-                        // if we have a user-specified default expr, it must satisfy the non-null constraint
-                        // in table-create phase. So we just consider default_expr is none.
-                        return Err(ErrorCode::BadArguments(format!(
-                            "null value in column `{}` of table `{}` violates not-null constraint",
-                            f.name(),
-                            table.name()
-                        )));
-                    }
+                    // if we have a user-specified default expr, it must satisfy the non-null constraint
+                    // in table-create phase. So we just consider default_expr is none.
+                    return Err(ErrorCode::BadArguments(format!(
+                        "null value in column `{}` of table `{}` violates not-null constraint",
+                        f.name(),
+                        table.name()
+                    )));
                 }
                 let default_value = Scalar::default_value(f.data_type());
                 Expr::Constant {
@@ -136,28 +130,35 @@ where Self: Transform
         let mut expression_transforms = Vec::with_capacity(unmatched.len());
         let mut data_schemas = HashMap::with_capacity(unmatched.len());
         let mut trigger_non_null_errors = Vec::with_capacity(unmatched.len());
-        let mut trigger_non_null_error = (false, String::from(""));
         for (idx, item) in unmatched.iter().enumerate() {
             let input_schema = item.0.clone();
             data_schemas.insert(idx, input_schema.clone());
-            let expression_transform = build_expression_transform(
+            match build_expression_transform(
                 input_schema,
                 output_schema.clone(),
                 table.clone(),
                 ctx.clone(),
-                true,
-                &mut trigger_non_null_error,
-            )?;
-            trigger_non_null_errors.push(trigger_non_null_error.clone());
-            expression_transforms.push(expression_transform);
+            ) {
+                Ok(expression_transform) => {
+                    expression_transforms.push(Some(expression_transform));
+                    trigger_non_null_errors.push(None);
+                }
+                Err(err) => {
+                    if err.code() != ErrorCode::BAD_ARGUMENTS {
+                        return Err(err);
+                    } else {
+                        expression_transforms.push(None);
+                        trigger_non_null_errors.push(Some(err));
+                    }
+                }
+            };
         }
+        // computed_expression_transform will hold entire schema, so this won't get non-null constraint
         let computed_expression_transform = build_expression_transform(
             target_table_schema_with_computed.clone(),
             output_schema,
             table.clone(),
             ctx,
-            true,
-            &mut trigger_non_null_error,
         )?;
         Ok(ProcessorPtr::create(Transformer::create(
             input,
@@ -166,7 +167,6 @@ where Self: Transform
                 data_schemas,
                 expression_transforms,
                 trigger_non_null_errors,
-                target_table_name: table.name().to_string(),
                 computed_expression_transform,
                 target_table_schema_with_computed,
             },
@@ -187,14 +187,17 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
         }
         let input_schema_idx =
             SourceSchemaIndex::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
-        if self.trigger_non_null_errors[input_schema_idx].0 {
-            let trigger = &self.trigger_non_null_errors[input_schema_idx];
-            return Err(ErrorCode::BadArguments(format!(
-                "null value in column `{}` of table `{}` violates not-null constraint",
-                &trigger.1, &self.target_table_name
-            )));
+        if self.trigger_non_null_errors[input_schema_idx].is_some() {
+            let error_code = self.trigger_non_null_errors[input_schema_idx]
+                .clone()
+                .unwrap();
+            return Err(error_code);
         }
-        block = self.expression_transforms[input_schema_idx].transform(block)?;
+        assert!(self.expression_transforms[input_schema_idx].is_some());
+        block = self.expression_transforms[input_schema_idx]
+            .as_mut()
+            .unwrap()
+            .transform(block)?;
         let input_schema = self.data_schemas.get(&input_schema_idx).unwrap();
         let columns = block.columns()[input_schema.num_fields()..].to_owned();
         Ok(DataBlock::new(columns, block.num_rows()))
