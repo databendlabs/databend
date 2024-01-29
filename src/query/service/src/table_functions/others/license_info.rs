@@ -69,6 +69,7 @@ impl LicenseInfoTable {
             TableField::new("expire_at", TableDataType::Timestamp),
             // formatted string calculate the available time from now to expiry of license
             TableField::new("available_time_until_expiry", TableDataType::String),
+            TableField::new("features", TableDataType::String),
         ])
     }
 
@@ -156,6 +157,8 @@ impl LicenseInfoSource {
         let available_time = info.expires_at.unwrap_or_default().sub(now).as_micros();
         let human_readable_available_time =
             HumanDuration::from(Duration::from_micros(available_time)).to_string();
+
+        let feature_str = info.custom.display_features();
         Ok(DataBlock::new(
             vec![
                 BlockEntry::new(
@@ -192,6 +195,7 @@ impl LicenseInfoSource {
                     DataType::String,
                     Value::Scalar(Scalar::String(human_readable_available_time)),
                 ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(feature_str))),
             ],
             1,
         ))
