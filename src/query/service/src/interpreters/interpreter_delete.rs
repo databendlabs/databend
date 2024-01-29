@@ -389,26 +389,55 @@ pub async fn subquery_filter(
     }))
 }
 
-pub fn replace_subquery(
+// return false means that doesnot replace a subquery with filter,
+// in this case we need to replace subquery's parent with filter.
+fn do_replace_subquery(
     filters: &mut VecDeque<ScalarExpr>,
     selection: &mut ScalarExpr,
-) -> Result<()> {
+) -> Result<bool> {
+    let data_type = selection.data_type()?;
+    let mut replace_selection_with_filter = None;
+
     match selection {
         ScalarExpr::FunctionCall(func) => {
             for arg in &mut func.arguments {
-                replace_subquery(filters, arg)?;
+                if !do_replace_subquery(filters, arg)? {
+                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
+                    break;
+                }
             }
         }
         ScalarExpr::UDFServerCall(udf) => {
             for arg in &mut udf.arguments {
-                replace_subquery(filters, arg)?;
+                if !do_replace_subquery(filters, arg)? {
+                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
+                    break;
+                }
             }
         }
         ScalarExpr::SubqueryExpr { .. } => {
-            let filter = filters.pop_back().unwrap();
-            *selection = filter;
+            if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
+                let filter = filters.pop_back().unwrap();
+                *selection = filter;
+            } else {
+                return Ok(false);
+            }
         }
         _ => {}
     }
+
+    if let Some(filter) = replace_selection_with_filter {
+        *selection = filter;
+        replace_subquery(filters, selection)?;
+    }
+    Ok(true)
+}
+
+pub fn replace_subquery(
+    filters: &mut VecDeque<ScalarExpr>,
+    selection: &mut ScalarExpr,
+) -> Result<()> {
+    let _ = do_replace_subquery(filters, selection)?;
+
     Ok(())
 }

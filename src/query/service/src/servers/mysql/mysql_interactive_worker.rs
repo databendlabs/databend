@@ -187,7 +187,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        let root = Span::root(full_name!(), SpanContext::random());
+        let root = Span::root(full_name!(), SpanContext::random())
+            .with_properties(|| self.base.session.to_minitrace_properties());
 
         async {
             if self.base.session.is_aborting() {
