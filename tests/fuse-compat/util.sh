@@ -191,6 +191,89 @@ run_test() {
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_read
 }
 
+# Test fuse-data forward compatibility between an old version query and the current
+# version query.
+run_forward_test() {
+    echo " === pip list"
+    python3 -m pip list
+
+    local query_old_ver="$1"
+    local old_config_path="$2"
+    local logictest_path="tests/fuse-compat/compat-logictest/$3"
+
+    echo " === Test with query-$query_old_ver and current query"
+
+    local query_old="./bins/$query_old_ver/bin/databend-query"
+    local query_new="./bins/current/databend-query"
+    local metasrv_old="./bins/$query_old_ver/bin/databend-meta"
+    local metasrv_new="./bins/current/databend-meta"
+    local sqllogictests="./bins/current/databend-sqllogictests"
+
+
+    echo " === metasrv version:"
+    # TODO remove --single
+    "$metasrv_new" --single --cmd ver || echo " === no version yet"
+
+    echo " === old query version:"
+    "$query_old" --cmd ver || echo " === no version yet"
+
+    echo " === new query version:"
+    "$query_new" --cmd ver || echo " === no version yet"
+
+    sleep 1
+
+    kill_proc databend-query
+    kill_proc databend-meta
+
+    echo " === Clean meta dir"
+    rm -rf .databend || echo " === no dir to rm: .databend"
+    rm nohup.out || echo "no nohup.out"
+
+    echo ' === Start databend-meta...'
+
+    export RUST_BACKTRACE=1
+
+    echo ' === Start new databend-meta...'
+
+    nohup "$metasrv_new" --single --log-level=DEBUG &
+    python3 scripts/ci/wait_tcp.py --timeout 20 --port 9191
+
+    echo " === Start new databend-query..."
+
+    config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
+    echo "new databend config path: $config_path"
+
+    nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
+    python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
+
+    echo " === Run test: fuse_compat_write with current query"
+
+    # download_logictest $query_old_ver old_logictest
+    $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
+
+    echo ' === Start old databend-meta...'
+
+    nohup "$metasrv_old" --single --log-level=DEBUG &
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
+
+    echo ' === Start old databend-query...'
+
+    # TODO clean up data?
+    echo " === bring up $query_old"
+
+    nohup "$query_old" -c "$old_config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-old.log &
+    python3 scripts/ci/wait_tcp.py --timeout 15 --port 3307
+
+    echo " === Run test: fuse_compat_read with old query"
+
+    # download_logictest $query_old_ver old_logictest/$query_old_ver
+    # run_logictest old_logictest/$query_old_ver fuse_compat_read
+    $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_read
+
+    kill_proc databend-query
+    kill_proc databend-meta
+}
+
 # Run suppelmentary stateless tests
 run_stateless() {
     local case_path="$1"
