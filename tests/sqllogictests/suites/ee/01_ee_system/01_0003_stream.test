@@ -415,7 +415,7 @@ statement error 1065
 select a, b, c from s6
 
 query IIITB
-select a, `B`, c, change$action, change$is_update from s6 order by a
+select a, `B`, c, change$action, change$is_update from s6 order by a, `B`
 ----
 1 1 1 DELETE 0
 1 2 2 INSERT 1
