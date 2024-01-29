@@ -468,7 +468,7 @@ impl Settings {
     }
 
     pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fuse_write_use_parquet2")? != 0)
+        Ok(self.try_get_u64("fuse_write_use_parquet2")? == 1)
     }
 
     pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
