@@ -349,6 +349,16 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                     .parse::<u64>()?;
 
+                let schema = table_meta.schema_with_stream();
+                let mut cols = Vec::with_capacity(schema.fields().len());
+                for field in schema.fields() {
+                    let name = field.name();
+                    if is_stream_column(name) {
+                        continue;
+                    }
+                    cols.push(name.clone());
+                }
+
                 let suffix = format!("{:08x}", Utc::now().timestamp());
                 let query = match mode {
                     StreamMode::AppendOnly => {
@@ -368,16 +378,6 @@ impl Binder {
                         )
                     }
                     StreamMode::Standard => {
-                        let schema = table_meta.schema_with_stream();
-                        let mut cols = Vec::with_capacity(schema.fields().len());
-                        for field in schema.fields() {
-                            let name = field.name();
-                            if is_stream_column(name) {
-                                continue;
-                            }
-                            cols.push(name.clone());
-                        }
-
                         let a_table_alias = format!("_change_insert${}", suffix);
                         let a_cols = cols.join(", ");
 
@@ -387,17 +387,14 @@ impl Binder {
                             .map(|s| format!("d_{}", s))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        let d_col_alias = cols
-                            .iter()
-                            .map(|s| format!("{} as d_{}", s, s))
-                            .collect::<Vec<_>>()
-                            .join(", ");
 
                         format!(
-                            "with _change as ( \
+                            "with _change({a_cols}, change$action, change$row_id, \
+                                          {d_cols}, d_change$action, d_change$row_id) as \
+                            ( \
                                 select * \
                                 from ( \
-                                    select {a_cols}, \
+                                    select *, \
                                            _row_version, \
                                            'INSERT' as change$action, \
                                            if(is_not_null(_origin_block_id), \
@@ -407,17 +404,17 @@ impl Binder {
                                     from {database}.{table_name} as {a_table_alias} \
                                 ) as A \
                                 FULL OUTER JOIN ( \
-                                    select {d_col_alias}, \
+                                    select *, \
                                            _row_version, \
-                                           'DELETE' as d_change$action, \
+                                           'DELETE' as change$action, \
                                            if(is_not_null(_origin_block_id), \
                                               concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                               {d_table_alias}._base_row_id \
-                                           ) as d_change$row_id \
+                                           ) as change$row_id \
                                     from {database}.{table_name} as {d_table_alias} \
                                 ) as D \
-                                on A.change$row_id = D.d_change$row_id \
-                                where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
+                                on A.change$row_id = D.change$row_id \
+                                where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
                             ) \
                             select {a_cols}, \
                                    change$action, \
@@ -441,6 +438,10 @@ impl Binder {
                 if let Statement::Query(query) = &stmt {
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query).await?;
+
+                    for (index, column_name) in cols.iter().enumerate() {
+                        new_bind_context.columns[index].column_name = column_name.clone();
+                    }
                     if let Some(alias) = alias {
                         new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                     } else {
