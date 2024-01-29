@@ -83,7 +83,7 @@ use log::debug;
 use log::error;
 
 use crate::binder::get_storage_params_from_options;
-use crate::binder::parse_uri_location;
+use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -437,7 +437,12 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
+                let sp = parse_storage_params_from_uri(
+                    &mut uri,
+                    Some(self.ctx.as_ref()),
+                    "when create TABLE with external location",
+                )
+                .await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -689,7 +694,9 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
+        let sp =
+            parse_storage_params_from_uri(&mut uri, Some(self.ctx.as_ref()), "when ATTACH TABLE")
+                .await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;

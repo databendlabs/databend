@@ -49,6 +49,10 @@ level = "INFO"
 format = "text"
 dir = "./.databend/logs_hive"
 
+[log.structlog]
+on = true
+dir = "./.databend/structlog_hive"
+
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
 endpoints = ["0.0.0.0:9191"]
