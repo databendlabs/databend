@@ -454,7 +454,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: db_table_name_ident.clone(),
             table_meta: table_meta(created_on),
         };
@@ -1507,7 +1507,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db.to_string(),
@@ -1583,7 +1583,7 @@ impl SchemaApiTestSuite {
             };
             let created_on = Utc::now();
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident.clone(),
                 table_meta: table_meta(created_on),
             };
@@ -1636,7 +1636,10 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_create_get_drop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1667,7 +1670,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1730,7 +1733,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db_name.to_string(),
@@ -1774,7 +1777,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create table again with if_not_exists = true");
         {
-            req.if_not_exists = true;
+            req.create_option = CreateOption::CreateIfNotExists(true);
             let res = mt.create_table(req.clone()).await?;
             assert_eq!(
                 tb_ident_2.table_id, res.table_id,
@@ -1800,7 +1803,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create table again with if_not_exists = false");
         {
-            req.if_not_exists = false;
+            req.create_option = CreateOption::CreateIfNotExists(false);
 
             let res = mt.create_table(req).await;
             info!("create table res: {:?}", res);
@@ -1840,7 +1843,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1937,6 +1940,75 @@ impl SchemaApiTestSuite {
             assert_eq!(expected_tb_count, tb_count.count);
         }
 
+        info!("--- create or replace db1");
+        {
+            let old_created_on = Utc::now();
+            let table = "test_replace";
+
+            let key_dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: table.to_string(),
+            };
+
+            let req = CreateTableReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: table.to_string(),
+                },
+                table_meta: table_meta(old_created_on),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            let old_table_id = res.table_id;
+
+            let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?.count;
+            let res = mt.get_table((tenant, db_name, table).into()).await?;
+            assert_eq!(res.meta.created_on, old_created_on);
+
+            let orig_table_id: u64 = get_kv_u64_data(mt.as_kv_api(), &key_dbid_tbname).await?;
+            assert_eq!(orig_table_id, old_table_id);
+            let key_table_id_to_name = TableIdToName {
+                table_id: res.ident.table_id,
+            };
+            let ret_table_name_ident: DBIdTableName =
+                get_kv_data(mt.as_kv_api(), &key_table_id_to_name).await?;
+            assert_eq!(ret_table_name_ident, key_dbid_tbname);
+
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: table.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            let table_id = res.table_id;
+
+            // table count dose not change
+            assert_eq!(
+                tb_count,
+                mt.count_tables(Self::req_count_table(tenant)).await?.count
+            );
+            // table meta has been changed
+            let res = mt.get_table((tenant, db_name, table).into()).await?;
+            assert_eq!(res.meta.created_on, created_on);
+
+            assert_eq!(
+                table_id,
+                get_kv_u64_data(mt.as_kv_api(), &key_dbid_tbname).await?
+            );
+            let key_table_id_to_name = TableIdToName { table_id };
+            let ret_table_name_ident: DBIdTableName =
+                get_kv_data(mt.as_kv_api(), &key_table_id_to_name).await?;
+            assert_eq!(ret_table_name_ident, key_dbid_tbname);
+        }
         Ok(())
     }
 
@@ -2145,7 +2217,7 @@ impl SchemaApiTestSuite {
 
         let created_on = Utc::now();
         let create_tb2_req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db1_name.to_string(),
@@ -2368,7 +2440,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2634,7 +2706,7 @@ impl SchemaApiTestSuite {
         info!("--- create table");
         {
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2645,7 +2717,7 @@ impl SchemaApiTestSuite {
             let _res = mt.create_table(req.clone()).await?;
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2957,7 +3029,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3289,7 +3361,7 @@ impl SchemaApiTestSuite {
         };
 
         let req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident,
             table_meta: create_table_meta.clone(),
         };
@@ -3523,7 +3595,7 @@ impl SchemaApiTestSuite {
         };
 
         let req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: tbl_name_ident,
             table_meta: create_table_meta.clone(),
         };
@@ -3757,7 +3829,7 @@ impl SchemaApiTestSuite {
         info!("--- create and get table");
         {
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -3843,7 +3915,7 @@ impl SchemaApiTestSuite {
             drop_ids_2.push(DroppedId::Db(res.db_id, db_name.db_name.clone()));
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db1".to_string(),
@@ -3891,7 +3963,7 @@ impl SchemaApiTestSuite {
                     table_name: "tb1".to_string(),
                 };
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: table_name.clone(),
                     table_meta: table_meta(created_on),
                 };
@@ -3916,7 +3988,7 @@ impl SchemaApiTestSuite {
             {
                 let mut table_meta = table_meta(created_on);
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db2".to_string(),
@@ -3944,7 +4016,7 @@ impl SchemaApiTestSuite {
             info!("--- create db2.tb3");
             {
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db2".to_string(),
@@ -3992,7 +4064,7 @@ impl SchemaApiTestSuite {
             info!("--- create and drop db3.tb1");
             {
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4018,7 +4090,7 @@ impl SchemaApiTestSuite {
             {
                 let mut table_meta = table_meta(created_on);
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4047,7 +4119,7 @@ impl SchemaApiTestSuite {
             info!("--- create db3.tb3");
             {
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4193,7 +4265,7 @@ impl SchemaApiTestSuite {
             for i in 0..number {
                 let table_name = format!("tb{:?}", i);
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db.to_string(),
@@ -4429,7 +4501,7 @@ impl SchemaApiTestSuite {
         info!("--- create and get table");
         {
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -4551,7 +4623,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             let res = mt
                 .create_table(CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: tbl_name_ident.clone(),
                     table_meta: create_table_meta.clone(),
                 })
@@ -4647,7 +4719,7 @@ impl SchemaApiTestSuite {
         {
             // first create drop table2
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: new_tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -4808,7 +4880,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -4916,7 +4988,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5066,7 +5138,7 @@ impl SchemaApiTestSuite {
             let _ = mt.create_database(plan).await?;
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5280,7 +5352,7 @@ impl SchemaApiTestSuite {
             };
             for tb_name in tb_names {
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: tb_name.clone(),
                     table_meta: table_meta(create_on),
                 };
@@ -5397,7 +5469,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let mut req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5464,7 +5536,7 @@ impl SchemaApiTestSuite {
 
                 let table_meta = util.table_meta();
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: util.tenant(),
                         db_name: util.db_name(),
@@ -5514,7 +5586,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let mut req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db1_name.to_string(),
@@ -6331,7 +6403,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
             for tb in tables {
                 let req = CreateTableReq {
-                    if_not_exists: false,
+                    create_option: CreateOption::CreateIfNotExists(false),
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db_name.to_string(),
@@ -6404,7 +6476,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6499,7 +6571,7 @@ impl SchemaApiTestSuite {
             let _ = mt.create_database(plan).await?;
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6753,7 +6825,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
     async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
         let table_meta = self.table_meta();
         let req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: TableNameIdent {
                 tenant: self.tenant(),
                 db_name: self.db_name(),

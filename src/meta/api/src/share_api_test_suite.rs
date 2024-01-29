@@ -732,7 +732,7 @@ impl ShareApiTestSuite {
             db_id = res.db_id;
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -755,7 +755,7 @@ impl ShareApiTestSuite {
             };
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -771,7 +771,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db2_name.to_string(),
@@ -1179,7 +1179,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1332,7 +1332,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: db_name.to_string(),
@@ -1583,7 +1583,7 @@ impl ShareApiTestSuite {
             db_id = res.db_id;
 
             let req = CreateTableReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
