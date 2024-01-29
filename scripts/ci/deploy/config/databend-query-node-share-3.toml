@@ -70,6 +70,10 @@ level = "ERROR"
 format = "text"
 dir = "./.databend/logs_3"
 
+[log.structlog]
+on = true
+dir = "./.databend/structlog_3"
+
 [meta]
 endpoints = ["0.0.0.0:39191"]
 username = "root"

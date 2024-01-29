@@ -26,6 +26,7 @@ use databend_common_tracing::OTLPConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::StructLogConfig;
 use databend_common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -598,6 +599,7 @@ impl Into<InnerLogConfig> for LogConfig {
             otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
             profile: ProfileLogConfig::default(),
+            structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
         }
     }
