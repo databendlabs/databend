@@ -3871,6 +3871,7 @@ dependencies = [
  "defer",
  "fern",
  "humantime",
+ "itertools 0.10.5",
  "log",
  "minitrace",
  "minitrace-opentelemetry",
