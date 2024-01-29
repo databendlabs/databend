@@ -135,13 +135,6 @@ impl Interpreter for ReclusterTableInterpreter {
                 )));
             }
 
-            // Status.
-            {
-                let status = "recluster: begin to run recluster";
-                ctx.set_status_info(status);
-                info!("{}", status);
-            }
-
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let mutator = fuse_table
                 .build_recluster_mutator(ctx.clone(), extras.clone(), plan.limit)
