@@ -130,7 +130,6 @@ data_path = "./.databend/stateless_test_data"
 # default is "none", which disable table data cache
 # use "disk" to enabled disk cache
 data_cache_storage = "none"
-table_data_deserialized_data_bytes = 102400
 
 [cache.disk]
 # cache path
