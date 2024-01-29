@@ -41,6 +41,15 @@ pub enum ProfileStatisticsName {
     SpillReadTime,
 }
 
+#[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
+pub enum StatisticsUnit {
+    Rows,
+    Bytes,
+    NanoSeconds,
+    MillisSeconds,
+    Count,
+}
+
 impl Display for ProfileStatisticsName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -67,6 +76,7 @@ pub struct ProfileDesc {
     desc: &'static str,
     display_name: &'static str,
     index: usize,
+    unit: StatisticsUnit,
 }
 
 pub static PROFILES_DESC: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
@@ -99,76 +109,91 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 display_name: "cpu time",
                 desc: "The time spent to process in nanoseconds",
                 index: ProfileStatisticsName::CpuTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
             }),
             (ProfileStatisticsName::WaitTime, ProfileDesc {
                 display_name: "wait time",
                 desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
                 index: ProfileStatisticsName::WaitTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
             }),
             (ProfileStatisticsName::ExchangeRows, ProfileDesc {
                 display_name: "exchange rows",
                 desc: "The number of data rows exchange between nodes in cluster mode",
                 index: ProfileStatisticsName::ExchangeRows as usize,
+                unit: StatisticsUnit::Rows,
             }),
             (ProfileStatisticsName::ExchangeBytes, ProfileDesc {
                 display_name: "exchange bytes",
                 desc: "The number of data bytes exchange between nodes in cluster mode",
                 index: ProfileStatisticsName::ExchangeBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::OutputRows, ProfileDesc {
                 display_name: "output rows",
                 desc: "The number of rows from the physical plan output to the next physical plan",
                 index: ProfileStatisticsName::OutputRows as usize,
+                unit: StatisticsUnit::Rows,
             }),
             (ProfileStatisticsName::OutputBytes, ProfileDesc {
                 display_name: "output bytes",
                 desc: "The number of bytes from the physical plan output to the next physical plan",
                 index: ProfileStatisticsName::OutputBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::ScanBytes, ProfileDesc {
                 display_name: "bytes scanned",
                 desc: "The bytes scanned of query",
                 index: ProfileStatisticsName::ScanBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::ScanCacheBytes, ProfileDesc {
                 display_name: "bytes scanned from cache",
                 desc: "The bytes scanned from cache of query",
                 index: ProfileStatisticsName::ScanCacheBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::ScanPartitions, ProfileDesc {
                 display_name: "partitions scanned",
                 desc: "The partitions scanned of query",
                 index: ProfileStatisticsName::ScanPartitions as usize,
+                unit: StatisticsUnit::Count,
             }),
             (ProfileStatisticsName::SpillWriteCount, ProfileDesc {
                 display_name: "numbers spilled by write",
                 desc: "The number of spilled by write",
                 index: ProfileStatisticsName::SpillWriteCount as usize,
+                unit: StatisticsUnit::Count,
             }),
             (ProfileStatisticsName::SpillWriteBytes, ProfileDesc {
                 display_name: "bytes spilled by write",
                 desc: "The bytes spilled by write",
                 index: ProfileStatisticsName::SpillWriteBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::SpillWriteTime, ProfileDesc {
                 display_name: "spilled time by write",
                 desc: "The time spent to write spill in millisecond",
                 index: ProfileStatisticsName::SpillWriteTime as usize,
+                unit: StatisticsUnit::MillisSeconds,
             }),
             (ProfileStatisticsName::SpillReadCount, ProfileDesc {
                 display_name: "numbers spilled by read",
                 desc: "The number of spilled by read",
                 index: ProfileStatisticsName::SpillReadCount as usize,
+                unit: StatisticsUnit::Count,
             }),
             (ProfileStatisticsName::SpillReadBytes, ProfileDesc {
                 display_name: "bytes spilled by read",
                 desc: "The bytes spilled by read",
                 index: ProfileStatisticsName::SpillReadBytes as usize,
+                unit: StatisticsUnit::Bytes,
             }),
             (ProfileStatisticsName::SpillReadTime, ProfileDesc {
                 display_name: "spilled time by read",
                 desc: "The time spent to read spill in millisecond",
                 index: ProfileStatisticsName::SpillReadTime as usize,
+                unit: StatisticsUnit::MillisSeconds,
             }),
         ]))
     }).clone()
