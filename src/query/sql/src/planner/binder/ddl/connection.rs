@@ -16,7 +16,7 @@ use databend_common_ast::ast::CreateConnectionStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_exception::Result;
 
-use crate::binder::parse_uri_location;
+use crate::binder::parse_storage_params_from_uri;
 use crate::plans::CreateConnectionPlan;
 use crate::plans::Plan;
 use crate::Binder;
@@ -30,11 +30,11 @@ impl Binder {
         let mut location = UriLocation::new(
             stmt.storage_type.clone(),
             "".to_string(),
-            "".to_string(),
+            "/".to_string(),
             "".to_string(),
             stmt.storage_params.clone(),
         );
-        parse_uri_location(&mut location, None).await?;
+        parse_storage_params_from_uri(&mut location, None, "when CREATE CONNECTION").await?;
         Ok(Plan::CreateConnection(Box::new(CreateConnectionPlan {
             if_not_exists: stmt.if_not_exists,
             name: stmt.name.to_string(),
