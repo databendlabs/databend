@@ -393,6 +393,12 @@ impl UriLocation {
     ) -> databend_common_exception::Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
+            if !path.starts_with('/') {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Invalid uri: {}. fs location must start with 'fs:///'",
+                    uri
+                )));
+            }
             return Ok(UriLocation::new(
                 "fs".to_string(),
                 "".to_string(),

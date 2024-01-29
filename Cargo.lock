@@ -3871,6 +3871,7 @@ dependencies = [
  "defer",
  "fern",
  "humantime",
+ "itertools 0.10.5",
  "log",
  "minitrace",
  "minitrace-opentelemetry",
@@ -9107,8 +9108,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.44.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4af824652d4d2ffabf606d337a071677ae621b05622adf35df9562f69d9b4498"
+source = "git+https://github.com/apache/opendal?rev=e94f068#e94f068a9977fcd20c9bb3626aaaa8be833209a8"
 dependencies = [
  "anyhow",
  "async-backtrace",

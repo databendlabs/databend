@@ -1,6 +1,6 @@
 ---s3 cp
 ---copy into
-//tmp/load_compact.csv	1000	0	NULL	NULL
+tmp/load_compact.csv	1000	0	NULL	NULL
 ---row_count
 1000
 ---block_count

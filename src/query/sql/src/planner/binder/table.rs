@@ -300,12 +300,24 @@ impl Binder {
                 }
             }
             "STREAM" => {
-                let change_type = match table_alias_name.as_deref() {
-                    Some("_change_append") => Some(ChangeType::Append),
-                    Some("_change_insert") => Some(ChangeType::Insert),
-                    Some("_change_delete") => Some(ChangeType::Delete),
-                    _ => None,
-                };
+                let mut change_type = None;
+                if let Some(table_alias) = table_alias_name.as_deref() {
+                    let alias_param = table_alias.split('$').collect::<Vec<_>>();
+                    if alias_param.len() == 2 && alias_param[1].len() == 8 {
+                        if let Ok(suffix) = i64::from_str_radix(alias_param[1], 16) {
+                            // 2023-01-01 00:00:00.
+                            let base_timestamp = 1672502400;
+                            if suffix > base_timestamp {
+                                change_type = match alias_param[0] {
+                                    "_change_append" => Some(ChangeType::Append),
+                                    "_change_insert" => Some(ChangeType::Insert),
+                                    "_change_delete" => Some(ChangeType::Delete),
+                                    _ => None,
+                                };
+                            }
+                        }
+                    }
+                }
                 if change_type.is_some() {
                     let table_index = self.metadata.write().add_table(
                         catalog,
@@ -337,92 +349,86 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                     .parse::<u64>()?;
 
+                let schema = table_meta.schema_with_stream();
+                let mut cols = Vec::with_capacity(schema.fields().len());
+                for field in schema.fields() {
+                    let name = field.name();
+                    if is_stream_column(name) {
+                        continue;
+                    }
+                    cols.push(name.clone());
+                }
+
+                let suffix = format!("{:08x}", Utc::now().timestamp());
                 let query = match mode {
                     StreamMode::AppendOnly => {
+                        let append_alias = format!("_change_append${}", suffix);
                         format!(
                             "select *, \
                                     'INSERT' as change$action, \
                                     false as change$is_update, \
                                     if(is_not_null(_origin_block_id), \
                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                       _change_append._base_row_id \
+                                       {append_alias}._base_row_id \
                                     ) as change$row_id \
-                             from {}.{} as _change_append \
+                             from {database}.{table_name} as {append_alias} \
                              where not(is_not_null(_origin_version) and \
-                                       (_origin_version < {} or contains(_change_append._base_block_ids, _origin_block_id)))",
-                            database, table_name, table_version
+                                       (_origin_version < {table_version} or \
+                                        contains({append_alias}._base_block_ids, _origin_block_id)))",
                         )
                     }
                     StreamMode::Standard => {
-                        let schema = table_meta.schema_with_stream();
-                        let mut cols = Vec::with_capacity(schema.fields().len());
-                        for field in schema.fields() {
-                            let name = field.name();
-                            if is_stream_column(name) {
-                                continue;
-                            }
-                            cols.push(name.clone());
-                        }
-
+                        let a_table_alias = format!("_change_insert${}", suffix);
                         let a_cols = cols.join(", ");
+
+                        let d_table_alias = format!("_change_delete${}", suffix);
                         let d_cols = cols
                             .iter()
                             .map(|s| format!("d_{}", s))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        let d_col_alias = cols
-                            .iter()
-                            .map(|s| format!("{} as d_{}", s, s))
-                            .collect::<Vec<_>>()
-                            .join(", ");
 
                         format!(
-                            "with _change as ( \
+                            "with _change({a_cols}, change$action, change$row_id, \
+                                          {d_cols}, d_change$action, d_change$row_id) as \
+                            ( \
                                 select * \
                                 from ( \
-                                    select {}, \
+                                    select *, \
                                            _row_version, \
                                            'INSERT' as change$action, \
                                            if(is_not_null(_origin_block_id), \
                                               concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                              _change_insert._base_row_id \
+                                              {a_table_alias}._base_row_id \
                                            ) as change$row_id \
-                                    from {}.{} as _change_insert \
+                                    from {database}.{table_name} as {a_table_alias} \
                                 ) as A \
                                 FULL OUTER JOIN ( \
-                                    select {}, \
+                                    select *, \
                                            _row_version, \
-                                           'DELETE' as d_change$action, \
+                                           'DELETE' as change$action, \
                                            if(is_not_null(_origin_block_id), \
                                               concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                              _change_delete._base_row_id \
-                                           ) as d_change$row_id \
-                                    from {}.{} as _change_delete \
+                                              {d_table_alias}._base_row_id \
+                                           ) as change$row_id \
+                                    from {database}.{table_name} as {d_table_alias} \
                                 ) as D \
-                                on A.change$row_id = D.d_change$row_id \
-                                where A.change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
+                                on A.change$row_id = D.change$row_id \
+                                where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
                             ) \
-                            select {}, \
+                            select {a_cols}, \
                                    change$action, \
                                    change$row_id, \
                                    d_change$action is not null as change$is_update \
                             from _change \
                             where change$action is not null \
                             union all \
-                            select {}, \
+                            select {d_cols}, \
                                    d_change$action, \
                                    d_change$row_id, \
                                    change$action is not null as change$is_update \
                             from _change \
                             where d_change$action is not null",
-                            a_cols,
-                            database,
-                            table_name,
-                            d_col_alias,
-                            database,
-                            table_name,
-                            a_cols,
-                            d_cols
                         )
                     }
                 };
@@ -432,6 +438,10 @@ impl Binder {
                 if let Statement::Query(query) = &stmt {
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query).await?;
+
+                    for (index, column_name) in cols.iter().enumerate() {
+                        new_bind_context.columns[index].column_name = column_name.clone();
+                    }
                     if let Some(alias) = alias {
                         new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                     } else {

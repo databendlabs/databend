@@ -3,7 +3,7 @@ statement ok
 truncate table ontime
 
 query TIITI
-copy into ontime from @data/ontime_200.csv FILE_FORMAT = (type = CSV skip_header = 1)
+copy into ontime from @data/ontime_200.csv pattern = '' FILE_FORMAT = (type = CSV skip_header = 1)
 ----
 ontime_200.csv	199	0	NULL	NULL
 
@@ -68,7 +68,7 @@ statement ok
 truncate table ontime
 
 query TIITI
-copy into ontime from @data/ontime_200.ndjson FILE_FORMAT = (type = NDJSON) split_size = 10240
+copy into ontime from @data/ontime_200.ndjson PATTERN = '' FILE_FORMAT = (type = NDJSON) split_size = 10240
 ----
 ontime_200.ndjson	199	0	NULL	NULL
 
@@ -81,7 +81,7 @@ statement ok
 truncate table ontime
 
 query TIITI
-copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = PARQUET)
+copy into ontime from @data/ontime_200.parquet pattern = '' FILE_FORMAT = (type = PARQUET)
 ----
 ontime_200.parquet	199	0	NULL	NULL
 

@@ -39,6 +39,8 @@ use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_storage::STDIN_FD;
+use opendal::raw::normalize_path;
+use opendal::raw::normalize_root;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -429,12 +431,26 @@ fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<Storage
     Ok(sp)
 }
 
+pub async fn parse_storage_params_from_uri(
+    l: &mut UriLocation,
+    ctx: Option<&dyn TableContext>,
+    usage: &str,
+) -> Result<StorageParams> {
+    if !l.path.ends_with('/') {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("path in URL must end with '/' {usage}. Got '{}'.", l.path),
+        ));
+    }
+    Ok(parse_uri_location(l, ctx).await?.0)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub async fn parse_uri_location(
     l: &mut UriLocation,
     ctx: Option<&dyn TableContext>,
 ) -> Result<(StorageParams, String)> {
-    // Path endswith `/` means it's a directory, otherwise it's a file.
+    // Path ends with `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
     let (root, path) = if l.path.ends_with('/') {
@@ -442,6 +458,8 @@ pub async fn parse_uri_location(
     } else {
         ("/".to_string(), l.path.clone())
     };
+    let root = normalize_root(&root);
+    let path = normalize_path(&path);
 
     let protocol = l.protocol.parse::<Scheme>()?;
     if let Scheme::Custom(_) = protocol {
@@ -573,6 +591,11 @@ pub async fn get_storage_params_from_options(
     } else {
         UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
     };
-    let (sp, _) = parse_uri_location(&mut location, None).await?;
+    let sp = parse_storage_params_from_uri(
+        &mut location,
+        None,
+        "when loading/creating ICEBERG/DELTA table",
+    )
+    .await?;
     Ok(sp)
 }

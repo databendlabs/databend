@@ -5,7 +5,7 @@ statement ok
 create table tit(a string default 'bend', b int, c string)
 
 query 
-copy into tit (c, b) from  (select t.tinyint_col+1, t.id+1 from @data/parquet/alltypes_plain.parquet  t) FILE_FORMAT = (type = PARQUET)
+copy into tit (c, b) from  (select t.tinyint_col+1, t.id+1 from @data/parquet/ t) files = ('alltypes_plain.parquet') FILE_FORMAT = (type = PARQUET)
 ----
 parquet/alltypes_plain.parquet 8 0 NULL NULL
 
