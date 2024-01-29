@@ -19,6 +19,7 @@ use enumflags2::bitflags;
 use enumflags2::make_bitflags;
 use enumflags2::BitFlags;
 
+// Note: If add new privilege type, need add forward test
 #[bitflags]
 #[repr(u64)]
 #[derive(
