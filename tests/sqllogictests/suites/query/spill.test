@@ -107,4 +107,31 @@ statement ok
 set disable_join_reorder = 0;
 
 statement ok
+set max_block_size = 512;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1 as select number as a from numbers(100000);
+
+statement ok
+create table t2 as select number as a from numbers(100000);
+
+statement ok
+select * from t1, t2 where t1.a = t2.a;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+set max_block_size = 65536;
+
+statement ok
 set join_spilling_threshold = 0;

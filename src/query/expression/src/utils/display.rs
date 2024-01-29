@@ -1010,7 +1010,10 @@ impl Display for Domain {
                 write!(f, ")")
             }
             Domain::Map(None) => write!(f, "{{}}"),
-            Domain::Map(Some((key_domain, val_domain))) => {
+            Domain::Map(Some(domain)) => {
+                let inner_domain = domain.as_tuple().unwrap();
+                let key_domain = &inner_domain[0];
+                let val_domain = &inner_domain[1];
                 write!(f, "{{[{key_domain}], [{val_domain}]}}")
             }
             Domain::Undefined => write!(f, "Undefined"),

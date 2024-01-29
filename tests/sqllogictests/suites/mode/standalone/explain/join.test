@@ -87,7 +87,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 0.18
+├── estimated rows: 1.64
 ├── Filter(Build)
 │   ├── output columns: [t.number (#0)]
 │   ├── filters: [t.number (#0) > 1]
@@ -104,8 +104,8 @@ HashJoin
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: []
-    ├── filters: [1 < t1.number (#1)]
-    ├── estimated rows: 0.91
+    ├── filters: [t1.number (#1) > 1]
+    ├── estimated rows: 8.18
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
@@ -114,7 +114,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [1 < t1.number (#1)], limit: NONE]
+        ├── push downs: [filters: [t1.number (#1) > 1], limit: NONE]
         └── estimated rows: 10.00
 
 query T
