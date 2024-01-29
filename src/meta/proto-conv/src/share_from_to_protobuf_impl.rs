@@ -129,23 +129,19 @@ impl FromToProto for mt::ShareGrantEntry {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let privileges = BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits(p.privileges);
-        match privileges {
-            Ok(privileges) => Ok(mt::ShareGrantEntry {
-                object: mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
-                    reason: "ShareGrantEntry.object can not be None".to_string(),
-                })?)?,
-                privileges,
-                grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
-                update_on: match p.update_on {
-                    Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                    None => None,
-                },
-            }),
-            Err(e) => Err(Incompatible {
-                reason: format!("UserPrivilegeType error: {}", e),
-            }),
-        }
+        let privileges =
+            BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
+        Ok(mt::ShareGrantEntry {
+            object: mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+                reason: "ShareGrantEntry.object can not be None".to_string(),
+            })?)?,
+            privileges,
+            grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
+            update_on: match p.update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+        })
     }
 
     fn to_pb(&self) -> Result<pb::ShareGrantEntry, Incompatible> {
