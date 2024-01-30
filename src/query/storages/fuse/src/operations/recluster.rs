@@ -119,8 +119,13 @@ impl FuseTable {
 
         let max_threads = settings.get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
+        // The default limit might be too small, which makes
+        // the scanning of recluster candidates slow.
+        let chunk_size = limit.max(max_threads * 4);
+        // The max number of segments to be reclustered.
+        let max_seg_num = limit.min(max_threads * 2);
 
-        'F: for chunk in segment_locations.chunks(limit) {
+        'F: for chunk in segment_locations.chunks(chunk_size) {
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
@@ -138,7 +143,7 @@ impl FuseTable {
             let selected_segs = ReclusterMutator::select_segments(
                 &compact_segments,
                 block_per_seg,
-                max_threads * 2,
+                max_seg_num,
                 default_cluster_key_id,
             )?;
             // select the blocks with the highest depth.
