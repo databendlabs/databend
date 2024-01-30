@@ -94,7 +94,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#2)]
     ├── read rows: 5
-    ├── read bytes: 53
+    ├── read bytes: 52
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

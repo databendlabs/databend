@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
+use async_trait::async_trait;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use databend_common_base::containers::ItemManager;
@@ -50,7 +51,6 @@ use databend_common_metrics::count::Count;
 use log::debug;
 use log::info;
 use log::warn;
-use openraft::async_trait::async_trait;
 use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
@@ -287,7 +287,6 @@ impl NetworkConnection {
     }
 }
 
-#[async_trait]
 impl RaftNetwork<TypeConfig> for NetworkConnection {
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
@@ -324,7 +323,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         let raft_res = GrpcHelper::parse_raft_reply(resp)
             .map_err(|serde_err| new_net_err(&serde_err, || "parse append_entries reply"))?;
 
-        return raft_res.map_err(|e| self.to_rpc_err(e));
+        raft_res.map_err(|e| self.to_rpc_err(e))
     }
 
     #[logcall::logcall(err = "debug")]
@@ -403,7 +402,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         self.report_metrics_snapshot(raft_res.is_ok());
 
-        return raft_res.map_err(|e| self.to_rpc_err(e));
+        raft_res.map_err(|e| self.to_rpc_err(e))
     }
 
     #[logcall::logcall(err = "debug")]
@@ -428,7 +427,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         let raft_res = GrpcHelper::parse_raft_reply(resp)
             .map_err(|serde_err| new_net_err(&serde_err, || "parse vote reply"))?;
 
-        return raft_res.map_err(|e| self.to_rpc_err(e));
+        raft_res.map_err(|e| self.to_rpc_err(e))
     }
 
     /// When a `Unreachable` error is returned from the `Network`,
@@ -439,7 +438,6 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
     }
 }
 
-#[async_trait]
 impl RaftNetworkFactory<TypeConfig> for Network {
     type Network = NetworkConnection;
 

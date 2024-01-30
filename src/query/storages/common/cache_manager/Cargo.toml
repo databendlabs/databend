@@ -9,6 +9,7 @@ edition = { workspace = true }
 [features]
 
 [dependencies]
+arrow = { workspace = true }
 databend-common-arrow = { path = "../../../../common/arrow" }
 databend-common-base = { path = "../../../../common/base" }
 databend-common-cache = { path = "../../../../common/cache" }

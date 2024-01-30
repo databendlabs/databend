@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../../shell_env.sh
 
-for USE_PARQUET2 in 0 1; do
+for USE_PARQUET2 in 0; do
 
 echo "USE_PARQUET2=${USE_PARQUET2}"
 

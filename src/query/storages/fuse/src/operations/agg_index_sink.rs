@@ -44,6 +44,7 @@ pub struct AggIndexSink {
     keep_block_name_col: bool,
     location_data: HashMap<String, Vec<BlockRowIndex>>,
     blocks: Vec<DataBlock>,
+    use_parquet2: bool,
 }
 
 impl AggIndexSink {
@@ -58,7 +59,7 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx, AggIndexSink {
+        let sinker = AsyncSinker::create(input, ctx.clone(), AggIndexSink {
             data_accessor,
             index_id,
             write_settings,
@@ -67,6 +68,7 @@ impl AggIndexSink {
             keep_block_name_col,
             location_data: HashMap::new(),
             blocks: vec![],
+            use_parquet2: ctx.get_settings().get_fuse_write_use_parquet2()?,
         });
 
         Ok(ProcessorPtr::create(sinker))
@@ -111,7 +113,13 @@ impl AsyncSink for AggIndexSink {
                 self.index_id,
             );
             let mut data = vec![];
-            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
+            io::serialize_block(
+                &self.write_settings,
+                &self.sink_schema,
+                block,
+                &mut data,
+                self.use_parquet2,
+            )?;
 
             {
                 metrics_inc_agg_index_write_nums(1);

@@ -32,6 +32,6 @@ opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
-tracing = { version = "0.1.37", optional = true }
+tracing = { version = "0.1.40", optional = true }
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"], optional = true }
