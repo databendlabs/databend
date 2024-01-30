@@ -58,7 +58,6 @@ impl AggregateHashTable {
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
     ) -> Self {
-        // let capacity = Self::initial_capacity();
         let capacity = Self::initial_capacity().max(config.capacity);
         Self::new_with_capacity(group_types, aggrs, config, capacity)
     }
@@ -478,8 +477,7 @@ impl AggregateHashTable {
     }
 
     pub fn initial_capacity() -> usize {
-        // TODO: how to init capacity by thread nums
-        4096 * 8
+        4096
     }
 
     pub fn get_capacity_for_count(count: usize) -> usize {

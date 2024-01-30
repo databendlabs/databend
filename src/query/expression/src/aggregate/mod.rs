@@ -48,6 +48,13 @@ pub(crate) const BATCH_SIZE: usize = 2048;
 pub(crate) const LOAD_FACTOR: f64 = 1.5;
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
+// Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
+pub(crate) const L1_CACHE_SIZE: usize = 32768 / 2;
+// Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
+pub(crate) const L2_CACHE_SIZE: usize = 1048576 / 2;
+// Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
+pub(crate) const L3_CACHE_SIZE: usize = 1572864 / 2;
+
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
     // Max radix bits across all threads, this is a hint to repartition
@@ -83,6 +90,16 @@ impl HashTableConfig {
 
     pub fn with_partial(mut self, partial_agg: bool) -> Self {
         self.partial_agg = partial_agg;
+        self
+    }
+
+    pub fn with_initial_capacity(mut self, active_threads: usize) -> Self {
+        let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
+	    let cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
+
+	    let size_per_entry = (8 as f64 * LOAD_FACTOR) as usize;
+	    let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
+        self.capacity = capacity;
         self
     }
 }

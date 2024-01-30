@@ -100,6 +100,7 @@ impl PipelineBuilder {
         self.build_pipeline(&aggregate.input)?;
 
         let max_block_size = self.settings.get_max_block_size()?;
+        let max_threads = self.settings.get_max_threads()?;
 
         let enable_experimental_aggregate_hashtable = self
             .settings
@@ -131,7 +132,7 @@ impl PipelineBuilder {
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = HashTableConfig::default().with_partial(true);
+        let partial_agg_config = HashTableConfig::default().with_partial(true).with_initial_capacity(max_threads as usize);
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
