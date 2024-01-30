@@ -466,7 +466,6 @@ impl FastFieldDecoderValues {
             }
             Err(_) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(&buf);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(format!(

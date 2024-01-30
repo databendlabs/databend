@@ -44,6 +44,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache::LoadParams;
@@ -213,6 +214,17 @@ impl CreateTableInterpreter {
             source: InsertInputSource::SelectPlan(select_plan),
         };
 
+        // update share spec if needed
+        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+            save_share_spec(
+                &tenant,
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_info),
+            )
+            .await?;
+        }
+
         InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await
@@ -273,6 +285,17 @@ impl CreateTableInterpreter {
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        // update share spec if needed
+        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_info),
+            )
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -339,7 +362,7 @@ impl CreateTableInterpreter {
         }
 
         let req = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option.clone(),
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),
@@ -405,7 +428,7 @@ impl CreateTableInterpreter {
             ..Default::default()
         };
         let req = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option.clone(),
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),

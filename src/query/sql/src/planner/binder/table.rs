@@ -349,15 +349,12 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
                     .parse::<u64>()?;
 
-                let schema = table_meta.schema_with_stream();
-                let mut cols = Vec::with_capacity(schema.fields().len());
-                for field in schema.fields() {
-                    let name = field.name();
-                    if is_stream_column(name) {
-                        continue;
-                    }
-                    cols.push(name.clone());
-                }
+                let cols = table_meta
+                    .schema()
+                    .fields()
+                    .iter()
+                    .map(|f| f.name().clone())
+                    .collect::<Vec<_>>();
 
                 let suffix = format!("{:08x}", Utc::now().timestamp());
                 let query = match mode {

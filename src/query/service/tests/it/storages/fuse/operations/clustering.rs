@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
@@ -38,7 +39,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
