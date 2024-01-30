@@ -388,3 +388,23 @@ c ARRAY(INT32) YES NULL (empty)
 d MAP(STRING, INT32) YES NULL (empty)
 e MAP(STRING, STRING) YES NULL (empty)
 f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)
+
+statement ok
+create table replace_test(a int);
+
+statement ok
+insert into replace_test values(1);
+
+query I
+select a from replace_test;
+----
+1
+
+statement error 1005
+create or replace table IF NOT EXISTS replace_test(b int);
+
+statement ok
+create or replace table replace_test(b int);
+
+statement error 1065
+select a from replace_test;

@@ -65,6 +65,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_delta::DeltaTable;
@@ -82,7 +83,7 @@ use log::debug;
 use log::error;
 
 use crate::binder::get_storage_params_from_options;
-use crate::binder::parse_uri_location;
+use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -399,7 +400,7 @@ impl Binder {
         stmt: &CreateTableStmt,
     ) -> Result<Plan> {
         let CreateTableStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             table,
@@ -436,7 +437,12 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
+                let sp = parse_storage_params_from_uri(
+                    &mut uri,
+                    Some(self.ctx.as_ref()),
+                    "when create TABLE with external location",
+                )
+                .await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -621,7 +627,7 @@ impl Binder {
         };
 
         let plan = CreateTablePlan {
-            if_not_exists: *if_not_exists,
+            create_option: create_option.clone(),
             tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
             database: database.clone(),
@@ -688,7 +694,9 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
+        let sp =
+            parse_storage_params_from_uri(&mut uri, Some(self.ctx.as_ref()), "when ATTACH TABLE")
+                .await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
@@ -701,7 +709,7 @@ impl Binder {
         };
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.ctx.get_tenant(),
             catalog,
             database,

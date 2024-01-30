@@ -36,6 +36,7 @@ ordered-float = { workspace = true }
 parquet = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
+reqwest-hickory-resolver = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

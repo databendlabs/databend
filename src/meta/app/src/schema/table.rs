@@ -31,6 +31,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
+use super::CreateOption;
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
@@ -444,7 +445,7 @@ impl Display for TableIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 }
@@ -463,15 +464,26 @@ impl CreateTableReq {
 
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "create_table(if_not_exists={}):{}/{}-{}={}",
-            self.if_not_exists,
-            self.tenant(),
-            self.db_name(),
-            self.table_name(),
-            self.table_meta
-        )
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            write!(
+                f,
+                "create_table(if_not_exists={}):{}/{}-{}={}",
+                if_not_exists,
+                self.tenant(),
+                self.db_name(),
+                self.table_name(),
+                self.table_meta
+            )
+        } else {
+            write!(
+                f,
+                "create_or_replace_table:{}/{}-{}={}",
+                self.tenant(),
+                self.db_name(),
+                self.table_name(),
+                self.table_meta
+            )
+        }
     }
 }
 
@@ -479,6 +491,7 @@ impl Display for CreateTableReq {
 pub struct CreateTableReply {
     pub table_id: u64,
     pub new_table: bool,
+    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
 
 /// Drop table by id.

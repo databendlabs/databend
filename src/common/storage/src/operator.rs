@@ -16,6 +16,8 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -44,6 +46,7 @@ use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use once_cell::sync::OnceCell;
 use opendal::layers::AsyncBacktraceLayer;
+use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -54,11 +57,16 @@ use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
+use reqwest_hickory_resolver::HickoryResolver;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 
 static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
+
+/// The global dns resolver for opendal.
+static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> =
+    LazyLock::new(|| Arc::new(HickoryResolver::default()));
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -102,15 +110,31 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
-        .layer(
-            TimeoutLayer::new()
-                // Return timeout error if the operation failed to finish in
-                // 10s
-                .with_timeout(Duration::from_secs(10))
-                // Return timeout error if the request speed is less than
-                // 1 KiB/s.
-                .with_speed(1024),
-        )
+        .layer({
+            let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(10);
+            let retry_io_timeout = env::var("_DATABEND_INTERNAL_RETRY_IO_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(10);
+
+            let mut timeout_layer = TimeoutLayer::new();
+
+            if retry_timeout != 0 {
+                // Return timeout error if the operation timeout
+                timeout_layer = timeout_layer.with_timeout(Duration::from_secs(retry_timeout));
+            }
+
+            if retry_io_timeout != 0 {
+                // Return timeout error if the io operation timeout
+                timeout_layer =
+                    timeout_layer.with_io_timeout(Duration::from_secs(retry_io_timeout));
+            }
+
+            timeout_layer
+        })
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add async backtrace
@@ -120,10 +144,15 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(load_prometheus_client_layer())
-        .finish();
+        .layer(load_prometheus_client_layer());
 
-    Ok(op)
+    if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
+        if let Ok(permits) = permits.parse::<usize>() {
+            return Ok(op.layer(ConcurrentLimitLayer::new(permits)).finish());
+        }
+    }
+
+    Ok(op.finish())
 }
 
 /// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
@@ -283,6 +312,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
 
     let http_builder = {
         let mut builder = reqwest::ClientBuilder::new();
+
+        // Set dns resolver.
+        builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
 
         // Pool max idle per host controls connection pool size.
         // Default to no limit, set to `0` for disable it.

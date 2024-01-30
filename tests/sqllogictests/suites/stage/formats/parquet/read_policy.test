@@ -1,7 +1,7 @@
 # No nested types.
 # POLICY NO FETCH
 query T
-select id from @data/parquet/alltypes_plain.parquet;
+select id from @data/parquet/ (files => ('alltypes_plain.parquet')) ;
 ----
 4
 5
@@ -16,14 +16,14 @@ select id from @data/parquet/alltypes_plain.parquet;
 
 # predicate does not contain output
 query T
-select tinyint_col from @data/parquet/alltypes_plain.parquet where id > 3 and bool_col = true;
+select tinyint_col from @data/parquet/alltypes_plain.parquet ( pattern => '') where id > 3 and bool_col = true;
 ----
 0
 0
 
 # predicate contains output
 query TT
-select tinyint_col, id from @data/parquet/alltypes_plain.parquet where id > 3 and bool_col = true;
+select tinyint_col, id from @data/parquet/alltypes_plain.parquet ( pattern => '') where id > 3 and bool_col = true;
 ----
 0 4
 0 6

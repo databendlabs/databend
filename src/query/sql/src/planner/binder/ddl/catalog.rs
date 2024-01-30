@@ -36,7 +36,7 @@ use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
-use crate::binder::parse_uri_location;
+use crate::binder::parse_storage_params_from_uri;
 use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
@@ -198,7 +198,12 @@ async fn parse_catalog_url(
     };
 
     let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
-    let (sp, _) = parse_uri_location(&mut location, Some(ctx.as_ref())).await?;
+    let sp = parse_storage_params_from_uri(
+        &mut location,
+        Some(ctx.as_ref()),
+        "when create Hive Catalog",
+    )
+    .await?;
 
     Ok(Some(sp))
 }

@@ -585,9 +585,9 @@ impl StageInfo {
         }
     }
 
-    pub fn new_external_stage(storage: StorageParams, path: &str, is_temporary: bool) -> StageInfo {
+    pub fn new_external_stage(storage: StorageParams, is_temporary: bool) -> StageInfo {
         StageInfo {
-            stage_name: format!("{storage},path={path}"),
+            stage_name: format!("{storage}"),
             stage_type: StageType::External,
             is_temporary,
             stage_params: StageParams { storage },

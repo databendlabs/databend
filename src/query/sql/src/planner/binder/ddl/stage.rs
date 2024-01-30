@@ -26,7 +26,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
-use crate::binder::location::parse_uri_location;
+use crate::binder::location::parse_storage_params_from_uri;
 use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
 use crate::plans::Plan;
@@ -82,14 +82,12 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) =
-                    parse_uri_location(&mut uri, Some(self.ctx.as_ref())).await?;
-
-                if !path.ends_with('/') {
-                    return Err(ErrorCode::SyntaxException(
-                        "URL's path must ends with `/` when do CREATE STAGE",
-                    ));
-                }
+                let stage_storage = parse_storage_params_from_uri(
+                    &mut uri,
+                    Some(self.ctx.as_ref()),
+                    "when CREATE STAGE",
+                )
+                .await?;
 
                 // Check the storage params via init operator.
                 let _ = init_operator(&stage_storage).map_err(|err| {
@@ -98,8 +96,7 @@ impl Binder {
                     ))
                 })?;
 
-                StageInfo::new_external_stage(stage_storage, &path, true)
-                    .with_stage_name(stage_name)
+                StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name)
             }
         };
 
