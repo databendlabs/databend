@@ -70,7 +70,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'clickhouse_http_handler_host'             | '127.0.0.1'                                                    | ''       |
 | 'query'   | 'clickhouse_http_handler_port'             | '8124'                                                         | ''       |
 | 'query'   | 'cloud_control_grpc_server_address'        | 'null'                                                         | ''       |
-| 'query'   | 'cloud_control_grpc_timeout'               | '0'                                                         | ''       |
+| 'query'   | 'cloud_control_grpc_timeout'               | '0'                                                            | ''       |
 | 'query'   | 'cluster_id'                               | ''                                                             | ''       |
 | 'query'   | 'data_retention_time_in_days_max'          | '90'                                                           | ''       |
 | 'query'   | 'databend_enterprise_license'              | 'null'                                                         | ''       |
