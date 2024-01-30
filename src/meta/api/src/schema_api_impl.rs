@@ -1733,9 +1733,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if succ {
                     return Ok(CreateTableReply {
                         table_id,
-                        new_table: true,
+                        new_table: tb_id_seq == 0,
                         spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                            Some((spec_vec, mut_share_table_info))
+                            if spec_vec.is_empty() {
+                                None
+                            } else {
+                                Some((spec_vec, mut_share_table_info))
+                            }
                         } else {
                             None
                         },
@@ -2479,7 +2483,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if succ {
                 return Ok(DropTableReply {
                     spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                        Some((spec_vec, mut_share_table_info))
+                        if spec_vec.is_empty() {
+                            None
+                        } else {
+                            Some((spec_vec, mut_share_table_info))
+                        }
                     } else {
                         None
                     },
@@ -3915,45 +3923,38 @@ async fn drop_table_by_id(
     }
 
     // remove table from share
+    let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
+    let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
+    for share_id in &db_meta.shared_by {
+        let res = remove_table_from_share(
+            kv_api,
+            *share_id,
+            table_id,
+            tenant.clone(),
+            condition,
+            if_then,
+        )
+        .await;
 
-    let opt = if db_meta.shared_by.is_empty() {
-        None
-    } else {
-        let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
-        let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
-        for share_id in &db_meta.shared_by {
-            let res = remove_table_from_share(
-                kv_api,
-                *share_id,
-                table_id,
-                tenant.clone(),
-                condition,
-                if_then,
-            )
-            .await;
-
-            match res {
-                Ok((share_name, share_meta, share_table_info)) => {
-                    spec_vec.push(
-                        convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta)
-                            .await?,
-                    );
-                    mut_share_table_info.push((share_name.to_string(), share_table_info));
-                }
-                Err(e) => match e {
-                    // ignore UnknownShareId error
-                    KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                        error!(
-                            "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
-                            share_id, tenant, table_id
-                        );
-                    }
-                    _ => return Err(e),
-                },
+        match res {
+            Ok((share_name, share_meta, share_table_info)) => {
+                spec_vec.push(
+                    convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta).await?,
+                );
+                mut_share_table_info.push((share_name.to_string(), share_table_info));
             }
+            Err(e) => match e {
+                // ignore UnknownShareId error
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!(
+                        "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
+                        share_id, tenant, table_id
+                    );
+                }
+                _ => return Err(e),
+            },
         }
-        Some((spec_vec, mut_share_table_info))
-    };
+    }
 
     // add TableIdListKey if not exist
     if if_delete {
@@ -3980,7 +3981,7 @@ async fn drop_table_by_id(
             ));
         }
     }
-    Ok((opt, tb_id_seq))
+    Ok((Some((spec_vec, mut_share_table_info)), tb_id_seq))
 }
 
 async fn drop_database_meta(
