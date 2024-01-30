@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -30,6 +33,7 @@ pub(super) struct ResultCacheWriter {
 
     schema: TableSchemaRef,
     blocks: Vec<DataBlock>,
+    _ctx: Arc<dyn TableContext>,
 }
 
 impl ResultCacheWriter {
@@ -38,6 +42,7 @@ impl ResultCacheWriter {
         location: String,
         operator: Operator,
         max_bytes: usize,
+        ctx: Arc<dyn TableContext>,
     ) -> Self {
         ResultCacheWriter {
             location,
@@ -47,6 +52,7 @@ impl ResultCacheWriter {
             num_rows: 0,
             schema,
             blocks: vec![],
+            _ctx: ctx,
         }
     }
 
@@ -69,6 +75,7 @@ impl ResultCacheWriter {
             self.blocks.clone(),
             &mut buf,
             TableCompression::None,
+            true,
         )?;
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());

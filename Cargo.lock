@@ -3486,6 +3486,7 @@ name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.3",
+ "arrow-array",
  "async-backtrace",
  "async-trait-fn",
  "backoff",
@@ -3527,6 +3528,7 @@ dependencies = [
  "metrics",
  "minitrace",
  "opendal",
+ "parquet",
  "parquet-format-safe",
  "rand 0.8.5",
  "serde",
@@ -4403,6 +4405,8 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "parquet",
+ "parquet-format-safe",
 ]
 
 [[package]]
@@ -4428,6 +4432,7 @@ dependencies = [
 name = "databend-storages-common-cache-manager"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "databend-common-arrow",
  "databend-common-base",
  "databend-common-cache",
@@ -4491,6 +4496,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "futures",
  "futures-util",
+ "parquet",
  "pot",
  "rmp-serde",
  "serde",
