@@ -35,6 +35,7 @@ pub fn blocks_to_parquet(
     assert!(!blocks.is_empty());
     let props = WriterProperties::builder()
         .set_compression(compression.into())
+        // use `usize::MAX` to effectively limit the number of row groups to 1
         .set_max_row_group_size(usize::MAX)
         .set_encoding(Encoding::PLAIN)
         .set_dictionary_enabled(false)
