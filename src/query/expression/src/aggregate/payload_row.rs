@@ -282,20 +282,18 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) => {
-            row_match_binary_column(
-                v,
-                validity,
-                address,
-                select_vector,
-                temp_vector,
-                count,
-                validity_offset,
-                col_offset,
-                no_match,
-                no_match_count,
-            )
-        }
+        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) => row_match_binary_column(
+            v,
+            validity,
+            address,
+            select_vector,
+            temp_vector,
+            count,
+            validity_offset,
+            col_offset,
+            no_match,
+            no_match_count,
+        ),
         Column::String(v) => {
             let v = &BinaryColumn::from(v.clone());
             row_match_binary_column(

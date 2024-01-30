@@ -95,10 +95,11 @@ impl HashTableConfig {
 
     pub fn with_initial_capacity(mut self, active_threads: usize) -> Self {
         let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
-	    let cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
+        let cache_per_active_thread =
+            L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
 
-	    let size_per_entry = (8 as f64 * LOAD_FACTOR) as usize;
-	    let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
+        let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
+        let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
         self.capacity = capacity;
         self
     }

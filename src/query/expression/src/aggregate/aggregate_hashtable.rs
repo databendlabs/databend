@@ -155,7 +155,7 @@ impl AggregateHashTable {
                 self.reset_count();
             }
 
-            //check maybe_repartition
+            // check maybe_repartition
             if self.maybe_repartition() {
                 self.clear_ht();
                 self.reset_count();
