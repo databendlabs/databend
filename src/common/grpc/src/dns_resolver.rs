@@ -27,6 +27,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use hickory_resolver::TokioAsyncResolver;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -38,7 +39,6 @@ use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
-use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::RpcClientTlsConfig;
 
