@@ -50,6 +50,7 @@ pub struct SortDesc {
     pub asc: bool,
     pub nulls_first: bool,
     pub order_by: IndexType,
+    pub display_name: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

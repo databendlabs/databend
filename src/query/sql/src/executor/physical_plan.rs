@@ -414,34 +414,14 @@ impl PhysicalPlan {
                 false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
             },
             PhysicalPlan::AggregatePartial(v) => v
-                .agg_funcs
+                .agg_funcs_expr
                 .iter()
-                .map(|x| {
-                    format!(
-                        "{}({})",
-                        x.sig.name,
-                        x.arg_indices
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                })
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                 .join(", "),
             PhysicalPlan::AggregateFinal(v) => v
-                .agg_funcs
+                .agg_funcs_expr
                 .iter()
-                .map(|x| {
-                    format!(
-                        "{}({})",
-                        x.sig.name,
-                        x.arg_indices
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                })
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                 .join(", "),
             PhysicalPlan::Sort(v) => v
                 .order_by
@@ -449,7 +429,7 @@ impl PhysicalPlan {
                 .map(|x| {
                     format!(
                         "{}{}{}",
-                        x.order_by,
+                        x.display_name,
                         if x.asc { "" } else { " DESC" },
                         if x.nulls_first { " NULLS FIRST" } else { "" },
                     )
@@ -520,7 +500,7 @@ impl PhysicalPlan {
                     .map(|x| {
                         format!(
                             "{}{}{}",
-                            x.order_by,
+                            x.display_name,
                             if x.asc { "" } else { " DESC" },
                             if x.nulls_first { " NULLS FIRST" } else { "" },
                         )
@@ -569,7 +549,7 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(v) => v
                 .pairs
                 .iter()
-                .map(|(l, r)| format!("{} <- {}", l, r))
+                .map(|(l, r)| format!("#{} <- #{}", l, r))
                 .join(", "),
             _ => String::new(),
         })
@@ -630,46 +610,32 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(v) => HashMap::from([
                 (
                     String::from("Grouping keys"),
-                    v.group_by.iter().map(|x| x.to_string()).collect(),
+                    v.group_by_expr
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .collect(),
                 ),
                 (
                     String::from("Aggregate Functions"),
-                    v.agg_funcs
+                    v.agg_funcs_expr
                         .iter()
-                        .map(|x| {
-                            format!(
-                                "{}({})",
-                                x.sig.name,
-                                x.arg_indices
-                                    .iter()
-                                    .map(|x| x.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            )
-                        })
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                         .collect(),
                 ),
             ]),
             PhysicalPlan::AggregateFinal(v) => HashMap::from([
                 (
                     String::from("Grouping keys"),
-                    v.group_by.iter().map(|x| x.to_string()).collect(),
+                    v.group_by_expr
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .collect(),
                 ),
                 (
                     String::from("Aggregate Functions"),
-                    v.agg_funcs
+                    v.agg_funcs_expr
                         .iter()
-                        .map(|x| {
-                            format!(
-                                "{}({})",
-                                x.sig.name,
-                                x.arg_indices
-                                    .iter()
-                                    .map(|x| x.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            )
-                        })
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                         .collect(),
                 ),
             ]),

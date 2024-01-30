@@ -130,6 +130,7 @@ impl PhysicalPlanBuilder {
                     asc: v.asc,
                     nulls_first: v.nulls_first,
                     order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
                 })
                 .collect(),
             limit: sort.limit,

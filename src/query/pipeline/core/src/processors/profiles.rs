@@ -111,14 +111,14 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 desc: "The time spent to process in nanoseconds",
                 index: ProfileStatisticsName::CpuTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::WaitTime, ProfileDesc {
                 display_name: "wait time",
                 desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
                 index: ProfileStatisticsName::WaitTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::ExchangeRows, ProfileDesc {
                 display_name: "exchange rows",
