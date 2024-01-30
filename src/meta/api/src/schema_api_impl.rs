@@ -1640,7 +1640,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         .await?
                     }
                 } else {
-                    None
+                    (None, 0)
                 }
             };
 
@@ -1679,11 +1679,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             {
                 // append new table_id into list
                 tb_id_list.data.append(table_id);
-                let tb_id_seq = if let Some((_, _, tb_id_seq)) = opt {
-                    tb_id_seq
-                } else {
-                    0
-                };
+                let tb_id_seq = opt.1;
 
                 condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
@@ -1709,8 +1705,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ]);
 
-                // opt is none means that is not a replace operation
-                if opt.is_none() {
+                // tb_id_seq is 0 means that is a create operation, in this case need to update table count
+                if tb_id_seq == 0 {
                     tb_count.data.0 += 1;
                     // update table count atomically
                     condition.push(txn_cond_seq(&key_table_count, Eq, tb_count.seq));
@@ -1738,7 +1734,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     return Ok(CreateTableReply {
                         table_id,
                         new_table: true,
-                        spec_vec: if let Some((spec_vec, mut_share_table_info, _)) = opt {
+                        spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
                             Some((spec_vec, mut_share_table_info))
                         } else {
                             None
@@ -2482,7 +2478,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
             if succ {
                 return Ok(DropTableReply {
-                    spec_vec: if let Some((spec_vec, mut_share_table_info, _)) = opt {
+                    spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
                         Some((spec_vec, mut_share_table_info))
                     } else {
                         None
@@ -3804,7 +3800,7 @@ async fn drop_table_by_id(
     tb_count_opt: &mut Option<u64>,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>, u64)>, KVAppError> {
+) -> Result<(Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>, u64), KVAppError> {
     let tbid = TableId { table_id };
 
     // Check if table exists.
@@ -3840,7 +3836,7 @@ async fn drop_table_by_id(
     let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
-            Ok(None)
+            Ok((None, 0))
         } else {
             return Err(KVAppError::AppError(AppError::UnknownTable(
                 UnknownTable::new(tbname, "drop_table_by_id"),
@@ -3919,38 +3915,45 @@ async fn drop_table_by_id(
     }
 
     // remove table from share
-    let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
-    let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
-    for share_id in &db_meta.shared_by {
-        let res = remove_table_from_share(
-            kv_api,
-            *share_id,
-            table_id,
-            tenant.clone(),
-            condition,
-            if_then,
-        )
-        .await;
 
-        match res {
-            Ok((share_name, share_meta, share_table_info)) => {
-                spec_vec.push(
-                    convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta).await?,
-                );
-                mut_share_table_info.push((share_name.to_string(), share_table_info));
-            }
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!(
-                        "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
-                        share_id, tenant, table_id
+    let opt = if db_meta.shared_by.is_empty() {
+        None
+    } else {
+        let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
+        let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
+        for share_id in &db_meta.shared_by {
+            let res = remove_table_from_share(
+                kv_api,
+                *share_id,
+                table_id,
+                tenant.clone(),
+                condition,
+                if_then,
+            )
+            .await;
+
+            match res {
+                Ok((share_name, share_meta, share_table_info)) => {
+                    spec_vec.push(
+                        convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta)
+                            .await?,
                     );
+                    mut_share_table_info.push((share_name.to_string(), share_table_info));
                 }
-                _ => return Err(e),
-            },
+                Err(e) => match e {
+                    // ignore UnknownShareId error
+                    KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                        error!(
+                            "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
+                            share_id, tenant, table_id
+                        );
+                    }
+                    _ => return Err(e),
+                },
+            }
         }
-    }
+        Some((spec_vec, mut_share_table_info))
+    };
 
     // add TableIdListKey if not exist
     if if_delete {
@@ -3977,7 +3980,7 @@ async fn drop_table_by_id(
             ));
         }
     }
-    Ok(Some((spec_vec, mut_share_table_info, tb_id_seq)))
+    Ok((opt, tb_id_seq))
 }
 
 async fn drop_database_meta(
