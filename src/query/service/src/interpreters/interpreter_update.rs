@@ -116,7 +116,8 @@ impl Interpreter for UpdateInterpreter {
                     db_name.to_string(),
                     tbl_name.to_string(),
                     "update".to_string(),
-                    true,
+                    // table lock has been added, no need to check.
+                    false,
                 );
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
