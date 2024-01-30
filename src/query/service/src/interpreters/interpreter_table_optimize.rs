@@ -138,6 +138,7 @@ impl OptimizeTableInterpreter {
             update_stream_meta: vec![],
             merge_meta,
             need_lock,
+            deduplicated_label: None,
         })))
     }
 
@@ -187,8 +188,7 @@ impl OptimizeTableInterpreter {
             )?;
 
             let build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             build_res.main_pipeline
         } else {
             Pipeline::create()
@@ -236,12 +236,9 @@ impl OptimizeTableInterpreter {
                         mutator.removed_segment_summary,
                     )?;
 
-                    build_res = build_query_pipeline_without_render_result_set(
-                        &self.ctx,
-                        &physical_plan,
-                        false,
-                    )
-                    .await?;
+                    build_res =
+                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
+                            .await?;
 
                     let ctx = self.ctx.clone();
                     let plan = self.plan.clone();

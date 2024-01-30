@@ -21,18 +21,30 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
-/// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
+/// [`OwnershipObject`] is used to maintain the grant object that support rename by id. Using ID over name
 /// have many benefits, it can avoid lost privileges after the object get renamed.
+/// But Stage and UDF do not support the concept of renaming and do not have ids, so names can be used.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum GrantObjectByID {
+pub enum OwnershipObject {
     /// used on the fuse databases
-    Database { catalog_name: String, db_id: u64 },
+    Database {
+        catalog_name: String,
+        db_id: u64,
+    },
 
     /// used on the fuse tables
     Table {
         catalog_name: String,
         db_id: u64,
         table_id: u64,
+    },
+
+    Stage {
+        name: String,
+    },
+
+    UDF {
+        name: String,
     },
 }
 
@@ -82,17 +94,21 @@ impl GrantObject {
     }
 
     /// Global, database and table has different available privileges
-    pub fn available_privileges(&self) -> UserPrivilegeSet {
+    pub fn available_privileges(&self, available_ownership: bool) -> UserPrivilegeSet {
         match self {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
             GrantObject::Database(_, _) | GrantObject::DatabaseById(_, _) => {
-                UserPrivilegeSet::available_privileges_on_database()
+                UserPrivilegeSet::available_privileges_on_database(available_ownership)
             }
             GrantObject::Table(_, _, _) | GrantObject::TableById(_, _, _) => {
-                UserPrivilegeSet::available_privileges_on_table()
+                UserPrivilegeSet::available_privileges_on_table(available_ownership)
             }
-            GrantObject::UDF(_) => UserPrivilegeSet::available_privileges_on_udf(),
-            GrantObject::Stage(_) => UserPrivilegeSet::available_privileges_on_stage(),
+            GrantObject::UDF(_) => {
+                UserPrivilegeSet::available_privileges_on_udf(available_ownership)
+            }
+            GrantObject::Stage(_) => {
+                UserPrivilegeSet::available_privileges_on_stage(available_ownership)
+            }
         }
     }
 
@@ -164,7 +180,7 @@ impl GrantEntry {
     }
 
     pub fn has_all_available_privileges(&self) -> bool {
-        let all_available_privileges = self.object.available_privileges();
+        let all_available_privileges = self.object.available_privileges(false);
         self.privileges
             .contains(BitFlags::from(all_available_privileges))
     }
@@ -255,7 +271,11 @@ impl UserGrantSet {
             .map(|e| {
                 if e.matches_entry(object) {
                     let mut e = e.clone();
-                    e.privileges ^= privileges;
+                    e.privileges = e
+                        .privileges
+                        .iter()
+                        .filter(|p| !privileges.contains(*p))
+                        .collect();
                     e
                 } else {
                     e.clone()

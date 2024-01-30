@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -37,10 +38,10 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
-use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use num_traits::NumCast;
 use roaring::RoaringTreemap;
 use serde_json::Value;
 
@@ -48,9 +49,10 @@ use crate::FieldDecoder;
 use crate::FileFormatOptionsExt;
 
 pub struct FieldJsonAstDecoder {
-    pub timezone: Tz,
+    timezone: Tz,
     pub ident_case_sensitive: bool,
     pub is_select: bool,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -60,11 +62,12 @@ impl FieldDecoder for FieldJsonAstDecoder {
 }
 
 impl FieldJsonAstDecoder {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(options: &FileFormatOptionsExt, rounding_mode: bool) -> Self {
         FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
+            rounding_mode,
         }
     }
 
@@ -77,8 +80,10 @@ impl FieldJsonAstDecoder {
                 NumberColumnBuilder::NUM_TYPE(c) => {
                     if NUM_TYPE::FLOATING {
                         self.read_float(c, value)
-                    } else {
+                    } else if NUM_TYPE::NEGATIVE {
                         self.read_int(c, value)
+                    } else {
+                        self.read_uint(c, value)
                     }
                 }
             }),
@@ -87,6 +92,7 @@ impl FieldJsonAstDecoder {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
+            ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value),
             ColumnBuilder::Map(c) => self.read_map(c, value),
@@ -130,20 +136,62 @@ impl FieldJsonAstDecoder {
     fn read_int<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
         match value {
             Value::Number(v) => {
-                let v = v.to_string();
-                let mut reader = Cursor::new(v.as_bytes());
-                let v: T::Native = if !T::FLOATING {
-                    reader.read_int_text()
-                } else {
-                    reader.read_float_text()
-                }?;
+                let new_val: Option<T::Native> = match v.as_i64() {
+                    Some(v) => num_traits::cast::cast(v),
+                    None => match v.as_f64() {
+                        Some(v) => {
+                            if self.rounding_mode {
+                                num_traits::cast::cast(v.round())
+                            } else {
+                                num_traits::cast::cast(v)
+                            }
+                        }
+                        None => None,
+                    },
+                };
+                match new_val {
+                    Some(v) => {
+                        column.push(v.into());
+                        Ok(())
+                    }
+                    None => Err(ErrorCode::BadBytes(format!("Incorrect json number {}", v))),
+                }
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
+        }
+    }
 
-                column.push(v.into());
-                Ok(())
+    fn read_uint<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
+    where
+        T: Number + From<T::Native>,
+        T::Native: FromLexical + NumCast,
+    {
+        match value {
+            Value::Number(v) => {
+                let new_val: Option<T::Native> = match v.as_u64() {
+                    Some(v) => num_traits::cast::cast(v),
+                    None => match v.as_f64() {
+                        Some(v) => {
+                            if self.rounding_mode {
+                                num_traits::cast::cast(v.round())
+                            } else {
+                                num_traits::cast::cast(v)
+                            }
+                        }
+                        None => None,
+                    },
+                };
+                match new_val {
+                    Some(v) => {
+                        column.push(v.into());
+                        Ok(())
+                    }
+                    None => Err(ErrorCode::BadBytes(format!("Incorrect json number {}", v))),
+                }
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
         }
@@ -152,20 +200,21 @@ impl FieldJsonAstDecoder {
     fn read_float<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
         match value {
             Value::Number(v) => {
-                let v = v.to_string();
-                let mut reader = Cursor::new(v.as_bytes());
-                let v: T::Native = if !T::FLOATING {
-                    reader.read_int_text()
-                } else {
-                    reader.read_float_text()
-                }?;
-
-                column.push(v.into());
-                Ok(())
+                let new_val: Option<T::Native> = match v.as_f64() {
+                    Some(v) => num_traits::cast::cast(v),
+                    None => None,
+                };
+                match new_val {
+                    Some(v) => {
+                        column.push(v.into());
+                        Ok(())
+                    }
+                    None => Err(ErrorCode::BadBytes(format!("Incorrect json number {}", v))),
+                }
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
         }
@@ -245,7 +294,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
                 let rb = parse_bitmap(v.as_bytes())?;
@@ -269,7 +318,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         let v = jsonb::Value::from(value);
         v.write_to_vec(&mut column.data);
         column.commit_row();
@@ -307,7 +356,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_tuple(&self, fields: &mut Vec<ColumnBuilder>, value: &Value) -> Result<()> {
+    fn read_tuple(&self, fields: &mut [ColumnBuilder], value: &Value) -> Result<()> {
         match value {
             Value::Object(obj) => {
                 if fields.len() != obj.len() {

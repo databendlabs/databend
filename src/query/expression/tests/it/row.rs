@@ -19,9 +19,10 @@ use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_expression::converts::arrow2::set_validities;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
@@ -32,6 +33,7 @@ use itertools::Itertools;
 use jsonb::convert_to_comparable;
 use jsonb::parse_value;
 use ordered_float::OrderedFloat;
+use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::thread_rng;
@@ -219,14 +221,91 @@ fn test_null_encoding() {
 }
 
 #[test]
-fn test_string() {
-    let col = StringType::from_opt_data(vec![
+fn test_binary() {
+    let col = BinaryType::from_opt_data(vec![
         Some("hello".as_bytes().to_vec()),
         Some("he".as_bytes().to_vec()),
         None,
         Some("foo".as_bytes().to_vec()),
         Some("".as_bytes().to_vec()),
     ]);
+
+    let converter =
+        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
+    let num_rows = col.len();
+    let rows = converter.convert_columns(&[col], num_rows);
+
+    unsafe {
+        assert!(rows.index_unchecked(1) < rows.index_unchecked(0));
+        assert!(rows.index_unchecked(2) < rows.index_unchecked(4));
+        assert!(rows.index_unchecked(3) < rows.index_unchecked(0));
+        assert!(rows.index_unchecked(3) < rows.index_unchecked(1));
+    }
+
+    const BLOCK_SIZE: usize = 32;
+
+    let col = BinaryType::from_opt_data(vec![
+        None,
+        Some(vec![0_u8; 0]),
+        Some(vec![0_u8; 6]),
+        Some(vec![0_u8; BLOCK_SIZE]),
+        Some(vec![0_u8; BLOCK_SIZE + 1]),
+        Some(vec![1_u8; 6]),
+        Some(vec![1_u8; BLOCK_SIZE]),
+        Some(vec![1_u8; BLOCK_SIZE + 1]),
+        Some(vec![0xFF_u8; 6]),
+        Some(vec![0xFF_u8; BLOCK_SIZE]),
+        Some(vec![0xFF_u8; BLOCK_SIZE + 1]),
+    ]);
+    let num_rows = col.len();
+
+    let converter =
+        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
+    let rows = converter.convert_columns(&[col.clone()], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) < rows.index_unchecked(j),
+                    "{} < {} - {:?} < {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+
+    let converter = RowConverter::new(vec![SortField::new_with_options(
+        DataType::Binary.wrap_nullable(),
+        false,
+        false,
+    )])
+    .unwrap();
+    let rows = converter.convert_columns(&[col], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) > rows.index_unchecked(j),
+                    "{} > {} - {:?} > {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_string() {
+    let col =
+        StringType::from_opt_data(vec![Some("hello"), Some("he"), None, Some("foo"), Some("")]);
 
     let converter =
         RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
@@ -244,16 +323,13 @@ fn test_string() {
 
     let col = StringType::from_opt_data(vec![
         None,
-        Some(vec![0_u8; 0]),
-        Some(vec![0_u8; 6]),
-        Some(vec![0_u8; BLOCK_SIZE]),
-        Some(vec![0_u8; BLOCK_SIZE + 1]),
-        Some(vec![1_u8; 6]),
-        Some(vec![1_u8; BLOCK_SIZE]),
-        Some(vec![1_u8; BLOCK_SIZE + 1]),
-        Some(vec![0xFF_u8; 6]),
-        Some(vec![0xFF_u8; BLOCK_SIZE]),
-        Some(vec![0xFF_u8; BLOCK_SIZE + 1]),
+        Some(String::from_utf8(vec![0_u8; 0]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; 6]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; BLOCK_SIZE]).unwrap()),
+        Some(String::from_utf8(vec![0_u8; BLOCK_SIZE + 1]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; 6]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; BLOCK_SIZE]).unwrap()),
+        Some(String::from_utf8(vec![1_u8; BLOCK_SIZE + 1]).unwrap()),
     ]);
     let num_rows = col.len();
 
@@ -321,7 +397,7 @@ fn test_variant() {
     ];
 
     let mut validity = MutableBitmap::with_capacity(values.len());
-    let mut builder = StringColumnBuilder::with_capacity(values.len(), values.len() * 10);
+    let mut builder = BinaryColumnBuilder::with_capacity(values.len(), values.len() * 10);
     for value in values {
         if let Some(value) = value {
             validity.push(true);
@@ -401,7 +477,12 @@ fn generate_string_column(len: usize, valid_percent: f64) -> Column {
         .map(|_| {
             rng.gen_bool(valid_percent).then(|| {
                 let len = rng.gen_range(0..100);
-                (0..len).map(|_| rng.gen_range(0..128)).collect_vec()
+                thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    // randomly generate 5 characters.
+                    .take(len)
+                    .map(char::from)
+                    .collect::<String>()
             })
         })
         .collect::<Vec<_>>();
@@ -482,7 +563,7 @@ fn fuzz_test() {
                                 )
                                 .unwrap(),
                             );
-                            Column::set_validity(array, &c.validity)
+                            set_validities(array, &c.validity)
                         }
                         _ => col.as_arrow(),
                     },

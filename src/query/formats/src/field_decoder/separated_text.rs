@@ -22,12 +22,12 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Number;
@@ -54,7 +54,9 @@ use databend_common_meta_app::principal::TsvFileFormatParams;
 use databend_common_meta_app::principal::XmlFileFormatParams;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
+use num_traits::NumCast;
 
+use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -62,8 +64,9 @@ use crate::NestedValues;
 
 #[derive(Clone)]
 pub struct SeparatedTextDecoder {
-    pub common_settings: InputCommonSettings,
-    pub nested_decoder: NestedValues,
+    common_settings: InputCommonSettings,
+    nested_decoder: NestedValues,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for SeparatedTextDecoder {
@@ -75,7 +78,11 @@ impl FieldDecoder for SeparatedTextDecoder {
 /// in CSV, we find the exact bound of each field before decode it to a type.
 /// which is diff from the case when parsing values.
 impl SeparatedTextDecoder {
-    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_csv(
+        params: &CsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -85,12 +92,18 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: params.binary_format,
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
-    pub fn create_tsv(_params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_tsv(
+        _params: &TsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
@@ -100,12 +113,18 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
-    pub fn create_xml(_params: &XmlFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_xml(
+        _params: &XmlFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+        rounding_mode: bool,
+    ) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_LOWER.as_bytes().to_vec()],
@@ -115,8 +134,10 @@ impl SeparatedTextDecoder {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
             },
             nested_decoder: NestedValues::create(options_ext),
+            rounding_mode,
         }
     }
 
@@ -130,8 +151,14 @@ impl SeparatedTextDecoder {
                 *len += 1;
                 Ok(())
             }
+            ColumnBuilder::Binary(c) => {
+                let data = decode_binary(data, self.common_settings().binary_format)?;
+                c.put_slice(&data);
+                c.commit_row();
+                Ok(())
+            }
             ColumnBuilder::String(c) => {
-                c.data.extend_from_slice(data);
+                c.put_str(std::str::from_utf8(data)?);
                 c.commit_row();
                 Ok(())
             }
@@ -156,7 +183,12 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
-            _ => unimplemented!(),
+            ColumnBuilder::EmptyArray { .. } => {
+                unreachable!("EmptyArray")
+            }
+            ColumnBuilder::EmptyMap { .. } => {
+                unreachable!("EmptyMap")
+            }
         }
     }
 
@@ -195,15 +227,32 @@ impl SeparatedTextDecoder {
     fn read_int<T>(&self, column: &mut Vec<T>, data: &[u8]) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
         // can not use read_num_text_exact directly, because we need to allow int like '1.0'
         let (n_in, effective) = collect_number(data);
         if n_in != data.len() {
             return Err(ErrorCode::BadBytes("invalid text for number"));
         }
-        let n: T::Native = read_num_text_exact(&data[..effective])?;
-        column.push(n.into());
+        let val: Result<T::Native> = read_num_text_exact(&data[..effective]);
+        let v = match val {
+            Ok(v) => v,
+            Err(_) => {
+                // cast float value to integer value
+                let val: f64 = read_num_text_exact(&data[..effective])?;
+                let new_val: Option<T::Native> = if self.rounding_mode {
+                    num_traits::cast::cast(val.round())
+                } else {
+                    num_traits::cast::cast(val)
+                };
+                if let Some(v) = new_val {
+                    v
+                } else {
+                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                }
+            }
+        };
+        column.push(v.into());
         Ok(())
     }
 
@@ -269,14 +318,14 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
-    fn read_bitmap(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let rb = parse_bitmap(data)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
     }
 
-    fn read_variant(&self, column: &mut StringColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         match parse_value(data) {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);
@@ -284,7 +333,6 @@ impl SeparatedTextDecoder {
             }
             Err(e) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(data);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));

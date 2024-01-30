@@ -19,7 +19,6 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
 use databend_common_sql::executor::physical_plans::Filter;
 
 use crate::pipelines::processors::transforms::TransformFilter;
@@ -45,9 +44,9 @@ impl PipelineBuilder {
         assert_eq!(predicate.data_type(), &DataType::Boolean);
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
-        let (select_expr, has_or) = build_select_expr(&predicate);
+        let (select_expr, has_or) = build_select_expr(&predicate).into();
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformFilter::create(
+            Ok(ProcessorPtr::create(TransformFilter::create(
                 input,
                 output,
                 select_expr.clone(),
@@ -55,17 +54,7 @@ impl PipelineBuilder {
                 filter.projections.clone(),
                 self.func_ctx.clone(),
                 max_block_size,
-            );
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    filter.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )))
         })?;
 
         Ok(())

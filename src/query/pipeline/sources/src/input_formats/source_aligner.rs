@@ -26,6 +26,8 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use log::debug;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
@@ -111,7 +113,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                 let eof = read_batch.is_none();
                 let row_batches = state.align(read_batch)?;
                 for b in row_batches.into_iter() {
-                    if b.size() > 0 {
+                    if b.rows() > 0 || b.size() > 0 {
                         process_values.rows += b.rows();
                         self.row_batches.push_back(b);
                     }
@@ -131,6 +133,10 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     self.state = None;
                     self.batch_rx = None;
                 }
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytes,
+                    process_values.bytes,
+                );
                 self.ctx.scan_progress.incr(&process_values);
                 Ok(())
             }

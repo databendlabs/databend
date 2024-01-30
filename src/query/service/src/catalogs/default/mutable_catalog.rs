@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -146,7 +147,7 @@ impl MutableCatalog {
 
         // Create default database.
         let req = CreateDatabaseReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: DatabaseNameIdent {
                 tenant,
                 db_name: "default".to_string(),
@@ -247,7 +248,10 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(&req.name_ident.tenant).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(CreateDatabaseReply {
+            db_id: res.db_id,
+            spec_vec: None,
+        })
     }
 
     #[async_backtrace::framed]
@@ -404,6 +408,7 @@ impl Catalog for MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
+
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();

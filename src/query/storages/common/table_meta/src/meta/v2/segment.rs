@@ -66,6 +66,7 @@ pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
     pub file_size: u64,
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
@@ -230,9 +231,10 @@ impl BlockMeta {
         let col_stats = s
             .col_stats
             .iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
                 let data_type = fields[*k as usize].data_type();
-                (*k, ColumnStatistics::from_v0(v, data_type))
+                let stats = ColumnStatistics::from_v0(v, data_type);
+                stats.map(|s| (*k, s))
             })
             .collect();
 
@@ -261,9 +263,10 @@ impl BlockMeta {
         let col_stats = s
             .col_stats
             .iter()
-            .map(|(k, v)| {
-                let data_type = fields[*k as usize].data_type();
-                (*k, ColumnStatistics::from_v0(v, data_type))
+            .filter_map(|(k, v)| {
+                let t = fields[*k as usize].data_type();
+                let stats = ColumnStatistics::from_v0(v, t);
+                stats.map(|s| (*k, s))
             })
             .collect();
 

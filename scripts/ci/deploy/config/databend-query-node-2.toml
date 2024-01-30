@@ -52,6 +52,11 @@ auth_type = "no_password"
 level = "INFO"
 format = "text"
 dir = "./.databend/logs_2"
+prefix_filter = ""
+
+[log.structlog]
+on = true
+dir = "./.databend/structlog_2"
 
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config

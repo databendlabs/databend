@@ -354,7 +354,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_expr(*expr, columns),
                     RawExpr::Constant {
                         span,
-                        scalar: Scalar::String(key.name.into_bytes()),
+                        scalar: Scalar::String(key.name),
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
@@ -532,7 +532,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
             DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
         }
-        databend_common_ast::ast::TypeName::Binary => DataType::String,
+        databend_common_ast::ast::TypeName::Binary => DataType::Binary,
         databend_common_ast::ast::TypeName::String => DataType::String,
         databend_common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         databend_common_ast::ast::TypeName::Date => DataType::Date,
@@ -552,6 +552,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
+        databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }
 
@@ -566,7 +567,7 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
             precision,
             scale,
         })),
-        ASTLiteral::String(s) => Scalar::String(s.as_bytes().to_vec()),
+        ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
         ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),

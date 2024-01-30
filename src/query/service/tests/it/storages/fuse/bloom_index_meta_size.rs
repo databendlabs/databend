@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_arrow::parquet::metadata::FileMetaData;
-use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
+// use databend_common_arrow::parquet::metadata::FileMetaData;
+// use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_base::base::tokio;
 use databend_common_cache::Cache;
 use databend_common_expression::types::Int32Type;
@@ -36,9 +36,10 @@ use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
+use databend_storages_common_blocks::ParquetFileMeta;
 use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
-use databend_storages_common_index::BloomIndexMeta;
+// use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -51,9 +52,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 use sysinfo::get_current_pid;
-use sysinfo::ProcessExt;
 use sysinfo::System;
-use sysinfo::SystemExt;
 use uuid::Uuid;
 
 // NOTE:
@@ -65,64 +64,64 @@ use uuid::Uuid;
 //
 // please run the following two cases individually (in different process)
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore]
-async fn test_index_meta_cache_size_file_meta_data() -> databend_common_exception::Result<()> {
-    let thrift_file_meta = setup().await?;
+// #[tokio::test(flavor = "multi_thread")]
+// #[ignore]
+// async fn test_index_meta_cache_size_file_meta_data() -> databend_common_exception::Result<()> {
+//     let thrift_file_meta = setup().await?;
 
-    let cache_number = 300_000;
+//     let cache_number = 300_000;
 
-    let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta)?;
+//     let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta)?;
 
-    let sys = System::new_all();
-    let pid = get_current_pid().unwrap();
-    let process = sys.process(pid).unwrap();
-    let base_memory_usage = process.memory();
-    let scenario = "FileMetaData";
+//     let sys = System::new_all();
+//     let pid = get_current_pid().unwrap();
+//     let process = sys.process(pid).unwrap();
+//     let base_memory_usage = process.memory();
+//     let scenario = "FileMetaData";
 
-    eprintln!(
-        "scenario {}, pid {}, base memory {}",
-        scenario, pid, base_memory_usage
-    );
+//     eprintln!(
+//         "scenario {}, pid {}, base memory {}",
+//         scenario, pid, base_memory_usage
+//     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<FileMetaData>(cache_number as u64);
+//     let cache = InMemoryCacheBuilder::new_item_cache::<FileMetaData>(cache_number as u64);
 
-    populate_cache(&cache, meta, cache_number);
-    show_memory_usage(scenario, base_memory_usage, cache_number);
+//     populate_cache(&cache, meta, cache_number);
+//     show_memory_usage(scenario, base_memory_usage, cache_number);
 
-    drop(cache);
+//     drop(cache);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore]
-async fn test_index_meta_cache_size_bloom_meta() -> databend_common_exception::Result<()> {
-    let thrift_file_meta = setup().await?;
+// #[tokio::test(flavor = "multi_thread")]
+// #[ignore]
+// async fn test_index_meta_cache_size_bloom_meta() -> databend_common_exception::Result<()> {
+//     let thrift_file_meta = setup().await?;
 
-    let cache_number = 300_000;
+//     let cache_number = 300_000;
 
-    let bloom_index_meta = BloomIndexMeta::try_from(thrift_file_meta)?;
+//     let bloom_index_meta = BloomIndexMeta::try_from(thrift_file_meta)?;
 
-    let sys = System::new_all();
-    let pid = get_current_pid().unwrap();
-    let process = sys.process(pid).unwrap();
-    let base_memory_usage = process.memory();
+//     let sys = System::new_all();
+//     let pid = get_current_pid().unwrap();
+//     let process = sys.process(pid).unwrap();
+//     let base_memory_usage = process.memory();
 
-    let scenario = "BloomIndexMeta(mini)";
-    eprintln!(
-        "scenario {}, pid {}, base memory {}",
-        scenario, pid, base_memory_usage
-    );
+//     let scenario = "BloomIndexMeta(mini)";
+//     eprintln!(
+//         "scenario {}, pid {}, base memory {}",
+//         scenario, pid, base_memory_usage
+//     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<BloomIndexMeta>(cache_number as u64);
-    populate_cache(&cache, bloom_index_meta, cache_number);
-    show_memory_usage("BloomIndexMeta(Mini)", base_memory_usage, cache_number);
+//     let cache = InMemoryCacheBuilder::new_item_cache::<BloomIndexMeta>(cache_number as u64);
+//     populate_cache(&cache, bloom_index_meta, cache_number);
+//     show_memory_usage("BloomIndexMeta(Mini)", base_memory_usage, cache_number);
 
-    drop(cache);
+//     drop(cache);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_random_location_memory_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
@@ -296,8 +295,8 @@ fn build_test_segment_info(
     });
 
     let col_stat = ColumnStatistics::new(
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
         0,
         0,
         None,
@@ -363,6 +362,7 @@ fn build_test_segment_info(
     Ok(SegmentInfo::new(block_metas, statistics))
 }
 
+#[allow(dead_code)]
 fn populate_cache<T>(cache: &InMemoryItemCacheHolder<T>, item: T, num_cache: usize)
 where T: Clone {
     let mut c = cache.write();
@@ -375,7 +375,8 @@ where T: Clone {
     }
 }
 
-async fn setup() -> databend_common_exception::Result<ThriftFileMetaData> {
+#[allow(dead_code)]
+async fn setup() -> databend_common_exception::Result<ParquetFileMeta> {
     let fields = (0..23)
         .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
         .collect::<Vec<_>>();

@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -50,7 +49,6 @@ use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::ForwardToLeader;
 use databend_common_meta_types::GrpcConfig;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::MembershipNode;
@@ -242,7 +240,7 @@ impl MetaNodeBuilder {
         let endpoint = if let Some(a) = self.endpoint.take() {
             a
         } else {
-            sto.get_node_endpoint(&node_id).await.map_err(|e| {
+            sto.get_node_raft_endpoint(&node_id).await.map_err(|e| {
                 MetaStartupError::InvalidConfig(format!(
                     "endpoint of node: {} is not configured and is not in store, error: {}",
                     node_id, e,
@@ -252,7 +250,7 @@ impl MetaNodeBuilder {
 
         info!("about to start raft grpc on endpoint {}", endpoint);
 
-        MetaNode::start_grpc(mn.clone(), &endpoint.addr, endpoint.port).await?;
+        MetaNode::start_grpc(mn.clone(), endpoint.addr(), endpoint.port()).await?;
 
         Ok(mn)
     }
@@ -320,7 +318,7 @@ impl MetaNode {
     pub async fn start_grpc(
         mn: Arc<MetaNode>,
         host: &str,
-        port: u32,
+        port: u16,
     ) -> Result<(), MetaNetworkError> {
         let mut rx = mn.running_rx.clone();
 
@@ -905,7 +903,7 @@ impl MetaNode {
             .get_nodes(|ms| ms.learner_ids().collect::<Vec<_>>())
             .await;
 
-        let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
+        let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
         let db_size = self.sto.db.size_on_disk().map_err(|e| {
             let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
@@ -978,44 +976,10 @@ impl MetaNode {
     }
 
     #[minitrace::trace]
-    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaAPIError>
-    where
-        Request: Into<ForwardRequestBody> + Debug,
-        ForwardResponse: TryInto<Reply>,
-        <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
-    {
-        let res = self
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: req.into(),
-            })
-            .await;
-
-        match res {
-            Err(e) => {
-                server_metrics::incr_read_failed();
-                Err(e)
-            }
-            Ok(res) => {
-                let res: Reply = res.try_into().map_err(|e| {
-                    server_metrics::incr_read_failed();
-                    let invalid_reply = InvalidReply::new(
-                        format!("expect reply type to be {}", std::any::type_name::<Reply>(),),
-                        &AnyError::error(e),
-                    );
-                    MetaNetworkError::from(invalid_reply)
-                })?;
-
-                Ok(res)
-            }
-        }
-    }
-
-    #[minitrace::trace]
     pub async fn handle_forwardable_request<Req>(
         &self,
         req: ForwardRequest<Req>,
-    ) -> Result<Req::Reply, MetaAPIError>
+    ) -> Result<(Option<Endpoint>, Req::Reply), MetaAPIError>
     where
         Req: RequestFor,
         for<'a> MetaLeader<'a>: Handler<Req>,
@@ -1037,7 +1001,7 @@ impl MetaNode {
                 Ok(leader) => {
                     let res = leader.handle(req.clone()).await;
                     match res {
-                        Ok(x) => return Ok(x),
+                        Ok(x) => return Ok((None, x)),
                         Err(e) => e,
                     }
                 }
@@ -1062,8 +1026,27 @@ impl MetaNode {
             let res = f.forward(leader_id, req_cloned).await;
 
             let forward_err = match res {
-                Ok(x) => {
-                    return Ok(x);
+                Ok((_leader_raft_endpoint, reply)) => {
+                    let leader_grpc_endpoint = self
+                        .get_node(&leader_id)
+                        .await
+                        .and_then(|node| node.grpc_api_advertise_address)
+                        .and_then(|leader_grpc_address| {
+                            let endpoint_res = Endpoint::parse(&leader_grpc_address);
+
+                            match endpoint_res {
+                                Ok(o) => Some(o),
+                                Err(e) => {
+                                    error!(
+                                        "fail to parse leader_grpc_address: {}; error: {}",
+                                        &leader_grpc_address, e
+                                    );
+                                    None
+                                }
+                            }
+                        });
+
+                    return Ok((leader_grpc_endpoint, reply));
                 }
                 Err(forward_err) => forward_err,
             };
@@ -1147,11 +1130,12 @@ impl MetaNode {
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
         debug!("{} req: {:?}", func_name!(), req);
 
-        let res = self
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::Write(req.clone()),
-            })
+        // TODO: enable returning endpoint
+        let (_endpoint, res) = self
+            .handle_forwardable_request(ForwardRequest::new(
+                1,
+                ForwardRequestBody::Write(req.clone()),
+            ))
             .await?;
 
         let res: AppliedState = res.try_into().expect("expect AppliedState");

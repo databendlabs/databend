@@ -93,15 +93,25 @@ impl FuseTable {
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
+            let mut fields = schema.remove_virtual_computed_fields().fields().to_vec();
+
             all_column_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
                 pos += 1;
             });
 
-            (
-                Projection::Columns(all_column_indices),
-                Arc::new(schema.remove_virtual_computed_fields()),
-            )
+            if query_row_id_col {
+                // add `_predicate` column into input schema
+                fields.push(TableField::new(
+                    PREDICATE_COLUMN_NAME,
+                    TableDataType::Boolean,
+                ));
+                pos += 1;
+            }
+
+            let schema = TableSchema::new(fields);
+
+            (Projection::Columns(all_column_indices), Arc::new(schema))
         } else {
             col_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
@@ -113,6 +123,7 @@ impl FuseTable {
                 .map(|index| schema.fields()[*index].clone())
                 .collect();
 
+            // add `_predicate` column into input schema
             fields.push(TableField::new(
                 PREDICATE_COLUMN_NAME,
                 TableDataType::Boolean,
@@ -145,7 +156,6 @@ impl FuseTable {
                 Arc::new(TableSchema::new(fields)),
             )
         };
-
         let mut cap = 2;
         if !computed_list.is_empty() {
             cap += 1;
@@ -208,6 +218,7 @@ impl FuseTable {
                 1,
             );
         }
+
         let remain_reader = Arc::new(remain_reader);
         let filter_expr = Arc::new(filter.map(|v| {
             v.as_expr(&BUILTIN_FUNCTIONS)

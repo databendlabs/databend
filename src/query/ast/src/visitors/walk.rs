@@ -374,6 +374,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowMetrics { show_options } => visitor.visit_show_metrics(show_options),
         Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
         Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
+        Statement::ShowUserFunctions { show_options } => {
+            visitor.visit_show_user_functions(show_options)
+        }
         Statement::ShowTableFunctions { show_options } => {
             visitor.visit_show_table_functions(show_options)
         }

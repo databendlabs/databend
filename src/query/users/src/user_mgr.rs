@@ -14,6 +14,8 @@
 
 use core::net::Ipv4Addr;
 
+use chrono::DateTime;
+use chrono::Utc;
 use cidr::Ipv4Cidr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,14 +40,6 @@ impl UserApiProvider {
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
-            );
-            user_info.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_stage(),
-            );
-            user_info.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_udf(),
             );
             // Grant admin role to all configured users.
             user_info
@@ -321,7 +315,8 @@ impl UserApiProvider {
         let client = self.get_user_api_client(tenant)?;
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
-                ui.update_auth_option(auth_info, user_option)
+                ui.update_auth_option(auth_info.clone(), user_option);
+                ui.update_auth_history(auth_info)
             })
             .await;
 
@@ -343,5 +338,55 @@ impl UserApiProvider {
         user_info.option.set_default_role(default_role);
         self.update_user(tenant, user, None, Some(user_info.option))
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn update_user_login_result(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        authed: bool,
+    ) -> Result<()> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Ok(());
+        }
+        let client = self.get_user_api_client(tenant)?;
+        let update_user = client
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                if authed {
+                    ui.clear_login_fail_history()
+                } else {
+                    ui.update_login_fail_history()
+                }
+            })
+            .await;
+
+        match update_user {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.add_message_back("(while update user login result).")),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn update_user_lockout_time(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        lockout_time: DateTime<Utc>,
+    ) -> Result<()> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Ok(());
+        }
+        let client = self.get_user_api_client(tenant)?;
+        let update_user = client
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_lockout_time(lockout_time);
+            })
+            .await;
+
+        match update_user {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.add_message_back("(while update user lockout time).")),
+        }
     }
 }

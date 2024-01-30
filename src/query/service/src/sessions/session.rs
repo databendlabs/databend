@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -68,6 +68,21 @@ impl Session {
             mysql_connection_id,
             format_settings: FormatSettings::default(),
         }))
+    }
+
+    pub fn to_minitrace_properties(self: &Arc<Self>) -> Vec<(&'static str, String)> {
+        let mut properties = vec![
+            ("session_id", self.id.clone()),
+            ("session_database", self.get_current_database()),
+            ("session_tenant", self.get_current_tenant()),
+        ];
+        if let Some(query_id) = self.get_current_query_id() {
+            properties.push(("query_id", query_id));
+        }
+        if let Some(connection_id) = self.get_mysql_conn_id() {
+            properties.push(("connection_id", connection_id.to_string()));
+        }
+        properties
     }
 
     pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
@@ -260,7 +275,7 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn has_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<bool> {
+    pub async fn has_ownership(self: &Arc<Self>, object: &OwnershipObject) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }

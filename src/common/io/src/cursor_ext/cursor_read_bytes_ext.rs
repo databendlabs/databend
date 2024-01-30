@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::slice::memchr::memchr;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::io::ErrorKind;
@@ -175,8 +176,7 @@ where T: AsRef<[u8]>
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize {
         let remaining_slice = self.remaining_slice();
-        let to_read =
-            core::slice::memchr::memchr(delim, remaining_slice).map_or(buf.len(), |n| n + 1);
+        let to_read = memchr(delim, remaining_slice).map_or(buf.len(), |n| n + 1);
         buf.extend_from_slice(&remaining_slice[..to_read]);
         self.consume(to_read);
         to_read

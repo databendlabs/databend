@@ -130,7 +130,7 @@ impl IcebergTable {
             .collect();
         let arrow2_schema = Arrow2Schema::from(fields);
 
-        Ok(TableSchema::from(&arrow2_schema))
+        TableSchema::try_from(&arrow2_schema)
     }
 
     /// create a new table on the table directory
@@ -198,13 +198,7 @@ impl IcebergTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema = self.schema();
-        let arrow_schema = table_schema.to_arrow();
-        let arrow_fields = arrow_schema
-            .fields
-            .into_iter()
-            .map(|f| f.into())
-            .collect::<Vec<arrow_schema::Field>>();
-        let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let arrow_schema = table_schema.as_ref().into();
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
         let mut read_options = ParquetReadOptions::default();

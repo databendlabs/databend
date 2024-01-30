@@ -32,8 +32,6 @@ fn test_string() {
     test_bit_length(file);
     test_octet_length(file);
     test_char_length(file);
-    test_to_base64(file);
-    test_from_base64(file);
     test_quote(file);
     test_reverse(file);
     test_ascii(file);
@@ -47,7 +45,6 @@ fn test_string() {
     test_bin(file);
     test_oct(file);
     test_hex(file);
-    test_unhex(file);
     test_pad(file);
     test_replace(file);
     test_translate(file);
@@ -89,6 +86,10 @@ fn test_lower(file: &mut impl Write) {
 
 fn test_bit_length(file: &mut impl Write) {
     run_ast(file, "bit_length('latin')", &[]);
+    run_ast(file, "bit_length('CAFÉ')", &[]);
+    run_ast(file, "bit_length('数据库')", &[]);
+    run_ast(file, "bit_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')", &[]);
+    run_ast(file, "bit_length('قاعدة البيانات')", &[]);
     run_ast(file, "bit_length(NULL)", &[]);
     run_ast(file, "bit_length(a)", &[(
         "a",
@@ -98,8 +99,12 @@ fn test_bit_length(file: &mut impl Write) {
 
 fn test_octet_length(file: &mut impl Write) {
     run_ast(file, "octet_length('latin')", &[]);
+    run_ast(file, "octet_length('CAFÉ')", &[]);
+    run_ast(file, "octet_length('数据库')", &[]);
+    run_ast(file, "octet_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')", &[]);
+    run_ast(file, "octet_length('قاعدة البيانات')", &[]);
     run_ast(file, "octet_length(NULL)", &[]);
-    run_ast(file, "length(a)", &[(
+    run_ast(file, "octet_length(a)", &[(
         "a",
         StringType::from_data(vec!["latin", "кириллица", "кириллица and latin"]),
     )]);
@@ -107,32 +112,15 @@ fn test_octet_length(file: &mut impl Write) {
 
 fn test_char_length(file: &mut impl Write) {
     run_ast(file, "char_length('latin')", &[]);
+    run_ast(file, "char_length('CAFÉ')", &[]);
+    run_ast(file, "char_length('数据库')", &[]);
+    run_ast(file, "char_length('НОЧЬ НА ОКРАИНЕ МОСКВЫ')", &[]);
+    run_ast(file, "char_length('قاعدة البيانات')", &[]);
     run_ast(file, "char_length(NULL)", &[]);
     run_ast(file, "character_length(a)", &[(
         "a",
         StringType::from_data(vec!["latin", "кириллица", "кириллица and latin"]),
     )]);
-}
-
-fn test_to_base64(file: &mut impl Write) {
-    run_ast(file, "to_base64('Abc')", &[]);
-    run_ast(file, "to_base64('123')", &[]);
-    run_ast(file, "to_base64(Null)", &[]);
-    run_ast(file, "to_base64(a)", &[(
-        "a",
-        StringType::from_data(vec!["Abc", "123"]),
-    )]);
-}
-
-fn test_from_base64(file: &mut impl Write) {
-    run_ast(file, "from_base64('QWJj')", &[]);
-    run_ast(file, "from_base64('MTIz')", &[]);
-    run_ast(file, "from_base64(Null)", &[]);
-    run_ast(file, "from_base64(a)", &[(
-        "a",
-        StringType::from_data(vec!["QWJj", "MTIz"]),
-    )]);
-    run_ast(file, "from_base64('!@#')", &[]);
 }
 
 fn test_quote(file: &mut impl Write) {
@@ -186,6 +174,10 @@ fn test_ascii(file: &mut impl Write) {
 fn test_ltrim(file: &mut impl Write) {
     run_ast(file, "ltrim('   abc   ')", &[]);
     run_ast(file, "ltrim('  ')", &[]);
+    run_ast(file, "ltrim('  你  好  ')", &[]);
+    run_ast(file, "ltrim('  분산 데이터베이스    ')", &[]);
+    run_ast(file, "ltrim('   あなたのことが好きです   ')", &[
+    ]);
     run_ast(file, "ltrim(NULL)", &[]);
     run_ast(file, "ltrim(a)", &[(
         "a",
@@ -196,6 +188,10 @@ fn test_ltrim(file: &mut impl Write) {
 fn test_rtrim(file: &mut impl Write) {
     run_ast(file, "rtrim('   abc   ')", &[]);
     run_ast(file, "rtrim('  ')", &[]);
+    run_ast(file, "rtrim('  你  好  ')", &[]);
+    run_ast(file, "rtrim('  분산 데이터베이스    ')", &[]);
+    run_ast(file, "rtrim('   あなたのことが好きです   ')", &[
+    ]);
     run_ast(file, "rtrim(NULL)", &[]);
     run_ast(file, "rtrim(a)", &[(
         "a",
@@ -211,6 +207,12 @@ fn test_trim_leading(file: &mut impl Write) {
     run_ast(file, "trim_leading(NULL, 'a')", &[]);
     run_ast(file, "trim_leading('aaaaaaaa', NULL)", &[]);
     run_ast(file, "trim_leading('aaaaaaaa', '')", &[]);
+    run_ast(file, "trim_leading('분산 데이터베이스', '분산 ')", &[]);
+    run_ast(
+        file,
+        "trim_leading('あなたのことが好きです', 'あなたの')",
+        &[],
+    );
 
     let table = [
         (
@@ -233,6 +235,12 @@ fn test_trim_trailing(file: &mut impl Write) {
     run_ast(file, "trim_trailing(NULL, 'a')", &[]);
     run_ast(file, "trim_trailing('aaaaaaaa', NULL)", &[]);
     run_ast(file, "trim_trailing('aaaaaaaa', '')", &[]);
+    run_ast(file, "trim_trailing('분산 데이터베이스', '베이스')", &[]);
+    run_ast(
+        file,
+        "trim_trailing('あなたのことが好きです', '好きです')",
+        &[],
+    );
 
     let table = [
         (
@@ -255,6 +263,10 @@ fn test_trim_both(file: &mut impl Write) {
     run_ast(file, "trim_both(NULL, 'a')", &[]);
     run_ast(file, "trim_both('aaaaaaaa', NULL)", &[]);
     run_ast(file, "trim_both('aaaaaaaa', '')", &[]);
+    run_ast(file, "trim_both('  你  好  ', ' ')", &[]);
+    run_ast(file, "trim_both('  분산 데이터베이스    ', ' ')", &[
+    ]);
+    run_ast(file, "trim_both('   あなたのことが好きです   ', ' ')", &[]);
 
     let table = [
         (
@@ -337,6 +349,9 @@ fn test_trim(file: &mut impl Write) {
     // TRIM(<expr>)
     run_ast(file, "trim('   abc   ')", &[]);
     run_ast(file, "trim('  ')", &[]);
+    run_ast(file, "trim('  你  好  ')", &[]);
+    run_ast(file, "trim('  분산 데이터베이스    ')", &[]);
+    run_ast(file, "trim('   あなたのことが好きです   ')", &[]);
     run_ast(file, "trim(NULL)", &[]);
     run_ast(file, "trim(a)", &[(
         "a",
@@ -352,6 +367,11 @@ fn test_trim(file: &mut impl Write) {
 fn test_concat(file: &mut impl Write) {
     run_ast(file, "concat('5', '3', '4')", &[]);
     run_ast(file, "concat(NULL, '3', '4')", &[]);
+    run_ast(
+        file,
+        "concat('忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')",
+        &[],
+    );
     run_ast(file, "concat(a, '3', '4', '5')", &[(
         "a",
         StringType::from_data(vec!["abc", "   abc", "   abc   ", "abc   "]),
@@ -366,6 +386,11 @@ fn test_concat(file: &mut impl Write) {
 
     run_ast(file, "concat_ws('-', '3', null, '4', null, '5')", &[]);
     run_ast(file, "concat_ws(NULL, '3', '4')", &[]);
+    run_ast(
+        file,
+        "concat_ws(',', '忠犬ハチ公', 'CAFÉ', '数据库', 'قاعدة البيانات', 'НОЧЬ НА ОКРАИНЕ МОСКВЫ')",
+        &[],
+    );
     run_ast(file, "concat_ws(a, '3', '4', '5')", &[(
         "a",
         StringType::from_data(vec![",", "-", ",", "-"]),
@@ -450,19 +475,6 @@ fn test_hex(file: &mut impl Write) {
     run_ast(file, "hex(e)", columns);
 }
 
-fn test_unhex(file: &mut impl Write) {
-    run_ast(file, "unhex('6461746162656e64')", &[]);
-
-    let columns = &[("s", StringType::from_data(vec!["abc", "def", "databend"]))];
-    run_ast(file, "unhex(hex(s))", columns);
-
-    let columns = &[(
-        "s",
-        StringType::from_data(vec!["616263", "646566", "6461746162656e64"]),
-    )];
-    run_ast(file, "unhex(s)", columns);
-}
-
 fn test_pad(file: &mut impl Write) {
     run_ast(file, "lpad('hi', 2, '?')", &[]);
     run_ast(file, "lpad('hi', 4, '?')", &[]);
@@ -535,8 +547,8 @@ fn test_strcmp(file: &mut impl Write) {
     run_ast(file, "strcmp('hii', 'hii')", &[]);
 
     let table = [
-        ("a", StringType::from_data(vec!["hi", "test", "cc"])),
-        ("b", StringType::from_data(vec!["i", "test", "ccb"])),
+        ("a", StringType::from_data(vec!["i", "h", "test", "cc"])),
+        ("b", StringType::from_data(vec!["hi", "hi", "test", "ccb"])),
     ];
     run_ast(file, "strcmp(a, b)", &table);
 }
@@ -545,6 +557,7 @@ fn test_locate(file: &mut impl Write) {
     run_ast(file, "locate('bar', 'foobarbar')", &[]);
     run_ast(file, "locate('', 'foobarbar')", &[]);
     run_ast(file, "locate('', '')", &[]);
+    run_ast(file, "locate('好世', '你好世界')", &[]);
     run_ast(file, "instr('foobarbar', 'bar')", &[]);
     run_ast(file, "instr('foobarbar', '')", &[]);
     run_ast(file, "instr('', '')", &[]);
@@ -553,6 +566,7 @@ fn test_locate(file: &mut impl Write) {
     run_ast(file, "position('' IN '')", &[]);
     run_ast(file, "position('foobarbar' IN 'bar')", &[]);
     run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
+    run_ast(file, "locate('好世', '你好世界', 1)", &[]);
 
     let table = [
         ("a", StringType::from_data(vec!["bar", "cc", "cc", "q"])),
@@ -607,6 +621,8 @@ fn test_ord(file: &mut impl Write) {
 fn test_repeat(file: &mut impl Write) {
     run_ast(file, "repeat('3', NULL)", &[]);
     run_ast(file, "repeat('3', 5)", &[]);
+    run_ast(file, "repeat('你好世界', 3)", &[]);
+    run_ast(file, "repeat('こんにちは', 2)", &[]);
     run_ast(file, "repeat('3', 1000001)", &[]);
     let table = [("a", StringType::from_data(vec!["a", "b", "c"]))];
     run_ast(file, "repeat(a, 3)", &table);
@@ -621,6 +637,7 @@ fn test_insert(file: &mut impl Write) {
     run_ast(file, "insert('Quadratic', 3, 100, NULL)", &[]);
     run_ast(file, "insert('Quadratic', 3, NULL, 'NULL')", &[]);
     run_ast(file, "insert('Quadratic', NULL, 100, 'NULL')", &[]);
+    run_ast(file, "insert('你好世界', 1, 2, 'こんにちは')", &[]);
     run_ast(file, "insert(NULL, 2, 100, 'NULL')", &[]);
 
     let table = [
@@ -690,6 +707,8 @@ fn test_substr(file: &mut impl Write) {
     run_ast(file, "substr('Sakila' from -4 for 2)", &[]);
     run_ast(file, "substr('sakila' FROM -4)", &[]);
     run_ast(file, "substr('abc',2)", &[]);
+    run_ast(file, "substr('你好世界', 3)", &[]);
+    run_ast(file, "substr('こんにちは', 2)", &[]);
     run_ast(file, "substr('abc', pos, len)", &[
         (
             "pos",
@@ -712,6 +731,8 @@ fn test_split(file: &mut impl Write) {
     run_ast(file, "split('Sakila', 'il')", &[]);
     run_ast(file, "split('sakila', 'a')", &[]);
     run_ast(file, "split('abc','b')", &[]);
+    run_ast(file, "split('你好世界', '好')", &[]);
+    run_ast(file, "split('こんにちは', 'に')", &[]);
     run_ast(file, "split(str, sep)", &[
         (
             "str",

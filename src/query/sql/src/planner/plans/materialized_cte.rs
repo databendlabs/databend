@@ -39,6 +39,10 @@ impl Operator for MaterializedCte {
         RelOp::MaterializedCte
     }
 
+    fn arity(&self) -> usize {
+        2
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
@@ -88,8 +92,13 @@ impl Operator for MaterializedCte {
         _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
-        }]])
+        Ok(vec![vec![
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+        ]])
     }
 }

@@ -31,8 +31,8 @@ use itertools::Itertools;
 
 mod arithmetic;
 mod array;
+mod binary;
 mod bitmap;
-
 mod boolean;
 mod cast;
 mod comparison;
@@ -220,7 +220,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
 
 fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col, &col.data_type());
+    let new_col = Column::from_arrow(&*arrow_col, &col.data_type()).unwrap();
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 

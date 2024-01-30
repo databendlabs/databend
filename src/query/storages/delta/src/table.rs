@@ -200,13 +200,7 @@ impl DeltaTable {
             .collect();
         let table_schema = Arc::new(TableSchema::new(non_partition_fields));
 
-        let arrow_schema = table_schema.to_arrow();
-        let arrow_fields = arrow_schema
-            .fields
-            .into_iter()
-            .map(|f| f.into())
-            .collect::<Vec<arrow_schema::Field>>();
-        let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let arrow_schema = table_schema.as_ref().into();
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
         let mut read_options = ParquetReadOptions::default();

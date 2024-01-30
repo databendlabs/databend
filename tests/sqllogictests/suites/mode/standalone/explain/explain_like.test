@@ -29,7 +29,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [s (#0)]
         ├── read rows: 4
-        ├── read bytes: 63
+        ├── read bytes: 80
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -56,7 +56,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [s (#0)]
         ├── read rows: 4
-        ├── read bytes: 63
+        ├── read bytes: 80
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]

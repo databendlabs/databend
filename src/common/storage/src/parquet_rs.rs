@@ -18,8 +18,8 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::EXTENSION_KEY;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;
@@ -244,13 +244,7 @@ mod tests {
             }),
             TableField::new("h", TableDataType::String),
         ]);
-        let arrow_fields = schema.to_arrow().fields;
-        let arrow_schema = arrow_schema::Schema::new(
-            arrow_fields
-                .into_iter()
-                .map(arrow_schema::Field::from)
-                .collect::<Vec<_>>(),
-        );
+        let arrow_schema = (&schema).into();
         let schema_desc = arrow_to_parquet_schema(&arrow_schema).unwrap();
         let mut leave_id = 0;
         let tree = build_parquet_schema_tree(schema_desc.root_schema(), &mut leave_id);

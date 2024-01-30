@@ -19,10 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_pipeline_core::PlanScopeGuard;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
@@ -43,15 +43,13 @@ pub struct PipelineBuilder {
 
     pub pipelines: Vec<Pipeline>,
 
-    // probe data_fields for merge into
-    pub probe_data_fields: Option<Vec<DataField>>,
+    // probe data_fields for distributed merge into when source build
+    pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
     // Cte -> state, each cte has it's own state
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
-    pub(crate) enable_profiling: bool,
-    pub(crate) proc_profs: SharedProcessorProfiles,
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
@@ -60,21 +58,17 @@ impl PipelineBuilder {
         func_ctx: FunctionContext,
         settings: Arc<Settings>,
         ctx: Arc<QueryContext>,
-        enable_profiling: bool,
-        prof_span_set: SharedProcessorProfiles,
         scopes: Vec<PlanScope>,
     ) -> PipelineBuilder {
         PipelineBuilder {
-            enable_profiling,
             ctx,
             func_ctx,
             settings,
             pipelines: vec![],
             main_pipeline: Pipeline::with_scopes(scopes),
-            proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             cte_state: HashMap::new(),
-            probe_data_fields: None,
+            merge_into_probe_data_fields: None,
             join_state: None,
         }
     }
@@ -93,27 +87,38 @@ impl PipelineBuilder {
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
-            prof_span_set: self.proc_profs,
             exchange_injector: self.exchange_injector,
             builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,
-                input_probe_schema: self.probe_data_fields,
+                input_probe_schema: self.merge_into_probe_data_fields,
             },
         })
     }
 
-    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Option<PlanScopeGuard> {
+    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
-            PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => None,
+            PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
             _ => {
-                let scope = PlanScope::create(plan.get_id(), plan.name());
-                Some(self.main_pipeline.add_plan_scope(scope))
+                let desc = plan.get_desc()?;
+                let plan_labels = plan.get_labels()?;
+                let mut profile_labels = Vec::with_capacity(plan_labels.len());
+                for (name, value) in plan_labels {
+                    profile_labels.push(ProfileLabel::create(name, value));
+                }
+
+                let scope = PlanScope::create(
+                    plan.get_id(),
+                    plan.name(),
+                    Arc::new(desc),
+                    Arc::new(profile_labels),
+                );
+                Ok(Some(self.main_pipeline.add_plan_scope(scope)))
             }
         }
     }
 
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
-        let _guard = self.add_plan_scope(plan);
+        let _guard = self.add_plan_scope(plan)?;
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),

@@ -262,6 +262,7 @@ impl HttpQuery {
                 for (k, v) in conf_settings {
                     settings
                         .set_setting(k.to_string(), v.to_string())
+                        .await
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
                                 warn!(
@@ -289,13 +290,16 @@ impl HttpQuery {
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
+        let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
             unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
+                ctx.get_settings()
+                    .set_deduplicate_label(label.clone())
+                    .await?;
             }
         }
         if let Some(ua) = user_agent {
@@ -317,7 +321,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: attachment.file_format_options.clone(),
+                file_format_options: attachment.file_format_options.as_ref().map(|v| {
+                    v.iter()
+                        .map(|(k, v)| (k.to_lowercase(), v.to_owned()))
+                        .collect::<BTreeMap<_, _>>()
+                }),
                 copy_options: attachment.copy_options.clone(),
             }),
             None => {}
@@ -339,6 +347,7 @@ impl HttpQuery {
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root(std::any::type_name::<ExecuteState>(), parent)
+                .with_properties(|| http_ctx.to_minitrace_properties())
         } else {
             Span::noop()
         };

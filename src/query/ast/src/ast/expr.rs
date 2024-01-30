@@ -323,6 +323,7 @@ pub enum TypeName {
     },
     Variant,
     Nullable(Box<TypeName>),
+    NotNull(Box<TypeName>),
 }
 
 impl TypeName {
@@ -335,6 +336,13 @@ impl TypeName {
             Self::Nullable(Box::new(self))
         } else {
             self
+        }
+    }
+
+    pub fn wrap_not_null(self) -> Self {
+        match self {
+            Self::NotNull(_) => self,
+            _ => Self::NotNull(Box::new(self)),
         }
     }
 }
@@ -887,6 +895,9 @@ impl Display for TypeName {
             }
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;
+            }
+            TypeName::NotNull(ty) => {
+                write!(f, "{} NOT NULL", ty)?;
             }
         }
         Ok(())

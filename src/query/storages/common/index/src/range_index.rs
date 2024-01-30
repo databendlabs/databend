@@ -28,7 +28,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
@@ -161,7 +160,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
     }
     match data_type {
         DataType::Nullable(box inner_ty) => {
-            if stats.len() == 1 && (stats[0].min().is_null() || stats[0].max().is_null()) {
+            if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
                 return Domain::Nullable(NullableDomain {
                     has_null: true,
                     value: None,
@@ -201,53 +200,44 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);
-            let kv_domain = inner_domain.as_tuple().unwrap();
-            Domain::Map(Some((
-                Box::new(kv_domain[0].clone()),
-                Box::new(kv_domain[1].clone()),
-            )))
+            Domain::Map(Some(Box::new(inner_domain)))
         }
         _ => {
             let stat = stats[0];
+            let min = stat.min();
+            let max = stat.max();
+
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
                     NumberType::<NUM_TYPE>::upcast_domain(SimpleDomain {
-                        min: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.min().as_ref())
-                            .unwrap(),
-                        max: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.max().as_ref())
-                            .unwrap(),
+                        min: NumberType::<NUM_TYPE>::try_downcast_scalar(&min.as_ref()).unwrap(),
+                        max: NumberType::<NUM_TYPE>::try_downcast_scalar(&max.as_ref()).unwrap(),
                     })
                 }
                 DataType::String => Domain::String(StringDomain {
-                    min: StringType::try_downcast_scalar(&stat.min().as_ref())
-                        .unwrap()
-                        .to_vec(),
-                    max: Some(
-                        StringType::try_downcast_scalar(&stat.max().as_ref())
-                            .unwrap()
-                            .to_vec()
-                    ),
+                    min: min.clone().into_string().unwrap(),
+                    max: Some(max.clone().into_string().unwrap()),
                 }),
                 DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
-                    min: TimestampType::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                    max: TimestampType::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                    min: TimestampType::try_downcast_scalar(&min.as_ref()).unwrap(),
+                    max: TimestampType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
                 DataType::Date => DateType::upcast_domain(SimpleDomain {
-                    min: DateType::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                    max: DateType::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                    min: DateType::try_downcast_scalar(&min.as_ref()).unwrap(),
+                    max: DateType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
                 DataType::Decimal(dec) => match dec {
                     DecimalDataType::Decimal128(sz) => Domain::Decimal(DecimalDomain::Decimal128(
                         SimpleDomain {
-                            min: Decimal128Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                            max: Decimal128Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                            min: Decimal128Type::try_downcast_scalar(&min.as_ref()).unwrap(),
+                            max: Decimal128Type::try_downcast_scalar(&max.as_ref()).unwrap(),
                         },
                         *sz,
                     )),
                     DecimalDataType::Decimal256(sz) => Domain::Decimal(DecimalDomain::Decimal256(
                         SimpleDomain {
-                            min: Decimal256Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
-                            max: Decimal256Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                            min: Decimal256Type::try_downcast_scalar(&min.as_ref()).unwrap(),
+                            max: Decimal256Type::try_downcast_scalar(&max.as_ref()).unwrap(),
                         },
                         *sz,
                     )),

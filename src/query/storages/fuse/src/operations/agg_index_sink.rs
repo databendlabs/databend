@@ -21,7 +21,6 @@ use async_trait::unboxed_simple;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -45,6 +44,7 @@ pub struct AggIndexSink {
     keep_block_name_col: bool,
     location_data: HashMap<String, Vec<BlockRowIndex>>,
     blocks: Vec<DataBlock>,
+    use_parquet2: bool,
 }
 
 impl AggIndexSink {
@@ -59,7 +59,7 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx, AggIndexSink {
+        let sinker = AsyncSinker::create(input, ctx.clone(), AggIndexSink {
             data_accessor,
             index_id,
             write_settings,
@@ -68,6 +68,7 @@ impl AggIndexSink {
             keep_block_name_col,
             location_data: HashMap::new(),
             blocks: vec![],
+            use_parquet2: ctx.get_settings().get_fuse_write_use_parquet2()?,
         });
 
         Ok(ProcessorPtr::create(sinker))
@@ -78,11 +79,7 @@ impl AggIndexSink {
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
-            let location = unsafe {
-                String::from_utf8_unchecked(StringType::to_owned_scalar(
-                    block_name_col.index(i).unwrap(),
-                ))
-            };
+            let location = block_name_col.index(i).unwrap().to_string();
 
             self.location_data
                 .entry(location)
@@ -116,7 +113,13 @@ impl AsyncSink for AggIndexSink {
                 self.index_id,
             );
             let mut data = vec![];
-            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
+            io::serialize_block(
+                &self.write_settings,
+                &self.sink_schema,
+                block,
+                &mut data,
+                self.use_parquet2,
+            )?;
 
             {
                 metrics_inc_agg_index_write_nums(1);

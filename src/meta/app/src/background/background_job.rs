@@ -382,12 +382,16 @@ mod kvapi_key_impl {
 
     use crate::background::background_job::BackgroundJobId;
     use crate::background::background_job::BackgroundJobIdent;
+    use crate::background::BackgroundJobInfo;
+
     const PREFIX_BACKGROUND_JOB: &str = "__fd_background_job";
     const PREFIX_BACKGROUND_JOB_BY_ID: &str = "__fd_background_job_by_id";
 
     /// <prefix>/<tenant>/<background_job_ident> -> <id>
     impl kvapi::Key for BackgroundJobIdent {
         const PREFIX: &'static str = PREFIX_BACKGROUND_JOB;
+
+        type ValueType = BackgroundJobId;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -409,6 +413,8 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for BackgroundJobId {
         const PREFIX: &'static str = PREFIX_BACKGROUND_JOB_BY_ID;
+
+        type ValueType = BackgroundJobInfo;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

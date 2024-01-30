@@ -398,7 +398,10 @@ impl Substitution {
             DataType::Generic(idx) => self.0.get(idx).cloned().ok_or_else(|| {
                 ErrorCode::from_string_no_backtrace(format!("unbound generic type `T{idx}`"))
             }),
-            DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
+            DataType::Nullable(box ty) => {
+                let inner_ty = self.apply(ty)?;
+                Ok(inner_ty.wrap_nullable())
+            }
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
             DataType::Map(box ty) => {
                 let inner_ty = self.apply(ty)?;
@@ -438,7 +441,6 @@ pub fn try_check_function<Index: ColumnIndex>(
             check_cast(arg.span(), is_try, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
-
     let return_type = subst.apply(&sig.return_type)?;
     assert!(!return_type.has_nested_nullable());
 
@@ -706,6 +708,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
 }
 
 pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
+    "to_binary",
     "to_string",
     "to_uint8",
     "to_uint16",

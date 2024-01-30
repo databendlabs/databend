@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
@@ -29,7 +30,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -53,8 +53,12 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(metadata);
+pub fn decorrelate_subquery(
+    ctx: Arc<dyn TableContext>,
+    metadata: MetadataRef,
+    s_expr: SExpr,
+) -> Result<SExpr> {
+    let mut rewriter = SubqueryRewriter::new(ctx, metadata);
     rewriter.rewrite(&s_expr)
 }
 
@@ -195,9 +199,12 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both {
-                    left, right, op, ..
+                    left,
+                    right,
+                    is_equal_op,
+                    ..
                 } => {
-                    if op == ComparisonOp::Equal {
+                    if is_equal_op {
                         left_conditions.push(left.clone());
                         right_conditions.push(right.clone());
                     } else {
@@ -222,6 +229,7 @@ impl SubqueryRewriter {
             from_correlated_subquery: true,
             need_hold_hash_table: false,
             broadcast: false,
+            is_lateral: false,
         };
 
         // Rewrite plan to semi-join.
@@ -297,6 +305,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     broadcast: false,
+                    is_lateral: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -345,6 +354,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     broadcast: false,
+                    is_lateral: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -408,6 +418,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     broadcast: false,
+                    is_lateral: false,
                 }
                 .into();
                 Ok((

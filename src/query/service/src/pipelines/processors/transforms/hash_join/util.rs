@@ -16,8 +16,6 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -173,7 +171,7 @@ where
                     .map(|key| key.fast_hash()),
             );
         }
-        HashMethodKind::SingleString(method) => {
+        HashMethodKind::SingleBinary(method) => {
             let keys_state = method.build_keys_state(columns, num_rows)?;
             hashes.extend(
                 method
@@ -234,14 +232,11 @@ where
 }
 
 // Generate min max runtime filter
-pub(crate) fn min_max_filter<T>(
-    min: T,
-    max: T,
+pub(crate) fn min_max_filter(
+    min: Scalar,
+    max: Scalar,
     probe_key: &Expr<String>,
-) -> Result<Option<Expr<String>>>
-where
-    T: Number,
-{
+) -> Result<Option<Expr<String>>> {
     if let Expr::ColumnRef {
         span,
         id,
@@ -257,11 +252,11 @@ where
         };
         let min = RawExpr::Constant {
             span: None,
-            scalar: Scalar::Number(NumberScalar::from(min)),
+            scalar: min,
         };
         let max = RawExpr::Constant {
             span: None,
-            scalar: Scalar::Number(NumberScalar::from(max)),
+            scalar: max,
         };
         // Make gte and lte function
         let gte_func = RawExpr::FunctionCall {

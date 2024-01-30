@@ -67,6 +67,10 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
             .with_set_flag(databend_common_meta_app::principal::UserOptionFlag::TenantSetting)
             .with_default_role(Some("role1".into()))
             .with_network_policy(Some("mypolicy".to_string())),
+        history_auth_infos: vec![],
+        password_fails: vec![],
+        password_update_on: None,
+        lockout_time: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

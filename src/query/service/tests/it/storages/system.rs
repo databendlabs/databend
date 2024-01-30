@@ -285,7 +285,7 @@ async fn test_functions_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 8);
+    assert_eq!(block.num_columns(), 5);
 
     Ok(())
 }
@@ -393,6 +393,10 @@ async fn test_users_table() -> Result<()> {
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
                 option: UserOption::default(),
+                history_auth_infos: vec![],
+                password_fails: vec![],
+                password_update_on: None,
+                lockout_time: None,
             },
             false,
         )
@@ -409,6 +413,10 @@ async fn test_users_table() -> Result<()> {
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
                 option: UserOption::default().with_default_role(Some("role1".to_string())),
+                history_auth_infos: vec![],
+                password_fails: vec![],
+                password_update_on: None,
+                lockout_time: None,
             },
             false,
         )

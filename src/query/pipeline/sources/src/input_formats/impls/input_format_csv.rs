@@ -20,12 +20,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_formats::FieldDecoder;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_formats::RecordDelimiter;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::FileParseError;
@@ -57,14 +59,46 @@ impl InputFormatCSV {
         column_index: usize,
         schema: &TableSchemaRef,
         default_values: &Option<Vec<Scalar>>,
+        empty_filed_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             match default_values {
                 None => {
+                    // query
                     builder.push_default();
                 }
                 Some(values) => {
-                    builder.push(values[column_index].as_ref());
+                    let field = &schema.fields()[column_index];
+                    // copy
+                    match empty_filed_as {
+                        EmptyFieldAs::FieldDefault => {
+                            builder.push(values[column_index].as_ref());
+                        }
+                        EmptyFieldAs::Null => {
+                            if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                                return Err(FileParseError::ColumnEmptyError {
+                                    column_index,
+                                    column_name: field.name().to_owned(),
+                                    column_type: field.data_type.to_string(),
+                                    empty_field_as: empty_filed_as.to_string(),
+                                });
+                            }
+                            builder.push_default();
+                        }
+                        EmptyFieldAs::String => {
+                            if !matches!(field.data_type.remove_nullable(), TableDataType::String) {
+                                let field = &schema.fields()[column_index];
+                                return Err(FileParseError::ColumnEmptyError {
+                                    column_index,
+                                    column_name: field.name().to_owned(),
+                                    column_type: field.data_type.to_string(),
+                                    empty_field_as: empty_filed_as.to_string(),
+                                });
+                            }
+
+                            builder.push_default();
+                        }
+                    }
                 }
             }
             return Ok(());
@@ -82,6 +116,7 @@ impl InputFormatCSV {
         field_ends: &[usize],
         columns_to_read: &Option<Vec<usize>>,
         default_values: &Option<Vec<Scalar>>,
+        empty_filed_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = columns_to_read {
             for c in columns_to_read {
@@ -98,6 +133,7 @@ impl InputFormatCSV {
                         *c,
                         schema,
                         default_values,
+                        empty_filed_as,
                     )?;
                 }
             }
@@ -106,7 +142,15 @@ impl InputFormatCSV {
             for (c, column) in columns.iter_mut().enumerate() {
                 let field_end = field_ends[c];
                 let col_data = &buf[field_start..field_end];
-                Self::read_column(column, field_decoder, col_data, c, schema, default_values)?;
+                Self::read_column(
+                    column,
+                    field_decoder,
+                    col_data,
+                    c,
+                    schema,
+                    default_values,
+                    empty_filed_as,
+                )?;
                 field_start = field_end;
             }
         }
@@ -124,9 +168,14 @@ impl InputFormatTextBase for InputFormatCSV {
     fn create_field_decoder(
         params: &FileFormatParams,
         options: &FileFormatOptionsExt,
+        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
         let csv_params = CsvFileFormatParams::downcast_unchecked(params);
-        Arc::new(SeparatedTextDecoder::create_csv(csv_params, options))
+        Arc::new(SeparatedTextDecoder::create_csv(
+            csv_params,
+            options,
+            rounding_mode,
+        ))
     }
 
     fn try_create_align_state(
@@ -177,6 +226,10 @@ impl InputFormatTextBase for InputFormatCSV {
             .as_any()
             .downcast_ref::<SeparatedTextDecoder>()
             .expect("must success");
+        let format_params = match builder.ctx.file_format_params {
+            FileFormatParams::Csv(ref p) => p,
+            _ => unreachable!(),
+        };
         for (i, end) in batch.row_ends.iter().enumerate() {
             let num_fields = batch.num_fields[i];
             let buf = &batch.data[start..*end];
@@ -188,6 +241,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.field_ends[field_end_idx..field_end_idx + num_fields],
                 &builder.projection,
                 &builder.ctx.default_values,
+                &format_params.empty_field_as,
             ) {
                 builder.ctx.on_error(
                     e,
@@ -329,9 +383,11 @@ impl AligningStateTextBased for CsvReaderState {
         let mut file_status = FileStatus::default();
         let mut buf_out = vec![0u8; buf_in.len()];
         while self.common.rows_to_skip > 0 {
-            let (_, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
+            let (res, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
             buf_in = &buf_in[n_in..];
-            self.common.rows_to_skip -= 1;
+            if matches!(res, ReadRecordOutput::Record { .. }) {
+                self.common.rows_to_skip -= 1;
+            }
         }
 
         let mut buf_out_pos = 0usize;

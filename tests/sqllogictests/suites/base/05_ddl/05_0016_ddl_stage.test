@@ -32,4 +32,17 @@ statement ok
 DROP STAGE test_stage_internal
 
 statement ok
+CREATE STAGE if not exists test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+DROP STAGE test_stage_huggingface
+
+statement ok
+CREATE STAGE if not exists test_stage_cos url='cos://testbucket/' connection=(secret_id ='minioadmin' secret_key ='minioadmin' endpoint_url='https://cos.ap-guangzhou.myqcloud.com')
+
+statement ok
+DROP STAGE test_stage_cos
+
+statement ok
 SHOW STAGES
+

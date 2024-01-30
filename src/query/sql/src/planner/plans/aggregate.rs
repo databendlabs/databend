@@ -96,8 +96,46 @@ impl Operator for Aggregate {
         RelOp::Aggregate
     }
 
+    fn arity(&self) -> usize {
+        1
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
+        let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+
+        if input_physical_prop.distribution == Distribution::Serial {
+            return Ok(input_physical_prop);
+        }
+
+        match self.mode {
+            AggregateMode::Partial => {
+                // TODO(leiysky): in current implementation we are using the `_group_by_key` produced
+                // by partial aggregation as the distribution key, which is not exactly the same with
+                // `Hash(group_items)`. Because of this we cannot leverage the distribution key to
+                // satisfy the required hash distribution from parent node. We should fix this in the future.
+                Ok(PhysicalProperty {
+                    distribution: Distribution::Random,
+                })
+            }
+
+            AggregateMode::Final => {
+                if self.group_items.is_empty() {
+                    // Scalar aggregation
+                    Ok(PhysicalProperty {
+                        distribution: Distribution::Serial,
+                    })
+                } else {
+                    // The distribution should have been derived by partial aggregation
+                    Ok(PhysicalProperty {
+                        distribution: input_physical_prop.distribution,
+                    })
+                }
+            }
+
+            AggregateMode::Initial => Err(ErrorCode::Internal(
+                "Cannot derive physical property for initial aggregate".to_string(),
+            ))?,
+        }
     }
 
     fn compute_required_prop_child(
@@ -230,11 +268,12 @@ impl Operator for Aggregate {
             f64::min(res, cardinality)
         };
 
-        let precise_cardinality = if self.group_items.is_empty() {
-            Some(1)
-        } else {
-            None
-        };
+        let precise_cardinality =
+            if self.group_items.is_empty() && self.mode == AggregateMode::Final {
+                Some(1)
+            } else {
+                None
+            };
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
@@ -247,56 +286,73 @@ impl Operator for Aggregate {
     fn compute_required_prop_children(
         &self,
         ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-
-        if child_physical_prop.distribution == Distribution::Serial {
-            return Ok(vec![vec![required]]);
-        }
+        let mut children_required = vec![];
 
         match self.mode {
             AggregateMode::Partial => {
                 if self.group_items.is_empty() {
                     // Scalar aggregation
-                    required.distribution = Distribution::Any;
+                    children_required.push(vec![RequiredProperty {
+                        distribution: Distribution::Any,
+                    }]);
+
+                    children_required.push(vec![RequiredProperty {
+                        distribution: Distribution::Serial,
+                    }]);
                 } else {
                     let settings = ctx.get_settings();
 
                     // Group aggregation, enforce `Hash` distribution
-                    required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
-                        "before_partial" => Ok(Distribution::Hash(
-                            self.group_items
-                                .iter()
-                                .map(|item| item.scalar.clone())
-                                .collect(),
-                        )),
-                        "before_merge" => {
-                            Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
+                    match settings.get_group_by_shuffle_mode()?.as_str() {
+                        "before_partial" => {
+                            children_required.push(vec![RequiredProperty {
+                                distribution: Distribution::Hash(
+                                    self.group_items
+                                        .iter()
+                                        .map(|item| item.scalar.clone())
+                                        .collect(),
+                                ),
+                            }]);
                         }
-                        value => Err(ErrorCode::Internal(format!(
-                            "Bad settings value group_by_shuffle_mode = {:?}",
-                            value
-                        ))),
-                    }?;
+                        "before_merge" => {
+                            children_required.push(vec![RequiredProperty {
+                                distribution: Distribution::Hash(vec![
+                                    self.group_items[0].scalar.clone(),
+                                ]),
+                            }]);
+                        }
+                        value => {
+                            return Err(ErrorCode::Internal(format!(
+                                "Bad settings value group_by_shuffle_mode = {:?}",
+                                value
+                            )));
+                        }
+                    }
                 }
             }
 
             AggregateMode::Final => {
                 if self.group_items.is_empty() {
                     // Scalar aggregation
-                    required.distribution = Distribution::Serial;
+                    children_required.push(vec![RequiredProperty {
+                        distribution: Distribution::Serial,
+                    }]);
                 } else {
                     // The distribution should have been derived by partial aggregation
-                    required.distribution = Distribution::Any;
+                    children_required.push(vec![RequiredProperty {
+                        distribution: Distribution::Any,
+                    }]);
                 }
             }
 
-            AggregateMode::Initial => unreachable!(),
+            AggregateMode::Initial => Err(ErrorCode::Internal(
+                "Cannot compute required property for initial aggregate".to_string(),
+            ))?,
         }
 
-        Ok(vec![vec![required]])
+        Ok(children_required)
     }
 }

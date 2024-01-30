@@ -26,4 +26,5 @@ once_cell = { workspace = true }
 sys-info = "0.9"
 
 [dev-dependencies]
+databend-common-base = { path = "../../common/base" }
 tokio = { workspace = true }

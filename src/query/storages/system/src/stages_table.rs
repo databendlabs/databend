@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -72,21 +73,31 @@ impl AsyncSystemTable for StagesTable {
             stages
         };
 
-        let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut stage_type: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut stage_params: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut copy_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut file_format_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut comment: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
+        let user_api = UserApiProvider::instance();
+        let mut owners: Vec<Option<String>> = vec![];
+        let mut name: Vec<String> = Vec::with_capacity(stages.len());
+        let mut stage_type: Vec<String> = Vec::with_capacity(stages.len());
+        let mut stage_params: Vec<String> = Vec::with_capacity(stages.len());
+        let mut copy_options: Vec<String> = Vec::with_capacity(stages.len());
+        let mut file_format_options: Vec<String> = Vec::with_capacity(stages.len());
+        let mut comment: Vec<String> = Vec::with_capacity(stages.len());
         let mut number_of_files: Vec<Option<u64>> = Vec::with_capacity(stages.len());
-        let mut creator: Vec<Option<Vec<u8>>> = Vec::with_capacity(stages.len());
+        let mut creator: Vec<Option<String>> = Vec::with_capacity(stages.len());
         let mut created_on = Vec::with_capacity(stages.len());
         for stage in stages.into_iter() {
-            name.push(stage.stage_name.clone().into_bytes());
-            stage_type.push(stage.stage_type.clone().to_string().into_bytes());
-            stage_params.push(format!("{:?}", stage.stage_params).into_bytes());
-            copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
-            file_format_options.push(format!("{:?}", stage.file_format_params).into_bytes());
+            let stage_name = stage.stage_name;
+            name.push(stage_name.clone());
+            owners.push(
+                user_api
+                    .get_ownership(&tenant, &OwnershipObject::Stage { name: stage_name })
+                    .await
+                    .ok()
+                    .and_then(|ownership| ownership.map(|o| o.role.clone())),
+            );
+            stage_type.push(stage.stage_type.clone().to_string());
+            stage_params.push(format!("{:?}", stage.stage_params));
+            copy_options.push(format!("{:?}", stage.copy_options));
+            file_format_options.push(format!("{:?}", stage.file_format_params));
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
                 StageType::LegacyInternal | StageType::Internal | StageType::User => {
@@ -96,9 +107,9 @@ impl AsyncSystemTable for StagesTable {
                     number_of_files.push(None);
                 }
             };
-            creator.push(stage.creator.map(|c| c.to_string().into_bytes().to_vec()));
+            creator.push(stage.creator.map(|c| c.to_string()));
             created_on.push(stage.created_on.timestamp_micros());
-            comment.push(stage.comment.clone().into_bytes());
+            comment.push(stage.comment.clone());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -111,6 +122,7 @@ impl AsyncSystemTable for StagesTable {
             StringType::from_opt_data(creator),
             TimestampType::from_data(created_on),
             StringType::from_data(comment),
+            StringType::from_opt_data(owners),
         ]))
     }
 }
@@ -134,6 +146,10 @@ impl StagesTable {
             ),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("comment", TableDataType::String),
+            TableField::new(
+                "owner",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
         ]);
         let table_info = TableInfo {
             desc: "'system'.'stages'".to_string(),

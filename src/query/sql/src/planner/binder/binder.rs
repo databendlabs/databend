@@ -161,7 +161,7 @@ impl<'a> Binder {
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             match new_expr {
                 Expr::Constant { scalar, .. } => {
-                    let value = String::from_utf8(scalar.into_string().unwrap())?;
+                    let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');
                         tz.parse::<Tz>().map_err(|_| {
@@ -176,7 +176,10 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings)
+            .await
     }
 
     #[async_recursion::async_recursion]
@@ -232,6 +235,10 @@ impl<'a> Binder {
 
             Statement::ShowFunctions { show_options } => {
                 self.bind_show_functions(bind_context, show_options).await?
+            }
+
+            Statement::ShowUserFunctions { show_options } => {
+                self.bind_show_user_functions(bind_context, show_options).await?
             }
 
             Statement::ShowTableFunctions { show_options } => {

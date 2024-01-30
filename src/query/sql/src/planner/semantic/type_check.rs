@@ -50,6 +50,8 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
+use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -502,40 +504,37 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 if let Expr::Subquery {
-                    subquery, modifier, ..
+                    subquery,
+                    modifier: Some(subquery_modifier),
+                    ..
                 } = &**right
                 {
-                    if let Some(subquery_modifier) = modifier {
-                        match subquery_modifier {
-                            SubqueryModifier::Any | SubqueryModifier::Some => {
-                                let comparison_op = ComparisonOp::try_from(op)?;
-                                self.resolve_subquery(
-                                    SubqueryType::Any,
-                                    subquery,
-                                    Some(*left.clone()),
-                                    Some(comparison_op),
-                                )
-                                .await?
-                            }
-                            SubqueryModifier::All => {
-                                let contrary_op = op.to_contrary()?;
-                                let rewritten_subquery = Expr::Subquery {
-                                    span: right.span(),
-                                    modifier: Some(SubqueryModifier::Any),
-                                    subquery: (*subquery).clone(),
-                                };
-                                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                                    span: *span,
-                                    op: contrary_op,
-                                    left: (*left).clone(),
-                                    right: Box::new(rewritten_subquery),
-                                })
-                                .await?
-                            }
-                        }
-                    } else {
-                        self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
+                    match subquery_modifier {
+                        SubqueryModifier::Any | SubqueryModifier::Some => {
+                            let comparison_op = ComparisonOp::try_from(op)?;
+                            self.resolve_subquery(
+                                SubqueryType::Any,
+                                subquery,
+                                Some(*left.clone()),
+                                Some(comparison_op),
+                            )
                             .await?
+                        }
+                        SubqueryModifier::All => {
+                            let contrary_op = op.to_contrary()?;
+                            let rewritten_subquery = Expr::Subquery {
+                                span: right.span(),
+                                modifier: Some(SubqueryModifier::Any),
+                                subquery: (*subquery).clone(),
+                            };
+                            self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                                span: *span,
+                                op: contrary_op,
+                                left: (*left).clone(),
+                                right: Box::new(rewritten_subquery),
+                            })
+                            .await?
+                        }
                     }
                 } else {
                     self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
@@ -1397,6 +1396,15 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in set-returning function".to_string(),
+            )
+            .set_span(span));
+        }
         // try to resolve window function without arguments first
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
             return Ok(window_func);
@@ -1489,7 +1497,7 @@ impl<'a> TypeChecker<'a> {
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
                 span: d.span(),
-                is_try: return_type.is_nullable(),
+                is_try: false,
                 argument: Box::new(d),
                 target_type: Box::new(return_type.clone()),
             }))
@@ -1631,6 +1639,15 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "aggregate functions can not be used in set-returning function".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_aggregate_function {
             if self.in_window_function {
                 // The aggregate function can be in window function call,
@@ -1714,6 +1731,49 @@ impl<'a> TypeChecker<'a> {
         Ok((new_agg_func, data_type))
     }
 
+    fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
+        let max_ty = match ty.remove_nullable() {
+            DataType::Number(s) => {
+                if s.is_float() {
+                    DataType::Number(NumberDataType::Float64)
+                } else {
+                    DataType::Number(NumberDataType::Int64)
+                }
+            }
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                let p = MAX_DECIMAL128_PRECISION;
+                let decimal_size = DecimalSize {
+                    precision: p,
+                    scale: s.scale,
+                };
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                let p = MAX_DECIMAL256_PRECISION;
+                let decimal_size = DecimalSize {
+                    precision: p,
+                    scale: s.scale,
+                };
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            }
+            DataType::Null => DataType::Null,
+            DataType::Binary => DataType::Binary,
+            DataType::String => DataType::String,
+            _ => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "array_reduce does not support type '{:?}'",
+                    ty
+                )));
+            }
+        };
+
+        if ty.is_nullable() {
+            Ok(max_ty.wrap_nullable())
+        } else {
+            Ok(max_ty)
+        }
+    }
+
     #[async_backtrace::framed]
     async fn resolve_lambda_function(
         &mut self,
@@ -1738,9 +1798,14 @@ impl<'a> TypeChecker<'a> {
             .collect::<Vec<_>>();
 
         // TODO: support multiple params
-        if params.len() != 1 {
+        // ARRAY_REDUCE have two params
+        if params.len() != 1 && func_name != "array_reduce" {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
+            )));
+        } else if func_name == "array_reduce" && params.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {func_name} expects 2 parameter",
             )));
         }
 
@@ -1749,7 +1814,7 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for lambda function, {func_name} expects 1 argument"
             )));
         }
-        let box (arg, arg_type) = self.resolve(args[0]).await?;
+        let box (mut arg, arg_type) = self.resolve(args[0]).await?;
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
@@ -1761,8 +1826,22 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         };
+
+        let inner_tys = if func_name == "array_reduce" {
+            let max_ty = self.transform_to_max_type(&inner_ty)?;
+            vec![max_ty.clone(), max_ty.clone()]
+        } else {
+            vec![inner_ty.clone()]
+        };
+
+        let columns = params
+            .iter()
+            .zip(inner_tys.iter())
+            .map(|(col, ty)| (col.clone(), ty.clone()))
+            .collect::<Vec<_>>();
+
         let box (lambda_expr, lambda_type) =
-            parse_lambda_expr(self.ctx.clone(), &params[0], &inner_ty, &lambda.expr)?;
+            parse_lambda_expr(self.ctx.clone(), &columns, &lambda.expr)?;
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1772,10 +1851,32 @@ impl<'a> TypeChecker<'a> {
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
                 ));
             }
+        } else if func_name == "array_reduce" {
+            // transform arg type
+            let max_ty = inner_tys[0].clone();
+            let target_type = if arg_type.is_nullable() {
+                Box::new(DataType::Nullable(Box::new(DataType::Array(Box::new(
+                    max_ty.clone(),
+                )))))
+            } else {
+                Box::new(DataType::Array(Box::new(max_ty.clone())))
+            };
+            // we should convert arg to max_ty to avoid overflow in 'ADD'/'SUB',
+            // so if arg_type(origin_type) != target_type(max_type), cast arg
+            // for example, if arg = [1INT8, 2INT8, 3INT8], after cast it be [1INT64, 2INT64, 3INT64]
+            if arg_type != *target_type {
+                arg = ScalarExpr::CastExpr(CastExpr {
+                    span: arg.span(),
+                    is_try: false,
+                    argument: Box::new(arg),
+                    target_type,
+                });
+            }
+            max_ty.wrap_nullable()
         } else if arg_type.is_nullable() {
-            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
-            DataType::Array(Box::new(lambda_type))
+            DataType::Array(Box::new(lambda_type.clone()))
         };
 
         let (lambda_func, data_type) = match arg_type.remove_nullable() {
@@ -1798,8 +1899,14 @@ impl<'a> TypeChecker<'a> {
             ),
             _ => {
                 // generate lambda expression
-                let lambda_field = DataField::new("0", inner_ty.clone());
-                let lambda_schema = DataSchema::new(vec![lambda_field]);
+                let lambda_schema = if inner_tys.len() == 1 {
+                    let lambda_field = DataField::new("0", inner_tys[0].clone());
+                    DataSchema::new(vec![lambda_field])
+                } else {
+                    let lambda_field0 = DataField::new("0", inner_tys[0].clone());
+                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
+                    DataSchema::new(vec![lambda_field0, lambda_field1])
+                };
 
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
@@ -1808,7 +1915,7 @@ impl<'a> TypeChecker<'a> {
                     });
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
-                let lambda_display = format!("{} -> {}", params[0], expr.sql_display());
+                let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
                 (
                     LambdaFunc {
@@ -1884,16 +1991,7 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        // rewrite_collation
-        let func_name = if self.function_need_collation(func_name, &args)?
-            && self.ctx.get_settings().get_collation()? == "utf8"
-        {
-            format!("{func_name}_utf8")
-        } else {
-            func_name.to_owned()
-        };
-
-        self.resolve_scalar_function_call(span, &func_name, params, args)
+        self.resolve_scalar_function_call(span, func_name, params, args)
     }
 
     pub fn resolve_scalar_function_call(
@@ -2284,12 +2382,13 @@ impl<'a> TypeChecker<'a> {
             "timezone",
             "nullif",
             "ifnull",
+            "nvl",
+            "nvl2",
             "is_null",
             "coalesce",
             "last_query_id",
             "array_sort",
             "array_aggregate",
-            "array_reduce",
             "to_variant",
             "try_to_variant",
             "greatest",
@@ -2390,6 +2489,37 @@ impl<'a> TypeChecker<'a> {
                         },
                         arg_y,
                         arg_x,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl", &[arg_x, arg_y]) => {
+                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // nvl is essentially an alias for ifnull.
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_x,
+                        arg_y,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl2", &[arg_x, arg_y, arg_z]) => {
+                // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_y,
+                        arg_z,
                     ])
                     .await,
                 )
@@ -2511,8 +2641,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() >= 2 {
                     let box (arg, _) = self.resolve(args[1]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let sort_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(sort_order) = arg.value {
                             if sort_order.eq_ignore_ascii_case("asc") {
                                 asc = true;
                             } else if sort_order.eq_ignore_ascii_case("desc") {
@@ -2536,8 +2665,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() == 3 {
                     let box (arg, _) = self.resolve(args[2]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let nulls_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(nulls_order) = arg.value {
                             if nulls_order.eq_ignore_ascii_case("nulls first") {
                                 nulls_first = true;
                             } else if nulls_order.eq_ignore_ascii_case("nulls last") {
@@ -2570,14 +2698,13 @@ impl<'a> TypeChecker<'a> {
                         .await,
                 )
             }
-            ("array_aggregate" | "array_reduce", args) => {
+            ("array_aggregate", args) => {
                 if args.len() != 2 {
                     return None;
                 }
                 let box (arg, _) = self.resolve(args[1]).await.ok()?;
                 if let Ok(arg) = ConstantExpr::try_from(arg) {
-                    if let Scalar::String(arg) = arg.value {
-                        let aggr_func_name = unsafe { std::str::from_utf8_unchecked(&arg) };
+                    if let Scalar::String(aggr_func_name) = arg.value {
                         let func_name = format!("array_{}", aggr_func_name);
                         let args_ref: Vec<&Expr> = vec![args[0]];
                         return Some(
@@ -2645,7 +2772,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: databend_common_expression::Scalar::String(" ".as_bytes().to_vec()),
+                value: databend_common_expression::Scalar::String(" ".to_string()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -2673,7 +2800,7 @@ impl<'a> TypeChecker<'a> {
                 scale: *scale,
             })),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
-            Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
+            Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
         };
@@ -2983,7 +3110,7 @@ impl<'a> TypeChecker<'a> {
                 {
                     let key = ConstantExpr {
                         span,
-                        value: Scalar::String(field_name.clone().into_bytes()),
+                        value: Scalar::String(field_name.clone()),
                     }
                     .into();
 
@@ -3339,7 +3466,7 @@ impl<'a> TypeChecker<'a> {
         let keypaths_str = format!("{}", keypaths);
         let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
-            value: Scalar::String(keypaths_str.into_bytes()),
+            value: Scalar::String(keypaths_str),
         });
         let args = vec![scalar, path_scalar];
 
@@ -3630,15 +3757,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = ["substr", "substring", "length"];
-        let result = !args.is_empty()
-            && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
-            && self.ctx.get_settings().get_collation().unwrap() != "binary"
-            && names.contains(&name);
-        Ok(result)
-    }
-
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
         expr: &databend_common_expression::Expr<Index>,
@@ -3676,22 +3794,6 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
 }
 
 pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
-    let data_type = resolve_type_name_inner(type_name)?;
-    let data_type = match &data_type {
-        TableDataType::Nullable(_) => data_type,
-        _ => {
-            if not_null {
-                data_type
-            } else {
-                data_type.wrap_nullable()
-            }
-        }
-    };
-
-    Ok(data_type)
-}
-
-pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
     let data_type = match type_name {
         TypeName::Boolean => TableDataType::Boolean,
         TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
@@ -3710,15 +3812,15 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 scale: *scale,
             })?)
         }
-        TypeName::Binary => TableDataType::String,
+        TypeName::Binary => TableDataType::Binary,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,
         TypeName::Array(item_type) => {
-            TableDataType::Array(Box::new(resolve_type_name_inner(item_type)?))
+            TableDataType::Array(Box::new(resolve_type_name(item_type, not_null)?))
         }
         TypeName::Map { key_type, val_type } => {
-            let key_type = resolve_type_name_inner(key_type)?;
+            let key_type = resolve_type_name(key_type, true)?;
             match key_type {
                 TableDataType::Boolean
                 | TableDataType::String
@@ -3726,7 +3828,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::Date => {
-                    let val_type = resolve_type_name_inner(val_type)?;
+                    let val_type = resolve_type_name(val_type, not_null)?;
                     let inner_type = TableDataType::Tuple {
                         fields_name: vec!["key".to_string(), "value".to_string()],
                         fields_type: vec![key_type, val_type],
@@ -3754,18 +3856,22 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
             },
             fields_type: fields_type
                 .iter()
-                .map(resolve_type_name_inner)
+                .map(|item_type| resolve_type_name(item_type, not_null))
                 .collect::<Result<Vec<_>>>()?,
         },
-        TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
-            resolve_type_name_inner(inner_type)?
-        }
         TypeName::Nullable(inner_type) => {
-            TableDataType::Nullable(Box::new(resolve_type_name_inner(inner_type)?))
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.wrap_nullable()
         }
         TypeName::Variant => TableDataType::Variant,
+        TypeName::NotNull(inner_type) => {
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.remove_nullable()
+        }
     };
-
+    if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
+        return Ok(data_type.wrap_nullable());
+    }
     Ok(data_type)
 }
 

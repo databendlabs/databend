@@ -153,6 +153,7 @@ pub struct Join {
     pub need_hold_hash_table: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
+    pub is_lateral: bool,
 }
 
 impl Default for Join {
@@ -166,6 +167,7 @@ impl Default for Join {
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
             broadcast: false,
+            is_lateral: false,
         }
     }
 }
@@ -355,6 +357,10 @@ impl Operator for Join {
         RelOp::Join
     }
 
+    fn arity(&self) -> usize {
+        2
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -405,22 +411,37 @@ impl Operator for Join {
         let probe_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        match (&probe_prop.distribution, &build_prop.distribution) {
-            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
-            // Then required proper is broadcast, and the join will be broadcast.
-            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
+        if probe_prop.distribution == Distribution::Serial
+            || build_prop.distribution == Distribution::Serial
+        {
+            return Ok(PhysicalProperty {
+                distribution: Distribution::Serial,
+            });
+        }
+
+        if !matches!(self.join_type, JoinType::Inner) {
+            return Ok(PhysicalProperty {
                 distribution: Distribution::Random,
-            }),
+            });
+        }
 
-            // If the distribution of probe side is Random, we will pass through
-            // the distribution of build side.
-            (Distribution::Random, _) => Ok(PhysicalProperty {
-                distribution: build_prop.distribution.clone(),
-            }),
-
-            // Otherwise pass through probe side.
-            _ => Ok(PhysicalProperty {
+        match (&probe_prop.distribution, &build_prop.distribution) {
+            // If any side of the join is Broadcast, pass through the other side.
+            (_, Distribution::Broadcast) => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
+            }),
+
+            // If both sides of the join are Hash, pass through the probe side.
+            // Although the build side is also Hash, it is more efficient to
+            // utilize the distribution on the probe side.
+            // As soon as we support subset property, we can pass through both sides.
+            (Distribution::Hash(_), Distribution::Hash(_)) => Ok(PhysicalProperty {
+                distribution: probe_prop.distribution.clone(),
+            }),
+
+            // Otherwise use random distribution.
+            _ => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
             }),
         }
     }
@@ -507,7 +528,7 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
         ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
@@ -519,7 +540,9 @@ impl Operator for Join {
                 // Use a very large value to prevent broadcast join.
                 1000.0
             };
-            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
+            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality
+                || ctx.get_settings().get_enforce_broadcast_join()?
+            {
                 if child_index == 1 {
                     required.distribution = Distribution::Broadcast;
                 } else {
@@ -541,13 +564,13 @@ impl Operator for Join {
 
     fn compute_required_prop_children(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
 
-        if self.join_type != JoinType::Cross {
+        if self.join_type != JoinType::Cross && !ctx.get_settings().get_enforce_broadcast_join()? {
             // (Hash, Hash)
             children_required.extend(
                 self.left_conditions
@@ -572,7 +595,8 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
+                | JoinType::RightSingle
         ) {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
@@ -586,6 +610,16 @@ impl Operator for Join {
                 },
             ]);
         }
+
+        // (Serial, Serial)
+        children_required.push(vec![
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            },
+        ]);
 
         Ok(children_required)
     }

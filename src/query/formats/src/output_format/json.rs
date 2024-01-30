@@ -98,8 +98,8 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         }
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
-        ScalarRef::Binary(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
-        ScalarRef::String(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
+        ScalarRef::Binary(x) => JsonValue::String(hex::encode_upper(x)),
+        ScalarRef::String(x) => JsonValue::String(x.to_string()),
         ScalarRef::Array(x) => {
             let vals = x
                 .iter()

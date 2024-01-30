@@ -57,7 +57,7 @@ impl Sort {
                 return Ok(order_by_field.data_type().clone());
             }
         }
-        Ok(DataType::String)
+        Ok(DataType::Binary)
     }
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {

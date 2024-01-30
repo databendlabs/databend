@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -38,14 +38,12 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_profile::SharedProcessorProfiles;
 
 use super::sort::HeapMerger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
 use super::sort::SortedStream;
 use crate::processors::sort::utils::ORDER_COL_NAME;
-use crate::processors::ProcessorProfileWrapper;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
@@ -53,7 +51,6 @@ pub fn try_add_multi_sort_merge(
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
-    prof_info: Option<(u32, SharedProcessorProfiles)>,
     remove_order_col: bool,
 ) -> Result<()> {
     debug_assert!(if !remove_order_col {
@@ -75,7 +72,8 @@ pub fn try_add_multi_sort_merge(
                 inputs_port.push(InputPort::create());
             }
             let output_port = OutputPort::create();
-            let processor = create_processor(
+
+            let processor = ProcessorPtr::create(create_processor(
                 inputs_port.clone(),
                 output_port.clone(),
                 schema,
@@ -83,17 +81,7 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 sort_columns_descriptions,
                 remove_order_col,
-            )?;
-
-            let processor = if let Some((plan_id, prof)) = &prof_info {
-                ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    processor,
-                    *plan_id,
-                    prof.clone(),
-                ))
-            } else {
-                ProcessorPtr::create(processor)
-            };
+            )?);
 
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 processor,
@@ -164,7 +152,7 @@ fn create_processor(
                     remove_order_col,
                 )?)
             }
-            _ => Box::new(MultiSortMergeProcessor::<StringColumn>::create(
+            _ => Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
                 inputs,
                 output,
                 schema,
@@ -175,7 +163,7 @@ fn create_processor(
             )?),
         }
     } else {
-        Box::new(MultiSortMergeProcessor::<StringColumn>::create(
+        Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
             inputs,
             output,
             schema,

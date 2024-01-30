@@ -1,0 +1,125 @@
+statement ok
+drop file format if exists my_csv
+
+statement ok
+create file format my_csv type = CSV, field_delimiter = '|';
+
+query T
+select $1 from @data/csv/empty/(file_format => 'my_csv') order by $1
+----
+,,,,
+0,,,,
+0,1,2,3,4
+0,11,22,,
+
+statement ok
+drop table if exists ints
+
+statement ok
+create table ints(c0 int, c1 int, c2 int default 2, c3 int not null, c4 int not null default 4)
+
+query TIITI
+copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = FIELD_DEFAULT)
+----
+csv/empty/empty1.csv 1 0 NULL NULL
+csv/empty/empty2.csv 1 0 NULL NULL
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 1 0 NULL NULL
+
+query 
+select * from ints order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+0 11 22 0 4
+0 NULL 2 0 4
+NULL NULL 2 0 4
+
+statement ok
+truncate table ints
+
+# empty_field_as = NULL
+query TIITI
+copy into ints from @data/csv/empty/ file_format = (type = CSV) force=true on_error=continue
+----
+csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 2
+
+query 
+select * from ints order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+
+statement ok
+truncate table ints
+
+query TIITI
+copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = STRING) force=true on_error=continue
+----
+csv/empty/empty1.csv 0 1 Empty value for column 1 (c1 Int32 NULL), when option empty_field_as = STRING 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = STRING 1
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
+
+query 
+select * from ints order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+
+statement ok
+drop table if exists strings
+
+statement ok
+create table strings(c0 int,c1 string, c2 string default 2, c3 string not null, c4 string not null default 4)
+
+query TIITI
+copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as = FIELD_DEFAULT)
+----
+csv/empty/empty1.csv 1 0 NULL NULL
+csv/empty/empty2.csv 1 0 NULL NULL
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 1 0 NULL NULL
+
+query 
+select * from strings order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+0 11 22 (empty) 4
+0 NULL 2 (empty) 4
+NULL NULL 2 (empty) 4
+
+statement ok
+truncate table strings
+
+# empty_field_as = NULL
+query TIITI
+copy into strings from @data/csv/empty/ file_format = (type = CSV) force=true  on_error=continue
+----
+csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
+csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 2
+
+query 
+select * from strings order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+
+statement ok
+truncate table strings
+
+query TIITI
+copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as = STRING) force=true on_error=continue
+----
+csv/empty/empty1.csv 1 0 NULL NULL
+csv/empty/empty2.csv 1 0 NULL NULL
+csv/empty/empty3.csv 1 0 NULL NULL
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
+
+query 
+select * from strings order by c0,c1,c2,c3,c4;
+----
+0 1 2 3 4
+0 11 22 (empty) (empty)
+0 NULL NULL (empty) (empty)

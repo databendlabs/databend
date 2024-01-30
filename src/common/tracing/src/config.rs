@@ -24,6 +24,7 @@ pub struct Config {
     pub otlp: OTLPConfig,
     pub query: QueryLogConfig,
     pub profile: ProfileLogConfig,
+    pub structlog: StructLogConfig,
     pub tracing: TracingConfig,
 }
 
@@ -37,6 +38,7 @@ impl Config {
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
+                prefix_filter: "databend_".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
@@ -55,6 +57,7 @@ pub struct FileConfig {
     pub dir: String,
     pub format: String,
     pub limit: usize,
+    pub prefix_filter: String,
 }
 
 impl Display for FileConfig {
@@ -75,6 +78,7 @@ impl Default for FileConfig {
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         }
     }
 }
@@ -214,6 +218,27 @@ impl Default for ProfileLogConfig {
             dir: "".to_string(),
             otlp_endpoint: "".to_string(),
             labels: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StructLogConfig {
+    pub on: bool,
+    pub dir: String,
+}
+
+impl Display for StructLogConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "enabled={}, dir={}", self.on, self.dir)
+    }
+}
+
+impl Default for StructLogConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            dir: "".to_string(),
         }
     }
 }

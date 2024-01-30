@@ -27,7 +27,7 @@ use crate::DataSchemaRef;
 
 /// ! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
-    let block: DataBlock = DataBlock::concat(results)?;
+    let block = DataBlock::concat(results)?;
     Ok(block.to_string())
 }
 
@@ -414,7 +414,7 @@ fn compute_render_widths(
 fn render_head(
     schema: &DataSchemaRef,
     widths: &mut [usize],
-    column_map: &mut Vec<i32>,
+    column_map: &mut [i32],
     header: &mut Vec<Cell>,
     aligns: &mut Vec<CellAlignment>,
 ) {

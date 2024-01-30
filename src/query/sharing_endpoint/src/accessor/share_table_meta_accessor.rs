@@ -34,12 +34,9 @@ impl SharingAccessor {
         if input.request_tables.is_empty() {
             Ok(share_table_map)
         } else {
-            Ok(BTreeMap::from_iter(
-                share_table_map
-                    .into_iter()
-                    .filter(|(table_name, _table_info)| input.request_tables.contains(table_name))
-                    .map(|(table_name, table_info)| (table_name, table_info)),
-            ))
+            Ok(BTreeMap::from_iter(share_table_map.into_iter().filter(
+                |(table_name, _table_info)| input.request_tables.contains(table_name),
+            )))
         }
     }
 }

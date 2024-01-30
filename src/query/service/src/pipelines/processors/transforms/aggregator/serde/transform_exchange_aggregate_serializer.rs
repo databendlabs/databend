@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::flight::default_ipc_fields;
 use databend_common_arrow::arrow::io::flight::WriteOptions;
 use databend_common_arrow::arrow::io::ipc::write::Compression;
@@ -38,6 +39,8 @@ use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_settings::FlightCompression;
@@ -87,7 +90,7 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
         schema: DataSchemaRef,
         local_pos: usize,
     ) -> Box<dyn Processor> {
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = ArrowSchema::from(schema.as_ref());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
@@ -260,6 +263,13 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 metrics_inc_aggregate_spill_write_count();
                 metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
                 metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillWriteTime,
+                    instant.elapsed().as_millis() as usize,
+                );
             }
 
             {

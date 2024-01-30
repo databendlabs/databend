@@ -26,6 +26,7 @@ use databend_common_tracing::OTLPConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::StructLogConfig;
 use databend_common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -281,7 +282,7 @@ pub struct ConfigViaEnv {
     pub config_id: String,
     pub kvsrv_listen_host: String,
     pub kvsrv_advertise_host: String,
-    pub kvsrv_api_port: u32,
+    pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
     pub kvsrv_snapshot_logs_since_last: u64,
@@ -379,6 +380,7 @@ impl Into<Config> for ConfigViaEnv {
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
                 file_limit: self.metasrv_log_file_limit,
+                file_prefix_filter: "databend_".to_string(),
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -436,7 +438,7 @@ pub struct RaftConfig {
 
     /// The listening port for metadata communication.
     #[clap(long, default_value = "28004")]
-    pub raft_api_port: u32,
+    pub raft_api_port: u16,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long, default_value = "./.databend/meta")]
@@ -597,6 +599,7 @@ impl Into<InnerLogConfig> for LogConfig {
             otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
             profile: ProfileLogConfig::default(),
+            structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
         }
     }
@@ -637,6 +640,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-limit", default_value = "48")]
     #[serde(rename = "limit")]
     pub file_limit: usize,
+
+    /// Log prefix filter
+    #[clap(long = "log-file-prefix-filter", default_value = "databend_")]
+    #[serde(rename = "prefix_filter")]
+    pub file_prefix_filter: String,
 }
 
 impl Default for FileLogConfig {
@@ -654,6 +662,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            prefix_filter: self.file_prefix_filter,
         }
     }
 }
@@ -666,6 +675,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_prefix_filter: inner.prefix_filter,
         }
     }
 }

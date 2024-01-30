@@ -74,6 +74,8 @@ mod index_from_to_protobuf_impl;
 mod least_visible_time_from_to_protobuf_impl;
 mod lock_from_to_protobuf_impl;
 mod owner_from_to_protobuf_impl;
+mod ownership_from_to_protobuf_impl;
+mod role_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
@@ -84,6 +86,7 @@ mod util;
 mod virtual_column_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
+pub use from_to_protobuf::FromToProtoEnum;
 pub use from_to_protobuf::Incompatible;
 pub use util::missing;
 pub use util::reader_check_msg;

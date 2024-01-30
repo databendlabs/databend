@@ -154,6 +154,8 @@ build_exceptions! {
 
     /// ParquetFileInvalid is used when given parquet file is invalid.
     ParquetFileInvalid(1201),
+    /// InvalidUtf8String is used when given string is not a valid utf8 string.
+    InvalidUtf8String(1202),
 
     // Table related errors starts here.
 
@@ -230,6 +232,8 @@ build_exceptions! {
     IllegalPasswordPolicy(2213),
     PasswordPolicyIsUsedByUser(2214),
     InvalidPassword(2215),
+    RoleAlreadyExists(2216),
+    IllegalRole(2217),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),

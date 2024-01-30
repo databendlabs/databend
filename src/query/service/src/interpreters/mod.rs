@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod access;
-mod common;
+pub(crate) mod common;
 mod hook;
 mod interpreter;
 mod interpreter_catalog_create;
@@ -48,7 +48,6 @@ mod interpreter_index_refresh;
 mod interpreter_insert;
 mod interpreter_kill;
 mod interpreter_merge_into;
-mod interpreter_merge_into_static_filter;
 mod interpreter_metrics;
 mod interpreter_network_policies_show;
 mod interpreter_network_policy_alter;
@@ -134,6 +133,7 @@ mod interpreter_virtual_column_refresh;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
+pub use hook::HookOperator;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;

@@ -90,6 +90,13 @@ select 1::Decimal(41, 3)::Float64, 2::Decimal(42, 4)::Float64, 3::Decimal(55, 5)
 ----
 1.0 2.0 3.0 10.0
 
+# cast overflow
+statement error 1006
+select CAST(1754842 AS Decimal(69, 63))
+
+statement error 1006
+select CAST(17548423738721552635 AS Decimal(69, 63))
+
 ## to_decimal(decimal) overflow
 statement error 1006
 select 10000::decimal(5,0)::decimal(3,0);

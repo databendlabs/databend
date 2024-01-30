@@ -18,9 +18,6 @@ use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sinker;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use databend_common_pipeline_transforms::processors::ProfileStub;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MaterializedCte;
 use databend_common_sql::executor::physical_plans::RangeJoin;
@@ -50,17 +47,6 @@ impl PipelineBuilder {
         let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
         self.expand_right_side_pipeline(range_join, state.clone())?;
         self.build_left_side(range_join, state)?;
-        if self.enable_profiling {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(range_join.plan_id, self.proc_profs.clone())
-                        .accumulate_output_rows()
-                        .accumulate_output_bytes(),
-                )))
-            })?;
-        }
         Ok(())
     }
 
@@ -73,16 +59,11 @@ impl PipelineBuilder {
         let max_threads = self.settings.get_max_threads()? as usize;
         self.main_pipeline.try_resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformRangeJoinLeft::create(input, output, state.clone());
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    range_join.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(TransformRangeJoinLeft::create(
+                input,
+                output,
+                state.clone(),
+            )))
         })?;
         Ok(())
     }
@@ -97,26 +78,17 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             right_side_context,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
-            let transform = Sinker::<TransformRangeJoinRight>::create(
-                input,
-                TransformRangeJoinRight::create(state.clone()),
-            );
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    range_join.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(
+                Sinker::<TransformRangeJoinRight>::create(
+                    input,
+                    TransformRangeJoinRight::create(state.clone()),
+                ),
+            ))
         })?;
         self.pipelines.push(right_res.main_pipeline.finalize());
         self.pipelines.extend(right_res.sources_pipelines);
@@ -125,12 +97,27 @@ impl PipelineBuilder {
 
     pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
         let id = join.probe.get_table_index();
-        let state = self.build_join_state(join, id)?;
+        // for merge into target table as build side.
+        let (merge_into_build_table_index, merge_into_is_distributed) =
+            self.merge_into_get_optimization_flag(join);
+
+        let state = self.build_join_state(
+            join,
+            id,
+            merge_into_build_table_index,
+            merge_into_is_distributed,
+        )?;
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
     }
 
-    fn build_join_state(&mut self, join: &HashJoin, id: IndexType) -> Result<Arc<HashJoinState>> {
+    fn build_join_state(
+        &mut self,
+        join: &HashJoin,
+        id: IndexType,
+        merge_into_target_table_index: IndexType,
+        merge_into_is_distributed: bool,
+    ) -> Result<Arc<HashJoinState>> {
         HashJoinState::try_create(
             self.ctx.clone(),
             join.build.output_schema()?,
@@ -138,6 +125,8 @@ impl PipelineBuilder {
             HashJoinDesc::create(join)?,
             &join.probe_to_build,
             id,
+            merge_into_target_table_index,
+            merge_into_is_distributed,
         )
     }
 
@@ -152,8 +141,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             build_side_context,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
@@ -184,20 +171,14 @@ impl PipelineBuilder {
             } else {
                 None
             };
-            let transform =
-                TransformHashJoinBuild::try_create(input, build_state.clone(), spill_state)?;
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    hash_join_plan.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(
+                input,
+                build_state.clone(),
+                spill_state,
+            )?))
         };
-        // for merge into
+        // for distributed merge into when source as build side.
         if hash_join_plan.need_hold_hash_table {
             self.join_state = Some(build_state.clone())
         }
@@ -240,7 +221,8 @@ impl PipelineBuilder {
             } else {
                 None
             };
-            let transform = TransformHashJoinProbe::create(
+
+            Ok(ProcessorPtr::create(TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
@@ -251,31 +233,8 @@ impl PipelineBuilder {
                 &join.join_type,
                 !join.non_equi_conditions.is_empty(),
                 has_string_column,
-            )?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    join.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
+            )?))
         })?;
-
-        if self.enable_profiling {
-            // Add a stub after the probe processor to accumulate the output rows.
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(join.plan_id, self.proc_profs.clone())
-                        .accumulate_output_rows()
-                        .accumulate_output_bytes(),
-                )))
-            })?;
-        }
 
         if join.need_hold_hash_table {
             let mut projected_probe_fields = vec![];
@@ -284,7 +243,7 @@ impl PipelineBuilder {
                     projected_probe_fields.push(field.clone());
                 }
             }
-            self.probe_data_fields = Some(projected_probe_fields);
+            self.merge_into_probe_data_fields = Some(projected_probe_fields);
         }
 
         Ok(())
@@ -315,8 +274,6 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             self.settings.clone(),
             left_side_ctx,
-            self.enable_profiling,
-            self.proc_profs.clone(),
             self.main_pipeline.get_scopes(),
         );
         left_side_builder.cte_state = self.cte_state.clone();

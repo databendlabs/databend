@@ -28,12 +28,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use opendal::Operator;
+
+use crate::MergeIOReadResult;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -50,6 +51,8 @@ pub struct BlockReader {
     // used for mutation to update stream columns.
     pub update_stream_columns: bool,
     pub put_cache: bool,
+
+    pub original_schema: TableSchemaRef,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -123,7 +126,7 @@ impl BlockReader {
             }
         };
 
-        let arrow_schema = schema.to_arrow();
+        let arrow_schema = schema.as_ref().into();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
@@ -147,6 +150,7 @@ impl BlockReader {
             query_internal_columns,
             update_stream_columns,
             put_cache,
+            original_schema: schema,
         }))
     }
 
@@ -161,11 +165,14 @@ impl BlockReader {
         let mut indices = BTreeMap::new();
         for column in columns {
             for (i, index) in column.leaf_indices.iter().enumerate() {
-                let f: TableField = (&column.field).into();
-                let data_type: DataType = f.data_type().into();
+                let f = DataField::try_from(&column.field).unwrap();
                 indices.insert(
                     *index,
-                    (column.leaf_column_ids[i], column.field.clone(), data_type),
+                    (
+                        column.leaf_column_ids[i],
+                        column.field.clone(),
+                        f.data_type().clone(),
+                    ),
                 );
             }
         }
@@ -189,7 +196,35 @@ impl BlockReader {
     }
 
     pub fn data_schema(&self) -> DataSchema {
-        let fields = self.data_fields();
-        DataSchema::new(fields)
+        self.schema().into()
+    }
+
+    pub fn report_cache_metrics<'a>(
+        &self,
+        merged_result: &MergeIOReadResult,
+        ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,
+    ) {
+        let bytes_read_from_storage: usize = ranges
+            .map(|range| range.end as usize - range.start as usize)
+            .sum();
+
+        let cache_metrics = self.ctx.get_data_cache_metrics();
+        let read_from_disk_cache: usize = merged_result
+            .cached_column_data
+            .iter()
+            .map(|(_, bytes)| bytes.len())
+            .sum();
+
+        let read_from_in_mem_cache_array: usize = merged_result
+            .cached_column_array
+            .iter()
+            .map(|(_, sized_array)| sized_array.1)
+            .sum();
+
+        cache_metrics.add_cache_metrics(
+            bytes_read_from_storage,
+            read_from_disk_cache,
+            read_from_in_mem_cache_array,
+        );
     }
 }

@@ -61,7 +61,6 @@ databend-common-pipeline-core = { path = "../pipeline/core" }
 databend-common-pipeline-sinks = { path = "../pipeline/sinks" }
 databend-common-pipeline-sources = { path = "../pipeline/sources" }
 databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
-databend-common-profile = { path = "../profile" }
 databend-common-settings = { path = "../settings" }
 databend-common-sharing = { path = "../sharing" }
 databend-common-sql = { path = "../sql" }
@@ -154,6 +153,7 @@ serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.5.3"
 strength_reduce = "0.2.4"
+sysinfo = "0.30"
 tempfile = "3.4.0"
 time = "0.3.14"
 tokio = { workspace = true }
@@ -182,7 +182,6 @@ p256 = "0.13"
 pretty_assertions = "1.3.0"
 reqwest = { workspace = true }
 rmp-serde = "1.1.1"
-sysinfo = "0.28.3"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 tower = "0.4.13"

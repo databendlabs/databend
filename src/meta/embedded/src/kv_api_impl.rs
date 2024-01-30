@@ -14,12 +14,9 @@
 
 use async_trait::async_trait;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
 use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-pub use databend_common_meta_sled_store::init_temp_sled_db;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -37,15 +34,9 @@ impl kvapi::KVApi for MetaEmbedded {
     }
 
     #[minitrace::trace]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
-        sm.get_kv(key).await
-    }
-
-    #[minitrace::trace]
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, Self::Error> {
-        let sm = self.inner.lock().await;
-        sm.mget_kv(key).await
+        sm.get_kv_stream(keys).await
     }
 
     #[minitrace::trace]

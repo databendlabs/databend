@@ -2,6 +2,10 @@ null
 null
 null
 null
+itt.csv	5	0	NULL	NULL
+sample.csv	6	0	NULL	NULL
+sample_3_duplicate.csv	8	0	NULL	NULL
+sample_3_replace.csv	5	0	NULL	NULL
 1	'Beijing'	100
 1	'Beijing'	100
 1	'Chengdu'	80
@@ -32,5 +36,10 @@ Error: APIError: ResponseError with 1046: Number of columns in file (2) does not
 at file 'sample_2_columns.csv', line 0
 24
 5
+itt.csv	5	0	NULL	NULL
+sample.csv	6	0	NULL	NULL
+sample_2_columns.csv	6	0	NULL	NULL
+sample_3_duplicate.csv	8	0	NULL	NULL
+sample_3_replace.csv	5	0	NULL	NULL
 54
 0

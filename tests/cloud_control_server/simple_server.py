@@ -48,13 +48,17 @@ def create_task_request_to_task(id, create_task_request):
     )
 
     task.when_condition = (
-        create_task_request.when_condition if create_task_request.HasField("when_condition") else ""
+        create_task_request.when_condition
+        if create_task_request.HasField("when_condition")
+        else ""
     )
     task.after.extend(create_task_request.after)
     task.created_at = datetime.now(timezone.utc).isoformat()
     task.updated_at = datetime.now(timezone.utc).isoformat()
-
+    # add session parameters
+    task.session_parameters.update(create_task_request.session_parameters)
     return task
+
 
 def get_root_task_id(task):
     if len(task.after) == 0:
@@ -66,6 +70,7 @@ def get_root_task_id(task):
 
         dedup = list(set(root_ids))
         return ",".join(dedup)
+
 
 def create_task_run_from_task(task):
     task_run = task_pb2.TaskRun()
@@ -87,7 +92,7 @@ def create_task_run_from_task(task):
     task_run.query_id = "qwert"
     task_run.scheduled_time = datetime.now(timezone.utc).isoformat()
     task_run.completed_time = datetime.now(timezone.utc).isoformat()
-
+    task_run.session_parameters.update(task.session_parameters)
     return task_run
 
 
@@ -177,7 +182,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             after = task.after
             print(request)
             if len(request.remove_after) > 0:
-                filtered_array = [elem for elem in after if elem not in request.remove_after]
+                filtered_array = [
+                    elem for elem in after if elem not in request.remove_after
+                ]
                 task.after[:] = []
                 task.after.extend(filtered_array)
             else:
@@ -203,6 +210,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                 task.suspend_task_after_num_failures = (
                     request.suspend_task_after_num_failures
                 )
+                has_options = True
+            if request.set_session_parameters:
+                task.session_parameters.update(request.session_parameters)
                 has_options = True
             if has_options is False:
                 return task_pb2.AlterTaskResponse(
@@ -243,6 +253,31 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         print("ShowTaskRuns", request)
         task_runs = list(TASK_RUN_DB.values())
         return task_pb2.ShowTaskRunsResponse(task_runs=task_runs)
+
+    def GetTaskDependents(self, request, context):
+        print("GetTaskDependents", request)
+        task_name = request.task_name
+        if task_name not in TASK_DB:
+            return task_pb2.GetTaskDependentsResponse(task=[])
+        task = TASK_DB[task_name]
+        root = task
+        l = [root]
+        if request.recursive is False:
+            return task_pb2.GetTaskDependentsResponse(task=l)
+
+        while len(root.after) > 0:
+            root = TASK_DB[root.after[0]]
+            l.insert(0, root)
+        return task_pb2.GetTaskDependentsResponse(task=l)
+
+    def EnableTaskDependents(self, request, context):
+        print("EnableTaskDependents", request)
+        task_name = request.task_name
+        if task_name not in TASK_DB:
+            return task_pb2.EnableTaskDependentsResponse()
+        task = TASK_DB[task_name]
+        task.status = task_pb2.Task.Started
+        return task_pb2.EnableTaskDependentsResponse()
 
 
 def serve():

@@ -32,6 +32,7 @@ pub struct MergeIntoSource {
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
     pub merge_type: MergeIntoType,
+    pub merge_into_split_idx: u32,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -51,6 +52,9 @@ pub struct MergeInto {
     pub output_schema: DataSchemaRef,
     pub distributed: bool,
     pub merge_type: MergeIntoType,
+    pub change_join_order: bool,
+    pub target_build_optimization: bool,
+    pub can_try_update_column_only: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -62,4 +66,6 @@ pub struct MergeIntoAppendNotMatched {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub input_schema: DataSchemaRef,
     pub merge_type: MergeIntoType,
+    pub change_join_order: bool,
+    pub segments: Vec<(usize, Location)>,
 }

@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(internal_features)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_asref)]
+#![allow(clippy::diverging_sub_expression)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(let_chains)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![allow(clippy::diverging_sub_expression)]
+#![feature(box_patterns)]
 
 mod parquet2;
 mod parquet_part;

@@ -99,7 +99,7 @@ impl VirtualColumnReader {
             );
 
             let merge_io_result =
-                BlockReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, ranges)
+                BlockReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
                     .ok()?;
 
             Some(VirtualMergeIOReadResult::create(
@@ -144,7 +144,7 @@ impl VirtualColumnReader {
                 read_settings,
                 self.dal.clone(),
                 loc,
-                ranges,
+                &ranges,
                 self.reader.put_cache,
             )
             .await
@@ -205,7 +205,7 @@ impl VirtualColumnReader {
             let part = FusePartInfo::from_part(&virtual_data.part)?;
             let schema = virtual_data.schema;
 
-            let table_schema = TableSchema::from(&schema);
+            let table_schema = TableSchema::try_from(&schema).unwrap();
             let parquet_schema_descriptor = to_parquet_schema(&schema)?;
             let column_nodes = ColumnNodes::new_from_schema(&schema, Some(&table_schema));
 
@@ -233,7 +233,7 @@ impl VirtualColumnReader {
                             let data_type = DataType::from(&*virtual_column.data_type);
                             let column = BlockEntry::new(
                                 data_type.clone(),
-                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
                             );
                             virtual_values.insert(index, column);
                         }

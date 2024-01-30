@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
@@ -38,7 +39,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
@@ -61,7 +62,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     // create test table
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -73,7 +74,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -109,7 +110,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;

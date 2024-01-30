@@ -14,11 +14,11 @@
 
 mod cascades;
 mod cost;
+mod decorrelate;
 mod distributed;
+mod filter;
 mod format;
 mod group;
-// mod heuristic;
-mod decorrelate;
 mod hyper_dp;
 mod m_expr;
 mod memo;
@@ -48,7 +48,6 @@ pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;
 pub use rule::DEFAULT_REWRITE_RULES;
-pub use rule::RESIDUAL_RULES;
 pub use s_expr::get_udf_names;
 pub use s_expr::SExpr;
 pub use util::contains_local_table_scan;

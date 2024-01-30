@@ -28,7 +28,6 @@ mod variant_value;
 pub use data_field::*;
 pub use data_schema::*;
 pub use data_value::*;
-pub use prelude::*;
 pub use types::*;
 pub use variant_value::*;
 

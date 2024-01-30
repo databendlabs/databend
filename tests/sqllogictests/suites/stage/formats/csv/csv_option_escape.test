@@ -4,6 +4,9 @@ drop table if exists v
 statement ok
 create table v (a variant not null)
 
+query error Invalid CSV option value: ESCAPE is currently set to 'x'. The valid values are '\\\\', ''.
+copy into v from @data/csv/ file_format = (type = CSV escape = 'x')
+
 query TIITI
 copy into v from @data/csv/escape_default.csv file_format = (type = CSV)
 ----

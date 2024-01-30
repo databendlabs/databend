@@ -244,7 +244,7 @@ impl AsyncSource for InferSchemaSource {
                 if use_parquet2 {
                     let arrow_schema =
                         read_parquet_schema_async(&operator, &first_file.path).await?;
-                    TableSchema::from(&arrow_schema)
+                    TableSchema::try_from(&arrow_schema)?
                 } else {
                     let arrow_schema = read_parquet_schema_async_rs(
                         &operator,
@@ -262,15 +262,15 @@ impl AsyncSource for InferSchemaSource {
             }
         };
 
-        let mut names: Vec<Vec<u8>> = vec![];
-        let mut types: Vec<Vec<u8>> = vec![];
+        let mut names: Vec<String> = vec![];
+        let mut types: Vec<String> = vec![];
         let mut nulls: Vec<bool> = vec![];
 
         for field in schema.fields().iter() {
-            names.push(field.name().to_string().as_bytes().to_vec());
+            names.push(field.name().to_string());
 
             let non_null_type = field.data_type().remove_recursive_nullable();
-            types.push(non_null_type.sql_name().as_bytes().to_vec());
+            types.push(non_null_type.sql_name());
             nulls.push(field.is_nullable());
         }
 

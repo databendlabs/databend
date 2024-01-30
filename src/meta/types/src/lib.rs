@@ -21,12 +21,10 @@
 mod applied_state;
 mod change;
 mod cluster;
-pub mod cmd;
-pub mod config;
 mod endpoint;
-pub mod errors;
 mod eval_expire_time;
 mod grpc_config;
+mod grpc_helper;
 mod log_entry;
 mod match_seq;
 mod message;
@@ -42,6 +40,10 @@ mod with;
 
 mod proto_display;
 mod proto_ext;
+
+pub mod cmd;
+pub mod config;
+pub mod errors;
 
 // reexport
 
@@ -113,6 +115,7 @@ pub use crate::cmd::Cmd;
 pub use crate::cmd::CmdContext;
 pub use crate::cmd::MetaSpec;
 pub use crate::cmd::UpsertKV;
+pub use crate::grpc_helper::GrpcHelper;
 pub use crate::raft_snapshot_data::SnapshotData;
 pub use crate::raft_types::compat07;
 pub use crate::raft_types::new_log_id;

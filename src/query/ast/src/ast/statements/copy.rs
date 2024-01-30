@@ -201,7 +201,7 @@ impl Display for CopyIntoTableStmt {
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
-        write!(f, " ON_ERROR = '{}'", self.on_error)?;
+        write!(f, " ON_ERROR = {}", self.on_error)?;
 
         Ok(())
     }
@@ -216,6 +216,7 @@ pub struct CopyIntoLocationStmt {
     pub file_format: BTreeMap<String, String>,
     pub single: bool,
     pub max_file_size: usize,
+    pub detailed_output: bool,
 }
 
 impl Display for CopyIntoLocationStmt {
@@ -233,7 +234,8 @@ impl Display for CopyIntoLocationStmt {
             write!(f, ")")?;
         }
         write!(f, " SINGLE = {}", self.single)?;
-        write!(f, " MAX_FILE_SIZE= {}", self.max_file_size)?;
+        write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
+        write!(f, " DETAILED_OUTPUT = {}", self.detailed_output)?;
 
         Ok(())
     }
@@ -245,6 +247,7 @@ impl CopyIntoLocationStmt {
             CopyIntoLocationOption::FileFormat(v) => self.file_format = v,
             CopyIntoLocationOption::Single(v) => self.single = v,
             CopyIntoLocationOption::MaxFileSize(v) => self.max_file_size = v,
+            CopyIntoLocationOption::DetailedOutput(v) => self.detailed_output = v,
         }
     }
 }
@@ -390,6 +393,12 @@ impl UriLocation {
     ) -> databend_common_exception::Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
+            if !path.starts_with('/') {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Invalid uri: {}. fs location must start with 'fs:///'",
+                    uri
+                )));
+            }
             return Ok(UriLocation::new(
                 "fs".to_string(),
                 "".to_string(),
@@ -491,4 +500,5 @@ pub enum CopyIntoLocationOption {
     FileFormat(BTreeMap<String, String>),
     MaxFileSize(usize),
     Single(bool),
+    DetailedOutput(bool),
 }

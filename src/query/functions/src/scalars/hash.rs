@@ -104,7 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.data.resize(old_len + 40, 0);
                 // TODO sha1 lib doesn't allow encode into buffer...
                 let mut m = ::sha1::Sha1::new();
-                sha1::digest::Update::update(&mut m, val);
+                sha1::digest::Update::update(&mut m, val.as_bytes());
 
                 if let Err(err) =
                     hex::encode_to_slice(m.finalize().as_slice(), &mut output.data[old_len..])
@@ -124,9 +124,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             |val, output, ctx| {
                 let old_len = output.data.len();
                 output.data.resize(old_len + 64, 0);
-                if let Err(err) =
-                    hex::encode_to_slice(blake3::hash(val).as_bytes(), &mut output.data[old_len..])
-                {
+                if let Err(err) = hex::encode_to_slice(
+                    blake3::hash(val.as_bytes()).as_bytes(),
+                    &mut output.data[old_len..],
+                ) {
                     ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
@@ -143,22 +144,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let res = match l {
                     224 => {
                         let mut h = sha2::Sha224::new();
-                        sha2::digest::Update::update(&mut h, val);
+                        sha2::digest::Update::update(&mut h, val.as_bytes());
                         format!("{:x}", h.finalize())
                     }
                     256 | 0 => {
                         let mut h = sha2::Sha256::new();
-                        sha2::digest::Update::update(&mut h, val);
+                        sha2::digest::Update::update(&mut h, val.as_bytes());
                         format!("{:x}", h.finalize())
                     }
                     384 => {
                         let mut h = sha2::Sha384::new();
-                        sha2::digest::Update::update(&mut h, val);
+                        sha2::digest::Update::update(&mut h, val.as_bytes());
                         format!("{:x}", h.finalize())
                     }
                     512 => {
                         let mut h = sha2::Sha512::new();
-                        sha2::digest::Update::update(&mut h, val);
+                        sha2::digest::Update::update(&mut h, val.as_bytes());
                         format!("{:x}", h.finalize())
                     }
                     v => {
@@ -172,7 +173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         String::new()
                     },
                 };
-                output.put_slice(res.as_bytes());
+                output.put_str(&res);
                 output.commit_row();
             },
         ),
@@ -340,6 +341,27 @@ impl<'a> DFHash for &'a [u8] {
     }
 }
 
+impl<'a> DFHash for &'a str {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash_slice(self.as_bytes(), state);
+    }
+}
+
+impl DFHash for [u8] {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash_slice(self, state);
+    }
+}
+
+impl DFHash for str {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash_slice(self.as_bytes(), state);
+    }
+}
+
 impl DFHash for bool {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -357,10 +379,11 @@ impl DFHash for Scalar {
                     DFHash::hash(v, state);
                 }
             }),
-            Scalar::String(vals) | Scalar::Variant(vals) => {
-                for v in vals {
-                    DFHash::hash(v, state);
-                }
+            Scalar::Binary(vals) | Scalar::Variant(vals) => {
+                DFHash::hash(vals.as_slice(), state);
+            }
+            Scalar::String(vals) => {
+                DFHash::hash(vals.as_str(), state);
             }
             _ => {}
         }

@@ -19,16 +19,16 @@ use ethnum::i256;
 use crate::load;
 use crate::select_vector::SelectVector;
 use crate::store;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
-use crate::types::string::StringColumn;
 use crate::types::ArgType;
+use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
@@ -92,10 +92,23 @@ pub unsafe fn serialize_column_to_rowformat(
                 store(&v.get_bit(index), address[index].add(offset) as *mut u8);
             }
         }
-        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for i in 0..rows {
                 let index = select_index.get_index(i);
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
+
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+
+                store(
+                    &(data.as_ptr() as u64),
+                    address[index].add(offset + 4) as *mut u8,
+                );
+            }
+        }
+        Column::String(v) => {
+            for i in 0..rows {
+                let index = select_index.get_index(i);
+                let data = arena.alloc_slice_copy(v.index_unchecked(index).as_bytes());
 
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
 
@@ -258,19 +271,28 @@ pub unsafe fn row_match_column(
             no_match,
             no_match_count,
         ),
-        Column::Binary(v) | Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            row_match_string_column(
-                v,
-                validity,
-                address,
-                select_index,
-                count,
-                validity_offset,
-                col_offset,
-                no_match,
-                no_match_count,
-            )
-        }
+        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => row_match_binary_column(
+            v,
+            validity,
+            address,
+            select_index,
+            count,
+            validity_offset,
+            col_offset,
+            no_match,
+            no_match_count,
+        ),
+        Column::String(v) => row_match_binary_column(
+            &v.clone().into(),
+            validity,
+            address,
+            select_index,
+            count,
+            validity_offset,
+            col_offset,
+            no_match,
+            no_match_count,
+        ),
         Column::Nullable(_) => unreachable!(),
         Column::Array(_) => todo!(),
         Column::Map(_) => todo!(),
@@ -278,8 +300,8 @@ pub unsafe fn row_match_column(
     }
 }
 
-unsafe fn row_match_string_column(
-    col: &StringColumn,
+unsafe fn row_match_binary_column(
+    col: &BinaryColumn,
     validity: Option<&Bitmap>,
     address: &[*const u8],
     select_index: &mut SelectVector,
@@ -306,7 +328,7 @@ unsafe fn row_match_string_column(
                 let address = address[idx].add(col_offset + 4);
                 let len = load::<u32>(len_address) as usize;
 
-                let value = StringType::index_column_unchecked(col, idx);
+                let value = BinaryType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
@@ -333,7 +355,7 @@ unsafe fn row_match_string_column(
 
             let len = load::<u32>(len_address) as usize;
 
-            let value = StringType::index_column_unchecked(col, idx);
+            let value = BinaryType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {

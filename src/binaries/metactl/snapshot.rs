@@ -324,10 +324,7 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
         }
         let url = Url::parse(&format!("http://{}", addrs[0]))?;
         let endpoint = match (url.host_str(), url.port()) {
-            (Some(addr), Some(port)) => Endpoint {
-                addr: addr.to_string(),
-                port: port as u32,
-            },
+            (Some(addr), Some(port)) => Endpoint::new(addr, port),
             _ => {
                 return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
             }
@@ -509,7 +506,12 @@ async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> 
 
     let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 
-    export_meta(grpc_api_addr.to_string().as_str(), config.db.clone()).await?;
+    export_meta(
+        grpc_api_addr.to_string().as_str(),
+        config.db.clone(),
+        config.export_chunk_size,
+    )
+    .await?;
     Ok(())
 }
 

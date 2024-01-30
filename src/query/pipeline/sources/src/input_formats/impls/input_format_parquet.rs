@@ -336,8 +336,8 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
             let fields: Vec<DataField> = rg
                 .fields_to_read
                 .iter()
-                .map(DataField::from)
-                .collect::<Vec<_>>();
+                .map(DataField::try_from)
+                .collect::<Result<Vec<_>>>()?;
 
             let input_schema = DataSchema::new(fields);
             let block = DataBlock::from_arrow_chunk(&chunk, &input_schema)?;
@@ -399,7 +399,7 @@ impl AligningStateTrait for ParquetAligningState {
     }
 }
 
-fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
+fn get_used_fields(fields: &[Field], schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
         if let Some(m) = fields

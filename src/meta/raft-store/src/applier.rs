@@ -40,7 +40,6 @@ use databend_common_meta_types::TxnDeleteByPrefixResponse;
 use databend_common_meta_types::TxnDeleteRequest;
 use databend_common_meta_types::TxnDeleteResponse;
 use databend_common_meta_types::TxnGetRequest;
-use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnPutRequest;
@@ -374,15 +373,9 @@ impl<'a> Applier<'a> {
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
         let sv = self.sm.get_maybe_expired_kv(&get.key).await?;
-        let value = sv.map(pb::SeqV::from);
-        let get_resp = TxnGetResponse {
-            key: get.key.clone(),
-            value,
-        };
+        let get_resp = TxnOpResponse::get(get.key.clone(), sv);
 
-        resp.responses.push(TxnOpResponse {
-            response: Some(txn_op_response::Response::Get(get_resp)),
-        });
+        resp.responses.push(get_resp);
 
         Ok(())
     }
@@ -401,11 +394,7 @@ impl<'a> Applier<'a> {
 
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
-            prev_value: if put.prev_value {
-                prev.map(pb::SeqV::from)
-            } else {
-                None
-            },
+            prev_value: prev.map(pb::SeqV::from),
         };
 
         resp.responses.push(TxnOpResponse {
@@ -435,11 +424,7 @@ impl<'a> Applier<'a> {
         let del_resp = TxnDeleteResponse {
             key: delete.key.clone(),
             success: is_deleted,
-            prev_value: if delete.prev_value {
-                prev.map(pb::SeqV::from)
-            } else {
-                None
-            },
+            prev_value: prev.map(pb::SeqV::from),
         };
 
         resp.responses.push(TxnOpResponse {

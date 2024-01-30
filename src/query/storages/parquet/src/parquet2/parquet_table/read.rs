@@ -25,11 +25,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TopKSorter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
-use databend_storages_common_index::Index;
-use databend_storages_common_index::RangeIndex;
 
 use super::Parquet2Table;
 use crate::parquet2::parquet_reader::Parquet2Reader;
@@ -43,8 +40,6 @@ pub struct Parquet2PrewhereInfo {
     pub func_ctx: FunctionContext,
     pub reader: Arc<Parquet2Reader>,
     pub filter: Expr,
-    pub top_k: Option<(usize, TopKSorter)>,
-    // the usize is the index of the column in ParquetReader.schema
 }
 
 impl Parquet2Table {
@@ -80,31 +75,8 @@ impl Parquet2Table {
             source_projection,
         )?;
 
-        // build top k information
-        let top_k = plan
-            .push_downs
-            .as_ref()
-            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
-            .unwrap_or_default();
-
         // Build prewhere info.
-        let mut push_down_prewhere = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref());
-
-        let top_k = if let Some((prewhere, top_k)) = push_down_prewhere.as_mut().zip(top_k) {
-            // If there is a top k, we need to add the top k columns to the prewhere columns.
-            if let RemoteExpr::<String>::ColumnRef { id, .. } =
-                &plan.push_downs.as_ref().unwrap().order_by[0].0
-            {
-                let index = table_schema.index_of(id)?;
-                prewhere.remain_columns.remove_col(index);
-                prewhere.prewhere_columns.add_col(index);
-                Some((id.clone(), top_k))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let push_down_prewhere = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref());
 
         // Build remain reader.
         // If there is no prewhere filter, remain reader is the same as source reader  (no prewhere phase, deserialize directly).
@@ -129,18 +101,11 @@ impl Parquet2Table {
                 )?;
                 src_fields.extend_from_slice(reader.output_schema.fields());
                 let filter = Self::build_filter(&p.filter, &reader.output_schema);
-                let top_k = top_k.map(|(name, top_k)| {
-                    (
-                        reader.output_schema.index_of(&name).unwrap(),
-                        TopKSorter::new(top_k.limit, top_k.asc),
-                    )
-                });
                 let func_ctx = ctx.get_function_context()?;
                 Ok::<_, ErrorCode>(Parquet2PrewhereInfo {
                     func_ctx,
                     reader,
                     filter,
-                    top_k,
                 })
             })
             .transpose()?;

@@ -28,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
@@ -357,8 +358,7 @@ pub fn parse_computed_expr_to_string(
 
 pub fn parse_lambda_expr(
     ctx: Arc<dyn TableContext>,
-    column_name: &str,
-    data_type: &DataType,
+    columns: &[(String, DataType)],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
     let settings = Settings::create("".to_string());
@@ -366,26 +366,21 @@ pub fn parse_lambda_expr(
     let mut metadata = Metadata::default();
 
     bind_context.set_expr_context(ExprContext::InLambdaFunction);
-    bind_context.add_column_binding(
-        ColumnBindingBuilder::new(
-            column_name.to_string(),
-            0,
-            Box::new(data_type.clone()),
-            Visibility::Visible,
-        )
-        .build(),
-    );
 
-    let table_type = infer_schema_type(data_type)?;
-    metadata.add_base_table_column(
-        column_name.to_string(),
-        table_type,
-        0,
-        None,
-        None,
-        None,
-        None,
-    );
+    for (idx, column) in columns.iter().enumerate() {
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                column.0.clone(),
+                idx,
+                Box::new(column.1.clone()),
+                Visibility::Visible,
+            )
+            .build(),
+        );
+
+        let table_type = infer_schema_type(&column.1)?;
+        metadata.add_base_table_column(column.0.to_string(), table_type, 0, None, None, None, None);
+    }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
@@ -421,17 +416,14 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
     match field.default_expr() {
         Some(default_expr) => {
             let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-            let mut expr = expr.remove(0);
-
-            if expr.data_type() != &data_type {
-                expr = Expr::Cast {
-                    span: None,
-                    is_try: data_type.is_nullable(),
-                    expr: Box::new(expr),
-                    dest_type: data_type,
-                };
-            }
+            let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+            let expr = check_cast(
+                None,
+                false,
+                expr,
+                &field.data_type().into(),
+                &BUILTIN_FUNCTIONS,
+            )?;
 
             let dummy_block = DataBlock::new(vec![], 1);
             let func_ctx = FunctionContext::default();
@@ -445,7 +437,7 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                     Ok(value.to_owned())
                 }
                 _ => Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid default value for column: {}, must be constant, actual: {}",
+                    "Invalid default value for column: {}, must be constant but got: {}",
                     field.name(),
                     result
                 ))),

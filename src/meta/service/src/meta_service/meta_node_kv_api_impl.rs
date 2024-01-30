@@ -15,19 +15,14 @@
 use async_trait::async_trait;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
@@ -37,6 +32,7 @@ use log::info;
 
 use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
+use crate::metrics::server_metrics;
 
 /// Impl kvapi::KVApi for MetaNode.
 ///
@@ -47,13 +43,8 @@ use crate::meta_service::MetaNode;
 impl kvapi::KVApi for MetaNode {
     type Error = MetaAPIError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
-        let ent = LogEntry::new(Cmd::UpsertKV(UpsertKV {
-            key: act.key,
-            seq: act.seq,
-            value: act.value,
-            value_meta: act.value_meta,
-        }));
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
+        let ent = LogEntry::new(Cmd::UpsertKV(act));
         let rst = self.write(ent).await?;
 
         match rst {
@@ -65,25 +56,22 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[minitrace::trace]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
+        let req = MGetKVReq {
+            keys: keys.to_vec(),
+        };
+
         let res = self
-            .consistent_read(GetKVReq {
-                key: key.to_string(),
-            })
-            .await?;
+            .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::MGetKV(req)))
+            .await;
 
-        Ok(res)
-    }
+        server_metrics::incr_read_result(&res);
 
-    #[minitrace::trace]
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
-        let res = self
-            .consistent_read(MGetKVReq {
-                keys: keys.to_vec(),
-            })
-            .await?;
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+        let strm = strm.map_err(MetaAPIError::from);
 
-        Ok(res)
+        Ok(strm.boxed())
     }
 
     #[minitrace::trace]
@@ -92,21 +80,23 @@ impl kvapi::KVApi for MetaNode {
             prefix: prefix.to_string(),
         };
 
-        let strm = self
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: MetaGrpcReadReq::ListKV(req),
-            })
-            .await?;
+        let res = self
+            .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::ListKV(req)))
+            .await;
 
-        let strm =
-            strm.map_err(|status| MetaAPIError::NetworkError(MetaNetworkError::from(status)));
+        server_metrics::incr_read_result(&res);
+
+        // TODO: enable returning endpoint
+        let (_endpoint, strm) = res?;
+
+        let strm = strm.map_err(MetaAPIError::from);
         Ok(strm.boxed())
     }
 
     #[minitrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         info!("MetaNode::transaction(): {}", txn);
+
         let ent = LogEntry::new(Cmd::Transaction(txn));
         let rst = self.write(ent).await?;
 

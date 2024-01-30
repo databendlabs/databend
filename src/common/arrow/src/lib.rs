@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(iter_advance_by)]
+#![allow(clippy::unconditional_recursion)]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::non_canonical_partial_ord_impl)]

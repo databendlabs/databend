@@ -25,6 +25,7 @@ use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -95,7 +96,7 @@ impl Column {
                 Column::Boolean(column)
             }
             Column::Binary(column) => {
-                let column = Self::take_ranges_string_types(column, ranges, num_rows);
+                let column = Self::take_ranges_binary_types(column, ranges, num_rows);
                 Column::Binary(column)
             }
             Column::String(column) => {
@@ -140,7 +141,7 @@ impl Column {
                 )
             }
             Column::Bitmap(column) => {
-                let column = Self::take_ranges_string_types(column, ranges, num_rows);
+                let column = Self::take_ranges_binary_types(column, ranges, num_rows);
                 Column::Bitmap(column)
             }
 
@@ -157,7 +158,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let column = Self::take_ranges_string_types(column, ranges, num_rows);
+                let column = Self::take_ranges_binary_types(column, ranges, num_rows);
                 Column::Variant(column)
             }
         }
@@ -191,11 +192,11 @@ impl Column {
         builder.into()
     }
 
-    fn take_ranges_string_types(
-        values: &StringColumn,
+    fn take_ranges_binary_types(
+        values: &BinaryColumn,
         ranges: &[Range<u32>],
         num_rows: usize,
-    ) -> StringColumn {
+    ) -> BinaryColumn {
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut offsets_len = 0;
         let mut data_size = 0;
@@ -233,7 +234,21 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    fn take_ranges_string_types(
+        values: &StringColumn,
+        ranges: &[Range<u32>],
+        num_rows: usize,
+    ) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::take_ranges_binary_types(
+                &values.clone().into(),
+                ranges,
+                num_rows,
+            ))
+        }
     }
 
     fn take_ranges_boolean_types(

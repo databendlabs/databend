@@ -77,7 +77,7 @@ impl Binder {
             .map(|ident| {
                 schema
                     .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .map(|v| v.clone())
+                    .cloned()
             })
             .collect::<Result<Vec<_>>>()?;
 

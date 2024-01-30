@@ -40,6 +40,7 @@ use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::sessions::QueryContext;
+use crate::sql::executor::physical_plans::MergeInto;
 use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
@@ -62,6 +63,7 @@ enum State {
     SelectLeaf,
     DeleteLeaf,
     ReplaceInto,
+    Update,
     Compact,
     Recluster,
     Other,
@@ -150,6 +152,26 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::SelectLeaf;
 
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        if !plan.change_join_order {
+            self.state = State::SelectLeaf;
+        }
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_update_source(
+        &mut self,
+        plan: &databend_common_sql::executor::physical_plans::UpdateSource,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::Update;
+
+        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
     }
 
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
@@ -293,6 +315,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
+            State::Update => FragmentType::Update,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;

@@ -36,6 +36,7 @@ pub use transform_spill_reader::*;
 
 pub mod exchange_defines {
     use databend_common_arrow::arrow::datatypes::Field;
+    use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
     use databend_common_arrow::arrow::io::flight::default_ipc_fields;
     use databend_common_arrow::arrow::io::flight::WriteOptions;
     use databend_common_arrow::arrow::io::ipc::IpcField;
@@ -64,7 +65,7 @@ pub mod exchange_defines {
         IPC_SCHEMA.get_or_init(|| {
             let schema = spilled_schema();
 
-            schema.to_arrow().fields
+            ArrowSchema::from(&schema).fields
         })
     }
 
@@ -74,7 +75,7 @@ pub mod exchange_defines {
         IPC_SCHEMA.get_or_init(|| {
             let schema = spilled_schema();
 
-            let arrow_schema = schema.to_arrow();
+            let arrow_schema = ArrowSchema::from(&schema);
             let ipc_fields = default_ipc_fields(&arrow_schema.fields);
 
             IpcSchema {
@@ -89,7 +90,7 @@ pub mod exchange_defines {
 
         IPC_FIELDS.get_or_init(|| {
             let schema = spilled_schema();
-            let arrow_schema = schema.to_arrow();
+            let arrow_schema = ArrowSchema::from(&schema);
             default_ipc_fields(&arrow_schema.fields)
         })
     }

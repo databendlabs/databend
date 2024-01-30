@@ -1,31 +1,54 @@
 query 
-select name, size, creator from list_stage(location => '@data/parquet/multi_page/') order by name
+select name, size, creator from list_stage(location => '@data/csv/prefix/') order by name
 ----
-parquet/multi_page/gen.py 696 NULL
-parquet/multi_page/multi_page_1.parquet 2711 NULL
-parquet/multi_page/multi_page_2.parquet 5328 NULL
-parquet/multi_page/multi_page_3.parquet 4020 NULL
-parquet/multi_page/multi_page_4.parquet 6636 NULL
+csv/prefix/ab.csv 1 NULL
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
 
 query 
-select name, size, creator from list_stage(location => '@data/parquet/', pattern => 'complex[.].*')
+select name, size, creator from list_stage(location => '@data/csv/prefix/a') order by name
 ----
-parquet/complex.parquet 92762 NULL
-
-query 
-select name, size, creator from list_stage(location => '@data/', pattern => 'parquet/complex[.].*')
-----
-parquet/complex.parquet 92762 NULL
+csv/prefix/ab.csv 1 NULL
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
 
 
 query 
-select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') order by name limit 3
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab') order by name
 ----
-delta/partitioned/_delta_log/00000000000000000002.checkpoint.parquet 18468 NULL
-delta/partitioned/_delta_log/00000000000000000004.checkpoint.parquet 18428 NULL
-delta/partitioned/p0=10/p2=12/p4=14/part-00000-62d00564-86cc-4256-a203-dbb878f585a6.c000.snappy.parquet 890 NULL
+csv/prefix/ab.csv 1 NULL
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
 
 query 
-select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') where name = 'parquet/tuple.parquet'
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab/') order by name
 ----
-parquet/tuple.parquet 431 NULL
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab/cd.csv') order by name
+----
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab/cd.csv.bk') order by name
+----
+csv/prefix/ab/cd.csv.bk 1 NULL
+
+query
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab', pattern => 'cd[.].*') order by name
+----
+
+query 
+select name, size, creator from list_stage(location => '@data/csv/prefix/ab/', pattern => 'cd[.].*') order by name
+----
+csv/prefix/ab/cd.csv 1 NULL
+csv/prefix/ab/cd.csv.bk 1 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/csv/prefix/', pattern => '.*[.]csv') order by name
+----
+csv/prefix/ab.csv 1 NULL
+csv/prefix/ab/cd.csv 1 NULL

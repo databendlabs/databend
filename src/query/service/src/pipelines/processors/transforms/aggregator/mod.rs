@@ -37,7 +37,6 @@ pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_group_by_final::TransformFinalGroupBy;
 pub use transform_group_by_partial::TransformPartialGroupBy;
 pub use transform_partition_bucket::build_partition_bucket;
-pub use transform_partition_bucket::TransformPartitionBucket;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
 pub use utils::*;

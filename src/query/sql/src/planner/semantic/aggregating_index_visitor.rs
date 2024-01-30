@@ -72,6 +72,8 @@ impl VisitorMut for AggregatingIndexRewriter {
                 self.has_agg_function = true;
                 if name.name.eq_ignore_ascii_case("avg") {
                     self.extract_avg(args);
+                } else if name.name.eq_ignore_ascii_case("count") {
+                    self.extract_count(args);
                 } else {
                     let agg = format!(
                         "{}({})",
@@ -180,11 +182,25 @@ impl AggregatingIndexRewriter {
         }
     }
 
+    // If `arg[0]` data type is *NOT* nullable, the optimizer will rewrite `count(arg)` to `count()`,
+    // this happened in `RuleID::NormalizeAggregate`.
+    // But here we cannot get the arg[0] type, so we provide both `count(arg)` and `count()`.
     pub fn extract_avg(&mut self, args: &[Expr]) {
         let sum = format!("SUM({})", args[0]);
-        let count = "COUNT()".to_string();
+        let count = format!("COUNT({})", args[0]);
+        let count_without_column = "COUNT()".to_string();
         self.extracted_aggs.insert(sum);
         self.extracted_aggs.insert(count);
+        self.extracted_aggs.insert(count_without_column);
+    }
+
+    pub fn extract_count(&mut self, args: &[Expr]) {
+        let count_without_column = "COUNT()".to_string();
+        self.extracted_aggs.insert(count_without_column);
+        if !args.is_empty() {
+            let count = format!("COUNT({})", args[0]);
+            self.extracted_aggs.insert(count);
+        }
     }
 }
 

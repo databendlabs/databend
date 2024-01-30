@@ -25,6 +25,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'file.level'                               | 'DEBUG'                                                        | ''       |
 | 'log'     | 'file.limit'                               | '48'                                                           | ''       |
 | 'log'     | 'file.on'                                  | 'true'                                                         | ''       |
+| 'log'     | 'file.prefix_filter'                       | 'databend_'                                                    | ''       |
 | 'log'     | 'level'                                    | 'DEBUG'                                                        | ''       |
 | 'log'     | 'log_dir'                                  | 'null'                                                         | ''       |
 | 'log'     | 'log_level'                                | 'null'                                                         | ''       |
@@ -42,6 +43,8 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
 | 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
 | 'log'     | 'stderr.on'                                | 'true'                                                         | ''       |
+| 'log'     | 'structlog.dir'                            | ''                                                             | ''       |
+| 'log'     | 'structlog.on'                             | 'false'                                                        | ''       |
 | 'log'     | 'tracing.capture_log_level'                | 'INFO'                                                         | ''       |
 | 'log'     | 'tracing.on'                               | 'false'                                                        | ''       |
 | 'log'     | 'tracing.otlp_endpoint'                    | 'http://127.0.0.1:4317'                                        | ''       |
@@ -68,6 +71,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'clickhouse_http_handler_port'             | '8124'                                                         | ''       |
 | 'query'   | 'cloud_control_grpc_server_address'        | 'null'                                                         | ''       |
 | 'query'   | 'cluster_id'                               | ''                                                             | ''       |
+| 'query'   | 'data_retention_time_in_days_max'          | '90'                                                           | ''       |
 | 'query'   | 'databend_enterprise_license'              | 'null'                                                         | ''       |
 | 'query'   | 'default_compression'                      | 'auto'                                                         | ''       |
 | 'query'   | 'default_storage_format'                   | 'auto'                                                         | ''       |
@@ -154,7 +158,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 'oss.server_side_encryption'               | ''                                                             | ''       |
 | 'storage' | 'oss.server_side_encryption_key_id'        | ''                                                             | ''       |
 | 'storage' | 's3.access_key_id'                         | ''                                                             | ''       |
-| 'storage' | 's3.allow_anonymous'                       | 'false'                                                        | ''       |
 | 'storage' | 's3.bucket'                                | ''                                                             | ''       |
 | 'storage' | 's3.enable_virtual_host_style'             | 'false'                                                        | ''       |
 | 'storage' | 's3.endpoint_url'                          | 'https://s3.amazonaws.com'                                     | ''       |

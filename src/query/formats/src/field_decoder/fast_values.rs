@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -58,13 +59,15 @@ use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use num_traits::NumCast;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
 
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
-    pub common_settings: InputCommonSettings,
+    common_settings: InputCommonSettings,
+    rounding_mode: bool,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -74,7 +77,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings) -> Self {
+    pub fn create_for_insert(format: FormatSettings, rounding_mode: bool) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -87,7 +90,9 @@ impl FastFieldDecoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
+                binary_format: Default::default(),
             },
+            rounding_mode,
         }
     }
 
@@ -140,6 +145,7 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -194,9 +200,26 @@ impl FastFieldDecoderValues {
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical,
+        T::Native: FromLexical + NumCast,
     {
-        let v: T::Native = reader.read_int_text()?;
+        let val: Result<T::Native> = reader.read_int_text();
+        let v = match val {
+            Ok(v) => v,
+            Err(_) => {
+                // cast float value to integer value
+                let val: f64 = reader.read_float_text()?;
+                let new_val: Option<T::Native> = if self.rounding_mode {
+                    num_traits::cast::cast(val.round())
+                } else {
+                    num_traits::cast::cast(val)
+                };
+                if let Some(v) = new_val {
+                    v
+                } else {
+                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                }
+            }
+        };
         column.push(v.into());
         Ok(())
     }
@@ -416,7 +439,7 @@ impl FastFieldDecoderValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -430,7 +453,7 @@ impl FastFieldDecoderValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -443,7 +466,6 @@ impl FastFieldDecoderValues {
             }
             Err(_) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(&buf);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(format!(

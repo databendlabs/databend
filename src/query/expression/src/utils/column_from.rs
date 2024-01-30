@@ -72,15 +72,25 @@ impl_from_data! { TimestampType }
 impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
 
+impl<'a> FromData<&'a [u8]> for BinaryType {
+    fn from_data(d: Vec<&'a [u8]>) -> Column {
+        BinaryType::from_data(d.into_iter().map(|d| d.to_vec()).collect_vec())
+    }
+
+    fn from_opt_data(d: Vec<Option<&'a [u8]>>) -> Column {
+        BinaryType::from_opt_data(d.into_iter().map(|d| d.map(|d| d.to_vec())).collect_vec())
+    }
+}
+
 impl<'a> FromData<&'a str> for StringType {
     fn from_data(d: Vec<&'a str>) -> Column {
-        StringType::from_data(d.into_iter().map(|d| d.as_bytes().to_vec()).collect_vec())
+        StringType::from_data(d.into_iter().map(|d| d.to_string()).collect_vec())
     }
 
     fn from_opt_data(d: Vec<Option<&'a str>>) -> Column {
         StringType::from_opt_data(
             d.into_iter()
-                .map(|d| d.map(|d| d.as_bytes().to_vec()))
+                .map(|d| d.map(|d| d.to_string()))
                 .collect_vec(),
         )
     }

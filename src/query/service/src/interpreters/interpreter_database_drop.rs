@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::GrantObjectByID;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
 use databend_common_storages_share::save_share_spec;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -47,17 +48,18 @@ impl Interpreter for DropDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
 
         // unset the ownership of the database, the database may not exists.
         let db = catalog.get_database(&tenant, &self.plan.database).await;
         if let Ok(db) = db {
-            role_api
-                .drop_ownership(&GrantObjectByID::Database {
-                    catalog_name: self.plan.catalog.clone(),
-                    db_id: db.get_db_info().ident.db_id,
-                })
-                .await?;
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let owner_object = OwnershipObject::Database {
+                catalog_name: self.plan.catalog.clone(),
+                db_id: db.get_db_info().ident.db_id,
+            };
+
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // actual drop database

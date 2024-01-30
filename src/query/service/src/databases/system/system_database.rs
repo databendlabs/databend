@@ -46,8 +46,6 @@ use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
-use databend_common_storages_system::QueryProfileTable;
-use databend_common_storages_system::QuerySummaryTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
@@ -59,6 +57,7 @@ use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TracingTable;
+use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::VirtualColumnsTable;
 
@@ -117,18 +116,17 @@ impl SystemDatabase {
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
             CachesTable::create(sys_db_meta.next_table_id()),
             IndexesTable::create(sys_db_meta.next_table_id()),
-            QueryProfileTable::create(sys_db_meta.next_table_id()),
             BackgroundTaskTable::create(sys_db_meta.next_table_id()),
             BackgroundJobTable::create(sys_db_meta.next_table_id()),
             BacktraceTable::create(sys_db_meta.next_table_id()),
             TempFilesTable::create(sys_db_meta.next_table_id()),
-            QuerySummaryTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
             ProcessorProfileTable::create(sys_db_meta.next_table_id()),
             LocksTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
+            UserFunctionsTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

@@ -426,25 +426,7 @@ impl DataBlock {
             .map(|(field, col)| {
                 Ok(BlockEntry::new(
                     field.data_type().clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
-                ))
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(DataBlock::new(cols, arrow_chunk.len()))
-    }
-
-    pub fn from_arrow_chunk_with_types<A: AsRef<dyn Array>>(
-        arrow_chunk: &ArrowChunk<A>,
-        data_types: &[DataType],
-    ) -> Result<Self> {
-        let cols = data_types
-            .iter()
-            .zip(arrow_chunk.arrays())
-            .map(|(data_type, col)| {
-                Ok(BlockEntry::new(
-                    data_type.clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), data_type)),
+                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())?),
                 ))
             })
             .collect::<Result<_>>()?;
@@ -458,13 +440,13 @@ impl DataBlock {
     // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
     pub fn create_with_default_value_and_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchema,
-        chuck: &ArrowChunk<A>,
+        chunk: &ArrowChunk<A>,
         default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
-        let chunk_columns = chuck.arrays();
+        let chunk_columns = chunk.arrays();
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
@@ -480,7 +462,7 @@ impl DataBlock {
                     chunk_idx += 1;
                     BlockEntry::new(
                         data_type.clone(),
-                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)?),
                     )
                 }
             };

@@ -64,8 +64,26 @@ impl DefaultDatabase {
             Ok(acc)
         })
     }
-}
 
+    async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
+        let table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .await?;
+
+        let mut refreshed = Vec::with_capacity(table_infos.len());
+        for table_info in table_infos {
+            refreshed.push(
+                self.ctx
+                    .storage_factory
+                    .refresh_table_info(table_info)
+                    .await?,
+            );
+        }
+        Ok(refreshed)
+    }
+}
 #[async_trait::async_trait]
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
@@ -77,7 +95,7 @@ impl Database for DefaultDatabase {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let storage = self.ctx.storage_factory.clone();
+        let storage = &self.ctx.storage_factory;
         storage.get_table(table_info)
     }
 
@@ -93,17 +111,19 @@ impl Database for DefaultDatabase {
                 table_name,
             ))
             .await?;
-        self.get_table_by_info(table_info.as_ref())
+
+        let table_info_refreshed = self
+            .ctx
+            .storage_factory
+            .refresh_table_info(table_info)
+            .await?;
+
+        self.get_table_by_info(table_info_refreshed.as_ref())
     }
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
-
+        let table_infos = self.list_table_infos().await?;
         self.load_tables(table_infos)
     }
 
@@ -112,6 +132,8 @@ impl Database for DefaultDatabase {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
         // thus, only the table-infos of dropped tables are used.
+        //
+        // For dropped tables, we do not bother refreshing the table info.
         let mut dropped = self
             .ctx
             .meta
@@ -121,11 +143,7 @@ impl Database for DefaultDatabase {
             .filter(|i| i.meta.drop_on.is_some())
             .collect::<Vec<_>>();
 
-        let mut table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
+        let mut table_infos = self.list_table_infos().await?;
 
         table_infos.append(&mut dropped);
 

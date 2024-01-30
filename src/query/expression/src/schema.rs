@@ -17,10 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use databend_common_arrow::arrow::datatypes::Field as ArrowField;
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::datatypes::TimeUnit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -28,17 +25,11 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::types::decimal::DecimalDataType;
-use crate::types::decimal::DecimalSize;
 use crate::types::DataType;
 use crate::types::NumberDataType;
-use crate::with_number_type;
 use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
-use crate::ARROW_EXT_TYPE_BITMAP;
-use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
-use crate::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::ARROW_EXT_TYPE_VARIANT;
 
 // Column id of TableField
 pub type ColumnId = u32;
@@ -53,9 +44,6 @@ pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
-pub const CHANGE_ACTION_COLUMN_ID: u32 = u32::MAX - 7;
-pub const CHANGE_IS_UPDATE_COLUMN_ID: u32 = u32::MAX - 8;
-pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 9;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -76,14 +64,16 @@ pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+pub const ROW_VERSION_COLUMN_ID: u32 = u32::MAX - 13;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
+pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= CHANGE_ROW_ID_COLUMN_ID
+    column_id >= BASE_BLOCK_IDS_COLUMN_ID
 }
 
 #[inline]
@@ -100,7 +90,7 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | CHANGE_ACTION_COL_NAME
             | CHANGE_IS_UPDATE_COL_NAME
             | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended 
+            // change$row_id might be expended
             // to the computation of the two following internal columns
             | ORIGIN_BLOCK_ROW_NUM_COL_NAME
             | BASE_ROW_ID_COL_NAME
@@ -109,14 +99,17 @@ pub fn is_internal_column(column_name: &str) -> bool {
 
 #[inline]
 pub fn is_stream_column_id(column_id: ColumnId) -> bool {
-    (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
+    (ROW_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]
 pub fn is_stream_column(column_name: &str) -> bool {
     matches!(
         column_name,
-        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+        ORIGIN_VERSION_COL_NAME
+            | ORIGIN_BLOCK_ID_COL_NAME
+            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+            | ROW_VERSION_COL_NAME
     )
 }
 
@@ -564,7 +557,9 @@ impl TableSchema {
                         )
                     });
                 }
+                Scalar::Map(_) | Scalar::Array(_) => {}
                 _ => {
+                    debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
                     *index += 1;
                 }
@@ -680,11 +675,10 @@ impl TableSchema {
     pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
-        let column_ids = self.to_column_ids();
 
         let fields = paths
             .iter()
-            .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
+            .map(|path| Self::traverse_paths(schema_fields, path).unwrap())
             .collect();
 
         Self {
@@ -765,11 +759,7 @@ impl TableSchema {
         column_ids
     }
 
-    fn traverse_paths(
-        fields: &[TableField],
-        path: &[FieldIndex],
-        column_ids: &[ColumnId],
-    ) -> Result<TableField> {
+    fn traverse_paths(fields: &[TableField], path: &[FieldIndex]) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
@@ -799,7 +789,7 @@ impl TableSchema {
         } = &field.data_type.remove_nullable()
         {
             let field_name = field.name();
-            let mut next_column_id = column_ids[1 + index];
+            let mut next_column_id = field.column_id;
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
@@ -809,7 +799,7 @@ impl TableSchema {
                     field.build_column_id(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
-            return Self::traverse_paths(&fields, &path[1..], &column_ids[index + 1..]);
+            return Self::traverse_paths(&fields, &path[1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
@@ -945,12 +935,6 @@ impl TableSchema {
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
         }
-    }
-
-    pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
-
-        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 }
 
@@ -1298,6 +1282,22 @@ impl TableDataType {
     }
 }
 
+// for merge into not matched clauses, when there are multi inserts, they maybe
+// have different source schemas.
+pub type SourceSchemaIndex = usize;
+
+#[typetag::serde(name = "source_schema_index")]
+impl BlockMetaInfo for SourceSchemaIndex {
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SourceSchemaIndex::downcast_ref_from(info).is_some_and(|other| other == self)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(*self)
+    }
+}
+
 pub type DataSchemaRef = Arc<DataSchema>;
 pub type TableSchemaRef = Arc<TableSchema>;
 
@@ -1336,18 +1336,6 @@ impl TableSchemaRefExt {
     }
 }
 
-impl From<&ArrowSchema> for TableSchema {
-    fn from(a_schema: &ArrowSchema) -> Self {
-        let fields = a_schema
-            .fields
-            .iter()
-            .map(|arrow_f| arrow_f.into())
-            .collect::<Vec<_>>();
-
-        TableSchema::new(fields)
-    }
-}
-
 impl From<&TableField> for DataField {
     fn from(f: &TableField) -> Self {
         let data_type = f.data_type.clone();
@@ -1371,319 +1359,21 @@ impl<T: AsRef<TableSchema>> From<T> for DataSchema {
     }
 }
 
+impl From<&DataField> for TableField {
+    fn from(f: &DataField) -> Self {
+        let ty = infer_schema_type(&f.data_type).unwrap();
+        let name = f.name.clone();
+        TableField::new(&name, ty)
+            .with_default_expr(f.default_expr.clone())
+            .with_computed_expr(f.computed_expr.clone())
+    }
+}
+
 impl AsRef<TableSchema> for &TableSchema {
     fn as_ref(&self) -> &TableSchema {
         self
     }
 }
-
-// conversions code
-// =========================
-impl From<&ArrowField> for TableField {
-    fn from(f: &ArrowField) -> Self {
-        Self {
-            name: f.name.clone(),
-            data_type: f.into(),
-            default_expr: None,
-            column_id: 0,
-            computed_expr: None,
-        }
-    }
-}
-
-impl From<&ArrowField> for DataField {
-    fn from(f: &ArrowField) -> Self {
-        Self {
-            name: f.name.clone(),
-            data_type: DataType::from(&TableDataType::from(f)),
-            default_expr: None,
-            computed_expr: None,
-        }
-    }
-}
-
-// ArrowType can't map to DataType, we don't know the nullable flag
-impl From<&ArrowField> for TableDataType {
-    fn from(f: &ArrowField) -> Self {
-        let ty = with_number_type!(|TYPE| match f.data_type() {
-            ArrowDataType::TYPE => TableDataType::Number(NumberDataType::TYPE),
-
-            ArrowDataType::Decimal(precision, scale) =>
-                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                })),
-            ArrowDataType::Decimal256(precision, scale) =>
-                TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                })),
-
-            ArrowDataType::Null => return TableDataType::Null,
-            ArrowDataType::Boolean => TableDataType::Boolean,
-
-            ArrowDataType::List(f)
-            | ArrowDataType::LargeList(f)
-            | ArrowDataType::FixedSizeList(f, _) =>
-                TableDataType::Array(Box::new(f.as_ref().into())),
-
-            ArrowDataType::Binary
-            | ArrowDataType::LargeBinary
-            | ArrowDataType::FixedSizeBinary(_)
-            | ArrowDataType::Utf8
-            | ArrowDataType::LargeUtf8 => TableDataType::String,
-
-            ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
-            ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
-            ArrowDataType::Map(f, _) => {
-                let inner_ty = f.as_ref().into();
-                TableDataType::Map(Box::new(inner_ty))
-            }
-            ArrowDataType::Struct(fields) => {
-                let (fields_name, fields_type) =
-                    fields.iter().map(|f| (f.name.clone(), f.into())).unzip();
-                TableDataType::Tuple {
-                    fields_name,
-                    fields_type,
-                }
-            }
-            ArrowDataType::Extension(custom_name, data_type, _) => match custom_name.as_str() {
-                ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
-                ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
-                ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
-                ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
-                _ => {
-                    let a =
-                        ArrowField::new(custom_name, data_type.as_ref().to_owned(), f.is_nullable);
-                    (&a).into()
-                }
-            },
-            // this is safe, because we define the datatype firstly
-            _ => {
-                unimplemented!("data_type: {:?}", f.data_type())
-            }
-        });
-
-        if f.is_nullable {
-            TableDataType::Nullable(Box::new(ty))
-        } else {
-            ty
-        }
-    }
-}
-
-impl From<&DataField> for ArrowField {
-    fn from(f: &DataField) -> Self {
-        let ty = f.data_type().into();
-        match ty {
-            ArrowDataType::Struct(_) if f.is_nullable() => {
-                let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
-            }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
-        }
-    }
-}
-
-impl From<&TableField> for ArrowField {
-    fn from(f: &TableField) -> Self {
-        let ty = f.data_type().into();
-        match ty {
-            ArrowDataType::Struct(_) if f.is_nullable() => {
-                let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
-            }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
-        }
-    }
-}
-
-fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
-    // if the struct type is nullable, need to set inner fields as nullable
-    match ty {
-        ArrowDataType::Struct(fields) => {
-            let fields = fields
-                .iter()
-                .map(|f| {
-                    let data_type = set_nullable(&f.data_type);
-                    ArrowField::new(f.name.clone(), data_type, true)
-                })
-                .collect();
-            ArrowDataType::Struct(fields)
-        }
-        _ => ty.clone(),
-    }
-}
-
-impl From<&DataType> for ArrowDataType {
-    fn from(ty: &DataType) -> Self {
-        match ty {
-            DataType::Null => ArrowDataType::Null,
-            DataType::EmptyArray => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            DataType::EmptyMap => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            DataType::Boolean => ArrowDataType::Boolean,
-            DataType::String => ArrowDataType::LargeBinary,
-            DataType::Number(ty) => with_number_type!(|TYPE| match ty {
-                NumberDataType::TYPE => ArrowDataType::TYPE,
-            }),
-            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                ArrowDataType::Decimal(s.precision.into(), s.scale.into())
-            }
-            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
-            }
-            DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-            DataType::Date => ArrowDataType::Date32,
-            DataType::Nullable(ty) => ty.as_ref().into(),
-            DataType::Array(ty) => {
-                let arrow_ty = ty.as_ref().into();
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
-                    "_array",
-                    arrow_ty,
-                    ty.is_nullable(),
-                )))
-            }
-            DataType::Map(ty) => {
-                let inner_ty = match ty.as_ref() {
-                    DataType::Tuple(tys) => {
-                        let key_ty = ArrowDataType::from(&tys[0]);
-                        let val_ty = ArrowDataType::from(&tys[1]);
-                        let key_field = ArrowField::new("key", key_ty, tys[0].is_nullable());
-                        let val_field = ArrowField::new("value", val_ty, tys[1].is_nullable());
-                        ArrowDataType::Struct(vec![key_field, val_field])
-                    }
-                    _ => unreachable!(),
-                };
-                ArrowDataType::Map(
-                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
-                    false,
-                )
-            }
-            DataType::Bitmap => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_BITMAP.to_string(),
-                Box::new(ArrowDataType::LargeBinary),
-                None,
-            ),
-            DataType::Tuple(types) => {
-                let fields = types
-                    .iter()
-                    .enumerate()
-                    .map(|(index, ty)| {
-                        let index = index + 1;
-                        let name = format!("{index}");
-                        ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
-                    })
-                    .collect();
-                ArrowDataType::Struct(fields)
-            }
-            DataType::Variant => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_VARIANT.to_string(),
-                Box::new(ArrowDataType::LargeBinary),
-                None,
-            ),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl From<&TableDataType> for ArrowDataType {
-    fn from(ty: &TableDataType) -> Self {
-        match ty {
-            TableDataType::Null => ArrowDataType::Null,
-            TableDataType::EmptyArray => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            TableDataType::EmptyMap => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            TableDataType::Boolean => ArrowDataType::Boolean,
-            TableDataType::Binary => ArrowDataType::LargeBinary,
-            TableDataType::String => ArrowDataType::LargeBinary,
-            TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
-                NumberDataType::TYPE => ArrowDataType::TYPE,
-            }),
-            TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal(size.precision as usize, size.scale as usize)
-            }
-            TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
-                ArrowDataType::Decimal256(size.precision as usize, size.scale as usize)
-            }
-            TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-            TableDataType::Date => ArrowDataType::Date32,
-            TableDataType::Nullable(ty) => ty.as_ref().into(),
-            TableDataType::Array(ty) => {
-                let arrow_ty = ty.as_ref().into();
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
-                    "_array",
-                    arrow_ty,
-                    ty.is_nullable(),
-                )))
-            }
-            TableDataType::Map(ty) => {
-                let inner_ty = match ty.as_ref() {
-                    TableDataType::Tuple {
-                        fields_name: _fields_name,
-                        fields_type,
-                    } => {
-                        let key_ty = ArrowDataType::from(&fields_type[0]);
-                        let val_ty = ArrowDataType::from(&fields_type[1]);
-                        let key_field =
-                            ArrowField::new("key", key_ty, fields_type[0].is_nullable());
-                        let val_field =
-                            ArrowField::new("value", val_ty, fields_type[1].is_nullable());
-                        ArrowDataType::Struct(vec![key_field, val_field])
-                    }
-                    _ => unreachable!(),
-                };
-                ArrowDataType::Map(
-                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
-                    false,
-                )
-            }
-            TableDataType::Bitmap => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_BITMAP.to_string(),
-                Box::new(ArrowDataType::LargeBinary),
-                None,
-            ),
-            TableDataType::Tuple {
-                fields_name,
-                fields_type,
-            } => {
-                let fields = fields_name
-                    .iter()
-                    .zip(fields_type)
-                    .map(|(name, ty)| ArrowField::new(name.as_str(), ty.into(), ty.is_nullable()))
-                    .collect();
-                ArrowDataType::Struct(fields)
-            }
-            TableDataType::Variant => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_VARIANT.to_string(),
-                Box::new(ArrowDataType::LargeBinary),
-                None,
-            ),
-        }
-    }
-}
-
-/// Convert a `DataType` to `TableDataType`.
-/// Generally, we don't allow to convert `DataType` to `TableDataType` directly.
-/// But for some special cases, for example creating table from a query without specifying
-/// the schema. Then we need to infer the corresponding `TableDataType` from `DataType`, and
-/// this function may report an error if the conversion is not allowed.
-///
-/// Do not use this function in other places.
 pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
     match data_type {
         DataType::Null => Ok(TableDataType::Null),
@@ -1730,7 +1420,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
 }
 
 /// Infer TableSchema from DataSchema, this is useful when creating table from a query.
-pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef> {
+pub fn infer_table_schema(data_schema: &DataSchema) -> Result<TableSchemaRef> {
     let mut fields = Vec::with_capacity(data_schema.fields().len());
     for field in data_schema.fields() {
         let field_type = infer_schema_type(field.data_type())?;

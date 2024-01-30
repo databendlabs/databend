@@ -64,6 +64,8 @@ pub struct Window {
     pub order_by: Vec<WindowOrderByInfo>,
     // window frames
     pub frame: WindowFuncFrame,
+    // limit for potentially possible push-down
+    pub limit: Option<usize>,
 }
 
 impl Window {
@@ -90,11 +92,26 @@ impl Window {
 
         Ok(used_columns)
     }
+
+    // `Window.partition_by_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
+    // like `Aggregate.group_columns` only consider `group_items` field.
+    pub fn partition_by_columns(&self) -> Result<ColumnSet> {
+        let mut col_set = ColumnSet::new();
+        for part in self.partition_by.iter() {
+            col_set.insert(part.index);
+            col_set.extend(part.scalar.used_columns())
+        }
+        Ok(col_set)
+    }
 }
 
 impl Operator for Window {
     fn rel_op(&self) -> RelOp {
         RelOp::Window
+    }
+
+    fn arity(&self) -> usize {
+        1
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -111,6 +128,17 @@ impl Operator for Window {
         let mut required = required.clone();
         required.distribution = Distribution::Serial;
         Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![RequiredProperty {
+            distribution: Distribution::Serial,
+        }]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -181,17 +209,6 @@ impl Operator for Window {
                 column_stats: input_stat_info.statistics.column_stats.clone(),
             },
         }))
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        required.distribution = Distribution::Serial;
-        Ok(vec![vec![required]])
     }
 }
 

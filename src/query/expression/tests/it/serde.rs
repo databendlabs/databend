@@ -43,7 +43,7 @@ fn test_serde_column() -> Result<()> {
     {
         let json = serde_json::to_vec(&plan).unwrap();
         let new_plan = serde_json::from_slice::<Plan>(&json).unwrap();
-        assert!(plan == new_plan);
+        assert_eq!(plan, new_plan);
     }
 
     {
@@ -51,7 +51,7 @@ fn test_serde_column() -> Result<()> {
         bincode_serialize_into_buf(&mut vs, &plan).unwrap();
         let vs = vs.as_slice();
         let new_plan: Plan = bincode_deserialize_from_slice(vs).unwrap();
-        assert!(plan == new_plan);
+        assert_eq!(plan, new_plan);
     }
     Ok(())
 }

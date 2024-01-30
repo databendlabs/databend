@@ -38,6 +38,8 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::sort::CommonRows;
 use databend_common_pipeline_transforms::processors::sort::DateRows;
 use databend_common_pipeline_transforms::processors::sort::HeapMerger;
@@ -283,6 +285,13 @@ where R: Rows + Sync + Send + 'static
             metrics_inc_sort_spill_write_count();
             metrics_inc_sort_spill_write_bytes(bytes);
             metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, bytes as usize);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillWriteTime,
+                ins.elapsed().as_millis() as usize,
+            );
         }
 
         self.unmerged_blocks.push_back(vec![location].into());
@@ -342,6 +351,16 @@ where R: Rows + Sync + Send + 'static
                 metrics_inc_sort_spill_read_count();
                 metrics_inc_sort_spill_read_bytes(bytes);
                 metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+
+                Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillReadBytes,
+                    bytes as usize,
+                );
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillReadTime,
+                    ins.elapsed().as_millis() as usize,
+                );
             }
 
             self.output_data = Some(block);
@@ -376,6 +395,16 @@ where R: Rows + Sync + Send + 'static
                 metrics_inc_sort_spill_write_count();
                 metrics_inc_sort_spill_write_bytes(bytes);
                 metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
+
+                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillWriteBytes,
+                    bytes as usize,
+                );
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::SpillWriteTime,
+                    ins.elapsed().as_millis() as usize,
+                );
             }
 
             spilled.push_back(location);
@@ -408,6 +437,16 @@ impl SortedStream for BlockStream {
                         metrics_inc_sort_spill_read_count();
                         metrics_inc_sort_spill_read_bytes(bytes);
                         metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
+
+                        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::SpillReadBytes,
+                            bytes as usize,
+                        );
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::SpillReadTime,
+                            ins.elapsed().as_millis() as usize,
+                        );
                     }
 
                     Some(block)

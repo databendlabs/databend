@@ -19,7 +19,6 @@
 pub mod api;
 pub mod configs;
 pub mod export;
-pub(crate) mod grpc_helper;
 pub mod message;
 pub mod meta_service;
 pub mod metrics;

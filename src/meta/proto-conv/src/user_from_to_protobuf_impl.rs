@@ -241,18 +241,14 @@ impl FromToProto for mt::principal::GrantEntry {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let privileges = BitFlags::<mt::principal::UserPrivilegeType, u64>::from_bits(p.privileges);
-        match privileges {
-            Ok(privileges) => Ok(mt::principal::GrantEntry::new(
-                mt::principal::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
-                    reason: "GrantEntry.object can not be None".to_string(),
-                })?)?,
-                privileges,
-            )),
-            Err(e) => Err(Incompatible {
-                reason: format!("UserPrivilegeType error: {}", e),
-            }),
-        }
+        let privileges =
+            BitFlags::<mt::principal::UserPrivilegeType, u64>::from_bits_truncate(p.privileges);
+        Ok(mt::principal::GrantEntry::new(
+            mt::principal::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+                reason: "GrantEntry.object can not be None".to_string(),
+            })?)?,
+            privileges,
+        ))
     }
 
     fn to_pb(&self) -> Result<pb::GrantEntry, Incompatible> {
@@ -333,6 +329,24 @@ impl FromToProto for mt::principal::UserInfo {
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
                 reason: "UserInfo.option cannot be None".to_string(),
             })?)?,
+            history_auth_infos: p
+                .history_auth_infos
+                .iter()
+                .map(|a| mt::principal::AuthInfo::from_pb(a.clone()))
+                .collect::<Result<Vec<mt::principal::AuthInfo>, Incompatible>>()?,
+            password_fails: p
+                .password_fails
+                .iter()
+                .map(|t| DateTime::<Utc>::from_pb(t.clone()))
+                .collect::<Result<Vec<DateTime<Utc>>, Incompatible>>()?,
+            password_update_on: match p.password_update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+            lockout_time: match p.lockout_time {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
         })
     }
 
@@ -346,6 +360,24 @@ impl FromToProto for mt::principal::UserInfo {
             grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)?),
             quota: Some(mt::principal::UserQuota::to_pb(&self.quota)?),
             option: Some(mt::principal::UserOption::to_pb(&self.option)?),
+            history_auth_infos: self
+                .history_auth_infos
+                .iter()
+                .map(mt::principal::AuthInfo::to_pb)
+                .collect::<Result<Vec<pb::AuthInfo>, Incompatible>>()?,
+            password_fails: self
+                .password_fails
+                .iter()
+                .map(|t| t.to_pb())
+                .collect::<Result<Vec<String>, Incompatible>>()?,
+            password_update_on: match self.password_update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
+            lockout_time: match self.lockout_time {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
         })
     }
 }

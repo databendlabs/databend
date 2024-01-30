@@ -117,6 +117,7 @@ run_test() {
     local query_old_ver="$1"
     local old_config_path="$2"
     local logictest_path="tests/fuse-compat/compat-logictest/$3"
+    local forward="$4"
 
     echo " === Test with query-$query_old_ver and current query"
 
@@ -150,47 +151,70 @@ run_test() {
 
     export RUST_BACKTRACE=1
 
-    echo ' === Start old databend-meta...'
+    if [ "$forward" == "forward" ]
+    then
+        echo ' === Start new databend-meta and databend-query...'
+        config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
+        log="query-current.log"
+        start $metasrv_new $query_new $config_path $log
 
-    nohup "$metasrv_old" --single --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
+        echo " === Run test: fuse_compat_write with current query"
+    else
+        echo ' === Start old databend-meta...'
 
-    echo ' === Start old databend-query...'
+        echo ' === Start old databend-meta and databend-query...'
+        log="query-old.log"
+        start "$metasrv_old" "$query_old" "$old_config_path" $log
 
-    # TODO clean up data?
-    echo " === bring up $query_old"
-
-    nohup "$query_old" -c "$old_config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-old.log &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
-
-    echo " === Run test: fuse_compat_write with old query"
+        echo " === Run test: fuse_compat_write with old query"
+    fi
 
     # download_logictest $query_old_ver old_logictest/$query_old_ver
-    # run_logictest old_logictest/$query_old_ver fuse_compat_write
+    # if backward
+    # run_logictest new_logictest/$query_old_ver fuse_compat_write
+    # if forward
+    # run_logictest new_logictest/$query_new_ver fuse_compat_write
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
 
     kill_proc databend-query
     kill_proc databend-meta
 
-    echo ' === Start new databend-meta...'
-
-    nohup "$metasrv_new" --single --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
-
-    echo " === Start new databend-query..."
-
-    config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
-    echo "new databend config path: $config_path"
-
-    nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
-    python3 scripts/ci/wait_tcp.py --timeout 15 --port 3307
-
-    echo " === Run test: fuse_compat_read with current query"
+    if [ "$forward" == 'forward' ]
+    then
+        echo " === Start old databend-meta and databend-query..."
+        log="query-old.log"
+        start "$metasrv_old" "$query_old" "$old_config_path" $log
+        echo " === Run test: fuse_compat_read with old query"
+    else
+        echo ' === Start new databend-meta and databend-query...'
+        config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
+        log="query-current.log"
+        start $metasrv_new $query_new $config_path $log
+        echo " === Run test: fuse_compat_read with current query"
+    fi
 
     # download_logictest $query_old_ver old_logictest
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_read
 }
 
+start() {
+      local metasrv="$1"
+      local query="$2"
+      local config_path="$3"
+      local log="$4"
+      export RUST_BACKTRACE=1
+      echo " === Start $metasrv databend-meta..."
+
+      nohup "$metasrv" --single --log-level=DEBUG &
+      python3 scripts/ci/wait_tcp.py --timeout 20 --port 9191
+
+      echo " === Start $query databend-query..."
+
+      echo "databend config path: $config_path"
+
+      nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" > "$log" &
+      python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
+}
 # Run suppelmentary stateless tests
 run_stateless() {
     local case_path="$1"

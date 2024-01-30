@@ -24,6 +24,7 @@ use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 
+use crate::binary::encode_binary;
 use crate::field_encoder::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderValues;
 use crate::FileFormatOptionsExt;
@@ -85,6 +86,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
+                    binary_format: params.binary_format,
                 },
                 quote_char: 0, // not used
             },
@@ -105,6 +107,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
+                    binary_format: Default::default(),
                 },
                 quote_char: 0, // not used
             },
@@ -117,9 +120,15 @@ impl FieldEncoderCSV {
     pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
         match &column {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+
+            Column::Binary(c) => {
+                let buf = unsafe { c.index_unchecked(row_index) };
+                let encoded = encode_binary(buf, self.simple.common_settings.binary_format);
+                out_buf.extend_from_slice(&encoded);
+            }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.string_formatter.write_string(buf, out_buf);
+                self.string_formatter.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) | Column::Variant(..) => {
@@ -133,8 +142,13 @@ impl FieldEncoderCSV {
                 self.nested.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);
             }
-            // null, bool, number
-            _ => self.simple.write_field(column, row_index, out_buf, false),
+
+            Column::Null { .. }
+            | Column::EmptyArray { .. }
+            | Column::EmptyMap { .. }
+            | Column::Number(_)
+            | Column::Decimal(_)
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
     }
 

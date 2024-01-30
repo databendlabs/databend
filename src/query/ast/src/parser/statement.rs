@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
@@ -107,12 +108,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let create_task = map(
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident ~ #task_warehouse_option
+            ~ #ident
+            ~ #task_warehouse_option
             ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
             ~ (AFTER ~ #comma_separated_list0(literal_string))?
             ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ (#set_table_option)?
             ~ AS ~ #statement
         },
         |(
@@ -126,12 +129,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             when_conditions,
             suspend_opt,
             comment_opt,
+            session_opts,
             _,
             sql,
         )| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .unwrap();
+            let sql = format!("{}", sql.stmt);
+            let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
@@ -145,6 +148,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 },
                 when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
+                session_parameters: session_opts,
             })
         },
     );
@@ -351,6 +355,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
+    let show_user_functions = map(
+        rule! {
+            SHOW ~ USER ~ FUNCTIONS ~ #show_options?
+        },
+        |(_, _, _, show_options)| Statement::ShowUserFunctions { show_options },
+    );
     let show_table_functions = map(
         rule! {
             SHOW ~ TABLE_FUNCTIONS ~ #show_options?
@@ -495,15 +505,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
         },
     );
-    let create_database = map(
+
+    let create_database = map_res(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ (OR ~ REPLACE)? ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
         },
-        |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
-            match create_database_option {
+        |(_, opt_or_replace, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            let statement = match create_database_option {
                 Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        if_not_exists: opt_if_not_exists.is_some(),
+                        create_option,
                         catalog,
                         database,
                         engine: Some(engine),
@@ -513,7 +527,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 }
                 Some(CreateDatabaseOption::FromShare(share_name)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
-                        if_not_exists: opt_if_not_exists.is_some(),
+                        create_option,
                         catalog,
                         database,
                         engine: None,
@@ -522,16 +536,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
-                    if_not_exists: opt_if_not_exists.is_some(),
+                    create_option,
                     catalog,
                     database,
                     engine: None,
                     options: vec![],
                     from_share: None,
                 }),
-            }
+            };
+
+            Ok(statement)
         },
     );
+
     let drop_database = map(
         rule! {
             DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2
@@ -687,9 +704,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let create_table = map(
+    let create_table = map_res(
         rule! {
-            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -700,6 +717,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(
             _,
+            opt_or_replace,
             opt_transient,
             _,
             opt_if_not_exists,
@@ -711,8 +729,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_table_options,
             opt_as_query,
         )| {
-            Statement::CreateTable(CreateTableStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateTable(CreateTableStmt {
+                create_option,
                 catalog,
                 database,
                 table,
@@ -725,7 +745,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 transient: opt_transient.is_some(),
-            })
+            }))
         },
     );
     let drop_table = map(
@@ -1126,20 +1146,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(_, _, _, level, _, _, role_name)| {
             Statement::Grant(GrantStmt {
-                source: AccountMgrSource::Privs {
-                    privileges: vec![UserPrivilegeType::Ownership],
-                    level,
-                },
-                principal: PrincipalIdentity::Role(role_name),
-            })
-        },
-    );
-    let revoke_ownership = map(
-        rule! {
-            REVOKE ~ OWNERSHIP ~ ON ~ #grant_ownership_level  ~ FROM ~ ROLE ~ #role_name
-        },
-        |(_, _, _, level, _, _, role_name)| {
-            Statement::Revoke(RevokeStmt {
                 source: AccountMgrSource::Privs {
                     privileges: vec![UserPrivilegeType::Ownership],
                     level,
@@ -1776,12 +1782,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     let statement_body = alt((
+        // query, explain,show
         rule!(
-            #map(query, |query| Statement::Query(Box::new(query)))
+        #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-            | #delete : "`DELETE FROM <table> [WHERE ...]`"
-            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
@@ -1791,10 +1796,13 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
+        ),
+        // database
+        rule!(
+            #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
-            | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
+            | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
@@ -1816,6 +1824,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
+            | #delete : "`DELETE FROM <table> [WHERE ...]`"
+            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -1843,14 +1853,13 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
+        // view,stream,index
         rule!(
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
-        ),
-        rule!(
-            #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
@@ -1874,6 +1883,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
@@ -1899,7 +1909,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-            | #revoke_ownership : "REVOKE OWNERSHIP ON <privileges_level> FROM ROLE <role_name>"
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
@@ -1974,6 +1983,23 @@ AS
             format: opt_format.map(|(_, format)| format.name),
         },
     )(i)
+}
+
+fn parse_create_option(
+    opt_or_replace: bool,
+    opt_if_not_exists: bool,
+) -> Result<CreateOption, nom::Err<ErrorKind>> {
+    if opt_or_replace && opt_if_not_exists {
+        return Err(nom::Err::Failure(ErrorKind::Other(
+            "option IF NOT EXISTS and OR REPLACE are incompatible.",
+        )));
+    }
+
+    if opt_or_replace {
+        Ok(CreateOption::CreateOrReplace)
+    } else {
+        Ok(CreateOption::CreateIfNotExists(opt_if_not_exists))
+    }
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
@@ -2169,7 +2195,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             (def, constraints)
         },
@@ -2178,16 +2203,18 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     for constraint in constraints {
         match constraint {
             ColumnConstraint::Nullable(nullable) => {
-                if nullable {
-                    def.data_type = def.data_type.wrap_nullable();
-                    def.nullable_constraint = Some(NullableConstraint::Null);
-                } else if def.data_type.is_nullable() {
+                if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                    || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other("ambiguous NOT NULL constraint"),
                     )));
+                }
+                if nullable {
+                    def.data_type = def.data_type.wrap_nullable();
                 } else {
-                    def.nullable_constraint = Some(NullableConstraint::NotNull);
+                    def.data_type = def.data_type.wrap_not_null();
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2573,7 +2600,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
-    map(
+    map_res(
         rule! {
             #ident
             ~ #type_name
@@ -2587,16 +2614,21 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
-                nullable_constraint: None,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => {
+                        if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                            || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                        {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "ambiguous NOT NULL constraint",
+                            )));
+                        }
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
-                            def.nullable_constraint = Some(NullableConstraint::Null);
                         } else {
-                            def.nullable_constraint = Some(NullableConstraint::NotNull);
+                            def.data_type = def.data_type.wrap_not_null();
                         }
                     }
                     ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2604,7 +2636,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                     }
                 }
             }
-            def
+            Ok(def)
         },
     )(i)
 }
@@ -2871,19 +2903,14 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(retain_hours_opt, dry_run_opt, opt_limit)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |(dry_run_opt, opt_limit)| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
             VacuumDropTableOption {
-                retain_hours,
                 dry_run,
                 limit: opt_limit.map(|(_, limit)| limit as usize),
             }
@@ -2894,21 +2921,14 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)?
+            (DRY ~ ^RUN)?
         },
-        |(retain_hours_opt, dry_run_opt)| {
-            let retain_hours = match retain_hours_opt {
-                Some(retain_hours) => Some(retain_hours.1),
-                None => None,
-            };
+        |dry_run_opt| {
             let dry_run = match dry_run_opt {
                 Some(_) => Some(()),
                 None => None,
             };
-            VacuumTableOption {
-                retain_hours,
-                dry_run,
-            }
+            VacuumTableOption { dry_run }
         },
     ),))(i)
 }
@@ -2966,12 +2986,16 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
+             ~ (#set_table_option)?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment)| AlterTaskOptions::Set {
-            warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-            schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-            suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-            comments: comment.map(|(_, _, comment)| comment),
+        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+            AlterTaskOptions::Set {
+                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
+                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
+                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
+                comments: comment.map(|(_, _, comment)| comment),
+                session_parameters: session_opts,
+            }
         },
     );
     let unset = map(
@@ -3347,16 +3371,12 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
-    let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         rule! {
-            #type_name ~ #nullable?
+            #type_name
         },
-        |(type_name, nullable)| match nullable {
-            Some(false) => type_name,
+        |type_name| match type_name {
+            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
             _ => type_name.wrap_nullable(),
         },
     )(i)

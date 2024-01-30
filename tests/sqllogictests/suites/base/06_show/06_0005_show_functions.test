@@ -1,25 +1,25 @@
-query TBBTT
+query TBT
 SHOW FUNCTIONS LIKE 'today%'
 ----
-today 1 0 (empty) (empty)
+today 0 (empty)
 
 
-query TBBTT
+query TBT
 SHOW FUNCTIONS LIKE 'to_day%'
 ----
-to_day_of_month 1 0 (empty) (empty)
-to_day_of_week 1 0 (empty) (empty)
-to_day_of_year 1 0 (empty) (empty)
+to_day_of_month 0 (empty)
+to_day_of_week 0 (empty)
+to_day_of_year 0 (empty)
 
-query TBBTT
+query TBT
 SHOW FUNCTIONS LIKE 'to_day%' LIMIT 1
 ----
-to_day_of_month 1 0 (empty) (empty)
+to_day_of_month 0 (empty)
 
-query TBBTT
+query TBT
 SHOW FUNCTIONS WHERE name='to_day_of_year' LIMIT 1
 ----
-to_day_of_year 1 0 (empty) (empty)
+to_day_of_year 0 (empty)
 
 statement error
 SHOW FUNCTIONS WHERE mu='err' LIMIT 1

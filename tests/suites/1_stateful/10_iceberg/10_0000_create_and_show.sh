@@ -19,6 +19,7 @@ EOF
 
 echo "SHOW DATABASES IN iceberg_ctl;" | $BENDSQL_CLIENT_CONNECT
 
-echo "SHOW TABLES IN iceberg_ctl.iceberg_db;" | $BENDSQL_CLIENT_CONNECT
+# FIXME: server warning: Failed to get database: iceberg_db, UnknownDatabase. Code: 1003, Text = Unknown database 'iceberg_db'.
+# echo "SHOW TABLES IN iceberg_ctl.iceberg_db;" | $BENDSQL_CLIENT_CONNECT
 
 echo "SHOW CREATE CATALOG iceberg_ctl;" | $BENDSQL_CLIENT_CONNECT

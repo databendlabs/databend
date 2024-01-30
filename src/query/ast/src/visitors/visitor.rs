@@ -406,6 +406,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
+    fn visit_show_user_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
     fn visit_show_table_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_show_options(&mut self, _show_options: &'ast Option<ShowOptions>, _name: String) {}

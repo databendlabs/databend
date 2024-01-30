@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObjectByID;
 use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
@@ -27,6 +27,8 @@ pub trait RoleApi: Sync + Send {
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
 
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
+
+    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
     /// General role update.
     ///
@@ -44,14 +46,30 @@ pub trait RoleApi: Sync + Send {
     /// from: the role that currently owns the object, it could be empty on the first time
     /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
     /// None RoleInfo means the role is built-in role, could only update grant object metadata
+    ///
+    /// Grant ownership used when create new object, contains two step:
+    /// 1. grant ownership privilege obj to role,
+    /// 2. kv api upsert new owner object key.
+    ///
+    /// or:
+    ///
+    /// 1. revoke ownership on obj from old role,
+    /// 2. grant ownership on obj to new role,
+    /// 3. kv api upsert new owner object key.
+    /// Note: if role/old_role is `account_admin` or `public` no need to revoke/grant ownership privilege
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(&self, object: &GrantObjectByID, role: &str) -> Result<()>;
+    async fn grant_ownership(&self, object: &OwnershipObject, role: &str) -> Result<()>;
 
-    /// Remember to call this method when you dropped a database/table, etc.
-    async fn drop_ownership(&self, object: &GrantObjectByID) -> Result<()>;
+    /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
+    /// Revoke ownership used when drop old object, contains two step:
+    /// 1. revoke ownership privilege obj to new role,
+    /// 2. kv api delete old owner object key.
+    ///
+    /// Note: if role is `account_admin` or None no need to revoke
+    async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
-    async fn get_ownership(&self, object: &GrantObjectByID) -> Result<Option<OwnershipInfo>>;
+    async fn get_ownership(&self, object: &OwnershipObject) -> Result<Option<OwnershipInfo>>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

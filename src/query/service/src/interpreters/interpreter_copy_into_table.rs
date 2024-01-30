@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
@@ -40,11 +39,7 @@ use log::debug;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::hook::hook_compact;
-use crate::interpreters::hook::hook_refresh;
-use crate::interpreters::hook::CompactHookTraceCtx;
-use crate::interpreters::hook::CompactTargetTableDescription;
-use crate::interpreters::hook::RefreshDesc;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -211,13 +206,13 @@ impl CopyIntoTableInterpreter {
         for entry in results {
             let status = entry.value();
             if let Some(err) = &status.error {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(err.num_errors as i32);
-                first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
+                first_error.push(Some(err.first_error.error.to_string().clone()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
             } else if return_all {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(0);
                 first_error.push(None);
@@ -241,6 +236,7 @@ impl CopyIntoTableInterpreter {
         plan: &CopyIntoTablePlan,
         files: &[StageFileInfo],
         update_stream_meta: Vec<UpdateStreamMetaReq>,
+        deduplicated_label: Option<String>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -268,6 +264,7 @@ impl CopyIntoTableInterpreter {
                 update_stream_meta,
                 plan.write_mode.is_overwrite(),
                 None,
+                deduplicated_label,
             )?;
         }
 
@@ -297,8 +294,6 @@ impl Interpreter for CopyIntoTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-        let start = Instant::now();
-
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
@@ -309,8 +304,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         let (physical_plan, files, update_stream_meta) =
             self.build_physical_plan(&self.plan).await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Build commit insertion pipeline.
         {
@@ -319,43 +313,22 @@ impl Interpreter for CopyIntoTableInterpreter {
                 &self.plan,
                 &files,
                 update_stream_meta,
+                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             )
             .await?;
         }
 
-        // Compact if 'enable_compact_after_write' is on.
+        // Execute hook.
         {
-            let compact_target = CompactTargetTableDescription {
-                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
-                database: self.plan.database_name.clone(),
-                table: self.plan.table_name.clone(),
-            };
-
-            let trace_ctx = CompactHookTraceCtx {
-                start,
-                operation_name: "copy_into_table".to_owned(),
-            };
-
-            hook_compact(
+            let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                compact_target,
-                trace_ctx,
+                self.plan.catalog_info.catalog_name().to_string(),
+                self.plan.database_name.to_string(),
+                self.plan.table_name.to_string(),
+                "copy_into_table".to_string(),
                 true,
-            )
-            .await;
-        }
-
-        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
-        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
-        {
-            let refresh_desc = RefreshDesc {
-                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
-                database: self.plan.database_name.clone(),
-                table: self.plan.table_name.clone(),
-            };
-
-            hook_refresh(self.ctx.clone(), &mut build_res.main_pipeline, refresh_desc).await;
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
         }
 
         Ok(build_res)

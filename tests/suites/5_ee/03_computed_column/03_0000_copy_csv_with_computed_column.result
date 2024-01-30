@@ -1,4 +1,5 @@
 ---test csv field with computed columns
+runner/_work/databend/databend/tests/data/csv/sample.csv	6	0	NULL	NULL
 1	'gnijieB'	102	'Beijing'	100
 2	'iahgnahS'	82	'Shanghai'	80
 3	'uohzgnauG'	62	'Guangzhou'	60

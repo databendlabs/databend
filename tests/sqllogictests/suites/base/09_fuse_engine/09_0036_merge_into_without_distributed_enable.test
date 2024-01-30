@@ -8,10 +8,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int,b string, c string);
+create table t1(a int,b string, c string) cluster by(a,b);
 
 statement ok
-create table t2(a int,b string, c string);
+create table t2(a int,b string, c string) cluster by(a,b);
 
 statement ok
 insert into t1 values(1,'b1','c1'),(2,'b2','c2');
@@ -276,7 +276,7 @@ statement ok
 drop table if exists target_table;
 
 statement ok
-create table target_table(a int,b string,c string);
+create table target_table(a int,b string,c string) cluster by(a,b);
 
 statement ok
 insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
@@ -288,7 +288,7 @@ select * from target_table order by a,b,c;
 2 a_2 b_2
 
 statement ok
-create table test_stage(a int,b string,c string);
+create table test_stage(a int,b string,c string) cluster by(a,b);
 
 statement ok
 insert into test_stage values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
@@ -468,10 +468,10 @@ select * from t1 order by a,b,c;
 1 a1 b1
 
 statement ok
-CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255));
+CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
 
 statement ok
-CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2));
+CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2)) cluster by(employee_id,salary);
 
 statement ok
 INSERT INTO employees VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', 'Finance'),(4, 'David', 'HR');
@@ -494,10 +494,10 @@ select * from salaries order by employee_id;
 
 ## null cast bug fix
 statement ok
-create table t1_target(a int not null);
+create table t1_target(a int not null) cluster by(a);
 
 statement ok
-create table t2_source(a int not null);
+create table t2_source(a int not null) cluster by(a);
 
 statement ok
 insert into t1_target values(1);
@@ -559,13 +559,13 @@ statement ok
 drop table if exists source_test;
 
 statement ok
-create table target_test(a int,b string);
+create table target_test(a int,b string) cluster by(a,b);
 
 statement ok
 insert into target_test values(1,'a'),(2,'b'),(3,'c');
 
 statement ok
-create table source_test(a int,b string,delete_flag bool);
+create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
 
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
@@ -609,10 +609,10 @@ merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5,
 
 ## test update list #13297
 statement ok
-create table t11(a int,b string, c string);
+create table t11(a int,b string, c string) cluster by(a,b);
 
 statement ok
-create table t12(a int,b string, c string);
+create table t12(a int,b string, c string) cluster by(a,b);
 
 statement ok
 insert into t11 values(1,'b1','c1'),(2,'b2','c2');
@@ -628,7 +628,7 @@ merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched
 
 ## test issue #13287
 statement ok
-create table tt1 (a int, b int);
+create table tt1 (a int, b int) cluster by(a,b);
 
 statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
@@ -645,7 +645,7 @@ select count(*) from tt1;
 
 ## test issue #13367
 statement ok
-create table tt2(a bool, b variant, c map(string, string));
+create table tt2(a bool, b variant, c map(string, string)) cluster by(a);
 
 statement ok
 insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
@@ -669,10 +669,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int);
+create table t1(a int) cluster by(a);
 
 statement ok
-create table t2(a int);
+create table t2(a int) cluster by(a);
 
 statement ok
 insert into t1 values(1);
@@ -697,10 +697,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(b int);
+create table t1(b int) cluster by(b);
 
 statement ok
-create table t2(a int);
+create table t2(a int) cluster by(a);
 
 statement ok
 insert into t1 values(1);
@@ -719,10 +719,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int,b string,c bool);
+create table t1(a int,b string,c bool) cluster by(a,b);
 
 statement ok
-create table t2(a int,b string,c bool);
+create table t2(a int,b string,c bool) cluster by(a,b);
 
 statement ok
 insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
@@ -783,7 +783,7 @@ statement ok
 drop table if exists tt1;
 
 statement ok
-create table tt1(a bool, b int);
+create table tt1(a bool, b int) cluster by(a,b);
 
 statement ok
 insert into tt1 values (true, 1), (false, 2);
@@ -806,10 +806,10 @@ statement ok
 drop table if exists t12;
 
 statement ok
-create table t12 (a int, b int);
+create table t12 (a int, b int) cluster by(a,b);
 
 statement ok
-create table t11 (a int, b int);
+create table t11 (a int, b int) cluster by(a,b);
 
 statement ok
 insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
@@ -849,6 +849,8 @@ CREATE TABLE orders CLUSTER BY (to_yyyymmddhh(created_at), user_id) AS SELECT
     date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
 FROM numbers(5000);
 
+### for now, we disable target_table_optimization for native. Native will
+### spilt one block into multi pages. We should fix this one in the future.
 statement ok
 MERGE INTO orders USING
 (
@@ -1006,7 +1008,7 @@ FROM orders;
 64.16764110 6.416764110000 1.97683658 19.29134884
 
 statement ok
-create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json);
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json) cluster by(c1,c2);
 
 statement ok
 create table tmp_01 like tb_01;
@@ -1026,10 +1028,10 @@ select id,c1,to_date(c2),c3 from tb_01;
 
 ## test #issue13932
 statement ok
-create table null_target(a int not null,b text);
+create table null_target(a int not null,b text) cluster by(a,b);
 
 statement ok
-create table null_source(a int not null,b text);
+create table null_source(a int not null,b text) cluster by(a,b);
 
 statement ok
 insert into null_target values(1,'a1');
@@ -1088,6 +1090,250 @@ query TTT
 select * from tt1_;
 ----
 0 20 21
+
+## issue#14474
+statement ok
+create table target_tt1 (a bool not null default true, b int not null default 1);
+
+query T
+merge into target_tt1 using(select false, 10) as tt2(a, b) on (target_tt1.b = 1) when not matched then insert (b) values (20);
+----
+1
+
+query TT
+select * from target_tt1;
+----
+1 20
+
+## test multi insert clauses with specified default values
+statement ok
+create table target_default_values(a int default 12,b string default 'yes');
+
+statement ok
+create table source_default_values(a int default 12,b string default 'yes');
+
+statement ok
+insert into target_default_values values(1,'a');
+
+statement ok
+insert into target_default_values values(2,'b');
+
+statement ok
+insert into source_default_values values(1,'c');
+
+statement ok
+insert into source_default_values values(3,'d');
+
+statement ok
+insert into source_default_values values(2,'e');
+
+statement ok
+insert into source_default_values values(4,'f');
+
+query TTT
+merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a' 
+then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched 
+then insert(b) values(t2.b);
+----
+2 1 1
+
+query TT
+select * from target_default_values order by a,b;
+----
+1 c
+3 yes
+12 f
+
+## add more tests cases for distributed modes.
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_200_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_400_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_random(
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) engine = random;
+
+## add 4w rows
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
+
+query T
+select count(*) from lineitem_target_origin_200_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+45000
+
+## it maybe flaky test, but in most times, it's normal.
+query TT
+MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on      
+t1.l_orderkey = t2.l_orderkey and     
+t1.l_partkey = t2.l_partkey  
+and t1.l_suppkey = t2.l_suppkey and     
+t1.l_linenumber = t2.l_linenumber and      
+t1.l_quantity = t2.l_quantity and      
+t1.l_extendedprice = t2.l_extendedprice and     
+t1.l_discount = t2.l_discount     
+when matched then update *     
+when not matched then insert *;
+----
+0 40000
+
+## test update column only optimization
+statement ok
+drop table if exists column_only_optimization_target;
+
+statement ok
+drop table if exists column_only_optimization_source;
+
+statement ok
+create table column_only_optimization_target(a int,b string);
+
+statement ok
+create table column_only_optimization_source(a int,b string);
+
+statement ok
+insert into column_only_optimization_target values(1,'a1'),(2,'a2');
+
+statement ok
+insert into column_only_optimization_target values(3,'a3'),(4,'a4');
+
+statement ok
+insert into column_only_optimization_target values(5,'a5'),(6,'a6');
+
+statement ok
+insert into column_only_optimization_target values(7,'a7'),(8,'a8');
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 a1
+2 a2
+3 a3
+4 a4
+5 a5
+6 a6
+7 a7
+8 a8
+
+statement ok
+insert into column_only_optimization_source values(1,'b1'),(2,'b2');
+
+statement ok
+insert into column_only_optimization_source values(3,'b3'),(4,'b4');
+
+query TT
+select * from column_only_optimization_source order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+
+query TT
+merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
+t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
+----
+0 4
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+5 a5
+6 a6
+7 a7
+8 a8
 
 statement ok
 set enable_experimental_merge_into = 0;

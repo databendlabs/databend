@@ -24,9 +24,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::StorageAzblobConfig;
+use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
+use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
@@ -37,6 +39,8 @@ use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_storage::STDIN_FD;
+use opendal::raw::normalize_path;
+use opendal::raw::normalize_root;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -160,22 +164,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    let allow_anonymous = {
-        if let Some(s) = l.connection.get("allow_anonymous") {
-            s
-        } else {
-            "false"
-        }
-    }
-    .to_string()
-    .parse()
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!("value for allow_anonymous is invalid: {err:?}"),
-        )
-    })?;
-
     // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
     let disable_credential_loader =
         role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
@@ -193,7 +181,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         enable_virtual_host_style,
         role_arn,
         external_id,
-        allow_anonymous,
     });
 
     l.connection.check()?;
@@ -305,6 +292,31 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
     Ok(sp)
 }
 
+fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let endpoint = l
+        .connection
+        .get("endpoint_url")
+        .cloned()
+        .map(secure_omission)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("endpoint_url is required for storage cos"),
+            )
+        })?;
+    let sp = StorageParams::Cos(StorageCosConfig {
+        endpoint_url: endpoint,
+        bucket: l.name.to_string(),
+        secret_id: l.connection.get("secret_id").cloned().unwrap_or_default(),
+        secret_key: l.connection.get("secret_key").cloned().unwrap_or_default(),
+        root,
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 /// Generally, the URI is in the pattern hdfs://<namenode>/<path>.
 /// If <namenode> is empty (i.e. `hdfs:///<path>`),  use <namenode> configured somewhere else, e.g. in XML config file.
 /// For databend user can specify <namenode> in connection options.
@@ -384,12 +396,61 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+/// Huggingface uri looks like `hf://opendal/huggingface-testdata/path/to/file`.
+///
+/// We need to parse `huggingface-testdata` from the root.
+fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let (repo_name, root) = root
+        .trim_start_matches('/')
+        .split_once('/')
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                "input uri is not a valid huggingface uri",
+            )
+        })?;
+
+    let sp = StorageParams::Huggingface(StorageHuggingfaceConfig {
+        repo_id: format!("{}/{repo_name}", l.name),
+        repo_type: l
+            .connection
+            .get("repo_type")
+            .cloned()
+            .unwrap_or_else(|| "dataset".to_string()),
+        revision: l
+            .connection
+            .get("revision")
+            .cloned()
+            .unwrap_or_else(|| "main".to_string()),
+        root: root.to_string(),
+        token: l.connection.get("token").cloned().unwrap_or_default(),
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
+pub async fn parse_storage_params_from_uri(
+    l: &mut UriLocation,
+    ctx: Option<&dyn TableContext>,
+    usage: &str,
+) -> Result<StorageParams> {
+    if !l.path.ends_with('/') {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("path in URL must end with '/' {usage}. Got '{}'.", l.path),
+        ));
+    }
+    Ok(parse_uri_location(l, ctx).await?.0)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub async fn parse_uri_location(
     l: &mut UriLocation,
     ctx: Option<&dyn TableContext>,
 ) -> Result<(StorageParams, String)> {
-    // Path endswith `/` means it's a directory, otherwise it's a file.
+    // Path ends with `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
     let (root, path) = if l.path.ends_with('/') {
@@ -397,6 +458,8 @@ pub async fn parse_uri_location(
     } else {
         ("/".to_string(), l.path.clone())
     };
+    let root = normalize_root(&root);
+    let path = normalize_path(&path);
 
     let protocol = l.protocol.parse::<Scheme>()?;
     if let Scheme::Custom(_) = protocol {
@@ -454,6 +517,7 @@ pub async fn parse_uri_location(
         Scheme::S3 => parse_s3_params(l, root)?,
         Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
+        Scheme::Cos => parse_cos_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
             let path = percent_decode_str(&l.path).decode_utf8_lossy();
@@ -482,6 +546,7 @@ pub async fn parse_uri_location(
             }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
+        Scheme::Huggingface => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -526,6 +591,11 @@ pub async fn get_storage_params_from_options(
     } else {
         UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
     };
-    let (sp, _) = parse_uri_location(&mut location, None).await?;
+    let sp = parse_storage_params_from_uri(
+        &mut location,
+        None,
+        "when loading/creating ICEBERG/DELTA table",
+    )
+    .await?;
     Ok(sp)
 }

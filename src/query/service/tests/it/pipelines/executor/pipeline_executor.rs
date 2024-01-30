@@ -41,7 +41,6 @@ async fn test_always_call_on_finished() -> Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let settings = ExecutorSettings {
-        enable_profiling: false,
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
     };

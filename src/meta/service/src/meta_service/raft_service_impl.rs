@@ -25,6 +25,7 @@ use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::Vote;
@@ -36,7 +37,6 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 
-use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
@@ -138,6 +138,8 @@ impl RaftService for RaftServiceImpl {
 
             let res = self.meta_node.handle_forwardable_request(forward_req).await;
 
+            let res = res.map(|(_endpoint, forward_resp)| forward_resp);
+
             let raft_reply: RaftReply = res.into();
 
             Ok(Response::new(raft_reply))
@@ -157,13 +159,16 @@ impl RaftService for RaftServiceImpl {
         async {
             let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
 
-            let strm = self
+            let (endpoint, strm) = self
                 .meta_node
                 .handle_forwardable_request(forward_req)
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            Ok(Response::new(strm))
+            let mut resp = Response::new(strm);
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+
+            Ok(resp)
         }
         .in_span(root)
         .await

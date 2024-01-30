@@ -125,6 +125,15 @@ pub enum FileParseError {
         column_type: String,
     },
     #[error(
+        "Empty value for column {column_index} ({column_name} {column_type}), when option empty_field_as = {empty_field_as}"
+    )]
+    ColumnEmptyError {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+        empty_field_as: String,
+    },
+    #[error(
         "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char at {error_pos} is {next_char}"
     )]
     ColumnDataNotDrained {

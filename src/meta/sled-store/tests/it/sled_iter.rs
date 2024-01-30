@@ -107,7 +107,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
     // Iterator outputs Vec<u8>
 
-    let trees = vec![t1, t2];
+    let trees = [t1, t2];
 
     let mut got = vec![];
     for tree_iter in databend_common_meta_sled_store::iter::<Vec<u8>>() {

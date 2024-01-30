@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -49,12 +48,8 @@ use parking_lot::RwLock;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::hook::hook_compact;
-use crate::interpreters::hook::hook_refresh;
-use crate::interpreters::hook::CompactHookTraceCtx;
-use crate::interpreters::hook::CompactTargetTableDescription;
-use crate::interpreters::hook::RefreshDesc;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -87,13 +82,11 @@ impl Interpreter for ReplaceInterpreter {
         }
 
         self.check_on_conflicts()?;
-        let start = Instant::now();
 
         // replace
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // purge
         if let Some((files, stage_info)) = purge_info {
@@ -106,38 +99,17 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // Compact if 'enable_compact_after_write' is on.
+        // Execute hook.
         {
-            let compact_target = CompactTargetTableDescription {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
-            };
-
-            let compact_hook_trace_ctx = CompactHookTraceCtx {
-                start,
-                operation_name: "replace_into".to_owned(),
-            };
-
-            hook_compact(
+            let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                &mut pipeline.main_pipeline,
-                compact_target,
-                compact_hook_trace_ctx,
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                "replace_into".to_owned(),
                 true,
-            )
-            .await;
-        }
-
-        // generate virtual columns if `enable_refresh_virtual_column_after_write` on.
-        {
-            let refresh_desc = RefreshDesc {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
-            };
-
-            hook_refresh(self.ctx.clone(), &mut pipeline.main_pipeline, refresh_desc).await;
+            );
+            hook_operator.execute(&mut pipeline.main_pipeline).await;
         }
 
         Ok(pipeline)
@@ -360,6 +332,7 @@ impl ReplaceInterpreter {
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
             need_lock: false,
+            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         })));
         Ok((root, purge_info))
     }

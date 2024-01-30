@@ -115,6 +115,10 @@ impl InterpreterQueryLog {
         let group_by_spilled_rows = 0u64;
         let group_by_spilled_bytes = 0u64;
 
+        let bytes_from_storage = 0;
+        let bytes_from_disk_cache = 0;
+        let bytes_from_mem_cache = 0;
+
         // Client.
         let client_address = match ctx.get_client_address() {
             Some(addr) => format!("{:?}", addr),
@@ -176,6 +180,10 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            bytes_from_remote_disk: bytes_from_storage,
+            bytes_from_local_disk: bytes_from_disk_cache,
+            bytes_from_memory: bytes_from_mem_cache,
+
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -247,6 +255,11 @@ impl InterpreterQueryLog {
         let result_rows = ctx.get_result_progress_value().rows as u64;
         let result_bytes = ctx.get_result_progress_value().bytes as u64;
 
+        let data_cache_metrics = ctx.get_data_cache_metrics().as_values();
+        let bytes_from_remote_disk = data_cache_metrics.bytes_from_remote_disk as u64;
+        let bytes_from_local_disk = data_cache_metrics.bytes_from_local_disk as u64;
+        let bytes_from_memory = data_cache_metrics.bytes_from_memory as u64;
+
         // Client.
         let client_address = match ctx.get_client_address() {
             Some(addr) => format!("{:?}", addr),
@@ -312,6 +325,10 @@ impl InterpreterQueryLog {
             agg_spilled_rows,
             group_by_spilled_bytes,
             group_by_spilled_rows,
+            bytes_from_remote_disk,
+            bytes_from_local_disk,
+            bytes_from_memory,
+
             client_info: "".to_string(),
             client_address,
             user_agent,
