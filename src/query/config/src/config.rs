@@ -1494,16 +1494,6 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
-    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
-    /// For example:
-    /// parquet_fast_read_bytes = 52428800
-    /// will let databend read whole file for parquet file less than 50MB and read column by column
-    /// if file size is greater than 50MB
-    #[clap(long, value_name = "VALUE")]
-    pub parquet_fast_read_bytes: Option<u64>,
-
-    #[clap(long, value_name = "VALUE")]
-    pub max_storage_io_requests: Option<u64>,
 
     #[clap(long, value_name = "VALUE")]
     pub databend_enterprise_license: Option<String>,
@@ -1599,6 +1589,19 @@ pub struct QueryConfig {
     /// Max bytes of cached bloom filter bytes.
     #[clap(long, value_name = "VALUE")]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
+
+    /// OBSOLETED: use settings['parquet_fast_read_bytes'] instead
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
+    /// For example:
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    #[clap(long, value_name = "VALUE")]
+    pub parquet_fast_read_bytes: Option<u64>,
+
+    /// OBSOLETED: use settings['max_storage_io_requests'] instead
+    #[clap(long, value_name = "VALUE")]
+    pub max_storage_io_requests: Option<u64>,
 
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long, value_name = "VALUE")]
