@@ -16,3 +16,5 @@ mod from;
 mod to;
 
 pub const EXTENSION_KEY: &str = "Extension";
+
+pub use to::table_schema_to_arrow_schema_ignore_inside_nullable;
