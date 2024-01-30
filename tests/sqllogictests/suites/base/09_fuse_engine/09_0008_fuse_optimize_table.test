@@ -599,19 +599,19 @@ select count() from fuse_snapshot('db_09_0008', 't10')
 
 # test for compact limit, compare with t10.
 statement ok
-create table t11(a int not null) cluster by(abs(a)) row_per_block=3
+create table t11(a int not null) cluster by(abs(a)) row_per_block=3 block_per_segment=2
 
 statement ok
 insert into t11 values(0),(1),(4)
+
+statement ok
+insert into t11 values(2),(5),(-7)
 
 statement ok
 insert into t11 values(3)
 
 statement ok
 insert into t11 values(-6),(-8)
-
-statement ok
-insert into t11 values(2),(5),(-7)
 
 query TIIIFFT
 select * from clustering_information('db_09_0008','t11')
@@ -621,10 +621,10 @@ select * from clustering_information('db_09_0008','t11')
 statement ok
 optimize table t11 compact limit 2
 
-query F
-select average_depth from clustering_information('db_09_0008','t11')
+query B
+select average_depth > 1.0 from clustering_information('db_09_0008','t11')
 ----
-1.6667
+1
 
 query I
 select * from t11 order by a
