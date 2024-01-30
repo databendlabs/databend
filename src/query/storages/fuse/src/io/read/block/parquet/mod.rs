@@ -59,6 +59,13 @@ impl BlockReader {
         )?;
         let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
+
+        let array_cache = if self.put_cache {
+            CacheManager::instance().get_table_data_array_cache()
+        } else {
+            None
+        };
+
         for ((i, field), column_node) in self
             .projected_schema
             .fields
@@ -67,23 +74,29 @@ impl BlockReader {
             .zip(self.project_column_nodes.iter())
         {
             let data_type = field.data_type().into();
-            if column_node.is_nested
-                && column_node
-                    .leaf_column_ids
-                    .iter()
-                    .any(|id| matches!(column_chunks.get(id), Some(DataItem::ColumnArray(_))))
-            {
-                return Err(ErrorCode::StorageOther(
-                    "unexpected nested field: nested leaf field hits cached",
-                ));
-            }
+
+            // NOTE, there is something tricky here:
+            // - `column_chunks` always contains data of leaf columns
+            // - here we may processing a nested type field
+            // - But, even if the field being processed is a filed with multiple leaf columns
+            //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
+            //    even if we are getting data from `column_chunks` using a non-leaf
+            //    `column_id` of `projected_schema.fields`
+            //
+            //   [^1]: Except in the current block, there is no data stored for the
+            //         corresponding field, and a default value has been declared for
+            //         the corresponding field.
+            //
+            //  Yes, it is too obscure, we need to polish it later.
+
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(data)) => {
+                    // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
                         arrow_array.into();
-                    if self.put_cache && !column_node.is_nested {
-                        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+                    if !column_node.is_nested {
+                        if let Some(cache) = &array_cache {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
                             let key =
@@ -94,6 +107,12 @@ impl BlockReader {
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)
                 }
                 Some(DataItem::ColumnArray(cached)) => {
+                    if column_node.is_nested {
+                        // a defensive check, should never happen
+                        return Err(ErrorCode::StorageOther(
+                            "unexpected nested field: nested leaf field hits cached",
+                        ));
+                    }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
