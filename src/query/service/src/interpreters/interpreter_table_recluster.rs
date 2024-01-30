@@ -36,7 +36,6 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
-use log::info;
 use log::warn;
 
 use crate::interpreters::Interpreter;

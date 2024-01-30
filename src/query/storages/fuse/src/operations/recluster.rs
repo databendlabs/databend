@@ -118,7 +118,7 @@ impl FuseTable {
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
         let max_threads = settings.get_max_threads()? as usize;
-        let limit = limit.unwrap_or(1000);
+        let limit = limit.unwrap_or(1000).max(max_threads * 4);
 
         'F: for chunk in segment_locations.chunks(limit) {
             // read segments.
