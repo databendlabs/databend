@@ -21,3 +21,4 @@ pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
 pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 
 pub use to::set_validities;
+pub use to::table_field_to_arrow2_field_ignore_inside_nullable;

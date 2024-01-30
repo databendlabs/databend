@@ -1494,16 +1494,6 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
-    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
-    /// For example:
-    /// parquet_fast_read_bytes = 52428800
-    /// will let databend read whole file for parquet file less than 50MB and read column by column
-    /// if file size is greater than 50MB
-    #[clap(long, value_name = "VALUE")]
-    pub parquet_fast_read_bytes: Option<u64>,
-
-    #[clap(long, value_name = "VALUE")]
-    pub max_storage_io_requests: Option<u64>,
 
     #[clap(long, value_name = "VALUE")]
     pub databend_enterprise_license: Option<String>,
@@ -1600,6 +1590,19 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
 
+    /// OBSOLETED: use settings['parquet_fast_read_bytes'] instead
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
+    /// For example:
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    #[clap(long, value_name = "VALUE")]
+    pub parquet_fast_read_bytes: Option<u64>,
+
+    /// OBSOLETED: use settings['max_storage_io_requests'] instead
+    #[clap(long, value_name = "VALUE")]
+    pub max_storage_io_requests: Option<u64>,
+
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long, value_name = "VALUE")]
     pub disable_system_table_load: bool,
@@ -1645,6 +1648,9 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
+
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub cloud_control_grpc_timeout: u64,
 
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
@@ -1726,6 +1732,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
+            cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             settings: self
                 .settings
                 .into_iter()
@@ -1821,6 +1828,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
+            cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             settings: HashMap::new(),
         }
     }

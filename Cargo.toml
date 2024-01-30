@@ -107,7 +107,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "e21b273" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "0247ffc" }
 
 opendal = { version = "0.44.2", features = [
     "layers-minitrace",
@@ -116,12 +116,11 @@ opendal = { version = "0.44.2", features = [
     "services-ipfs",
     "services-moka",
     "services-huggingface",
-    "trust-dns",
 ] }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # openraft for debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.1", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.4", features = [
     "compat-07",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
@@ -160,8 +159,8 @@ reqwest = { version = "0.11.19", default-features = false, features = [
     "json",
     "rustls-tls",
     "rustls-tls-native-roots",
-    "trust-dns",
 ] }
+reqwest-hickory-resolver = "0.0.2"
 semver = "1.0.14"
 serfig = "0.1.0"
 tokio = { version = "1.35.0", features = ["full"] }

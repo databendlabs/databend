@@ -418,9 +418,8 @@ impl Processor for MatchedSplitProcessor {
 
                 current_block = self.cast_data_type_for_merge(current_block)?;
 
-                current_block =
-                    current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
-
+                // no need to give source schema, the data block's schema is complete, so we won'f fill default
+                // field values.The computed field will be processed in `TransformResortAddOnWithoutSourceSchema`.
                 self.output_data_updated_data = Some(current_block);
             }
             let elapsed_time = start.elapsed().as_millis() as u64;

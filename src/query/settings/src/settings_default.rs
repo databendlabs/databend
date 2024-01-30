@@ -256,7 +256,6 @@ impl DefaultSettings {
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
-
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -385,7 +384,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -397,7 +396,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -507,6 +506,18 @@ impl DefaultSettings {
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("fuse_write_use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use parquet2 instead of parquet_rs when writing data with fuse engine.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("fuse_read_use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use parquet2 instead of parquet_rs when reading data with fuse engine.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -654,7 +665,7 @@ impl DefaultSettings {
                     desc: "Cost factor of transmit via network for a data row",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-               })
+                })
             ]);
 
             Ok(Arc::new(DefaultSettings {

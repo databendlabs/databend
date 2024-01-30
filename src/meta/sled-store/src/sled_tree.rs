@@ -14,6 +14,7 @@
 
 use std::fmt::Display;
 use std::marker::PhantomData;
+use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
@@ -33,6 +34,8 @@ use crate::sled::transaction::TransactionError;
 use crate::store::Store;
 use crate::SledBytesError;
 use crate::SledKeySpace;
+
+const DEFAULT_CHUNK_SIZE: usize = 256;
 
 /// Get a ref to the key or to the value.
 ///
@@ -227,19 +230,36 @@ impl SledTree {
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
-        let mut batch = sled::Batch::default();
+        loop {
+            // Convert K range into sled::IVec range
+            let sled_range = KV::serialize_range(&range)?;
 
-        // Convert K range into sled::IVec range
-        let sled_range = KV::serialize_range(&range)?;
+            // Removing should not leave a hole. Only when removing from left, it is allowed to delete in chunks.
+            let chunk_size = if let Bound::Unbounded = sled_range.0 {
+                // Do chunked delete
+                DEFAULT_CHUNK_SIZE
+            } else {
+                // Do one shot delete
+                usize::MAX
+            };
 
-        for item in self.tree.range(sled_range) {
-            let (k, _) = item?;
-            batch.remove(k);
+            let mut found = false;
+            let mut batch = sled::Batch::default();
+
+            for item in self.tree.range(sled_range).take(chunk_size) {
+                let (k, _) = item?;
+                batch.remove(k);
+                found = true;
+            }
+
+            if !found {
+                break;
+            }
+
+            self.tree.apply_batch(batch)?;
+
+            self.flush_async(flush).await?;
         }
-
-        self.tree.apply_batch(batch)?;
-
-        self.flush_async(flush).await?;
 
         Ok(())
     }

@@ -25,3 +25,4 @@ pub use processors::SourceFullMatched;
 pub use processors::TransformAddRowNumberColumnProcessor;
 pub use processors::TransformDistributedMergeIntoBlockDeserialize;
 pub use processors::TransformDistributedMergeIntoBlockSerialize;
+pub use processors::UnMatchedExprs;

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SourceSchemaIndex;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
@@ -40,7 +40,7 @@ use itertools::Itertools;
 use crate::operations::merge_into::mutator::SplitByExprMutator;
 use crate::operations::BlockMetaIndex;
 // (source_schema,condition,values_exprs)
-type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
+pub type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {
     op: BlockOperator,
@@ -56,10 +56,6 @@ pub struct MergeIntoNotMatchedProcessor {
     input_data: Option<DataBlock>,
     output_data: Vec<DataBlock>,
     func_ctx: FunctionContext,
-    // data_schemas[i] means the i-th op's result block's schema.
-    data_schemas: HashMap<usize, DataSchemaRef>,
-    // for target table build optimization
-    target_table_schema: DataSchemaRef,
     ctx: Arc<dyn TableContext>,
 }
 
@@ -69,15 +65,11 @@ impl MergeIntoNotMatchedProcessor {
         input_schema: DataSchemaRef,
         func_ctx: FunctionContext,
         ctx: Arc<dyn TableContext>,
-        target_table_schema: DataSchemaRef,
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
-        let mut data_schemas = HashMap::with_capacity(unmatched.len());
-        for (idx, item) in unmatched.iter().enumerate() {
+        for item in unmatched.iter() {
             let eval_projections: HashSet<usize> =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
-
-            data_schemas.insert(idx, item.0.clone());
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {
                     exprs: item
@@ -101,8 +93,6 @@ impl MergeIntoNotMatchedProcessor {
             input_data: None,
             output_data: Vec::new(),
             func_ctx,
-            data_schemas,
-            target_table_schema,
             ctx,
         })
     }
@@ -169,8 +159,8 @@ impl Processor for MergeIntoNotMatchedProcessor {
             let no_need_add_status = data_block.get_meta().is_some()
                 && BlockMetaIndex::downcast_from(data_block.take_meta().unwrap()).is_some();
             if no_need_add_status {
-                data_block =
-                    data_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
+                // no need to give source schema, the data block's schema is complete, so we won'f fill default
+                // field values.The computed field will be processed in `TransformResortAddOnWithoutSourceSchema`.
                 self.output_data.push(data_block);
                 return Ok(());
             }
@@ -179,8 +169,8 @@ impl Processor for MergeIntoNotMatchedProcessor {
             for (idx, op) in self.ops.iter().enumerate() {
                 let (mut satisfied_block, unsatisfied_block) =
                     op.split_mutator.split_by_expr(current_block)?;
-                satisfied_block = satisfied_block
-                    .add_meta(Some(Box::new(self.data_schemas.get(&idx).unwrap().clone())))?;
+                let source_schema_idx: SourceSchemaIndex = idx;
+                satisfied_block = satisfied_block.add_meta(Some(Box::new(source_schema_idx)))?;
                 if !satisfied_block.is_empty() {
                     metrics_inc_merge_into_append_blocks_counter(1);
                     metrics_inc_merge_into_append_blocks_rows_counter(

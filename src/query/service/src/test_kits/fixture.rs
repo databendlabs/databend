@@ -296,7 +296,7 @@ impl TestFixture {
 
     pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -321,7 +321,7 @@ impl TestFixture {
     // create a normal table without cluster key.
     pub fn normal_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -357,7 +357,7 @@ impl TestFixture {
     // create a variant table
     pub fn variant_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -402,7 +402,7 @@ impl TestFixture {
     // create a table with computed column
     pub fn computed_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),

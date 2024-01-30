@@ -1282,6 +1282,22 @@ impl TableDataType {
     }
 }
 
+// for merge into not matched clauses, when there are multi inserts, they maybe
+// have different source schemas.
+pub type SourceSchemaIndex = usize;
+
+#[typetag::serde(name = "source_schema_index")]
+impl BlockMetaInfo for SourceSchemaIndex {
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SourceSchemaIndex::downcast_ref_from(info).is_some_and(|other| other == self)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(*self)
+    }
+}
+
 pub type DataSchemaRef = Arc<DataSchema>;
 pub type TableSchemaRef = Arc<TableSchema>;
 

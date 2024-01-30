@@ -696,7 +696,9 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -744,7 +746,9 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -786,13 +790,63 @@ CreateTable(
 
 
 ---------- Input ----------
+create or replace table a (c decimal(38))
+---------- Output ---------
+CREATE OR REPLACE TABLE a (c Decimal(38, 0))
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                24..25,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                27..28,
+                            ),
+                        },
+                        data_type: Decimal {
+                            precision: 38,
+                            scale: 0,
+                        },
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -870,7 +924,9 @@ CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING) AS SELECT 
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1005,7 +1061,9 @@ CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING), d TUPLE(Int32, STRIN
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1087,7 +1145,9 @@ CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, c STRING AS (concat(a, ' ', 
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1225,7 +1285,9 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS ((a + b)) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1343,7 +1405,9 @@ CREATE TABLE a.b LIKE c.d
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1399,7 +1463,9 @@ CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -1441,7 +1507,9 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTIO
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1511,7 +1579,9 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -1907,7 +1977,9 @@ CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -2812,7 +2884,9 @@ CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -2887,7 +2961,9 @@ CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -2962,7 +3038,9 @@ CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -3019,7 +3097,9 @@ CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -3075,7 +3155,9 @@ CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -8825,7 +8907,9 @@ CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {

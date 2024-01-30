@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -103,7 +104,7 @@ impl Interpreter for CreateViewInterpreter {
         options.insert(QUERY.to_string(), subquery);
 
         let plan = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: CreateOption::CreateIfNotExists(self.plan.if_not_exists),
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),
