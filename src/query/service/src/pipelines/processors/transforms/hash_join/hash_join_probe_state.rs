@@ -308,36 +308,42 @@ impl HashJoinProbeState {
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
 
                 // Perform a round of hash table probe.
-                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
-                    probe_state.selection_count = if prefer_early_filtering {
+                probe_state.probe_with_selection = prefer_early_filtering;
+                probe_state.selection_count = if !Self::need_unmatched_selection(
+                    &self.hash_join_state.hash_join_desc.join_type,
+                    probe_state.with_conjunction,
+                ) {
+                    if prefer_early_filtering {
                         // Early filtering, use selection to get better performance.
-                        probe_state.probe_with_selection = true;
-
-                        table.hash_table.early_filtering_probe_with_selection(
+                        table.hash_table.early_filtering_matched_probe(
                             &mut probe_state.hashes,
                             valids,
                             &mut probe_state.selection,
                         )
                     } else {
                         // If don't do early filtering, don't use selection.
-                        probe_state.probe_with_selection = false;
-
                         table.hash_table.probe(&mut probe_state.hashes, valids)
-                    };
-                    probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
+                    }
                 } else {
-                    // For left join, left single join, full join and left anti join, don't use selection.
-                    probe_state.probe_with_selection = false;
-
-                    let count = if prefer_early_filtering {
-                        table
-                            .hash_table
-                            .early_filtering_probe(&mut probe_state.hashes, valids)
+                    if prefer_early_filtering {
+                        // Early filtering, use matched selection and unmatched selection to get better performance.
+                        let unmatched_selection =
+                            probe_state.probe_unmatched_indexes.as_mut().unwrap();
+                        let (matched_count, unmatched_count) =
+                            table.hash_table.early_filtering_probe(
+                                &mut probe_state.hashes,
+                                valids,
+                                &mut probe_state.selection,
+                                unmatched_selection,
+                            );
+                        probe_state.probe_unmatched_indexes_count = unmatched_count;
+                        matched_count
                     } else {
+                        // If don't do early filtering, don't use selection.
                         table.hash_table.probe(&mut probe_state.hashes, valids)
-                    };
-                    probe_state.num_keys_hash_matched += count as u64;
-                }
+                    }
+                };
+                probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
 
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(&input, keys, &table.hash_table, probe_state)
@@ -370,7 +376,7 @@ impl HashJoinProbeState {
     }
 
     /// Checks if a join type can use selection.
-    pub fn check_for_selection(join_type: &JoinType) -> bool {
+    pub fn need_unmatched_selection(join_type: &JoinType, with_conjunction: bool) -> bool {
         matches!(
             join_type,
             JoinType::Inner
@@ -381,7 +387,10 @@ impl HashJoinProbeState {
                 | JoinType::RightMark
                 | JoinType::LeftSemi
                 | JoinType::LeftMark
-        )
+        ) || matches!(
+            join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+        ) && with_conjunction
     }
 
     pub fn probe_attach(&self) -> Result<usize> {
