@@ -149,8 +149,6 @@ impl AggregateHashTable {
             }
         }
 
-        self.count += new_group_count;
-
         if self.config.partial_agg {
             // check size
             if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
@@ -292,6 +290,8 @@ impl AggregateHashTable {
             }
             remaining_entries = no_match_count;
         }
+
+        self.count += new_group_count;
 
         new_group_count
     }

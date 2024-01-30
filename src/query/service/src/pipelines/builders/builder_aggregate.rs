@@ -100,14 +100,6 @@ impl PipelineBuilder {
         self.build_pipeline(&aggregate.input)?;
 
         let max_block_size = self.settings.get_max_block_size()?;
-        // let max_threads = self.settings.get_max_threads()?;
-        // // TODO: how to get active_threads
-        // let active_threads = std::thread::available_parallelism()?.get() as u64;
-        // let total_shared_cache_size = max_threads as usize * 786432;
-        // let cache_per_active_thread = (16384 + 524288) as usize + total_shared_cache_size / active_threads as usize;
-
-        // let size_per_entry = std::mem::size_of::<u64>() * 1.5 as usize;
-	    // let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
 
         let enable_experimental_aggregate_hashtable = self
             .settings
@@ -140,7 +132,6 @@ impl PipelineBuilder {
 
         // Need a global atomic to read the max current radix bits hint
         let partial_agg_config = HashTableConfig::default().with_partial(true);
-        // let partial_agg_config = HashTableConfig::default().with_partial(true).with_initial_capacity(capacity);
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
