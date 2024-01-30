@@ -131,8 +131,9 @@ impl RealLicenseManager {
         let features = l.custom.features.as_ref().unwrap();
         if !features.contains(&feature.to_string()) {
             return Err(ErrorCode::LicenseKeyInvalid(format!(
-                "license key does not support feature {}, supported features: {:?}",
-                feature, features
+                "license key does not support feature {}, supported features: {}",
+                feature,
+                l.custom.display_features()
             )));
         }
         Ok(())
