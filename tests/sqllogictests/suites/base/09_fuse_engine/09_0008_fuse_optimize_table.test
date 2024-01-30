@@ -8,9 +8,6 @@ statement ok
 USE db_09_0008
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 create table t(a uint64 not null)
 
 statement ok
@@ -745,9 +742,6 @@ select row_count from fuse_block('db_09_0008', 't13')
 14
 7
 14
-
-statement ok
-set enable_table_lock = 1
 
 statement ok
 DROP TABLE m

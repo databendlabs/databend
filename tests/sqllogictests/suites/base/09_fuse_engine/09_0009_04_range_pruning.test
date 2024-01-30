@@ -9,9 +9,6 @@ statement ok
 USE db_09_0009_04
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 create table range_test_t(a int)
 
 statement ok
@@ -46,9 +43,6 @@ query II
 select max(a) from range_test_t where a >= 4000 and a <= 5000;
 ----
 5000
-
-statement ok
-set enable_table_lock = 1
 
 statement ok
 drop table range_test_t
