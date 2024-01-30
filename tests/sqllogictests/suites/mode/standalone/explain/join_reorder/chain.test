@@ -29,9 +29,9 @@ query T
 explain select * from t, t1, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#2), t.a (#0), t1.a (#1)]
+├── output columns: [t2.a (#2), t1.a (#1), t.a (#0)]
 ├── join type: INNER
-├── build keys: [t1.a (#1)]
+├── build keys: [t.a (#0)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
 ├── estimated rows: 1.00
@@ -46,7 +46,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -56,7 +56,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── read bytes: 60
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -66,7 +66,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#2)]
     ├── read rows: 100
-    ├── read bytes: 172
+    ├── read bytes: 166
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -77,153 +77,153 @@ query T
 explain select * from t, t2, t1 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#1), t.a (#0), t1.a (#2)]
+├── output columns: [t1.a (#2), t2.a (#1), t.a (#0)]
 ├── join type: INNER
-├── build keys: [t1.a (#2)]
-├── probe keys: [t2.a (#1)]
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#2)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
-│   ├── output columns: [t1.a (#2), t.a (#0)]
+│   ├── output columns: [t2.a (#1), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
-│   ├── probe keys: [t1.a (#2)]
+│   ├── probe keys: [t2.a (#1)]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   │   ├── push downs: [filters: [], limit: NONE]
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
-│       ├── table: default.join_reorder.t1
-│       ├── output columns: [a (#2)]
-│       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── table: default.join_reorder.t2
+│       ├── output columns: [a (#1)]
+│       ├── read rows: 100
+│       ├── read bytes: 166
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 10.00
+│       └── estimated rows: 100.00
 └── TableScan(Probe)
-    ├── table: default.join_reorder.t2
-    ├── output columns: [a (#1)]
-    ├── read rows: 100
-    ├── read bytes: 172
+    ├── table: default.join_reorder.t1
+    ├── output columns: [a (#2)]
+    ├── read rows: 10
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 100.00
+    └── estimated rows: 10.00
 
 query T
 explain select * from t1, t, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#2), t.a (#1), t1.a (#0)]
+├── output columns: [t1.a (#0), t.a (#1), t2.a (#2)]
 ├── join type: INNER
-├── build keys: [t1.a (#0)]
-├── probe keys: [t2.a (#2)]
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
-│   ├── output columns: [t1.a (#0), t.a (#1)]
+│   ├── output columns: [t2.a (#2), t.a (#1)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
-│   ├── probe keys: [t1.a (#0)]
+│   ├── probe keys: [t2.a (#2)]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   │   ├── push downs: [filters: [], limit: NONE]
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
-│       ├── table: default.join_reorder.t1
-│       ├── output columns: [a (#0)]
-│       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── table: default.join_reorder.t2
+│       ├── output columns: [a (#2)]
+│       ├── read rows: 100
+│       ├── read bytes: 166
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 10.00
+│       └── estimated rows: 100.00
 └── TableScan(Probe)
-    ├── table: default.join_reorder.t2
-    ├── output columns: [a (#2)]
-    ├── read rows: 100
-    ├── read bytes: 172
+    ├── table: default.join_reorder.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 10
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 100.00
+    └── estimated rows: 10.00
 
 query T
 explain select * from t1, t2, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#1), t.a (#2), t1.a (#0)]
+├── output columns: [t1.a (#0), t2.a (#1), t.a (#2)]
 ├── join type: INNER
-├── build keys: [t1.a (#0)]
-├── probe keys: [t2.a (#1)]
+├── build keys: [t.a (#2)]
+├── probe keys: [t1.a (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
-│   ├── output columns: [t1.a (#0), t.a (#2)]
+│   ├── output columns: [t2.a (#1), t.a (#2)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
-│   ├── probe keys: [t1.a (#0)]
+│   ├── probe keys: [t2.a (#1)]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   │   ├── push downs: [filters: [], limit: NONE]
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
-│       ├── table: default.join_reorder.t1
-│       ├── output columns: [a (#0)]
-│       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── table: default.join_reorder.t2
+│       ├── output columns: [a (#1)]
+│       ├── read rows: 100
+│       ├── read bytes: 166
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 10.00
+│       └── estimated rows: 100.00
 └── TableScan(Probe)
-    ├── table: default.join_reorder.t2
-    ├── output columns: [a (#1)]
-    ├── read rows: 100
-    ├── read bytes: 172
+    ├── table: default.join_reorder.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 10
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 100.00
+    └── estimated rows: 10.00
 
 query T
 explain select * from t2, t1, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#0), t.a (#2), t1.a (#1)]
+├── output columns: [t2.a (#0), t1.a (#1), t.a (#2)]
 ├── join type: INNER
-├── build keys: [t1.a (#1)]
+├── build keys: [t.a (#2)]
 ├── probe keys: [t2.a (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
@@ -238,7 +238,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -248,7 +248,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── read bytes: 60
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -258,7 +258,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#0)]
     ├── read rows: 100
-    ├── read bytes: 172
+    ├── read bytes: 166
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -286,7 +286,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 39
+│   │   ├── read bytes: 34
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -296,7 +296,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 10
-│       ├── read bytes: 65
+│       ├── read bytes: 60
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -306,7 +306,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#0)]
     ├── read rows: 100
-    ├── read bytes: 172
+    ├── read bytes: 166
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -327,7 +327,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -337,7 +337,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -358,7 +358,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -368,7 +368,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -389,7 +389,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -399,7 +399,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -420,7 +420,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -430,7 +430,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -451,7 +451,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -461,7 +461,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -482,7 +482,7 @@ HashJoin
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 39
+│   ├── read bytes: 34
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -492,7 +492,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#1)]
     ├── read rows: 10
-    ├── read bytes: 65
+    ├── read bytes: 60
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

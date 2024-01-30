@@ -153,6 +153,7 @@ pub struct Join {
     pub need_hold_hash_table: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
+    pub is_lateral: bool,
 }
 
 impl Default for Join {
@@ -166,6 +167,7 @@ impl Default for Join {
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
             broadcast: false,
+            is_lateral: false,
         }
     }
 }

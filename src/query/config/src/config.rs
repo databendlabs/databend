@@ -50,6 +50,7 @@ use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
+use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
@@ -1493,16 +1494,6 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
-    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
-    /// For example:
-    /// parquet_fast_read_bytes = 52428800
-    /// will let databend read whole file for parquet file less than 50MB and read column by column
-    /// if file size is greater than 50MB
-    #[clap(long, value_name = "VALUE")]
-    pub parquet_fast_read_bytes: Option<u64>,
-
-    #[clap(long, value_name = "VALUE")]
-    pub max_storage_io_requests: Option<u64>,
 
     #[clap(long, value_name = "VALUE")]
     pub databend_enterprise_license: Option<String>,
@@ -1598,6 +1589,19 @@ pub struct QueryConfig {
     /// Max bytes of cached bloom filter bytes.
     #[clap(long, value_name = "VALUE")]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
+
+    /// OBSOLETED: use settings['parquet_fast_read_bytes'] instead
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
+    /// For example:
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    #[clap(long, value_name = "VALUE")]
+    pub parquet_fast_read_bytes: Option<u64>,
+
+    /// OBSOLETED: use settings['max_storage_io_requests'] instead
+    #[clap(long, value_name = "VALUE")]
+    pub max_storage_io_requests: Option<u64>,
 
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long, value_name = "VALUE")]
@@ -1872,6 +1876,9 @@ pub struct LogConfig {
     pub profile: ProfileLogConfig,
 
     #[clap(flatten)]
+    pub structlog: StructLogConfig,
+
+    #[clap(flatten)]
     pub tracing: TracingConfig,
 }
 
@@ -1943,6 +1950,17 @@ impl TryInto<InnerLogConfig> for LogConfig {
             }
         }
 
+        let mut structlog: InnerStructLogConfig = self.structlog.try_into()?;
+        if structlog.on && structlog.dir.is_empty() {
+            if file.dir.is_empty() {
+                return Err(ErrorCode::InvalidConfig(
+                    "`dir` or `file.dir` must be set when `structlog.on` is true".to_string(),
+                ));
+            } else {
+                structlog.dir = format!("{}/structlogs", &file.dir);
+            }
+        }
+
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
         Ok(InnerLogConfig {
@@ -1951,6 +1969,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             otlp,
             query,
             profile,
+            structlog,
             tracing,
         })
     }
@@ -1966,6 +1985,7 @@ impl From<InnerLogConfig> for LogConfig {
             otlp: inner.otlp.into(),
             query: inner.query.into(),
             profile: inner.profile.into(),
+            structlog: inner.structlog.into(),
             tracing: inner.tracing.into(),
 
             // Deprecated fields
@@ -2272,6 +2292,45 @@ impl From<InnerProfileLogConfig> for ProfileLogConfig {
             log_profile_dir: inner.dir,
             log_profile_otlp_endpoint: inner.otlp_endpoint,
             log_profile_otlp_labels: inner.labels,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StructLogConfig {
+    #[clap(long = "log-structlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[serde(rename = "on")]
+    pub log_structlog_on: bool,
+
+    /// Struct Log file dir
+    #[clap(long = "log-structlog-dir", value_name = "VALUE", default_value = "")]
+    #[serde(rename = "dir")]
+    pub log_structlog_dir: String,
+}
+
+impl Default for StructLogConfig {
+    fn default() -> Self {
+        InnerStructLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerStructLogConfig> for StructLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStructLogConfig> {
+        Ok(InnerStructLogConfig {
+            on: self.log_structlog_on,
+            dir: self.log_structlog_dir,
+        })
+    }
+}
+
+impl From<InnerStructLogConfig> for StructLogConfig {
+    fn from(inner: InnerStructLogConfig) -> Self {
+        Self {
+            log_structlog_on: inner.on,
+            log_structlog_dir: inner.dir,
         }
     }
 }

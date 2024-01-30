@@ -16,6 +16,7 @@ mod cascades;
 mod cost;
 mod decorrelate;
 mod distributed;
+mod filter;
 mod format;
 mod group;
 mod hyper_dp;

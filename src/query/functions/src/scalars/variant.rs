@@ -121,7 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 Err(err) => {
                     if ctx.func_ctx.disable_variant_check {
-                        output.put_str(&val);
+                        output.put_str("");
                     } else {
                         ctx.set_error(output.len(), err.to_string());
                     }
@@ -147,7 +147,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 Err(err) => {
                     if ctx.func_ctx.disable_variant_check {
-                        output.put_str(s);
+                        output.put_str("");
                     } else {
                         ctx.set_error(output.len(), err.to_string());
                     }

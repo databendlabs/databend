@@ -209,33 +209,21 @@ impl StageFilesInfo {
         first_only: bool,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
-        let prefix_len = if path == "/" { 0 } else { path.len() };
-        let root_meta = operator.stat(path).await;
-        match root_meta {
-            Ok(meta) => match meta.mode() {
-                EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
-                EntryMode::DIR => {}
-                EntryMode::Unknown => {
-                    if path == STDIN_FD {
-                        return Ok(vec![stdin_stage_info()?]);
-                    }
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Unable to determine the mode of the object at path '{}'. The mode is unknown or unsupported.",
-                        path
-                    )));
-                }
-            },
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    return Ok(vec![]);
-                } else {
-                    return Err(e.into());
-                }
-            }
-        };
-
-        // path is a dir
+        if path == STDIN_FD {
+            return Ok(vec![stdin_stage_info()?]);
+        }
         let mut files = Vec::new();
+        let prefix_len = if path == "/" { 0 } else { path.len() };
+        let prefix_meta = operator.stat(path).await;
+        match prefix_meta {
+            Ok(meta) if meta.is_file() => {
+                files.push(StageFileInfo::new(path.to_string(), &meta));
+            }
+            Err(e) if e.kind() != opendal::ErrorKind::NotFound => {
+                return Err(e.into());
+            }
+            _ => {}
+        };
         let mut lister = operator
             .lister_with(path)
             .recursive(true)
@@ -260,7 +248,7 @@ impl StageFilesInfo {
 }
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
-    if mode.is_file() {
+    if !path.is_empty() && mode.is_file() {
         pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {
         false
@@ -274,32 +262,22 @@ fn blocking_list_files_with_pattern(
     first_only: bool,
     max_files: usize,
 ) -> Result<Vec<StageFileInfo>> {
-    let prefix_len = if path == "/" { 0 } else { path.len() };
+    if path == STDIN_FD {
+        return Ok(vec![stdin_stage_info()?]);
+    }
     let operator = operator.blocking();
-
-    let root_meta = operator.stat(path);
-    match root_meta {
-        Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
-            EntryMode::DIR => {}
-            EntryMode::Unknown => {
-                if path == STDIN_FD {
-                    return Ok(vec![stdin_stage_info()?]);
-                }
-                return Err(ErrorCode::BadArguments("object mode is unknown"));
-            }
-        },
-        Err(e) => {
-            if e.kind() == opendal::ErrorKind::NotFound {
-                return Ok(vec![]);
-            } else {
-                return Err(e.into());
-            }
-        }
-    };
-
-    // path is a dir
     let mut files = Vec::new();
+    let prefix_meta = operator.stat(path);
+    match prefix_meta {
+        Ok(meta) if meta.is_file() => {
+            files.push(StageFileInfo::new(path.to_string(), &meta));
+        }
+        Err(e) if e.kind() != opendal::ErrorKind::NotFound => {
+            return Err(e.into());
+        }
+        _ => {}
+    };
+    let prefix_len = if path == "/" { 0 } else { path.len() };
     let list = operator
         .lister_with(path)
         .recursive(true)

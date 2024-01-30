@@ -516,14 +516,7 @@ impl<'a> ScalarRef<'a> {
                 if map.len() == 0 {
                     Domain::Map(None)
                 } else {
-                    let inner_domain = map.domain();
-                    let map_domain = match inner_domain {
-                        Domain::Tuple(domains) => {
-                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
-                        }
-                        _ => unreachable!(),
-                    };
-                    Domain::Map(Some(map_domain))
+                    Domain::Map(Some(Box::new(map.domain())))
                 }
             }
             ScalarRef::Tuple(fields) => {
@@ -1040,13 +1033,7 @@ impl Column {
                     Domain::Map(None)
                 } else {
                     let inner_domain = col.values.domain();
-                    let map_domain = match inner_domain {
-                        Domain::Tuple(domains) => {
-                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
-                        }
-                        _ => unreachable!(),
-                    };
-                    Domain::Map(Some(map_domain))
+                    Domain::Map(Some(Box::new(inner_domain)))
                 }
             }
             Column::Nullable(col) => {

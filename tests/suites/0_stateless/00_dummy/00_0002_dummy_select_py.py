@@ -5,7 +5,7 @@ import sys
 import signal
 
 import boto3
-from moto import mock_s3
+from moto import mock_aws
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
@@ -40,7 +40,7 @@ class MyModel(object):
         s3.put_object(Bucket="mybucket", Key=self.name, Body=self.value)
 
 
-@mock_s3
+@mock_aws
 def test_my_model_save():
     conn = boto3.resource("s3", region_name="us-east-1")
     # We need to create the bucket since this is all in Moto's 'virtual' AWS account

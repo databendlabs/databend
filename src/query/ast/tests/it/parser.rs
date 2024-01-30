@@ -101,6 +101,7 @@ fn test_statement() {
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
+        r#"create or replace table a (c decimal(38))"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,

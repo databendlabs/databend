@@ -290,6 +290,7 @@ impl HttpQuery {
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
+        let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -346,6 +347,7 @@ impl HttpQuery {
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root(std::any::type_name::<ExecuteState>(), parent)
+                .with_properties(|| http_ctx.to_minitrace_properties())
         } else {
             Span::noop()
         };

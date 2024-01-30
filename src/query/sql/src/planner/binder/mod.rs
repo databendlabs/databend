@@ -63,6 +63,7 @@ pub use copy_into_table::resolve_file_location;
 pub use copy_into_table::resolve_stage_location;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;
+pub use location::parse_storage_params_from_uri;
 pub use location::parse_uri_location;
 pub use merge_into::MergeIntoType;
 pub use scalar::ScalarBinder;

@@ -15,6 +15,9 @@
 use databend_common_arrow::native;
 use databend_common_arrow::parquet;
 use databend_common_exception::ErrorCode;
+use parquet_rs::basic::Compression as ParquetCompression;
+use parquet_rs::basic::GzipLevel;
+use parquet_rs::basic::ZstdLevel;
 
 use crate::meta;
 
@@ -79,6 +82,31 @@ impl From<TableCompression> for meta::Compression {
             TableCompression::LZ4 => meta::Compression::Lz4Raw,
             TableCompression::Snappy => meta::Compression::Snappy,
             TableCompression::Zstd => meta::Compression::Zstd,
+        }
+    }
+}
+
+/// Convert to parquet Compression.
+impl From<TableCompression> for ParquetCompression {
+    fn from(value: TableCompression) -> Self {
+        match value {
+            TableCompression::None => ParquetCompression::UNCOMPRESSED,
+            TableCompression::LZ4 => ParquetCompression::LZ4_RAW,
+            TableCompression::Snappy => ParquetCompression::SNAPPY,
+            TableCompression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
+        }
+    }
+}
+
+impl From<meta::Compression> for ParquetCompression {
+    fn from(value: meta::Compression) -> Self {
+        match value {
+            meta::Compression::Lz4Raw => ParquetCompression::LZ4_RAW,
+            meta::Compression::Snappy => ParquetCompression::SNAPPY,
+            meta::Compression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
+            meta::Compression::None => ParquetCompression::UNCOMPRESSED,
+            meta::Compression::Lz4 => panic!("deprecated lz4"),
+            meta::Compression::Gzip => ParquetCompression::GZIP(GzipLevel::default()),
         }
     }
 }

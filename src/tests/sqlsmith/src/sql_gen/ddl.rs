@@ -24,6 +24,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::TypeName;
+use databend_common_meta_app::schema::CreateOption;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
@@ -72,7 +73,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 all: false,
             };
             let create_table = CreateTableStmt {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 catalog: None,
                 database: None,
                 table: Identifier::from_name(table_name),
