@@ -375,22 +375,12 @@ impl HashJoinProbeState {
         )
     }
 
-    /// Checks if a join type can use selection.
+    /// Checks if the join type need to use unmatched selection.
     pub fn need_unmatched_selection(join_type: &JoinType, with_conjunction: bool) -> bool {
         matches!(
             join_type,
-            JoinType::Inner
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-                | JoinType::RightMark
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-        ) || matches!(
-            join_type,
             JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
-        ) && with_conjunction
+        ) && !with_conjunction
     }
 
     pub fn probe_attach(&self) -> Result<usize> {
