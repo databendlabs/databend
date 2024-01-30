@@ -48,8 +48,12 @@ pub(crate) const BATCH_SIZE: usize = 2048;
 pub(crate) const LOAD_FACTOR: f64 = 1.5;
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
-pub(crate) const L2_MAX_ROWS_IN_HT: usize = 1024 * 1024 / 8 / 2;
-pub(crate) const L3_MAX_ROWS_IN_HT: usize = 16 * 1024 * 1024 / 8 / 2;
+pub(crate) const L1_CACHE_SIZE: usize = 32 * 1024 / 2;
+pub(crate) const L2_CACHE_SIZE: usize = 1024 * 1024 / 2;
+pub(crate) const L3_CACHE_SIZE: usize =  (512 + 1024) * 1024 / 2;
+
+// pub(crate) const L2_MAX_ROWS_IN_HT: usize = 1024 * 1024 / 8 / 2;
+// pub(crate) const L3_MAX_ROWS_IN_HT: usize = 16 * 1024 * 1024 / 8 / 2;
 
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
@@ -63,18 +67,20 @@ pub struct HashTableConfig {
     // min reduction ratio to control whether to expand the ht
     // {1024 * 1024, 1.1} / {16 * 1024 * 1024, 2.0},
     pub min_reductions: [f64; 2],
+    pub capacity: usize,
 }
 
 impl Default for HashTableConfig {
     fn default() -> Self {
         Self {
-            current_max_radix_bits: Arc::new(AtomicU64::new(4)),
-            initial_radix_bits: 4,
-            max_radix_bits: 8,
+            current_max_radix_bits: Arc::new(AtomicU64::new(3)),
+            initial_radix_bits: 3,
+            max_radix_bits: 7,
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
             partial_agg: false,
             min_reductions: [1.1, 2.0],
+            capacity: 0,
         }
     }
 }
@@ -88,6 +94,11 @@ impl HashTableConfig {
 
     pub fn with_partial(mut self, partial_agg: bool) -> Self {
         self.partial_agg = partial_agg;
+        self
+    }
+
+    pub fn with_initial_capacity(mut self, capacity: usize) -> Self {
+        self.capacity = capacity;
         self
     }
 }

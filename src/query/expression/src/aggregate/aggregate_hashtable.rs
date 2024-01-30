@@ -32,9 +32,10 @@ use crate::HashTableConfig;
 use crate::Payload;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
-use crate::L2_MAX_ROWS_IN_HT;
-use crate::L3_MAX_ROWS_IN_HT;
 use crate::LOAD_FACTOR;
+use crate::MAX_PAGE_SIZE;
+
+const BATCH_ADD_SIZE: usize = 2048;
 
 // The high 16 bits are the salt, the low 48 bits are the pointer address
 pub type Entry = u64;
@@ -44,11 +45,8 @@ pub struct AggregateHashTable {
     config: HashTableConfig,
     current_radix_bits: u64,
     entries: Vec<Entry>,
+    count: usize,
     capacity: usize,
-    disable_expand_ht: bool,
-
-    // how many rows probe into this hash table
-    probe_input_rows: usize,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -60,7 +58,8 @@ impl AggregateHashTable {
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
     ) -> Self {
-        let capacity = Self::initial_capacity();
+        // let capacity = Self::initial_capacity();
+        let capacity = Self::initial_capacity().max(config.capacity);
         Self::new_with_capacity(group_types, aggrs, config, capacity)
     }
 
@@ -72,12 +71,11 @@ impl AggregateHashTable {
     ) -> Self {
         Self {
             entries: vec![0u64; capacity],
+            count: 0,
             current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
             capacity,
             config,
-            disable_expand_ht: false,
-            probe_input_rows: 0,
         }
     }
 
@@ -92,8 +90,6 @@ impl AggregateHashTable {
         params: &[Vec<Column>],
         row_count: usize,
     ) -> Result<usize> {
-        const BATCH_ADD_SIZE: usize = 2048;
-
         if row_count <= BATCH_ADD_SIZE {
             self.add_groups_inner(state, group_columns, params, row_count)
         } else {
@@ -153,6 +149,22 @@ impl AggregateHashTable {
             }
         }
 
+        self.count += new_group_count;
+
+        if self.config.partial_agg {
+            // check size
+            if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
+                self.clear_ht();
+                self.reset_count();
+            }
+
+            //check maybe_repartition
+            if self.maybe_repartition() {
+                self.clear_ht();
+                self.reset_count();
+            }
+        }
+
         Ok(new_group_count)
     }
 
@@ -162,34 +174,20 @@ impl AggregateHashTable {
         group_columns: &[Column],
         row_count: usize,
     ) -> usize {
-        if self.current_radix_bits == self.config.max_radix_bits
-            && self.should_disable_expand_hash_table()
-        {
-            // directly append rows
-            state.set_incr_empty_vector(row_count);
-            self.payload.append_rows(state, row_count, group_columns);
-            return row_count;
-        }
         // exceed capacity or should resize
-        if row_count + self.len() > self.capacity
-            || row_count + self.len() > self.resize_threshold()
+        if row_count + self.count > self.capacity
+            || row_count + self.count > self.resize_threshold()
         {
             let mut new_capacity = self.capacity * 2;
 
-            while new_capacity - self.len() <= row_count {
+            while new_capacity - self.count <= row_count {
                 new_capacity *= 2;
             }
             self.resize(new_capacity);
         }
 
-        self.probe_input_rows += row_count;
-
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
-
-        if self.len() == 0 {
-            debug_assert_eq!(self.entries.iter().sum::<u64>(), 0);
-        }
 
         let entries = &mut self.entries;
 
@@ -383,24 +381,18 @@ impl AggregateHashTable {
         Ok(false)
     }
 
-    fn maybe_repartition(&mut self) {
+    fn maybe_repartition(&mut self) -> bool {
         // already final stage or the max radix bits
         if !self.config.partial_agg || (self.current_radix_bits == self.config.max_radix_bits) {
-            return;
+            return false;
         }
 
         let bytes_per_partition = self.payload.memory_size() / self.payload.partition_count();
 
         let mut new_radix_bits = self.current_radix_bits;
 
-        // 256k
-        if bytes_per_partition >= 256 * 1024 {
+        if bytes_per_partition > MAX_PAGE_SIZE * self.config.block_fill_factor as usize {
             new_radix_bits += self.config.repartition_radix_bits_incr;
-
-            // If reducion is small and input rows will be very large, directly repartition to max radix bits
-            if self.should_disable_expand_hash_table() {
-                new_radix_bits = self.config.max_radix_bits;
-            }
         }
 
         loop {
@@ -435,7 +427,9 @@ impl AggregateHashTable {
 
             self.current_radix_bits = current_max_radix_bits;
             self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
+            return true;
         }
+        false
     }
 
     #[inline]
@@ -445,8 +439,6 @@ impl AggregateHashTable {
 
     // scan payload to reconstruct PointArray
     pub fn resize(&mut self, new_capacity: usize) {
-        self.maybe_repartition();
-
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = vec![0; new_capacity];
@@ -485,36 +477,21 @@ impl AggregateHashTable {
         self.capacity = new_capacity;
     }
 
-    pub fn should_disable_expand_hash_table(&mut self) -> bool {
-        if self.disable_expand_ht {
-            return true;
-        }
-
-        if !self.config.partial_agg || self.len() < L2_MAX_ROWS_IN_HT {
-            return false;
-        }
-
-        let ratio = self.probe_input_rows as f64 / self.len() as f64;
-
-        let min_reduction = if self.len() >= L3_MAX_ROWS_IN_HT {
-            self.config.min_reductions[1]
-        } else {
-            self.config.min_reductions[0]
-        };
-
-        if self.len() >= L3_MAX_ROWS_IN_HT {
-            self.disable_expand_ht = ratio <= min_reduction;
-            return self.disable_expand_ht;
-        }
-        ratio <= min_reduction
-    }
-
     pub fn initial_capacity() -> usize {
-        4096
+        // TODO: how to init capacity by thread nums
+        4096 * 8
     }
 
     pub fn get_capacity_for_count(count: usize) -> usize {
         ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
+    }
+
+    pub fn clear_ht(&mut self) {
+        self.entries.fill(0);
+    }
+
+    pub fn reset_count(&mut self) {
+        self.count = 0;
     }
 }
 
