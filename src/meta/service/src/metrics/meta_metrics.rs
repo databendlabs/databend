@@ -511,6 +511,28 @@ pub mod raft_metrics {
 
         static STORAGE_METRICS: LazyLock<StorageMetrics> = LazyLock::new(StorageMetrics::init);
 
+        pub fn incr_raft_storage_write_result<T, E>(func: &str, result: &Result<T, E>) {
+            match result {
+                Ok(_) => {
+                    // Do not update metrics for success.
+                }
+                Err(_) => {
+                    incr_raft_storage_fail(func, true);
+                }
+            }
+        }
+
+        pub fn incr_raft_storage_read_result<T, E>(func: &str, result: &Result<T, E>) {
+            match result {
+                Ok(_) => {
+                    // Do not update metrics for success.
+                }
+                Err(_) => {
+                    incr_raft_storage_fail(func, false);
+                }
+            }
+        }
+
         pub fn incr_raft_storage_fail(func: &str, write: bool) {
             let labels = FuncLabels {
                 func: func.to_string(),
