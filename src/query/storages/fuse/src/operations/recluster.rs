@@ -70,7 +70,6 @@ impl FuseTable {
         {
             let status = "recluster: begin to run recluster";
             ctx.set_status_info(status);
-            log::info!("{}", status);
         }
 
         if self.cluster_key_meta.is_none() {

@@ -186,7 +186,6 @@ impl Interpreter for ReclusterTableInterpreter {
                     elapsed_time.as_secs()
                 );
                 ctx.set_status_info(&status);
-                info!("{}", &status);
             }
 
             if !plan.is_final {
