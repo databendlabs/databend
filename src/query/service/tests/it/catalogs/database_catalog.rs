@@ -180,7 +180,7 @@ async fn test_catalogs_table() -> Result<()> {
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "default".to_string(),

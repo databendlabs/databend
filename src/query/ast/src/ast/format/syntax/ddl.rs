@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::schema::CreateOption;
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -33,17 +34,28 @@ use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
+        } else {
+            RcDoc::nil()
+        })
         .append(if stmt.transient {
             RcDoc::space().append(RcDoc::text("TRANSIENT"))
         } else {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
-        .append(if stmt.if_not_exists {
-            RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
-        } else {
-            RcDoc::nil()
-        })
+        .append(
+            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
+                if if_not_exists {
+                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+                } else {
+                    RcDoc::nil()
+                }
+            } else {
+                RcDoc::nil()
+            },
+        )
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {

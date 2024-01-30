@@ -704,9 +704,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let create_table = map(
+    let create_table = map_res(
         rule! {
-            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -717,6 +717,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(
             _,
+            opt_or_replace,
             opt_transient,
             _,
             opt_if_not_exists,
@@ -728,8 +729,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_table_options,
             opt_as_query,
         )| {
-            Statement::CreateTable(CreateTableStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateTable(CreateTableStmt {
+                create_option,
                 catalog,
                 database,
                 table,
@@ -742,7 +745,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 transient: opt_transient.is_some(),
-            })
+            }))
         },
     );
     let drop_table = map(

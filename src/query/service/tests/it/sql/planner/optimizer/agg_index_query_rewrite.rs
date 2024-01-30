@@ -26,6 +26,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::optimizer::agg_index;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::RecursiveOptimizer;
@@ -60,7 +61,7 @@ struct TestSuite {
 
 fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: "default".to_string(),
