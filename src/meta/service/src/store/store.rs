@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use databend_common_base::base::tokio::task;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -89,7 +88,6 @@ impl Deref for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftLogReader<TypeConfig> for RaftStore {
     #[minitrace::trace]
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
@@ -108,7 +106,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
             .range_values(range)
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
-            Ok(entries) => return Ok(entries),
+            Ok(entries) => Ok(entries),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
                 Err(err)
@@ -117,7 +115,6 @@ impl RaftLogReader<TypeConfig> for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
     #[minitrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
@@ -125,7 +122,6 @@ impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftStorage<TypeConfig> for RaftStore {
     type LogReader = RaftStore;
     type SnapshotBuilder = RaftStore;
@@ -214,12 +210,10 @@ impl RaftStorage<TypeConfig> for RaftStore {
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
         {
             Err(err) => {
-                return {
-                    raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
-                    Err(err)
-                };
+                raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
+                Err(err)
             }
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -235,7 +229,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
         {
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("delete_conflict_logs_since", true);
                 Err(err)
@@ -316,7 +310,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
                 raft_metrics::storage::incr_raft_storage_fail("append_to_log", true);
                 Err(err)
             }
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -446,9 +440,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         {
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("read_vote", false);
-                return Err(err);
+                Err(err)
             }
-            Ok(vote) => return Ok(vote),
+            Ok(vote) => Ok(vote),
         }
     }
 

@@ -4382,6 +4382,7 @@ dependencies = [
  "databend-common-formats",
  "databend-common-functions",
  "databend-common-io",
+ "databend-common-meta-app",
  "databend-common-sql",
  "databend-driver",
  "databend-sql",
@@ -8332,7 +8333,12 @@ dependencies = [
 [[package]]
 name = "macros"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.1#24243ec7b904d760c0419a83bd327dbf923e015e"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.4#25d448a8f03efac5a0cdec7a1921fbe23bb00f34"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.46",
+]
 
 [[package]]
 name = "maplit"
@@ -9204,11 +9210,10 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.1#24243ec7b904d760c0419a83bd327dbf923e015e"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.4#25d448a8f03efac5a0cdec7a1921fbe23bb00f34"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-trait",
  "byte-unit",
  "clap 4.4.2",
  "derive_more",
@@ -9216,7 +9221,6 @@ dependencies = [
  "macros",
  "maplit",
  "openraft 0.7.5",
- "pin-utils",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -9225,6 +9229,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
+ "validit",
 ]
 
 [[package]]
@@ -12868,11 +12873,10 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "tracing"
-version = "0.1.37"
+version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ce8c33a8d48bd45d624a6e523445fd21ec13d3653cd51f681abf67418f54eb8"
+checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
- "cfg-if",
  "log",
  "pin-project-lite",
  "tracing-attributes",
@@ -12893,20 +12897,20 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.23"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4017f8f45139870ca7e672686113917c71c7a6e02d4924eda67186083c03081a"
+checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.46",
 ]
 
 [[package]]
 name = "tracing-core"
-version = "0.1.30"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
+checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 dependencies = [
  "once_cell",
  "valuable",
@@ -13211,6 +13215,15 @@ checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
  "getrandom 0.2.11",
  "serde",
+]
+
+[[package]]
+name = "validit"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1fad49f3eae9c160c06b4d49700a99e75817f127cf856e494b56d5e23170020"
+dependencies = [
+ "anyerror",
 ]
 
 [[package]]

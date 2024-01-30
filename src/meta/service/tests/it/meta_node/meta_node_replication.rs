@@ -63,7 +63,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     mn.raft
         .wait(timeout())
-        .log(Some(log_index), "leader init logs")
+        .applied_index(Some(log_index), "leader init logs")
         .await?;
 
     let n_req = 12;
@@ -79,7 +79,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     mn.raft
         .wait(timeout())
-        .log(Some(log_index), "applied on leader")
+        .applied_index(Some(log_index), "applied on leader")
         .await?;
 
     info!("--- check the snapshot is created");
@@ -105,7 +105,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     mn1.raft
         .wait(timeout())
-        .log(Some(log_index), "non-voter replicated all logs")
+        .applied_index(Some(log_index), "non-voter replicated all logs")
         .await?;
 
     mn1.raft
