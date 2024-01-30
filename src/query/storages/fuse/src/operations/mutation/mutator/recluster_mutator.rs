@@ -190,7 +190,7 @@ impl ReclusterMutator {
 
                 let block_size = block_meta.block_size as usize;
                 let row_count = block_meta.row_count as usize;
-                if task_bytes + block_size > memory_threshold {
+                if task_bytes + block_size > memory_threshold && selected_blocks.len() > 1 {
                     self.generate_task(
                         &selected_blocks,
                         &column_nodes,
