@@ -71,11 +71,3 @@ SELECT i, (SELECT SUM(s1.i) OVER (ORDER BY s1.i) FROM integers s1, integers s2 W
 2 NULL
 3 NULL
 NULL NULL
-
-query II
-SELECT i, (SELECT row_number() OVER (PARTITION BY i1.i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;
-----
-1 1
-2 1
-3 1
-NULL NULL

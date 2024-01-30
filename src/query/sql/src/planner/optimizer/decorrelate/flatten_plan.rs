@@ -27,7 +27,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
-use crate::plans::{Aggregate, Window};
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
@@ -43,6 +43,7 @@ use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::SrfItem;
 use crate::plans::UnionAll;
+use crate::plans::Window;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -195,7 +196,7 @@ impl SubqueryRewriter {
             }
 
             RelOperator::Window(op) => {
-                self.flatten_window(plan, op,  correlated_columns, flatten_info, need_cross_join)
+                self.flatten_window(plan, op, correlated_columns, flatten_info)
             }
 
             _ => Err(ErrorCode::Internal(
@@ -634,7 +635,6 @@ impl SubqueryRewriter {
         op: &Window,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
-        need_cross_join: bool,
     ) -> Result<SExpr> {
         if op
             .used_columns()?
@@ -645,17 +645,13 @@ impl SubqueryRewriter {
                 "correlated columns in window functions not supported",
             ));
         }
-        let flatten_plan = self.flatten_plan(
-            plan.child(0)?,
-            correlated_columns,
-            flatten_info,
-            need_cross_join,
-        )?;
+        let flatten_plan =
+            self.flatten_plan(plan.child(0)?, correlated_columns, flatten_info, true)?;
         let mut partition_by = op.partition_by.clone();
-        for correlated_column in correlated_columns.iter() {
+        for derived_column in self.derived_columns.values() {
             let column_binding = {
                 let metadata = self.metadata.read();
-                let column_entry = metadata.column(*correlated_column);
+                let column_entry = metadata.column(*derived_column);
                 let data_type = match column_entry {
                     ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
                         DataType::from(data_type)
@@ -664,26 +660,26 @@ impl SubqueryRewriter {
                         data_type.clone()
                     }
                     ColumnEntry::InternalColumn(TableInternalColumn {
-                                                    internal_column, ..
-                                                }) => internal_column.data_type(),
+                        internal_column, ..
+                    }) => internal_column.data_type(),
                     ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
                         DataType::from(data_type)
                     }
                 };
                 ColumnBindingBuilder::new(
-                    format!("subquery_{}", correlated_column),
-                    *correlated_column,
+                    format!("subquery_{}", derived_column),
+                    *derived_column,
                     Box::from(data_type.clone()),
                     Visibility::Visible,
                 )
-                    .build()
+                .build()
             };
             partition_by.push(ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
                     column: column_binding,
                 }),
-                index: *correlated_column,
+                index: *derived_column,
             });
         }
         Ok(SExpr::create_unary(
@@ -696,13 +692,13 @@ impl SubqueryRewriter {
                     partition_by,
                     order_by: op.order_by.clone(),
                     frame: op.frame.clone(),
+                    limit: op.limit,
                 }
                 .into(),
             ),
             Arc::new(flatten_plan),
         ))
     }
-
 
     fn flatten_union_all(
         &mut self,
