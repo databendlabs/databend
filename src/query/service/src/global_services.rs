@@ -119,7 +119,7 @@ impl GlobalServices {
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
-            CloudControlApiProvider::init(addr).await?;
+            CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
 
         Ok(())

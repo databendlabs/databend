@@ -27,10 +27,10 @@ pub struct ClientConfig {
 }
 
 impl ClientConfig {
-    pub fn new() -> Self {
+    pub fn new(timeout: Duration) -> Self {
         ClientConfig {
             metadata: Vec::new(),
-            timeout: Duration::from_secs(CLOUD_REQUEST_TIMEOUT_SEC),
+            timeout,
         }
     }
 
@@ -49,16 +49,24 @@ impl ClientConfig {
     pub fn get_timeout(&self) -> Duration {
         self.timeout
     }
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
+    }
 }
 
 impl Default for ClientConfig {
     fn default() -> Self {
-        Self::new()
+        Self::new(Duration::from_secs(CLOUD_REQUEST_TIMEOUT_SEC))
     }
 }
 
-pub fn build_client_config(tenant: String, user: String, query_id: String) -> ClientConfig {
-    let mut config = ClientConfig::new();
+pub fn build_client_config(
+    tenant: String,
+    user: String,
+    query_id: String,
+    timeout: Duration,
+) -> ClientConfig {
+    let mut config = ClientConfig::new(timeout);
     config.add_metadata(TENANT_ID, tenant);
     config.add_metadata(REQUESTER, user);
     config.add_metadata(QUERY_ID, query_id);

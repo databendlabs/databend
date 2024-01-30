@@ -30,30 +30,44 @@ pub const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
+    pub timeout: Duration,
 }
 
 impl CloudControlApiProvider {
-    pub async fn new(endpoint: String) -> Result<Arc<CloudControlApiProvider>> {
-        let endpoint = Self::get_endpoint(endpoint).await?;
+    pub async fn new(endpoint: String, timeout: u64) -> Result<Arc<CloudControlApiProvider>> {
+        let timeout = if timeout == 0 {
+            Duration::from_secs(CLOUD_REQUEST_TIMEOUT_SEC)
+        } else {
+            Duration::from_secs(timeout)
+        };
+
+        let endpoint = Self::get_endpoint(endpoint, timeout).await?;
         let task_client = TaskClient::new(endpoint).await?;
-        Ok(Arc::new(CloudControlApiProvider { task_client }))
+
+        Ok(Arc::new(CloudControlApiProvider {
+            task_client,
+            timeout,
+        }))
     }
 
-    async fn get_endpoint(endpoint: String) -> Result<tonic::transport::Endpoint> {
+    async fn get_endpoint(
+        endpoint: String,
+        timeout: Duration,
+    ) -> Result<tonic::transport::Endpoint> {
         let endpoint = tonic::transport::Endpoint::from_shared(endpoint)
             .map_err(|err| {
                 ErrorCode::CloudControlConnectError(format!(
                     "Invalid cloud control Server address: {err}"
                 ))
             })?
-            .connect_timeout(Duration::from_secs(CLOUD_REQUEST_TIMEOUT_SEC));
+            .connect_timeout(timeout);
 
         Ok(endpoint)
     }
 
     #[async_backtrace::framed]
-    pub async fn init(addr: String) -> Result<()> {
-        let provider = Self::new(addr).await?;
+    pub async fn init(addr: String, timeout: u64) -> Result<()> {
+        let provider = Self::new(addr, timeout).await?;
         GlobalInstance::set(provider);
         Ok(())
     }
@@ -64,5 +78,8 @@ impl CloudControlApiProvider {
 
     pub fn get_task_client(&self) -> Arc<TaskClient> {
         self.task_client.clone()
+    }
+    pub fn get_timeout(&self) -> Duration {
+        self.timeout
     }
 }
