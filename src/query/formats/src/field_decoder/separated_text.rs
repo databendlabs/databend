@@ -333,7 +333,6 @@ impl SeparatedTextDecoder {
             }
             Err(e) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(data);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));
