@@ -94,7 +94,7 @@ impl RaftLog {
     }
 
     /// Append logs into RaftLog.
-    /// There is no consecutiveness check. It is the caller's responsibility to leave no holes(if it runs a standard raft:DDD).
+    /// There is no consecutive-ness check. It is the caller's responsibility to leave no holes(if it runs a standard raft:DDD).
     /// There is no overriding check either. It always overrides the existent ones.
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
