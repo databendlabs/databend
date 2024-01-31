@@ -73,6 +73,8 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
         Arc::new(s_join_expr.child(1)?.clone()),
     );
 
-    result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
+    if !filter.predicates.is_empty() {
+        result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
+    }
     Ok((result, true))
 }

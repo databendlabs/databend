@@ -34,7 +34,7 @@ WHERE ctr1.ctr_total_return >
 ORDER BY c_customer_id
 LIMIT 100;
 ----
-HashJoin: LEFT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -3178,7 +3178,7 @@ ORDER BY c_customer_id NULLS FIRST,
          ctr_total_return NULLS FIRST
 LIMIT 100;
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -3372,7 +3372,7 @@ WHERE i_manufact_id = 977
        AND d_date_sk = cs_sold_date_sk )
 LIMIT 100;
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -4716,13 +4716,13 @@ UnionAll
 └── Right
     └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── Scan: default.tpcds.store_returns (read rows: 2810)
-        │       └── Probe
-        │           └── Scan: default.tpcds.store_sales (read rows: 28810)
+        │   └── Scan: default.tpcds.store_returns (read rows: 2810)
         └── Probe
-            └── Scan: default.tpcds.date_dim (read rows: 73049)
+            └── HashJoin: INNER
+                ├── Build
+                │   └── Scan: default.tpcds.store_sales (read rows: 28810)
+                └── Probe
+                    └── Scan: default.tpcds.date_dim (read rows: 73049)
 
 # Q50
 query I
@@ -6715,7 +6715,7 @@ HashJoin: INNER
 
 
 # Q69
-query I
+query 
 explain join
 SELECT cd_gender,
        cd_marital_status,
@@ -6773,7 +6773,7 @@ HashJoin: LEFT MARK
 ├── Build
 │   └── HashJoin: LEFT MARK
 │       ├── Build
-│       │   └── HashJoin: LEFT MARK
+│       │   └── HashJoin: RIGHT SEMI
 │       │       ├── Build
 │       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
@@ -8075,7 +8075,7 @@ ORDER BY c_customer_id,
          ctr_total_return
 LIMIT 100;
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -8146,7 +8146,7 @@ HashJoin: INNER
     └── Scan: default.tpcds.store_sales (read rows: 28810)
 
 # Q83
-query I
+query 
 explain join
 WITH sr_items AS
   (SELECT i_item_id item_id,
@@ -8962,7 +8962,7 @@ WHERE i_manufact_id = 350
 ORDER BY sum(ws_ext_discount_amt)
 LIMIT 100;
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build

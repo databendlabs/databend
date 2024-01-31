@@ -60,6 +60,7 @@ pub fn outer_to_inner(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExpr
             .iter()
             .any(|col| constraint_set.is_null_reject(col));
 
+        let old_join_type = join.join_type.clone();
         let new_join_type = match join.join_type {
             JoinType::Left => {
                 if eliminate_right_null {
@@ -103,10 +104,10 @@ pub fn outer_to_inner(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExpr
             _ => unreachable!(),
         };
 
-        if new_join_type == JoinType::Inner {
+        if new_join_type != old_join_type {
             if origin_join_type == JoinType::LeftSingle {
                 join.original_join_type = Some(JoinType::LeftSingle);
-            } else {
+            } else if origin_join_type == JoinType::RightSingle {
                 join.original_join_type = Some(JoinType::RightSingle);
             }
         } else {
@@ -212,7 +213,7 @@ fn outer_to_inner_impl(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExp
 
     if origin_join_type == JoinType::LeftSingle {
         join.original_join_type = Some(JoinType::LeftSingle);
-    } else {
+    } else if origin_join_type == JoinType::RightSingle {
         join.original_join_type = Some(JoinType::RightSingle);
     }
 

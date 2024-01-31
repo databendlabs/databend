@@ -31,6 +31,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -98,6 +99,10 @@ impl Rule for RulePushDownFilterJoin {
         let (s_expr, outer_to_inner) = outer_to_inner(self.after_join_reorder(), s_expr)?;
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
+        if s_expr.plan().rel_op() != RelOp::Filter {
+            state.add_result(s_expr);
+            return Ok(());
+        }
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
