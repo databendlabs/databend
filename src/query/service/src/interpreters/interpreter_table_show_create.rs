@@ -117,6 +117,7 @@ impl ShowCreateTableInterpreter {
                 let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
                 {
                     // make the display more readable.
+                    // can not use debug print, will add double quote
                     format!(
                         " COMMENT '{}'",
                         &field_comments[idx].as_str().replace('\'', "\\'")

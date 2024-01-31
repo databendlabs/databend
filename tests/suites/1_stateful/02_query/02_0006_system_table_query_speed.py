@@ -21,8 +21,10 @@ def test_speed(cursor, name):
     start = datetime.now()
     cursor.execute(sql)
     execute = (datetime.now()-start)
-    # in ci 0.06s, in local debug build cost 0.03s
-    if execute.total_seconds() > 0.08:
+    # In ci 0.068s, in local debug build cost 0.03s
+    # But of ci is vary, we set the exception value to 0.1s
+    # if not modify system table but the test failed, we should up the value again.
+    if execute.total_seconds() > 0.1:
         print("Err: query system.%s in one db cost exception, cost: %s"%(name, execute))
     else:
         print("normal")

@@ -157,6 +157,7 @@ impl ColumnsTable {
                         let comment = if field_comments.len() == n_fields
                             && !field_comments[idx].is_empty()
                         {
+                            // can not use debug print, will add double quote
                             format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
                         } else {
                             "".to_string()
