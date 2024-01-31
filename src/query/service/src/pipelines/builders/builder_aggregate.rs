@@ -133,8 +133,7 @@ impl PipelineBuilder {
 
         // Need a global atomic to read the max current radix bits hint
         let partial_agg_config = HashTableConfig::default()
-            .with_partial(true)
-            .with_initial_capacity(max_threads as usize);
+            .with_partial(true, max_threads as usize);
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(

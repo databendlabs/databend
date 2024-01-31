@@ -64,7 +64,7 @@ pub struct HashTableConfig {
     pub repartition_radix_bits_incr: u64,
     pub block_fill_factor: f64,
     pub partial_agg: bool,
-    pub capacity: usize,
+    pub max_partial_capacity: usize,
 }
 
 impl Default for HashTableConfig {
@@ -76,7 +76,7 @@ impl Default for HashTableConfig {
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
             partial_agg: false,
-            capacity: 0,
+            max_partial_capacity: 131072,
         }
     }
 }
@@ -88,19 +88,17 @@ impl HashTableConfig {
         self
     }
 
-    pub fn with_partial(mut self, partial_agg: bool) -> Self {
+    pub fn with_partial(mut self, partial_agg: bool, active_threads: usize) -> Self {
         self.partial_agg = partial_agg;
-        self
-    }
 
-    pub fn with_initial_capacity(mut self, active_threads: usize) -> Self {
+        // init max_partial_capacity
         let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
         let cache_per_active_thread =
             L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
-
         let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
         let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
-        self.capacity = capacity;
+        self.max_partial_capacity = capacity;
+
         self
     }
 }

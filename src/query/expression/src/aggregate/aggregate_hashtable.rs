@@ -58,7 +58,9 @@ impl AggregateHashTable {
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
     ) -> Self {
-        let capacity = Self::initial_capacity().max(config.capacity);
+        let capacity = Self::initial_capacity();
+        println!("init capacity:{}",capacity);
+        println!("max_partial_capacity: {}", config.max_partial_capacity);
         Self::new_with_capacity(group_types, aggrs, config, capacity)
     }
 
@@ -148,15 +150,17 @@ impl AggregateHashTable {
             }
         }
 
-        if self.config.partial_agg {
+        if self.config.partial_agg && self.capacity == self.config.max_partial_capacity {
             // check size
             if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
+                // println!("max_partial_capacity resize");
                 self.clear_ht();
                 self.reset_count();
             }
 
             // check maybe_repartition
             if self.maybe_repartition() {
+                // println!("max_partial_capacity maybe");
                 self.clear_ht();
                 self.reset_count();
             }
@@ -438,6 +442,12 @@ impl AggregateHashTable {
 
     // scan payload to reconstruct PointArray
     pub fn resize(&mut self, new_capacity: usize) {
+        println!("new_capacity {}",new_capacity);
+        if self.config.partial_agg {
+            self.maybe_repartition();
+            self.reset_count();
+        }
+
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = vec![0; new_capacity];
@@ -468,6 +478,10 @@ impl AggregateHashTable {
                     debug_assert!(entries[hs].is_occupied());
                     debug_assert_eq!(entries[hs].get_pointer(), row_ptr);
                     debug_assert_eq!(entries[hs].get_salt(), hash.get_salt());
+
+                    if self.config.partial_agg {
+                        self.count += 1;
+                    }
                 }
             }
         }
@@ -477,7 +491,7 @@ impl AggregateHashTable {
     }
 
     pub fn initial_capacity() -> usize {
-        4096
+        16384 * 2 * 2
     }
 
     pub fn get_capacity_for_count(count: usize) -> usize {
