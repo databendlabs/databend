@@ -120,6 +120,23 @@ impl OpenTelemetryLogger {
         let logger = provider.versioned_logger(name.to_string(), None, None, None);
         Self { logger, provider }
     }
+
+    pub(crate) fn finalizer(&self) -> impl FnOnce() + Send + Sync + 'static {
+        let mut provider = self.provider.clone();
+        move || match provider.try_shutdown() {
+            Some(results) => {
+                for r in results {
+                    if let Err(e) = r {
+                        eprintln!("shutdown log provider {:?} failed: {}", provider, e);
+                    }
+                }
+            }
+            None => eprintln!(
+                "shutdown logger failed: logger provider {:?} is already shutdown",
+                provider
+            ),
+        }
+    }
 }
 
 impl log::Log for OpenTelemetryLogger {
@@ -138,11 +155,17 @@ impl log::Log for OpenTelemetryLogger {
     }
 
     fn flush(&self) {
-        let result = self.provider.force_flush();
-        for r in result {
-            if let Err(e) = r {
-                eprintln!("flush log failed: {}", e);
-            }
+        flush_provider(&self.provider);
+    }
+}
+
+pub fn flush_provider(provider: &opentelemetry_sdk::logs::LoggerProvider) {
+    // DEBUG:
+    eprintln!("==> flushing otlp logger");
+    let result = provider.force_flush();
+    for r in result {
+        if let Err(e) = r {
+            eprintln!("flush log failed: {}", e);
         }
     }
 }

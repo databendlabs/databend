@@ -73,10 +73,19 @@ aggregate_spilling_memory_ratio = 60
 [log]
 
 [log.file]
+on = false
 level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
+
+[log.stderr]
+on = true
+level = "INFO"
+
+[log.query]
+on = true
+otlp_endpoint = "http://100.120.160.7:4317"
 
 [log.structlog]
 on = true
