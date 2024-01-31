@@ -2467,6 +2467,7 @@ dependencies = [
  "pprof",
  "rand 0.8.5",
  "regex",
+ "replace_with",
  "semver",
  "serde",
  "state",
@@ -10835,6 +10836,12 @@ checksum = "581008d2099240d37fb08d77ad713bcaec2c4d89d50b5b21a8bb1996bbab68ab"
 dependencies = [
  "bytecheck",
 ]
+
+[[package]]
+name = "replace_with"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqsign"

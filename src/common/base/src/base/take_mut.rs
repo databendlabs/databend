@@ -12,29 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::panic;
+use replace_with::replace_with_or_abort_and_return;
 
-use databend_common_exception::Result;
-
-use crate::runtime::catch_unwind;
-
-/// copy from https://docs.rs/take_mut/0.2.2/take_mut/fn.take.html with some modifications.
-/// if a panic occurs, the entire process will be aborted, as there's no valid `T` to put back into the `&mut T`.
-pub fn take_mut<T, F>(mut_ref: &mut T, closure: F) -> Result<()>
-where F: FnOnce(T) -> Result<T> {
-    use std::ptr;
-
-    unsafe {
-        let old_t = ptr::read(mut_ref);
-        let closure_result = catch_unwind(panic::AssertUnwindSafe(|| closure(old_t)));
-
-        match closure_result {
-            Ok(Ok(new_t)) => {
-                ptr::write(mut_ref, new_t);
-                Ok(())
-            }
-            Ok(Err(e)) => Err(e),
-            Err(_) => ::std::process::abort(),
-        }
-    }
+pub fn take_mut<T, U, F: FnOnce(T) -> (U, T)>(dest: &mut T, f: F) -> U {
+    replace_with_or_abort_and_return(dest, f)
 }
