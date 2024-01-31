@@ -2,9 +2,6 @@ statement ok
 drop table if exists t_compact_0
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 set enable_distributed_compact = 1
 
 statement ok
@@ -120,9 +117,6 @@ query II
 select count(),sum(a) from t_compact_1
 ----
 150 3825
-
-statement ok
-set enable_table_lock = 1
 
 statement ok
 drop table if exists t_compact_0

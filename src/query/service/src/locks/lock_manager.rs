@@ -23,7 +23,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_catalog::lock::Lock;
-use databend_common_catalog::lock::LockExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,6 +41,7 @@ use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
+use crate::locks::LockExt;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,

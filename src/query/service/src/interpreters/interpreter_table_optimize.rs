@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::lock::LockExt;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::Table;
@@ -42,6 +41,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockExt;
 use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -154,7 +154,7 @@ impl OptimizeTableInterpreter {
 
         // check if the table is locked.
         let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if self.plan.need_lock && table_lock.check_lock(catalog.clone()).await? {
+        if self.plan.need_lock && !table_lock.wait_lock_expired(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table
