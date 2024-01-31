@@ -392,7 +392,6 @@ e MAP(STRING, STRING) YES NULL (empty)
 f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)
 
 statement ok
-<<<<<<< HEAD
 create table replace_test(a int);
 
 statement ok
@@ -411,7 +410,8 @@ create or replace table replace_test(b int);
 
 statement error 1065
 select a from replace_test;
-=======
+
+statement ok
 drop table if exists t_default
 
 statement ok
@@ -432,4 +432,3 @@ select a, to_string(b), c from t_default
 ----
 1 1,2 {"k":"v"}
 2 1,2 {"k":"v"}
->>>>>>> fa89d26e48 (fix(ddl): fix create table bitmap and variant with default value)
