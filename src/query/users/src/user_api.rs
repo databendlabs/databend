@@ -39,9 +39,7 @@ use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
@@ -50,7 +48,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
-use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
@@ -96,14 +93,11 @@ impl UserApiProvider {
         //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
         // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
         //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
+        // But we only can set PUBLIC role into meta.
+        // Because the previous deserialization using from_bits caused forward compatibility issues after adding new privilege type
+        // Until we can confirm all product use https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly or later,
+        // We can add account_admin into meta.
         {
-            let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-            account_admin.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            );
-            user_mgr.add_role(tenant, account_admin, true).await?;
-
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
             user_mgr.add_role(tenant, public, true).await?;
         }

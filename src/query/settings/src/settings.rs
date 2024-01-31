@@ -100,10 +100,10 @@ impl Settings {
         self.changes.remove(k);
     }
 
-    pub async fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+    pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {
-                self.set_setting(k.to_string(), v.to_string()).await?;
+                self.set_setting(k.to_string(), v.to_string())?;
             }
         }
 

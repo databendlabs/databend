@@ -15,9 +15,12 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SettingPlan;
+use databend_common_sql::plans::VarValue;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -33,6 +36,19 @@ pub struct SettingInterpreter {
 impl SettingInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<Self> {
         Ok(SettingInterpreter { ctx, set })
+    }
+
+    async fn set_setting_by_var(&self, var: &VarValue, value: String) -> Result<()> {
+        let settings = self.ctx.get_shared_settings();
+
+        match var.is_global {
+            true => {
+                settings
+                    .set_global_setting(var.variable.clone(), value)
+                    .await
+            }
+            false => settings.set_setting(var.variable.clone(), value),
+        }
     }
 }
 
@@ -58,39 +74,29 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    let settings = self.ctx.get_shared_settings();
+                    self.set_setting_by_var(&var, tz.to_string()).await?;
+                    true
+                }
+                // TODO: if account_admin is built-in meta in future, we need process set sandbox_tenant in there.
+                // Like: https://github.com/datafuselabs/databend/pull/14451/files#diff-a26c9dfc9c0a37f5efa19e2b16006732b9023f42ee47cbe37fe461fb46b9dfc0R82-R85
+                "sandbox_tenant" => {
+                    // only used in sqlogictest, it will create a sandbox tenant on every sqlogictest cases
+                    // and switch to it by SET sandbox_tenant = xxx;
+                    let config = GlobalConfig::instance();
+                    let tenant = var.value.clone();
+                    if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
+                        UserApiProvider::try_create_simple(
+                            config.meta.to_meta_grpc_client_conf(),
+                            &tenant,
+                        )
+                        .await?;
+                    }
 
-                    match var.is_global {
-                        true => {
-                            settings
-                                .set_global_setting(var.variable.clone(), tz.to_string())
-                                .await
-                        }
-                        false => {
-                            settings
-                                .set_setting(var.variable.clone(), tz.to_string())
-                                .await
-                        }
-                    }?;
-
+                    self.set_setting_by_var(&var, var.value.clone()).await?;
                     true
                 }
                 _ => {
-                    let settings = self.ctx.get_shared_settings();
-
-                    match var.is_global {
-                        true => {
-                            settings
-                                .set_global_setting(var.variable.clone(), var.value.clone())
-                                .await
-                        }
-                        false => {
-                            settings
-                                .set_setting(var.variable.clone(), var.value.clone())
-                                .await
-                        }
-                    }?;
-
+                    self.set_setting_by_var(&var, var.value.clone()).await?;
                     true
                 }
             };
