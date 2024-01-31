@@ -46,6 +46,7 @@ pub struct FileFormatOptionsExt {
     pub timezone: Tz,
     pub is_select: bool,
     pub is_clickhouse: bool,
+    pub is_rounding_mode: bool,
 }
 
 impl FileFormatOptionsExt {
@@ -54,6 +55,11 @@ impl FileFormatOptionsExt {
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let numeric_cast_option = settings
+            .get_numeric_cast_option()
+            .unwrap_or("rounding".to_string());
+        let is_rounding_mode = numeric_cast_option.as_str() == "rounding";
+
         let options = FileFormatOptionsExt {
             ident_case_sensitive: false,
             headers: 0,
@@ -63,6 +69,7 @@ impl FileFormatOptionsExt {
             timezone,
             is_select,
             is_clickhouse: false,
+            is_rounding_mode,
         };
         Ok(options)
     }
@@ -81,6 +88,7 @@ impl FileFormatOptionsExt {
             timezone,
             is_select: false,
             is_clickhouse: true,
+            is_rounding_mode: true,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

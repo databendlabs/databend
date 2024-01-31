@@ -68,7 +68,6 @@ use crate::InputCommonSettings;
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
     common_settings: InputCommonSettings,
-    rounding_mode: bool,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -78,7 +77,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings, rounding_mode: bool) -> Self {
+    pub fn create_for_insert(format: FormatSettings, is_rounding_mode: bool) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -92,8 +91,8 @@ impl FastFieldDecoderValues {
                 timezone: format.timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),
+                is_rounding_mode,
             },
-            rounding_mode,
         }
     }
 
@@ -212,7 +211,7 @@ impl FastFieldDecoderValues {
             Err(_) => {
                 // cast float value to integer value
                 let val: f64 = reader.read_float_text()?;
-                let new_val: Option<T::Native> = if self.rounding_mode {
+                let new_val: Option<T::Native> = if self.common_settings.is_rounding_mode {
                     num_traits::cast::cast(val.round())
                 } else {
                     num_traits::cast::cast(val)

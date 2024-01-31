@@ -53,7 +53,7 @@ pub struct FieldJsonAstDecoder {
     timezone: Tz,
     pub ident_case_sensitive: bool,
     pub is_select: bool,
-    rounding_mode: bool,
+    is_rounding_mode: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -68,7 +68,7 @@ impl FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
-            rounding_mode,
+            is_rounding_mode: rounding_mode,
         }
     }
 
@@ -146,7 +146,7 @@ impl FieldJsonAstDecoder {
                     Some(v) => num_traits::cast::cast(v),
                     None => match v.as_f64() {
                         Some(v) => {
-                            if self.rounding_mode {
+                            if self.is_rounding_mode {
                                 num_traits::cast::cast(v.round())
                             } else {
                                 num_traits::cast::cast(v)
@@ -178,7 +178,7 @@ impl FieldJsonAstDecoder {
                     Some(v) => num_traits::cast::cast(v),
                     None => match v.as_f64() {
                         Some(v) => {
-                            if self.rounding_mode {
+                            if self.is_rounding_mode {
                                 num_traits::cast::cast(v.round())
                             } else {
                                 num_traits::cast::cast(v)
