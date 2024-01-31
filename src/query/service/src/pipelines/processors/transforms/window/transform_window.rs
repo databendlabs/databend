@@ -219,9 +219,13 @@ impl<T: Number> TransformWindow<T> {
             // STEP 2: Check each partition column to see if it has changed.
             let mut i = 0;
             while i < partition_by_columns {
-                // Should use `prev_frame_start` because the block at `partition_start` may already be popped out of the buffer queue.
-                let start_column =
-                    self.column_at(&self.prev_frame_start, self.partition_indices[i]);
+                // Should use `prev_frame_start` or `peer_group_start` because the block at `partition_start` may already be popped out of the buffer queue.
+                let index = if self.is_ranking {
+                    &self.peer_group_start
+                } else {
+                    &self.prev_frame_start
+                };
+                let start_column = self.column_at(index, self.partition_indices[i]);
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
