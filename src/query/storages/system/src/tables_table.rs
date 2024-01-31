@@ -161,6 +161,7 @@ where TablesTable<T>: HistoryAware
                 "owner",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
+            TableField::new("comment", TableDataType::String),
         ])
     }
 
@@ -378,6 +379,11 @@ where TablesTable<T>: HistoryAware
                 }
             })
             .collect();
+        let comment: Vec<String> = database_tables
+            .iter()
+            .map(|v| v.get_table_info().meta.comment.clone())
+            .collect();
+
         DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -397,6 +403,7 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
             StringType::from_opt_data(owner),
+            StringType::from_data(comment),
         ])
     }
 

@@ -42,7 +42,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'collation_catalog'               | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'collation_name'                  | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'collation_schema'                | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_comment'                  | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'column_comment'                  | 'information_schema' | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'column_default'                  | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'column_key'                      | 'information_schema' | 'columns'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'column_name'                     | 'information_schema' | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -56,6 +56,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                         | 'system'             | 'password_policies'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'stages'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'streams'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'comment'                         | 'system'             | 'tables'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'comment'                         | 'system'             | 'tables_with_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'task_history'        | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'comment'                         | 'system'             | 'tasks'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'compaction_stats'                | 'system'             | 'background_tasks'    | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |

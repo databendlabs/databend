@@ -11,17 +11,22 @@ cursor = db.cursor()
 cursor.execute("drop database if exists test;")
 cursor.execute("create database test;")
 for i in range(100):
-    sql = 'CREATE TABLE test.table_name_{i}(id int(5))'.format(i=i)
+    sql = "CREATE TABLE test.table_name_{i}(id int(5) comment 't\est', c1 int comment 'sss') comment='test'".format(i=i)
     cursor.execute(sql)
 db.commit()
 
-cursor.execute("select count() from system.tables where database='test'")
-start = datetime.now()
-cursor.execute("select count() from system.tables where database='test'")
-execute = (datetime.now()-start)
-if execute.total_seconds() > 0.05:
-    print("Err: query 100 tables in one db cost exception, cost: ", execute)
-else:
-    print("normal")
+def test_speed(cursor, name):
+    sql = "select count() from system."+ name +" where database='test'"
+    cursor.execute(sql)
+    start = datetime.now()
+    cursor.execute(sql)
+    execute = (datetime.now()-start)
+    # in ci 0.06s, in local debug build cost 0.03s
+    if execute.total_seconds() > 0.08:
+        print("Err: query system.%s in one db cost exception, cost: %s"%(name, execute))
+    else:
+        print("normal")
 
+test_speed(cursor, "tables")
+test_speed(cursor, "columns")
 db.close()
