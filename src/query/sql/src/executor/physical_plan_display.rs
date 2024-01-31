@@ -196,7 +196,7 @@ impl Display for Sort {
             .map(|item| {
                 format!(
                     "{} {}",
-                    item.display_name,
+                    item.order_by,
                     if item.asc { "ASC" } else { "DESC" }
                 )
             })
