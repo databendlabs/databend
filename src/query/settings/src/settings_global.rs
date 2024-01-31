@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -42,13 +41,6 @@ impl Settings {
     #[async_backtrace::framed]
     pub async fn try_drop_global_setting(&self, key: &str) -> Result<()> {
         self.changes.remove(key);
-
-        if !DefaultSettings::has_setting(key)? {
-            return Err(ErrorCode::UnknownVariable(format!(
-                "Unknown variable: {:?}",
-                key
-            )));
-        }
 
         UserApiProvider::instance()
             .get_setting_api_client(&self.tenant)?
