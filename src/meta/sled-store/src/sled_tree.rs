@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
+use std::time::Duration;
 
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::anyerror::AnyError;
@@ -259,6 +260,9 @@ impl SledTree {
             self.tree.apply_batch(batch)?;
 
             self.flush_async(flush).await?;
+
+            // Do not block for too long if there are many keys to delete.
+            tokio::time::sleep(Duration::from_millis(5)).await;
         }
 
         Ok(())
