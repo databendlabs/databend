@@ -59,8 +59,6 @@ impl AggregateHashTable {
         config: HashTableConfig,
     ) -> Self {
         let capacity = Self::initial_capacity();
-        println!("init capacity:{}", capacity);
-        println!("max_partial_capacity: {}", config.max_partial_capacity);
         Self::new_with_capacity(group_types, aggrs, config, capacity)
     }
 
@@ -153,14 +151,12 @@ impl AggregateHashTable {
         if self.config.partial_agg && self.capacity >= self.config.max_partial_capacity {
             // check size
             if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
-                // println!("max_partial_capacity resize");
                 self.clear_ht();
                 self.reset_count();
             }
 
             // check maybe_repartition
             if self.maybe_repartition() {
-                // println!("max_partial_capacity maybe");
                 self.clear_ht();
                 self.reset_count();
             }
@@ -176,8 +172,7 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
-        if row_count + self.count > self.resize_threshold()
-        {
+        if row_count + self.count > self.resize_threshold() {
             self.resize(self.capacity * 2);
         }
 
@@ -438,17 +433,15 @@ impl AggregateHashTable {
     pub fn resize(&mut self, new_capacity: usize) {
         if self.config.partial_agg {
             if self.capacity == self.config.max_partial_capacity {
-                println!("trying grow partial {} into {}", self.capacity, new_capacity);
                 return;
             }
             self.entries = vec![0; new_capacity];
             self.reset_count();
-            println!("grow partial {} into {}", self.capacity, new_capacity);
             self.capacity = new_capacity;
-
             return;
         }
 
+        self.reset_count();
         let mask = (new_capacity - 1) as u64;
 
         let mut entries = vec![0; new_capacity];
