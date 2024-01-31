@@ -254,6 +254,8 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         if optimized {
             s_expr = (*dp_res).clone();
             s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
+            // After join reorder, we need to run push down filter join again.
+            // There may be some changes to change join type, such as single join to inner join.
             s_expr.clear_applied_rules();
             let mut optimizer = RecursiveOptimizer::new(&[RuleID::PushDownFilterJoin], &opt_ctx);
             optimizer.set_after_join_reorder(true);

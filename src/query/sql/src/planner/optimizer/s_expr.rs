@@ -417,6 +417,7 @@ impl SExpr {
         add_internal_column_index_into_child(expr, column_index, table_index)
     }
 
+    // The method will clear the applied rules of current SExpr and its children.
     pub fn clear_applied_rules(&mut self) {
         self.applied_rules.clear();
         let children = self
