@@ -12,24 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod beyond_end_reader;
-pub mod error_utils;
-mod impls;
-mod input_context;
-mod input_format;
-mod input_format_text;
-mod input_pipeline;
-mod input_split;
-mod source_aligner;
-mod transform_deserializer;
+mod csv;
 
-pub use beyond_end_reader::BeyondEndReader;
-pub use input_context::InputContext;
-pub use input_context::InputPlan;
-pub use input_context::StreamPlan;
-pub use input_format::InputFormat;
-pub use input_format_text::*;
-pub use input_pipeline::StreamingReadBatch;
-pub use input_split::split_by_size;
-pub use input_split::SplitInfo;
-pub use source_aligner::Aligner;
+pub use csv::CsvInputFormat;
