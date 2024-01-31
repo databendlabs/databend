@@ -87,7 +87,11 @@ impl Interpreter for UnSettingInterpreter {
                     };
                     match default_val {
                         Some(val) => (true, val),
-                        None => (false, String::from("")),
+                        None => {
+                            self.ctx
+                                .push_warning(format!("Unknown setting: '{}'", setting_key));
+                            (false, String::from(""))
+                        }
                     }
                 }
             };
