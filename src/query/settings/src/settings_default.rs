@@ -745,10 +745,6 @@ impl DefaultSettings {
         Ok(recluster_block_size)
     }
 
-    pub fn has_setting(key: &str) -> Result<bool> {
-        Ok(Self::instance()?.settings.contains_key(key))
-    }
-
     /// Converts and validates a setting value based on its key.
     pub fn convert_value(k: String, v: String) -> Result<(String, UserSettingValue)> {
         // Retrieve the default settings instance
