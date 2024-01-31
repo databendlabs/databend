@@ -148,7 +148,7 @@ impl HashJoinBuildState {
         {
             let is_cluster = !ctx.get_cluster().is_empty();
             // For cluster, only support runtime filter for broadcast join.
-            let is_broadcast_join = true;
+            let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
             if !is_cluster || is_broadcast_join {
                 enable_inlist_runtime_filter = true;
                 enable_min_max_runtime_filter = true;

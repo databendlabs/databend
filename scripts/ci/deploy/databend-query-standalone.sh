@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
-BUILD_PROFILE=${BUILD_PROFILE:-release}
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query || true
 killall databend-meta || true

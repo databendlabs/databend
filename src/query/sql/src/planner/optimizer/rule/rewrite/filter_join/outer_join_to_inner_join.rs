@@ -129,7 +129,7 @@ pub fn outer_to_inner(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExpr
 
     #[cfg(not(feature = "z3-prove"))]
     {
-        let (s_expr, res) = outer_to_inner_impl(s_expr)?;
+        let (s_expr, res) = outer_to_inner_impl(after_join_reorder, &s_expr)?;
         Ok((s_expr, res))
     }
 }
