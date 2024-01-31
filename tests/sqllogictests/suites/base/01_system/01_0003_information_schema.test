@@ -77,3 +77,23 @@ information_schema
 information_schema
 information_schema
 information_schema
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(id int comment 'tes\t', c1 string comment 'sss') comment='table comm\ent'
+
+query T
+select table_comment from information_schema.TABLES where table_schema='default' and table_name='t'
+----
+table comm\ent
+
+query T
+select column_comment from information_schema.COLUMNS where table_schema='default' and table_name='t'
+----
+'tes	'
+'sss'
+
+statement ok
+drop table if exists t

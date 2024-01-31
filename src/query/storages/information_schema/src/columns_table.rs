@@ -33,7 +33,7 @@ impl ColumnsTable {
             name AS column_name,
             1 AS ordinal_position,
             NULL AS column_default,
-            NULL AS column_comment,
+            comment AS column_comment,
             NULL AS column_key,
             case when is_nullable='NO' then 0
             when is_nullable='YES' then 1
