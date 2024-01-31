@@ -151,15 +151,21 @@ where
                     state.merge_result(builder, self.function_data.as_deref())
                 }
             },
-            // some `ValueType` like `NullableType` need ownership to downcast builder,
-            // so here we using an unsafe way to take the ownership of builder.
-            // See [`take_mut`] for details.
-            _ => take_mut(builder, |builder| {
-                let mut builder = R::try_downcast_owned_builder(builder).unwrap();
-                state
-                    .merge_result(&mut builder, self.function_data.as_deref())
-                    .map(|_| R::try_upcast_column_builder(builder).unwrap())
-            }),
+            _ => {
+                // some `ValueType` like `NullableType` need ownership to downcast builder,
+                // so here we using an unsafe way to take the ownership of builder.
+                // See [`take_mut`] for details.
+                if let Some(builder) = R::try_downcast_builder(builder) {
+                    state.merge_result(builder, self.function_data.as_deref())
+                } else {
+                    take_mut(builder, |builder| {
+                        let mut builder = R::try_downcast_owned_builder(builder).unwrap();
+                        let res = state.merge_result(&mut builder, self.function_data.as_deref());
+
+                        (res, R::try_upcast_column_builder(builder).unwrap())
+                    })
+                }
+            }
         }
     }
 }
