@@ -97,6 +97,13 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_to_inner(self.after_join_reorder(), s_expr)?;
+        if self.after_join_reorder {
+            // Don't need to continue
+            if outer_to_inner {
+                state.add_result(s_expr);
+            }
+            return Ok(());
+        }
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         if s_expr.plan().rel_op() != RelOp::Filter {

@@ -192,23 +192,25 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let left_expr_for_runtime_filter = if left_condition.used_columns().iter().all(|idx| {
-                // Runtime filter only support column in base table. It's possible to use a wrong derived column with
-                // the same name as a base table column, so we need to check if the column is a base table column.
-                matches!(
-                    self.metadata.read().column(*idx),
-                    ColumnEntry::BaseTableColumn(_)
-                )
-            }) {
-                Some(
-                    left_condition
-                        .as_raw_expr()
-                        .type_check(&*self.metadata.read())?
-                        .project_column_ref(|col| col.column_name.clone()),
-                )
-            } else {
-                None
-            };
+            let left_expr_for_runtime_filter =
+                if left_condition.used_columns().iter().all(|idx| {
+                    // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+                    // the same name as a base table column, so we need to check if the column is a base table column.
+                    matches!(
+                        self.metadata.read().column(*idx),
+                        ColumnEntry::BaseTableColumn(_)
+                    )
+                }) && matches!(probe_side, box PhysicalPlan::TableScan(_))
+                {
+                    Some(
+                        left_condition
+                            .as_raw_expr()
+                            .type_check(&*self.metadata.read())?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )
+                } else {
+                    None
+                };
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =

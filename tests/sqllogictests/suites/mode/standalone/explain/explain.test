@@ -1240,14 +1240,14 @@ explain select * from a where a.id = (select id from b where a.id = b.id);
 Filter
 ├── output columns: [a.id (#0), a.c1 (#1)]
 ├── filters: [is_true(a.id (#0) = scalar_subquery_2 (#2))]
-├── estimated rows: 0.60
+├── estimated rows: 0.08
 └── HashJoin
     ├── output columns: [a.id (#0), a.c1 (#1), b.id (#2)]
-    ├── join type: LEFT SINGLE
+    ├── join type: INNER
     ├── build keys: [id (#2)]
     ├── probe keys: [id (#0)]
     ├── filters: []
-    ├── estimated rows: 3.00
+    ├── estimated rows: 0.40
     ├── Filter(Build)
     │   ├── output columns: [b.id (#2)]
     │   ├── filters: [is_true(b.id (#2) = b.id (#2))]
@@ -1604,7 +1604,7 @@ Filter
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
-    ├── join type: LEFT SINGLE
+    ├── join type: INNER
     ├── build keys: [a (#3)]
     ├── probe keys: [a (#0)]
     ├── filters: []
@@ -1659,7 +1659,7 @@ Filter
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.c (#5)]
-    ├── join type: LEFT SINGLE
+    ├── join type: INNER
     ├── build keys: [a (#3)]
     ├── probe keys: [a (#0)]
     ├── filters: []

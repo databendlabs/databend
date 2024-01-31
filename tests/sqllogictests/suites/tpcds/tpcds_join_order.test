@@ -6773,7 +6773,7 @@ HashJoin: LEFT MARK
 ├── Build
 │   └── HashJoin: LEFT MARK
 │       ├── Build
-│       │   └── HashJoin: RIGHT SEMI
+│       │   └── HashJoin: LEFT MARK
 │       │       ├── Build
 │       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
