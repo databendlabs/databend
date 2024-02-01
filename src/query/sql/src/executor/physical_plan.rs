@@ -58,7 +58,6 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
-use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum PhysicalPlan {
@@ -357,49 +356,6 @@ impl PhysicalPlan {
                 self,
                 Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
             )
-    }
-
-    pub fn get_table_index(&self) -> IndexType {
-        match self {
-            PhysicalPlan::TableScan(scan) => scan.table_index,
-            PhysicalPlan::Filter(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Project(plan) => plan.input.get_table_index(),
-            PhysicalPlan::EvalScalar(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ProjectSet(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregateExpand(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregatePartial(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregateFinal(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Window(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Sort(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Limit(plan) => plan.input.get_table_index(),
-            PhysicalPlan::RowFetch(plan) => plan.input.get_table_index(),
-            PhysicalPlan::HashJoin(plan) => plan.probe.get_table_index(),
-            PhysicalPlan::Exchange(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ExchangeSink(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ExchangeSource(plan) => plan.table_index,
-            PhysicalPlan::DistributedInsertSelect(plan) => plan.input.get_table_index(),
-            PhysicalPlan::MaterializedCte(_) |
-            // Todo: support union and range join return valid table index by join probe keys
-            PhysicalPlan::UnionAll(_) |
-            PhysicalPlan::RangeJoin(_) |
-            PhysicalPlan::ConstantTableScan(_)
-            | PhysicalPlan::CteScan(_)
-            | PhysicalPlan::Udf(_)
-            | PhysicalPlan::DeleteSource(_)
-            | PhysicalPlan::CopyIntoTable(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReplaceDeduplicate(_)
-            | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::MergeIntoSource(_)
-            | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
-            | PhysicalPlan::MergeIntoAddRowNumber(_)
-            | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => usize::MAX,
-        }
     }
 
     pub fn get_desc(&self) -> Result<String> {
