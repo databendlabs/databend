@@ -790,13 +790,13 @@ impl HashJoinBuildState {
     }
 
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
-        for (build_key, probe_key, table_indexes) in self
+        for (build_key, probe_key, table_index) in self
             .hash_join_state
             .hash_join_desc
             .build_keys
             .iter()
             .zip(self.hash_join_state.hash_join_desc.probe_keys_rt.iter())
-            .filter_map(|(b, (p, indexes))| p.as_ref().map(|p| (b, p, indexes)))
+            .filter_map(|(b, p)| p.as_ref().map(|(p, index)| (b, p, index)))
         {
             let mut runtime_filter = RuntimeFilterInfo::default();
             if self.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD
@@ -820,8 +820,7 @@ impl HashJoinBuildState {
                 )?;
             }
             if !runtime_filter.is_empty() {
-                self.ctx
-                    .set_runtime_filter((table_indexes[0], runtime_filter));
+                self.ctx.set_runtime_filter((*table_index, runtime_filter));
             }
         }
         Ok(())

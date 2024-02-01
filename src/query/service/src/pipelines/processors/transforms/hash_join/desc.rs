@@ -44,7 +44,7 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_keys_rt: Vec<(Option<Expr<String>>, Vec<IndexType>)>,
+    pub(crate) probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
 }
@@ -64,14 +64,13 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        let probe_keys_rt: Vec<(Option<Expr<String>>, Vec<IndexType>)> = join
+        let probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>> = join
             .probe_keys_rt
             .iter()
-            .map(|(k, idxes)| {
-                (
-                    k.as_ref().map(|v| v.as_expr(&BUILTIN_FUNCTIONS)),
-                    idxes.to_vec(),
-                )
+            .map(|probe_key_rt| {
+                probe_key_rt
+                    .as_ref()
+                    .map(|(expr, idx)| (expr.as_expr(&BUILTIN_FUNCTIONS), *idx))
             })
             .collect();
 
