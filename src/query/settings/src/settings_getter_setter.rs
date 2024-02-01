@@ -361,6 +361,10 @@ impl Settings {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
+    pub fn get_enable_experimental_aggregate_hashtable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
+    }
+
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
     }

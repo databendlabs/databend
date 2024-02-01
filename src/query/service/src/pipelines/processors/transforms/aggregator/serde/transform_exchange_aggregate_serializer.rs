@@ -175,6 +175,8 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         }
                     }));
                 }
+
+                Some(AggregateMeta::AggregateHashTable(_)) => todo!("AGG_HASHTABLE"),
             };
         }
 
