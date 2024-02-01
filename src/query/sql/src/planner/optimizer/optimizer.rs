@@ -134,9 +134,9 @@ impl<'a> RecursiveOptimizer<'a> {
             )?;
             let mut state = TransformResult::new();
             if rule
-                .patterns()
+                .matchers()
                 .iter()
-                .any(|pattern| s_expr.match_pattern(pattern))
+                .any(|matcher| matcher.matches(&s_expr))
                 && !s_expr.applied_rule(&rule.id())
             {
                 s_expr.set_applied_rule(&rule.id());
@@ -458,7 +458,9 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             .get_join_spilling_threshold()?
             == 0
             && !change_join_order
-            && merge_into_join_sexpr.match_pattern(&merge_source_optimizer.merge_source_pattern)
+            && merge_source_optimizer
+                .merge_source_matcher
+                .matches(&merge_into_join_sexpr)
             && !non_equal_join
         {
             (

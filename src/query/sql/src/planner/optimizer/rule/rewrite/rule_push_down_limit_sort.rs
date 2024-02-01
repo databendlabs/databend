@@ -15,17 +15,15 @@
 use std::cmp;
 use std::sync::Arc;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Limit;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::RelOp::Pattern;
-use crate::plans::RelOp::Sort;
 use crate::plans::RelOperator;
-use crate::plans::Sort as logsort;
+use crate::plans::Sort;
 
 /// Input:  Limit
 ///           \
@@ -40,27 +38,20 @@ use crate::plans::Sort as logsort;
 ///               *
 pub struct RulePushDownLimitSort {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RulePushDownLimitSort {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitSort,
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Limit,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(PatternPlan { plan_type: Sort }.into()),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan { plan_type: Pattern }.into(),
-                    ))),
-                )),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Limit,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Sort,
+                    children: vec![Matcher::Leaf],
+                }],
+            }],
         }
     }
 }
@@ -79,7 +70,7 @@ impl Rule for RulePushDownLimitSort {
         if let Some(mut count) = limit.limit {
             count += limit.offset;
             let sort = s_expr.child(0)?;
-            let mut sort_limit: logsort = sort.plan().clone().try_into()?;
+            let mut sort_limit: Sort = sort.plan().clone().try_into()?;
             sort_limit.limit = Some(sort_limit.limit.map_or(count, |c| cmp::max(c, count)));
             let sort = SExpr::create_unary(
                 Arc::new(RelOperator::Sort(sort_limit)),
@@ -93,7 +84,7 @@ impl Rule for RulePushDownLimitSort {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

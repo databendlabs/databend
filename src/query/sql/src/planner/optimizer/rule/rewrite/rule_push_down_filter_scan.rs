@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -29,7 +30,6 @@ use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::UDFServerCall;
@@ -43,7 +43,7 @@ use crate::TableEntry;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
 
@@ -54,20 +54,13 @@ impl RulePushDownFilterScan {
             // Filter
             //  \
             //   LogicalGet
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Scan,
-                    }
-                    .into(),
-                ))),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Scan,
+                    children: vec![],
+                }],
+            }],
             metadata,
         }
     }
@@ -409,7 +402,7 @@ impl Rule for RulePushDownFilterScan {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

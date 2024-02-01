@@ -16,21 +16,21 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::SExpr;
 use crate::plans::AddRowNumber;
 use crate::plans::Exchange::Broadcast;
 use crate::plans::Join;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 pub struct MergeSourceOptimizer {
-    pub merge_source_pattern: SExpr,
+    pub merge_source_matcher: Matcher,
 }
 
 impl MergeSourceOptimizer {
     pub fn create() -> Self {
         Self {
-            merge_source_pattern: Self::merge_source_pattern(),
+            merge_source_matcher: Self::merge_source_matcher(),
         }
     }
 
@@ -75,7 +75,7 @@ impl MergeSourceOptimizer {
     }
 
     // for right outer join (source as build)
-    fn merge_source_pattern() -> SExpr {
+    fn merge_source_matcher() -> Matcher {
         // Input:
         //       Exchange(Merge)
         //          |
@@ -97,49 +97,24 @@ impl MergeSourceOptimizer {
         //    |          AddRowNumber
         //    |               |
         //    *               *
-        SExpr::create_unary(
-            Arc::new(
-                PatternPlan {
-                    plan_type: RelOp::Exchange,
-                }
-                .into(),
-            ),
-            Arc::new(SExpr::create_binary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Exchange,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Exchange,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-            )),
-        )
+        Matcher::MatchOp {
+            op_type: RelOp::Exchange,
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![
+                    Matcher::MatchOp {
+                        op_type: RelOp::Exchange,
+                        children: vec![Matcher::Leaf],
+                    },
+                    Matcher::MatchOp {
+                        op_type: RelOp::Exchange,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Exchange,
+                            children: vec![Matcher::Leaf],
+                        }],
+                    },
+                ],
+            }],
+        }
     }
 }

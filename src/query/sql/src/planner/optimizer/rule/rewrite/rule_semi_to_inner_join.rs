@@ -17,50 +17,34 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 
 pub struct RuleSemiToInnerJoin {
     id: RuleID,
-    patterns: Vec<SExpr>,
-    _metadata: MetadataRef,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleSemiToInnerJoin {
-    pub fn new(_metadata: MetadataRef) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::SemiToInnerJoin,
-            patterns: vec![SExpr::create_binary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
-            _metadata,
+            // Join
+            // |  \
+            // *   *
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![Matcher::Leaf, Matcher::Leaf],
+            }],
         }
     }
 }
@@ -116,8 +100,8 @@ impl Rule for RuleSemiToInnerJoin {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 
@@ -145,8 +129,7 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::Udf(_)
         | RelOperator::Scan(_)
         | RelOperator::CteScan(_)
-        | RelOperator::Join(_)
-        | RelOperator::Pattern(_) => {}
+        | RelOperator::Join(_) => {}
     }
     Ok(())
 }

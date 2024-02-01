@@ -16,30 +16,30 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
 
 pub struct SortAndLimitPushDownOptimizer {
-    sort_pattern: SExpr,
-    limit_pattern: SExpr,
+    sort_matcher: Matcher,
+    limit_matcher: Matcher,
 }
 
 impl SortAndLimitPushDownOptimizer {
     pub fn create() -> Self {
         Self {
-            sort_pattern: Self::sort_pattern(),
-            limit_pattern: Self::limit_pattern(),
+            sort_matcher: Self::sort_matcher(),
+            limit_matcher: Self::limit_matcher(),
         }
     }
 
     /// `limit` is already pushed down to `Sort`,
     /// so the TopN scenario is already contained in this pattern.
-    fn sort_pattern() -> SExpr {
+    fn sort_matcher() -> Matcher {
         // Input:
         //   Sort
         //    \
@@ -54,31 +54,16 @@ impl SortAndLimitPushDownOptimizer {
         //       Sort (after_exchange = false)
         //        \
         //         *
-        SExpr::create_unary(
-            Arc::new(
-                PatternPlan {
-                    plan_type: RelOp::Sort,
-                }
-                .into(),
-            ),
-            Arc::new(SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Exchange,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )),
-        )
+        Matcher::MatchOp {
+            op_type: RelOp::Sort,
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Exchange,
+                children: vec![Matcher::Leaf],
+            }],
+        }
     }
 
-    fn limit_pattern() -> SExpr {
+    fn limit_matcher() -> Matcher {
         // Input:
         // Limit
         //  \
@@ -93,28 +78,13 @@ impl SortAndLimitPushDownOptimizer {
         //     Limit
         //      \
         //       *
-        SExpr::create_unary(
-            Arc::new(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-            ),
-            Arc::new(SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Exchange,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )),
-        )
+        Matcher::MatchOp {
+            op_type: RelOp::Limit,
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Exchange,
+                children: vec![Matcher::Leaf],
+            }],
+        }
     }
 
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -129,7 +99,7 @@ impl SortAndLimitPushDownOptimizer {
     }
 
     fn apply_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if !s_expr.match_pattern(&self.sort_pattern) {
+        if !self.sort_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
 
@@ -153,7 +123,7 @@ impl SortAndLimitPushDownOptimizer {
     }
 
     fn apply_limit(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if !s_expr.match_pattern(&self.limit_pattern) {
+        if self.limit_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
 

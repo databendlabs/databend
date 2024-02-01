@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
@@ -23,7 +24,6 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
 /// Rule to apply commutativity of join operator.
@@ -31,7 +31,7 @@ use crate::plans::RelOp;
 /// rule will help us measure which child is the better one.
 pub struct RuleCommuteJoin {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleCommuteJoin {
@@ -42,16 +42,10 @@ impl RuleCommuteJoin {
             // LogicalJoin
             // | \
             // *  *
-            patterns: vec![SExpr::create_binary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_pattern_leaf()),
-                Arc::new(SExpr::create_pattern_leaf()),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![Matcher::Leaf, Matcher::Leaf],
+            }],
         }
     }
 }
@@ -110,7 +104,7 @@ impl Rule for RuleCommuteJoin {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

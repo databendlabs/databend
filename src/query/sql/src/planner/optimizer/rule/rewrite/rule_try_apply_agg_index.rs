@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 
 use super::agg_index;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -30,39 +28,27 @@ pub struct RuleTryApplyAggIndex {
     id: RuleID,
     metadata: MetadataRef,
 
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleTryApplyAggIndex {
-    fn sorted_patterns() -> Vec<SExpr> {
+    fn sorted_matchers() -> Vec<Matcher> {
         vec![
             // Expression
             //     |
             //    Sort
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Sort,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Scan,
-                        }
-                        .into(),
-                    ))),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Sort,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                }],
+            },
             // Expression
             //     |
             //    Sort
@@ -70,36 +56,19 @@ impl RuleTryApplyAggIndex {
             //   Filter
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Sort,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Filter,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_leaf(Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Scan,
-                            }
-                            .into(),
-                        ))),
-                    )),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Sort,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Filter,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Scan,
+                            children: vec![],
+                        }],
+                    }],
+                }],
+            },
             // Expression
             //     |
             //    Sort
@@ -109,52 +78,25 @@ impl RuleTryApplyAggIndex {
             // Expression
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Sort,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::EvalScalar,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_leaf(Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Scan,
-                                    }
-                                    .into(),
-                                ))),
-                            )),
-                        )),
-                    )),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Sort,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::EvalScalar,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::Scan,
+                                    children: vec![],
+                                }],
+                            }],
+                        }],
+                    }],
+                }],
+            },
             // Expression
             //     |
             //    Sort
@@ -166,109 +108,58 @@ impl RuleTryApplyAggIndex {
             //   Filter
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Sort,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::EvalScalar,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_unary(
-                                    Arc::new(
-                                        PatternPlan {
-                                            plan_type: RelOp::Filter,
-                                        }
-                                        .into(),
-                                    ),
-                                    Arc::new(SExpr::create_leaf(Arc::new(
-                                        PatternPlan {
-                                            plan_type: RelOp::Scan,
-                                        }
-                                        .into(),
-                                    ))),
-                                )),
-                            )),
-                        )),
-                    )),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Sort,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::EvalScalar,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::Filter,
+                                    children: vec![Matcher::MatchOp {
+                                        op_type: RelOp::Scan,
+                                        children: vec![],
+                                    }],
+                                }],
+                            }],
+                        }],
+                    }],
+                }],
+            },
         ]
     }
 
-    fn normal_patterns() -> Vec<SExpr> {
+    fn normal_matchers() -> Vec<Matcher> {
         vec![
             // Expression
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Scan,
-                    }
-                    .into(),
-                ))),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Scan,
+                    children: vec![],
+                }],
+            },
             // Expression
             //     |
             //   Filter
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Filter,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Scan,
-                        }
-                        .into(),
-                    ))),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                }],
+            },
             // Expression
             //     |
             // Aggregation
@@ -276,44 +167,22 @@ impl RuleTryApplyAggIndex {
             // Expression
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Aggregate,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::EvalScalar,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_leaf(Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Scan,
-                                }
-                                .into(),
-                            ))),
-                        )),
-                    )),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Aggregate,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::EvalScalar,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::Scan,
+                                children: vec![],
+                            }],
+                        }],
+                    }],
+                }],
+            },
             // Expression
             //     |
             // Aggregation
@@ -323,65 +192,39 @@ impl RuleTryApplyAggIndex {
             //   Filter
             //     |
             //    Scan
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Aggregate,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::EvalScalar,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Filter,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_leaf(Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Scan,
-                                    }
-                                    .into(),
-                                ))),
-                            )),
-                        )),
-                    )),
-                )),
-            ),
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Aggregate,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::EvalScalar,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::Filter,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::Scan,
+                                    children: vec![],
+                                }],
+                            }],
+                        }],
+                    }],
+                }],
+            },
         ]
     }
 
-    fn patterns() -> Vec<SExpr> {
-        let mut patterns = Self::normal_patterns();
-        patterns.extend(Self::sorted_patterns());
+    fn matchers() -> Vec<Matcher> {
+        let mut patterns = Self::normal_matchers();
+        patterns.extend(Self::sorted_matchers());
         patterns
     }
+
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::TryApplyAggIndex,
             metadata,
-            patterns: Self::patterns(),
+            matchers: Self::matchers(),
         }
     }
 }
@@ -389,10 +232,6 @@ impl RuleTryApplyAggIndex {
 impl Rule for RuleTryApplyAggIndex {
     fn id(&self) -> RuleID {
         self.id
-    }
-
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
     }
 
     fn apply(
@@ -423,6 +262,10 @@ impl Rule for RuleTryApplyAggIndex {
         }
 
         Ok(())
+    }
+
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 

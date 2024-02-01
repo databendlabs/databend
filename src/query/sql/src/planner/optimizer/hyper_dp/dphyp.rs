@@ -249,7 +249,7 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((new_s_expr, true))
             }
-            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
+            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) => {
                 unreachable!()
             }
             RelOperator::DummyTableScan(_)
@@ -764,9 +764,9 @@ impl DPhpy {
             RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone(), false)?;
         let mut state = TransformResult::new();
         if rule
-            .patterns()
+            .matchers()
             .iter()
-            .any(|pattern| s_expr.match_pattern(pattern))
+            .any(|matcher| matcher.matches(&s_expr))
             && !s_expr.applied_rule(&rule.id())
         {
             s_expr.set_applied_rule(&rule.id());
