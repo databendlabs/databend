@@ -143,8 +143,11 @@ impl ExecutorTasksQueue {
         {
             drop(current_tasks);
             drop(workers_waiting_status);
-            self.switch_queue();
-            executor.increase_global_epoch();
+            if self.switch_queue() {
+                executor.increase_global_epoch();
+            }else{
+                self.finish(workers_condvar.clone());
+            }
             return;
         }
 
@@ -253,10 +256,14 @@ impl ExecutorTasksQueue {
 
     /// Switch the task queue between workers_tasks and next_tasks
     /// When we enter a new time slice, we need to switch them
-    pub fn switch_queue(&self) {
+    pub fn switch_queue(&self) -> bool{
         let mut current_tasks = self.workers_tasks.current_tasks.lock();
         let mut next_tasks = self.workers_tasks.next_tasks.lock();
+        if current_tasks.is_empty() && next_tasks.is_empty(){
+            return false;
+        }
         std::mem::swap(&mut *current_tasks, &mut *next_tasks);
+        return true;
     }
 
 }
