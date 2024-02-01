@@ -291,7 +291,7 @@ impl HashJoinProbeState {
 
         // Probe:
         // (1) INNER / RIGHT / RIGHT SINGLE / RIGHT SEMI / RIGHT ANTI / RIGHT MARK / LEFT SEMI / LEFT MARK
-        //        prefer_early_filtering is true  => early_filtering_probe_with_selection
+        //        prefer_early_filtering is true  => early_filtering_matched_probe
         //        prefer_early_filtering is false => probe
         // (2) LEFT / LEFT SINGLE / LEFT ANTI / FULL
         //        prefer_early_filtering is true  => early_filtering_probe

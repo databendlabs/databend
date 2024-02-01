@@ -73,27 +73,25 @@ impl ProbeState {
         has_string_column: bool,
         func_ctx: FunctionContext,
     ) -> Self {
-        let (row_state, row_state_indexes, mut probe_unmatched_indexes) = match &join_type {
+        let (row_state, row_state_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunction {
-                    (
-                        Some(vec![0; max_block_size]),
-                        Some(vec![0; max_block_size]),
-                        None,
-                    )
+                    (Some(vec![0; max_block_size]), Some(vec![0; max_block_size]))
                 } else {
-                    (
-                        Some(vec![0; max_block_size]),
-                        None,
-                        Some(vec![0; max_block_size]),
-                    )
+                    (Some(vec![0; max_block_size]), None)
                 }
             }
-            _ => (None, None, None),
+            _ => (None, None),
         };
-        if *join_type == JoinType::LeftAnti && !with_conjunction {
-            probe_unmatched_indexes = Some(vec![0; max_block_size]);
-        }
+        let probe_unmatched_indexes = if matches!(
+            &join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+        ) && !with_conjunction
+        {
+            Some(vec![0; max_block_size])
+        } else {
+            None
+        };
         let markers = if matches!(&join_type, JoinType::RightMark) {
             Some(vec![MARKER_KIND_FALSE; max_block_size])
         } else {

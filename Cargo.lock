@@ -4382,6 +4382,7 @@ dependencies = [
  "databend-common-formats",
  "databend-common-functions",
  "databend-common-io",
+ "databend-common-meta-app",
  "databend-common-sql",
  "databend-driver",
  "databend-sql",

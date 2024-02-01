@@ -240,17 +240,17 @@ impl HashJoinProbeState {
         }
 
         // Find all unmatched indexes and generate the result `DataBlock`.
-        matched_idx = 0;
+        let mut unmatched_idx = 0;
         for (i, state) in row_state.iter().enumerate() {
             if !*state {
-                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = i as u32 };
-                matched_idx += 1;
+                unsafe { *probe_indexes.get_unchecked_mut(unmatched_idx) = i as u32 };
+                unmatched_idx += 1;
             }
         }
-        if matched_idx > 0 {
+        if unmatched_idx > 0 {
             result_blocks.push(DataBlock::take(
                 input,
-                &probe_indexes[0..matched_idx],
+                &probe_indexes[0..unmatched_idx],
                 &mut probe_state.generation_state.string_items_buf,
             )?);
         }
