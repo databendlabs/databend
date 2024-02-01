@@ -413,16 +413,12 @@ impl PhysicalPlan {
                 true => String::new(),
                 false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
             },
-            PhysicalPlan::AggregatePartial(v) => v
-                .agg_funcs_expr
-                .iter()
-                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", "),
-            PhysicalPlan::AggregateFinal(v) => v
-                .agg_funcs_expr
-                .iter()
-                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", "),
+            PhysicalPlan::AggregatePartial(v) => {
+                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+            }
+            PhysicalPlan::AggregateFinal(v) => {
+                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+            }
             PhysicalPlan::Sort(v) => v
                 .order_by
                 .iter()
@@ -617,10 +613,7 @@ impl PhysicalPlan {
                 ),
                 (
                     String::from("Aggregate Functions"),
-                    v.agg_funcs_expr
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
+                    v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
                 ),
             ]),
             PhysicalPlan::AggregateFinal(v) => HashMap::from([
@@ -633,10 +626,7 @@ impl PhysicalPlan {
                 ),
                 (
                     String::from("Aggregate Functions"),
-                    v.agg_funcs_expr
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
+                    v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
                 ),
             ]),
             PhysicalPlan::HashJoin(v) => HashMap::from([

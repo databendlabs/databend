@@ -34,7 +34,6 @@ pub struct AggregatePartial {
     pub agg_funcs: Vec<AggregateFunctionDesc>,
 
     pub group_by_expr: Vec<RemoteExpr>,
-    pub agg_funcs_expr: Vec<RemoteExpr>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,

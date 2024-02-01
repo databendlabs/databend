@@ -43,6 +43,7 @@ pub struct AggregateFunctionDesc {
     pub output_column: IndexType,
     /// Bound indices of arguments. Only used in partial aggregation.
     pub arg_indices: Vec<IndexType>,
+    pub display: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

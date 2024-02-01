@@ -51,7 +51,6 @@ pub struct AggregateFinal {
     pub limit: Option<usize>,
 
     pub group_by_expr: Vec<RemoteExpr>,
-    pub agg_funcs_expr: Vec<RemoteExpr>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -120,22 +119,6 @@ impl PhysicalPlanBuilder {
 
         let result = match &agg.mode {
             AggregateMode::Partial => {
-                let agg_funcs_expr = agg
-                    .aggregate_functions
-                    .iter()
-                    .map(|item| {
-                        let expr = item
-                            .scalar
-                            .type_check(input_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                input_schema.index_of(&index.to_string()).unwrap()
-                            });
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        Ok(expr.as_remote_expr())
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
                 let group_by_expr = agg
                     .group_items
                     .iter()
@@ -178,6 +161,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -221,7 +205,6 @@ impl PhysicalPlanBuilder {
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
                                 group_by_expr,
-                                agg_funcs_expr,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -231,7 +214,6 @@ impl PhysicalPlanBuilder {
                                 input,
                                 agg_funcs,
                                 group_by_expr,
-                                agg_funcs_expr,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -278,7 +260,6 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
                                 group_by_expr,
-                                agg_funcs_expr,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
@@ -288,7 +269,6 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
                                 group_by_expr,
-                                agg_funcs_expr,
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
@@ -342,6 +322,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -368,7 +349,6 @@ impl PhysicalPlanBuilder {
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
                             group_by_expr: partial.group_by_expr.clone(),
-                            agg_funcs_expr: partial.agg_funcs_expr.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,
@@ -389,7 +369,6 @@ impl PhysicalPlanBuilder {
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
                             group_by_expr: partial.group_by_expr.clone(),
-                            agg_funcs_expr: partial.agg_funcs_expr.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,

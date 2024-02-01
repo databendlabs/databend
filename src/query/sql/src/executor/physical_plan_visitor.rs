@@ -179,9 +179,8 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             group_by: plan.group_by.clone(),
-            agg_funcs: plan.agg_funcs.clone(),
             group_by_expr: plan.group_by_expr.clone(),
-            agg_funcs_expr: plan.agg_funcs_expr.clone(),
+            agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -196,7 +195,6 @@ pub trait PhysicalPlanReplacer {
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             group_by_expr: plan.group_by_expr.clone(),
-            agg_funcs_expr: plan.agg_funcs_expr.clone(),
             stat_info: plan.stat_info.clone(),
             limit: plan.limit,
         }))

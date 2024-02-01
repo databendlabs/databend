@@ -303,6 +303,9 @@ impl PhysicalPlanBuilder {
                         }
                     })
                     .collect::<Result<_>>()?,
+                display: ScalarExpr::AggregateFunction(agg.clone())
+                    .as_expr()?
+                    .sql_display(),
             }),
             WindowFuncType::LagLead(lag_lead) => {
                 let new_default = match &lag_lead.default {
