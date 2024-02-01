@@ -75,35 +75,30 @@ impl StageApi for StageMgr {
             escape_for_key(&info.stage_name)?
         );
 
-        let res = self.kv_api.get_kv(&key).await?;
-
-        let seq = if res.is_some() {
-            match create_option {
-                CreateOption::CreateIfNotExists(if_not_exists) => {
-                    if *if_not_exists {
-                        return Ok(());
-                    } else {
-                        return Err(ErrorCode::StageAlreadyExists(format!(
-                            "Stage '{}' already exists.",
-                            info.stage_name
-                        )));
-                    }
-                }
-                CreateOption::CreateOrReplace => MatchSeq::GE(0),
-            }
-        } else {
-            MatchSeq::Exact(0)
-        };
-
         let val = Operation::Update(serialize_struct(
             &info,
             ErrorCode::IllegalUserStageFormat,
             || "",
         )?);
 
-        self.kv_api
+        let seq = match create_option {
+            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
+            CreateOption::CreateOrReplace => MatchSeq::GE(0),
+        };
+
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
             .await?;
+
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    info.stage_name
+                )));
+            }
+        }
 
         Ok(())
     }
