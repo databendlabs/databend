@@ -34,23 +34,18 @@ async fn test_set_settings() {
             // Ok with float.
             settings
                 .set_setting("max_memory_usage".to_string(), "1610612736.0".to_string())
-                .await
                 .unwrap();
 
             // Range than u64.
-            let result = settings
-                .set_setting(
-                    "max_memory_usage".to_string(),
-                    "161061273600000000000000000000000000000000000000000000000".to_string(),
-                )
-                .await;
+            let result = settings.set_setting(
+                "max_memory_usage".to_string(),
+                "161061273600000000000000000000000000000000000000000000000".to_string(),
+            );
             let expect = "WrongValueForVariable. Code: 2803, Text = 161061273600000000000000000000000000000000000000000000000 is not a valid integer value.";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
 
             // Range with neg.
-            let result = settings
-                .set_setting("max_memory_usage".to_string(), "-1".to_string())
-                .await;
+            let result = settings.set_setting("max_memory_usage".to_string(), "-1".to_string());
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = -1 is not a valid integer value.";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
@@ -60,32 +55,25 @@ async fn test_set_settings() {
             // Ok
             settings
                 .set_setting("enable_table_lock".to_string(), "1".to_string())
-                .await
                 .unwrap();
             // Ok
             settings
                 .set_setting("enable_table_lock".to_string(), "0".to_string())
-                .await
                 .unwrap();
 
             // Ok with float.
             settings
                 .set_setting("enable_table_lock".to_string(), "1.0".to_string())
-                .await
                 .unwrap();
 
             // Error
-            let result = settings
-                .set_setting("enable_table_lock".to_string(), "3".to_string())
-                .await;
+            let result = settings.set_setting("enable_table_lock".to_string(), "3".to_string());
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = Value 3 is not within the range [0, 1].";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
 
             // Error
-            let result = settings
-                .set_setting("enable_table_lock".to_string(), "xx".to_string())
-                .await;
+            let result = settings.set_setting("enable_table_lock".to_string(), "xx".to_string());
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = xx is not a valid integer value.";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
@@ -97,19 +85,15 @@ async fn test_set_settings() {
         // Ok
         settings
             .set_setting("query_flight_compression".to_string(), "LZ4".to_string())
-            .await
             .unwrap();
 
         // Ok
         settings
             .set_setting("query_flight_compression".to_string(), "lz4".to_string())
-            .await
             .unwrap();
 
         // Error
-        let result = settings
-            .set_setting("query_flight_compression".to_string(), "xx".to_string())
-            .await;
+        let result = settings.set_setting("query_flight_compression".to_string(), "xx".to_string());
         let expect = "WrongValueForVariable. Code: 2803, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
@@ -151,7 +135,6 @@ async fn test_set_data_retention_time_in_days() {
     {
         settings
             .set_setting("data_retention_time_in_days".to_string(), "90".to_string())
-            .await
             .unwrap();
 
         let actual = settings.get_data_retention_time_in_days().unwrap();
@@ -162,7 +145,6 @@ async fn test_set_data_retention_time_in_days() {
     {
         settings
             .set_setting("data_retention_time_in_days".to_string(), "0".to_string())
-            .await
             .unwrap();
 
         let actual = settings.get_data_retention_time_in_days().unwrap();
@@ -171,9 +153,8 @@ async fn test_set_data_retention_time_in_days() {
 
     // Out of range.
     {
-        let result = settings
-            .set_setting("data_retention_time_in_days".to_string(), "91".to_string())
-            .await;
+        let result =
+            settings.set_setting("data_retention_time_in_days".to_string(), "91".to_string());
         let expect =
             "WrongValueForVariable. Code: 2803, Text = Value 91 is not within the range [0, 90].";
 
@@ -200,7 +181,6 @@ async fn test_set_data_retention_time_in_days_from_config() {
     {
         settings
             .set_setting("data_retention_time_in_days".to_string(), "33".to_string())
-            .await
             .unwrap();
 
         let actual = settings.get_data_retention_time_in_days().unwrap();
@@ -209,9 +189,8 @@ async fn test_set_data_retention_time_in_days_from_config() {
 
     // Out of range.
     {
-        let result = settings
-            .set_setting("data_retention_time_in_days".to_string(), "34".to_string())
-            .await;
+        let result =
+            settings.set_setting("data_retention_time_in_days".to_string(), "34".to_string());
         let expect =
             "WrongValueForVariable. Code: 2803, Text = Value 34 is not within the range [0, 33].";
 

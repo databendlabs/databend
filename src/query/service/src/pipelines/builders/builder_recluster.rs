@@ -82,16 +82,21 @@ impl PipelineBuilder {
                     table_index: usize::MAX,
                 };
 
-                self.ctx.set_partitions(plan.parts.clone())?;
-
-                // ReadDataKind to avoid OOM.
-                table.do_read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
-
                 {
                     metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
                     metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
+
+                    log::info!(
+                        "Number of blocks scheduled for recluster: {}",
+                        recluster_block_nums
+                    );
                 }
+
+                self.ctx.set_partitions(plan.parts.clone())?;
+
+                // ReadDataKind to avoid OOM.
+                table.do_read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {

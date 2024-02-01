@@ -8,9 +8,6 @@ statement ok
 USE db_09_0027
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 create table t(c int) storage_format = 'native' compression = 'lz4';
 
 statement ok
@@ -72,9 +69,6 @@ select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where colum
 ----
 DeltaBitpack NULL 1
 OneValue NULL 1
-
-statement ok
-set enable_table_lock = 1
 
 statement ok
 DROP DATABASE db_09_0027

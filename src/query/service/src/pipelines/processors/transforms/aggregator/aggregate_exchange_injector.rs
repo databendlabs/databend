@@ -77,6 +77,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
+                        AggregateMeta::AggregateHashTable(_) => unreachable!(),
                         AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),
@@ -175,6 +176,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
+
+                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
                 };
 
                 return Ok(blocks);

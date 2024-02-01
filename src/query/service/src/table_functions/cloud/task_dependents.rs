@@ -262,7 +262,7 @@ impl AsyncSource for TaskDependentsSource {
         let user = self.ctx.get_current_user()?.identity().to_string();
         let query_id = self.ctx.get_id();
 
-        let cfg = build_client_config(tenant, user, query_id);
+        let cfg = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
 
         let dependents = cloud_api
             .get_task_client()

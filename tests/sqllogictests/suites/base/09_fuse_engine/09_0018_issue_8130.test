@@ -11,9 +11,6 @@ statement ok
 CREATE TABLE IF NOT EXISTS t_issue_8130(c int) row_per_block=1
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 INSERT INTO t_issue_8130 VALUES(1)
 
 statement ok
@@ -36,9 +33,6 @@ query I
 select count(1) from t_issue_8130 where c = 2
 ----
 1
-
-statement ok
-set enable_table_lock = 1
 
 statement ok
 DROP TABLE t_issue_8130

@@ -2695,7 +2695,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let rename_column = map(
         rule! {
-            RENAME ~ COLUMN ~ #ident ~ TO ~ #ident
+            RENAME ~ COLUMN? ~ #ident ~ TO ~ #ident
         },
         |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
             old_column,
@@ -2704,7 +2704,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN ~ #column_def ~ ( #add_column_option )?
+            ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
         },
         |(_, _, column, option)| AlterTableAction::AddColumn {
             column,
@@ -2714,14 +2714,14 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_column = map(
         rule! {
-            MODIFY ~ COLUMN ~ #modify_column_action
+            MODIFY ~ COLUMN? ~ #modify_column_action
         },
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
     let drop_column = map(
         rule! {
-            DROP ~ COLUMN ~ #ident
+            DROP ~ COLUMN? ~ #ident
         },
         |(_, _, column)| AlterTableAction::DropColumn { column },
     );
@@ -2765,13 +2765,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
 
     rule!(
-        #rename_table
+        #alter_table_cluster_key
+        | #drop_table_cluster_key
+        | #rename_table
         | #rename_column
         | #add_column
         | #drop_column
         | #modify_column
-        | #alter_table_cluster_key
-        | #drop_table_cluster_key
         | #recluster_table
         | #revert_table
         | #set_table_options

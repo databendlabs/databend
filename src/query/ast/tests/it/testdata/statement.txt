@@ -8050,6 +8050,53 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t ADD c int null;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN c Int32 NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        18..19,
+                    ),
+                },
+                data_type: Nullable(
+                    Int32,
+                ),
+                expr: None,
+                comment: None,
+            },
+            option: End,
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
 ALTER TABLE t ADD COLUMN c Int32 NULL
@@ -8298,6 +8345,45 @@ AlterTable(
                 quote: None,
                 span: Some(
                     26..27,
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t DROP b;
+---------- Output ---------
+ALTER TABLE t DROP COLUMN b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: DropColumn {
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    19..20,
                 ),
             },
         },
@@ -8571,6 +8657,54 @@ AlterTable(
                             quote: None,
                             span: Some(
                                 28..29,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY a int;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                21..22,
                             ),
                         },
                         data_type: Int32,

@@ -98,6 +98,18 @@ pub unsafe fn read_le(data: *const u8, len: usize) -> u64 {
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
+#[inline]
+pub fn fast_memcmp(a: &[u8], b: &[u8]) -> bool {
+    unsafe { sse::memcmp_sse(a, b) }
+}
+
+#[cfg(not(all(any(target_arch = "x86_64"), target_feature = "sse4.2")))]
+#[inline]
+pub fn fast_memcmp(a: &[u8], b: &[u8]) -> bool {
+    a == b
+}
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
 pub mod sse {
     use std::arch::x86_64::*;
 
@@ -137,6 +149,8 @@ pub mod sse {
             ))
     }
 
+    /// # Safety
+    /// This is safe that we compare bytes via addr
     #[inline(always)]
     pub unsafe fn memcmp_sse(a: &[u8], b: &[u8]) -> bool {
         let mut size = a.len();

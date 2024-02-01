@@ -122,7 +122,6 @@ pub async fn streaming_load(
             let value = unescape_string(unquote).map_err(InternalServerError)?;
             settings
                 .set_setting(key.to_string(), value.to_string())
-                .await
                 .map_err(InternalServerError)?
         }
     }

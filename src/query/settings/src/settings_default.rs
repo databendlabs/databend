@@ -606,6 +606,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables experimental aggregate hashtable",
+                        mode: SettingMode::Both,
+                        range: None,
+                }),
+
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
@@ -743,10 +750,6 @@ impl DefaultSettings {
         // so the block size is set relatively conservatively here.
         let recluster_block_size = max_memory_usage * 35 / 100;
         Ok(recluster_block_size)
-    }
-
-    pub fn has_setting(key: &str) -> Result<bool> {
-        Ok(Self::instance()?.settings.contains_key(key))
     }
 
     /// Converts and validates a setting value based on its key.

@@ -18,8 +18,11 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableEntryRefLike;
@@ -42,6 +45,7 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 pub struct TransformFinalAggregate<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
+    flush_state: PayloadFlushState,
 }
 
 impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
@@ -54,8 +58,63 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
         Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
-            TransformFinalAggregate::<Method> { method, params },
+            TransformFinalAggregate::<Method> {
+                method,
+                params,
+                flush_state: PayloadFlushState::default(),
+            },
         )))
+    }
+
+    fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
+        let mut agg_hashtable: Option<AggregateHashTable> = None;
+        if let AggregateMeta::Partitioned { bucket: _, data } = meta {
+            for bucket_data in data {
+                match bucket_data {
+                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                        }
+                        None => {
+                            let capacity =
+                                AggregateHashTable::get_capacity_for_count(payload.len());
+
+                            let mut hashtable = AggregateHashTable::new_with_capacity(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                HashTableConfig::default().with_initial_radix_bits(0),
+                                capacity,
+                            );
+                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            agg_hashtable = Some(hashtable);
+                        }
+                    },
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        if let Some(mut ht) = agg_hashtable {
+            let mut blocks = vec![];
+            self.flush_state.clear();
+            loop {
+                if ht.merge_result(&mut self.flush_state)? {
+                    let mut cols = self.flush_state.take_aggregate_results();
+                    cols.extend_from_slice(&self.flush_state.take_group_columns());
+
+                    blocks.push(DataBlock::new_from_columns(cols));
+                } else {
+                    break;
+                }
+            }
+
+            if blocks.is_empty() {
+                return Ok(DataBlock::empty());
+            }
+            return DataBlock::concat(&blocks);
+        }
+
+        Ok(DataBlock::empty())
     }
 }
 
@@ -65,6 +124,10 @@ where Method: HashMethodBounds
     const NAME: &'static str = "TransformFinalAggregate";
 
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
+        if self.params.enable_experimental_aggregate_hashtable {
+            return self.transform_agg_hashtable(meta);
+        }
+
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
             let arena = Arc::new(Bump::new());
@@ -176,6 +239,7 @@ where Method: HashMethodBounds
                             }
                         }
                     },
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 }
             }
 

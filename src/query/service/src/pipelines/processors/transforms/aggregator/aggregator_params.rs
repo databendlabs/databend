@@ -38,6 +38,8 @@ pub struct AggregatorParams {
     pub layout: Option<Layout>,
     pub offsets_aggregate_states: Vec<usize>,
 
+    pub enable_experimental_aggregate_hashtable: bool,
+    pub max_block_size: usize,
     // Limit is push down to AggregatorTransform
     pub limit: Option<usize>,
 }
@@ -49,6 +51,8 @@ impl AggregatorParams {
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
+        enable_experimental_aggregate_hashtable: bool,
+        max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
@@ -66,6 +70,8 @@ impl AggregatorParams {
             aggregate_functions_arguments: agg_args.to_vec(),
             layout: states_layout,
             offsets_aggregate_states: states_offsets,
+            enable_experimental_aggregate_hashtable,
+            max_block_size,
             limit,
         }))
     }

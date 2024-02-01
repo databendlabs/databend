@@ -129,6 +129,11 @@ impl FromToProto for mt::ShareGrantEntry {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        // Before https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly
+        // use from_bits deserialize privilege type, that maybe cause forward compat error.
+        // Because old query may not contain new query's privilege type, so from_bits will return err, cause from_pb err.
+        // https://docs.rs/enumflags2/0.7.7/enumflags2/struct.BitFlags.html#method.from_bits
+        // https://docs.rs/enumflags2/0.7.7/enumflags2/struct.BitFlags.html#method.from_bits_truncate
         let privileges =
             BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
         Ok(mt::ShareGrantEntry {
