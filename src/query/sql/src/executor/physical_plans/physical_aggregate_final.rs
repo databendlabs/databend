@@ -47,6 +47,8 @@ pub struct AggregateFinal {
     pub before_group_by_schema: DataSchemaRef,
     pub limit: Option<usize>,
 
+    pub group_by_display: Vec<String>,
+
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -114,6 +116,12 @@ impl PhysicalPlanBuilder {
 
         let result = match &agg.mode {
             AggregateMode::Partial => {
+                let group_by_display = agg
+                    .group_items
+                    .iter()
+                    .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
+                    .collect::<Result<Vec<_>>>()?;
+
                 let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                     if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                         Ok(AggregateFunctionDesc {
@@ -140,6 +148,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -182,6 +191,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -190,6 +200,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input,
                                 agg_funcs,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -235,6 +246,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
@@ -243,6 +255,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
@@ -296,6 +309,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -321,6 +335,7 @@ impl PhysicalPlanBuilder {
                         let limit = agg.limit;
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,
@@ -340,6 +355,7 @@ impl PhysicalPlanBuilder {
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,
