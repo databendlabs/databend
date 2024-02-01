@@ -32,6 +32,7 @@ use databend_common_sql::Planner;
 use futures::StreamExt;
 use log::error;
 use log::info;
+use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -203,7 +204,7 @@ impl Executor {
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
-            info!(
+            warn!(
                 "{}: http query change state to Stopped, reason {:?}",
                 &guard.query_id, reason
             );
@@ -252,7 +253,7 @@ impl Executor {
                 }))
             }
             Stopped(s) => {
-                info!(
+                warn!(
                     "{}: http query already stopped, reason {:?}, new reason {:?}",
                     &guard.query_id, s.reason, reason
                 );

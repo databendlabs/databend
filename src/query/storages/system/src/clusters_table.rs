@@ -70,6 +70,7 @@ impl SyncSystemTable for ClustersTable {
 
         Ok(DataBlock::new_from_columns(vec![
             names.build(),
+            clusters.build(),
             addresses.build(),
             addresses_port.build(),
             versions.build(),
