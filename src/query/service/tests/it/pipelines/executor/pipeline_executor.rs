@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -30,11 +31,12 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::SyncSenderSink;
-use databend_common_pipeline_sources::SyncReceiverSource;
+use databend_common_pipeline_sources::BlocksSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
+use parking_lot::Mutex;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_always_call_on_finished() -> Result<()> {
@@ -114,10 +116,14 @@ fn create_source_pipe(
 
     for _index in 0..size {
         let output = OutputPort::create();
-        let (tx, rx) = channel(1);
+        let (tx, _rx) = channel(1);
         txs.push(tx);
         items.push(PipeItem::create(
-            SyncReceiverSource::create(ctx.clone(), rx, output.clone())?,
+            BlocksSource::create(
+                ctx.clone(),
+                output.clone(),
+                Arc::new(Mutex::new(VecDeque::new())),
+            )?,
             vec![],
             vec![output],
         ));

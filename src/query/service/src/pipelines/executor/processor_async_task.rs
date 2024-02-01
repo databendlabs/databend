@@ -36,7 +36,7 @@ use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::{CompletedAsyncTask, RunningGraph};
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
@@ -46,6 +46,7 @@ pub struct ProcessorAsyncTask {
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
+    graph: Arc<RunningGraph>,
     profile: Arc<Profile>,
     instant: Instant,
     last_nanos: usize,
@@ -61,6 +62,7 @@ impl ProcessorAsyncTask {
         workers_condvar: Arc<WorkersCondvar>,
         weak_executor: Weak<PipelineExecutor>,
         profile: Arc<Profile>,
+        graph: Arc<RunningGraph>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -133,6 +135,7 @@ impl ProcessorAsyncTask {
             profile,
             last_nanos: instant.elapsed().as_nanos() as usize,
             instant,
+            graph,
             inner: inner.boxed(),
         }
     }
@@ -172,14 +175,14 @@ impl Future for ProcessorAsyncTask {
             Ok(Poll::Ready(res)) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res, self.graph.clone()),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), self.graph.clone()),
                 );
 
                 Poll::Ready(())

@@ -24,14 +24,14 @@ use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::CompletedAsyncTask;
-use crate::pipelines::executor::RunningGraph;
+use crate::pipelines::executor::{CompletedAsyncTask, RunningGraph};
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::processors::ProcessorPtr;
 
 pub enum ExecutorTask {
     None,
-    Sync(ProcessorPtr),
+    Async(ProcessorWrapper),
+    Sync(ProcessorWrapper),
     AsyncCompleted(CompletedAsyncTask),
 }
 
@@ -73,12 +73,13 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(&mut self, graph: &RunningGraph) -> Result<NodeIndex> {
+    pub unsafe fn execute_task(&mut self) -> Result<(NodeIndex, Arc<RunningGraph>)> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor, graph),
+            ExecutorTask::Async(_) => Err(ErrorCode::Internal("Execute async task at incorrect place.")),
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok(task.id),
+                Ok(_) => Ok((task.id, task.graph)),
                 Err(cause) => Err(cause),
             },
         }
@@ -87,19 +88,18 @@ impl ExecutorWorkerContext {
     /// # Safety
     unsafe fn execute_sync_task(
         &mut self,
-        proc: ProcessorPtr,
-        graph: &RunningGraph,
-    ) -> Result<NodeIndex> {
-        Profile::track_profile(graph.get_node_profile(proc.id()));
+        proc: ProcessorWrapper,
+    ) -> Result<(NodeIndex, Arc<RunningGraph>)> {
+        Profile::track_profile(proc.graph.get_node_profile(proc.id()));
 
         let instant = Instant::now();
 
-        proc.process()?;
+        proc.processor.process()?;
 
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        Ok(proc.id())
+        Ok((proc.processor.id(), proc.graph))
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {
@@ -115,8 +115,14 @@ impl Debug for ExecutorTask {
                 ExecutorTask::Sync(p) => write!(
                     f,
                     "ExecutorTask::Sync {{ id: {}, name: {}}}",
-                    p.id().index(),
-                    p.name()
+                    p.processor.id().index(),
+                    p.processor.name()
+                ),
+                ExecutorTask::Async(p) => write!(
+                    f,
+                    "ExecutorTask::Async {{ id: {}, name: {}}}",
+                    p.processor.id().index(),
+                    p.processor.name()
                 ),
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }

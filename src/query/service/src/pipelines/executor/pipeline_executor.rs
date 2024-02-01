@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::assume;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -37,6 +39,7 @@ use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
+use tokio::time;
 
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::ExecutorSettings;
@@ -53,7 +56,6 @@ pub type FinishedCallback =
 
 pub struct PipelineExecutor {
     threads_num: usize,
-    pub(crate) graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
@@ -64,6 +66,10 @@ pub struct PipelineExecutor {
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
+    pub epoch: AtomicU32,
+
+    // TODO: will remove it after refactoring Executor into a 1:n pattern
+    pub graph: Arc<RunningGraph>,
 }
 
 impl PipelineExecutor {
@@ -83,7 +89,7 @@ impl PipelineExecutor {
         let on_finished_callback = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
-        match RunningGraph::create(pipeline) {
+        match RunningGraph::create(pipeline, 0) {
             Err(cause) => {
                 let _ = on_finished_callback(&Err(cause.clone()));
                 Err(cause)
@@ -153,7 +159,7 @@ impl PipelineExecutor {
             .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
-        match RunningGraph::from_pipelines(pipelines) {
+        match RunningGraph::from_pipelines(pipelines, 0) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
                     let _ = on_finished_callback(&Err(cause.clone()));
@@ -173,7 +179,7 @@ impl PipelineExecutor {
     }
 
     fn try_create(
-        graph: RunningGraph,
+        graph: Arc<RunningGraph>,
         threads_num: usize,
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
@@ -195,6 +201,7 @@ impl PipelineExecutor {
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
+            epoch: AtomicU32::new(0),
         }))
     }
 
@@ -228,9 +235,10 @@ impl PipelineExecutor {
 
     #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        self.init()?;
+        // TODO: will remove this in the future
+        self.init(self.graph.clone())?;
 
-        self.start_executor_daemon()?;
+        self.start_time_limit_daemon()?;
 
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
@@ -265,7 +273,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    fn init(self: &Arc<Self>) -> Result<()> {
+    fn init(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
             {
@@ -285,7 +293,7 @@ impl PipelineExecutor {
                 );
             }
 
-            let mut init_schedule_queue = self.graph.init_schedule_queue(self.threads_num)?;
+            let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
@@ -310,7 +318,8 @@ impl PipelineExecutor {
         }
     }
 
-    fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
+    /// Used to abort the query when the execution time exceeds the maximum execution time limit
+    fn start_time_limit_daemon(self: &Arc<Self>) -> Result<()> {
         if !self.settings.max_execute_time_in_seconds.is_zero() {
             // NOTE(wake ref): When runtime scheduling is blocked, holding executor strong ref may cause the executor can not stop.
             let this = Arc::downgrade(self);
@@ -318,7 +327,12 @@ impl PipelineExecutor {
             let finished_notify = self.finished_notify.clone();
             self.async_runtime.spawn(GLOBAL_TASK, async move {
                 let finished_future = Box::pin(finished_notify.notified());
-                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                let max_execute_future = Box::pin(time::sleep(max_execute_time_in_seconds));
+
+                // This waits for either of two futures to complete:
+                // 1. The 'finished_future', which gets triggered when an external event signals that the task is finished.
+                // 2. The 'max_execute_future', which gets triggered when the maximum execution time as set in 'max_execute_time_in_seconds' elapses.
+                // When either future completes, the executor is finished.
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     if let Some(executor) = this.upgrade() {
                         executor.finish(Some(ErrorCode::AbortedQuery(
@@ -396,22 +410,28 @@ impl PipelineExecutor {
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
-                self.global_tasks_queue.steal_task_to_context(&mut context);
+                self.global_tasks_queue
+                    .steal_task_to_context(&mut context, &self);
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let executed_pid = context.execute_task(&self.graph)?;
+                let (executed_pid, graph) = context.execute_task()?;
 
                 // Not scheduled graph if pipeline is finished.
                 if !self.global_tasks_queue.is_finished() {
                     // We immediately schedule the processor again.
-                    let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                    let schedule_queue = graph.schedule_queue(executed_pid)?;
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, &self);
                 }
             }
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn increase_global_epoch(&self){
+        self.epoch.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn format_graph_nodes(&self) -> String {
