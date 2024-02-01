@@ -35,6 +35,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'check_option'                    | 'information_schema' | 'views'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'client_address'                  | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'client_info'                     | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'cluster'                         | 'system'             | 'clusters'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster_by'                      | 'system'             | 'tables'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster_by'                      | 'system'             | 'tables_with_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster_id'                      | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -203,6 +204,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'license'                         | 'system'             | 'credits'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'location'                        | 'system'             | 'query_cache'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'log_type'                        | 'system'             | 'query_log'           | 'Int8'                | 'TINYINT'           | ''       | ''       | 'NO'     | ''       |
+| 'log_type_name'                   | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'memory_usage'                    | 'system'             | 'processes'           | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'memory_usage'                    | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'message'                         | 'system'             | 'background_jobs'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
