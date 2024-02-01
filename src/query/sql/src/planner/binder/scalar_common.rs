@@ -14,7 +14,6 @@
 
 use std::collections::HashSet;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
@@ -22,7 +21,6 @@ use crate::optimizer::RelationalProperty;
 use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
@@ -227,49 +225,6 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     visitor.visit(scalar).unwrap();
 
     visitor.can_prune
-}
-
-/// Wrap cast scalar to target type
-pub fn wrap_cast_scalar(
-    scalar: &ScalarExpr,
-    data_type: &DataType,
-    target_type: &DataType,
-) -> Result<ScalarExpr> {
-    let target_scalar = if target_type.remove_nullable() == DataType::Variant {
-        match data_type.remove_nullable() {
-            DataType::Boolean
-            | DataType::Number(_)
-            | DataType::Decimal(_)
-            | DataType::Timestamp
-            | DataType::Date
-            | DataType::Bitmap
-            | DataType::Variant => wrap_cast(scalar, target_type),
-            DataType::String => {
-                // parse string to JSON value
-                let func = ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "parse_json".to_string(),
-                    params: vec![],
-                    arguments: vec![scalar.clone()],
-                });
-                wrap_cast(&func, target_type)
-            }
-            _ => {
-                if data_type == &DataType::Null && target_type.is_nullable() {
-                    scalar.clone()
-                } else {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "unable to cast type `{}` to type `{}`",
-                        data_type, target_type
-                    )));
-                }
-            }
-        }
-    } else {
-        wrap_cast(scalar, target_type)
-    };
-
-    Ok(target_scalar)
 }
 
 /// Wrap a cast expression with given target type

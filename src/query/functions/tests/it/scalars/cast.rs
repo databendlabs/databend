@@ -150,7 +150,7 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST([0, 1, 2] AS VARIANT)"), &[]);
     run_ast(
         file,
-        format!("{prefix}CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)"),
+        format!("{prefix}CAST([0::VARIANT, '\"a\"'::VARIANT] AS VARIANT)"),
         &[],
     );
     run_ast(
@@ -162,7 +162,7 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(true AS VARIANT)"), &[]);
     run_ast(
         file,
-        format!("{prefix}CAST({prefix}CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)"),
+        format!("{prefix}CAST({prefix}CAST('\"🍦 が美味しい\"' AS VARIANT) AS VARIANT)"),
         &[],
     );
     run_ast(file, format!("{prefix}CAST((1,) AS VARIANT)"), &[]);
@@ -177,7 +177,9 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
 
     run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
         "a",
-        StringType::from_data_with_validity(vec!["a", "bc", "def"], vec![true, false, true]),
+        StringType::from_data_with_validity(vec!["true", "{\"k\":\"v\"}", "[1,2,3]"], vec![
+            true, false, true,
+        ]),
     )]);
 
     run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(

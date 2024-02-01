@@ -51,6 +51,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -714,40 +715,94 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
-        "to_variant",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(buf)
-            }
-            ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
-                Value::Column(new_col)
-            }
-        },
-    );
+    registry.register_function_factory("to_variant", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        let return_type = if args_type[0].is_nullable_or_null() {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "to_variant".to_string(),
+                args_type: vec![DataType::Generic(0)],
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| match &args_domain[0] {
+                    Domain::Nullable(nullable_domain) => {
+                        FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                            has_null: nullable_domain.has_null,
+                            value: Some(Box::new(Domain::Undefined)),
+                        }))
+                    }
+                    _ => FunctionDomain::Domain(Domain::Undefined),
+                }),
+                eval: Box::new(|args, ctx| match &args[0] {
+                    ValueRef::Scalar(scalar) => match scalar {
+                        ScalarRef::Null => Value::Scalar(Scalar::Null),
+                        _ => {
+                            let mut buf = Vec::new();
+                            cast_scalar_to_variant(scalar.clone(), ctx.func_ctx.tz, &mut buf);
+                            Value::Scalar(Scalar::Variant(buf))
+                        }
+                    },
+                    ValueRef::Column(col) => {
+                        let validity = match col {
+                            Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
+                            Column::Nullable(box ref nullable_column) => {
+                                Some(nullable_column.validity.clone())
+                            }
+                            _ => None,
+                        };
+                        let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                        if let Some(validity) = validity {
+                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                validity,
+                                column: Column::Variant(new_col),
+                            })))
+                        } else {
+                            Value::Column(Column::Variant(new_col))
+                        }
+                    }
+                }),
+            },
+        }))
+    });
 
     registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "try_to_variant",
-        |_, _| {
+        |_, domain| {
+            let has_null = match domain {
+                Domain::Nullable(nullable_domain) => nullable_domain.has_null,
+                _ => false,
+            };
             FunctionDomain::Domain(NullableDomain {
-                has_null: false,
+                has_null,
                 value: Some(Box::new(())),
             })
         },
         |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(Some(buf))
-            }
+            ValueRef::Scalar(scalar) => match scalar {
+                ScalarRef::Null => Value::Scalar(None),
+                _ => {
+                    let mut buf = Vec::new();
+                    cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                    Value::Scalar(Some(buf))
+                }
+            },
             ValueRef::Column(col) => {
+                let validity = match col {
+                    Column::Null { len } => Bitmap::new_constant(false, len),
+                    Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
+                    _ => Bitmap::new_constant(true, col.len()),
+                };
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                 Value::Column(NullableColumn {
-                    validity: Bitmap::new_constant(true, new_col.len()),
+                    validity,
                     column: new_col,
                 })
             }

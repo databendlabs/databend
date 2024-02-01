@@ -445,6 +445,24 @@ SELECT to_variant(to_bitmap('100,200,300'));
 ----
 [100,200,300]
 
+statement error 1006
+SELECT 'abc'::variant
+
+query T
+SELECT '{"k":"v"}'::variant
+----
+{"k":"v"}
+
+query T
+SELECT to_variant('abc')
+----
+"abc"
+
+query T
+SELECT to_variant('{"k":"v"}')
+----
+"{\"k\":\"v\"}"
+
 statement ok
 drop table if exists t
 

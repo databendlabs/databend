@@ -31,7 +31,7 @@ use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use indexmap::IndexMap;
 
-use crate::binder::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::ConstantTableScan;
@@ -154,7 +154,7 @@ pub async fn bind_values(
         let mut builder = ColumnBuilder::with_capacity(value_field.data_type(), col_scalars.len());
         for (scalar, value_type) in scalars {
             let scalar = if value_type != value_field.data_type() {
-                wrap_cast_scalar(scalar, value_type, value_field.data_type())?
+                wrap_cast(scalar, value_field.data_type())
             } else {
                 scalar.clone()
             };
