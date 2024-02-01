@@ -103,7 +103,7 @@ impl Pipeline {
         }
     }
 
-    pub fn resize_scopes(&mut self, scopes: Vec<PlanScope>) {
+    pub fn reset_scopes(&mut self, scopes: Vec<PlanScope>) {
         self.scope_size = Arc::new(AtomicUsize::new(scopes.len()));
         self.plans_scope = scopes;
     }
