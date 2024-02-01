@@ -18,7 +18,6 @@ use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
-use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
@@ -27,11 +26,13 @@ use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use minitrace::func_name;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -74,50 +75,37 @@ impl StageApi for StageMgr {
             escape_for_key(&info.stage_name)?
         );
 
-        let mut trials = txn_backoff(None, func_name!());
-        let kv_api = &self.kv_api;
+        let res = self.kv_api.get_kv(&key).await?;
 
-        loop {
-            trials.next().unwrap()?.await;
-
-            let res = kv_api.get_kv(&key).await?;
-
-            let seq = if let Some(seqv) = res {
-                match create_option {
-                    CreateOption::CreateIfNotExists(if_not_exists) => {
-                        if *if_not_exists {
-                            return Ok(());
-                        } else {
-                            return Err(ErrorCode::StageAlreadyExists(format!(
-                                "Stage '{}' already exists.",
-                                info.stage_name
-                            )));
-                        }
+        let seq = if res.is_some() {
+            match create_option {
+                CreateOption::CreateIfNotExists(if_not_exists) => {
+                    if *if_not_exists {
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::StageAlreadyExists(format!(
+                            "Stage '{}' already exists.",
+                            info.stage_name
+                        )));
                     }
-                    CreateOption::CreateOrReplace => seqv.seq,
                 }
-            } else {
-                0
-            };
-
-            let condition = vec![txn_cond_seq(&key, Eq, seq)];
-            let if_then = vec![txn_op_put(
-                &key,
-                serialize_struct(&info, ErrorCode::IllegalUserStageFormat, || "")?,
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let tx_reply = kv_api.transaction(txn_req).await?;
-            let (succ, _responses) = txn_reply_to_api_result(tx_reply)?;
-            if succ {
-                return Ok(());
+                CreateOption::CreateOrReplace => MatchSeq::GE(0),
             }
-        }
+        } else {
+            MatchSeq::Exact(0)
+        };
+
+        let val = Operation::Update(serialize_struct(
+            &info,
+            ErrorCode::IllegalUserStageFormat,
+            || "",
+        )?);
+
+        self.kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
+            .await?;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
