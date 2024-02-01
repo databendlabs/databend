@@ -25,7 +25,6 @@ use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
 use super::join::Join;
 use super::limit::Limit;
-use super::pattern::PatternPlan;
 use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
@@ -48,11 +47,6 @@ pub trait Operator {
 
     /// Get arity of this operator
     fn arity(&self) -> usize;
-
-    /// Is this operator a pattern operator
-    fn is_pattern(&self) -> bool {
-        false
-    }
 
     /// Derive relational property
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>>;
@@ -128,7 +122,6 @@ pub enum RelOperator {
     MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
     Udf(Udf),
-    Pattern(PatternPlan),
 }
 
 impl Operator for RelOperator {
@@ -141,7 +134,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
             RelOperator::Sort(rel_op) => rel_op.rel_op(),
             RelOperator::Limit(rel_op) => rel_op.rel_op(),
-            RelOperator::Pattern(rel_op) => rel_op.rel_op(),
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
@@ -174,7 +166,6 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.arity(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
-            RelOperator::Pattern(rel_op) => rel_op.arity(),
         }
     }
 
@@ -187,7 +178,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Sort(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Limit(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Pattern(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Exchange(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -210,7 +200,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Sort(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Limit(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Pattern(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Exchange(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -233,7 +222,6 @@ impl Operator for RelOperator {
             RelOperator::Aggregate(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Sort(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Limit(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Pattern(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Exchange(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_stats(rel_expr),
@@ -274,9 +262,6 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Limit(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Pattern(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Exchange(rel_op) => {
@@ -368,9 +353,6 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Udf(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Pattern(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -558,25 +540,6 @@ impl TryFrom<RelOperator> for Limit {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast RelOperator to Limit"))
-        }
-    }
-}
-
-impl From<PatternPlan> for RelOperator {
-    fn from(v: PatternPlan) -> Self {
-        Self::Pattern(v)
-    }
-}
-
-impl TryFrom<RelOperator> for PatternPlan {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Pattern(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to Pattern",
-            ))
         }
     }
 }

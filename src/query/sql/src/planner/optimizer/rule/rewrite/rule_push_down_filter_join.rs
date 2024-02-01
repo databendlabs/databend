@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
@@ -32,13 +33,12 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
     after_join_reorder: bool,
 }
 
@@ -52,35 +52,13 @@ impl RulePushDownFilterJoin {
             //   | \
             //   |  *
             //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_binary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Join,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-            )],
-
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Join,
+                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                }],
+            }],
             after_join_reorder,
         }
     }
@@ -130,8 +108,8 @@ impl Rule for RulePushDownFilterJoin {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 
