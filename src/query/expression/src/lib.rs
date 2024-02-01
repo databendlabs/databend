@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::len_without_is_empty)]
+#![allow(clippy::arc_with_non_send_sync)]
 #![allow(internal_features)]
 // FIXME: we should avoid this by implementing Ord correctly.
 #![allow(clippy::non_canonical_partial_ord_impl)]

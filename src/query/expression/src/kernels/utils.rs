@@ -66,19 +66,10 @@ pub unsafe fn set_vec_len_by_ptr<T>(vec: &mut Vec<T>, ptr: *const T) {
 }
 
 /// # Safety
-/// # As: copy_nonoverlapping
+/// # As: core::ptr::write
 #[inline]
-pub unsafe fn store<T>(val: &T, ptr: *mut u8) {
-    std::ptr::copy_nonoverlapping(val as *const T as *const u8, ptr, std::mem::size_of::<T>());
-}
-
-/// # Safety
-/// # As: copy_nonoverlapping
-#[inline]
-pub unsafe fn load<T>(ptr: *const u8) -> T {
-    let mut ret: T = std::mem::zeroed();
-    std::ptr::copy_nonoverlapping(ptr as *const T, &mut ret, 1);
-    ret
+pub unsafe fn store<T: Copy>(val: T, ptr: *mut u8) {
+    core::ptr::write(ptr as _, val)
 }
 
 /// Iterates over an arbitrarily aligned byte buffer
