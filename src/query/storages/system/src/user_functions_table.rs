@@ -14,12 +14,15 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
@@ -117,6 +120,15 @@ impl AsyncSystemTable for UserFunctionsTable {
             })
             .collect();
 
+        let created_on = (0..names.len())
+            .map(|i| {
+                udfs.get(i)
+                    .map_or(DateTime::<Utc>::default().timestamp_micros(), |udf| {
+                        udf.created_on.timestamp_micros()
+                    })
+            })
+            .collect();
+
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             BooleanType::from_opt_data(is_aggregate),
@@ -124,6 +136,7 @@ impl AsyncSystemTable for UserFunctionsTable {
             VariantType::from_data(arguments),
             StringType::from_data(languages),
             StringType::from_data(definitions),
+            TimestampType::from_data(created_on),
         ]))
     }
 }
@@ -140,6 +153,7 @@ impl UserFunctionsTable {
             TableField::new("arguments", TableDataType::Variant),
             TableField::new("language", TableDataType::String),
             TableField::new("definition", TableDataType::String),
+            TableField::new("created_on", TableDataType::Timestamp),
         ]);
 
         let table_info = TableInfo {

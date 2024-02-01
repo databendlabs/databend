@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_expression::types::DataType;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -43,6 +45,7 @@ pub struct UserDefinedFunction {
     pub name: String,
     pub description: String,
     pub definition: UDFDefinition,
+    pub created_on: DateTime<Utc>,
 }
 
 impl UserDefinedFunction {
@@ -59,6 +62,7 @@ impl UserDefinedFunction {
                 parameters,
                 definition: definition.to_string(),
             }),
+            created_on: Utc::now(),
         }
     }
 
@@ -81,6 +85,7 @@ impl UserDefinedFunction {
                 arg_types,
                 return_type,
             }),
+            created_on: Utc::now(),
         }
     }
 }
