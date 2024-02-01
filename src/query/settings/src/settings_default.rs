@@ -606,6 +606,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables experimental aggregate hashtable",
+                        mode: SettingMode::Both,
+                        range: None,
+                }),
+
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",

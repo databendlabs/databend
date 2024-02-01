@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_hashtable::FastHash;
 use ethnum::i256;
+use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::ArgType;
@@ -27,74 +27,72 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Column;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: &[Column]) -> Vec<u64> {
+pub fn group_hash_columns(cols: &[Column], values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-
-    let mut values = group_hash_column(&cols[0]);
-
+    combine_group_hash_column::<true>(&cols[0], values);
     if cols.len() > 1 {
         for col in &cols[1..] {
-            let col_values = group_hash_column(col);
-            for (val, v) in values.iter_mut().zip(col_values) {
-                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ v;
-            }
+            combine_group_hash_column::<false>(col, values);
         }
     }
-    values
 }
 
-pub fn group_hash_column(c: &Column) -> Vec<u64> {
-    let len = c.len();
+pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
     match c.data_type() {
-        DataType::Null => vec![NULL_HASH_VAL; len],
-        DataType::EmptyArray => vec![NULL_HASH_VAL; len],
-        DataType::EmptyMap => vec![NULL_HASH_VAL; len],
+        DataType::Null => {}
+        DataType::EmptyArray => {}
+        DataType::EmptyMap => {}
         DataType::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberDataType::NUM_TYPE => {
-                group_hash_type_column::<NumberType<NUM_TYPE>>(c)
+                combine_group_hash_type_column::<IS_FIRST, NumberType<NUM_TYPE>>(c, values)
             }
         }),
         DataType::Decimal(v) => match v {
-            DecimalDataType::Decimal128(_) => group_hash_type_column::<DecimalType<i128>>(c),
-            DecimalDataType::Decimal256(_) => group_hash_type_column::<DecimalType<i256>>(c),
+            DecimalDataType::Decimal128(_) => {
+                combine_group_hash_type_column::<IS_FIRST, DecimalType<i128>>(c, values)
+            }
+            DecimalDataType::Decimal256(_) => {
+                combine_group_hash_type_column::<IS_FIRST, DecimalType<i256>>(c, values)
+            }
         },
-        DataType::Boolean => group_hash_type_column::<BooleanType>(c),
-        DataType::Binary => {
-            let c = BinaryType::try_downcast_column(c).unwrap();
-            BinaryType::iter_column(&c).map(|x| x.fast_hash()).collect()
-        }
-        DataType::String => {
-            let c = StringType::try_downcast_column(c).unwrap();
-            StringType::iter_column(&c).map(|x| x.fast_hash()).collect()
-        }
-        DataType::Bitmap => {
-            let c = BitmapType::try_downcast_column(c).unwrap();
-            BitmapType::iter_column(&c).map(|x| x.fast_hash()).collect()
-        }
-        DataType::Variant => {
-            let c = VariantType::try_downcast_column(c).unwrap();
-            VariantType::iter_column(&c)
-                .map(|x| x.fast_hash())
-                .collect()
-        }
-        DataType::Timestamp => group_hash_type_column::<TimestampType>(c),
-        DataType::Date => group_hash_type_column::<DateType>(c),
+        DataType::Boolean => combine_group_hash_type_column::<IS_FIRST, BooleanType>(c, values),
+        DataType::Timestamp => combine_group_hash_type_column::<IS_FIRST, TimestampType>(c, values),
+        DataType::Date => combine_group_hash_type_column::<IS_FIRST, DateType>(c, values),
+        DataType::Binary => combine_group_hash_string_column::<IS_FIRST, BinaryType>(c, values),
+        DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
+        DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
+        DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
         DataType::Nullable(_) => {
             let col = c.as_nullable().unwrap();
-            let mut values = group_hash_column(&col.column);
-            for (index, val) in col.validity.iter().enumerate() {
-                if !val {
-                    values[index] = NULL_HASH_VAL;
+            if IS_FIRST {
+                combine_group_hash_column::<IS_FIRST>(&col.column, values);
+                for (val, ok) in values.iter_mut().zip(col.validity.iter()) {
+                    if !ok {
+                        *val = NULL_HASH_VAL;
+                    }
+                }
+            } else {
+                let mut values2 = vec![0; c.len()];
+                combine_group_hash_column::<true>(&col.column, &mut values2);
+
+                for ((x, val), ok) in values2
+                    .iter()
+                    .zip(values.iter_mut())
+                    .zip(col.validity.iter())
+                {
+                    if ok {
+                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
+                    } else {
+                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
+                    }
                 }
             }
-            values
         }
         DataType::Tuple(_) => todo!(),
         DataType::Array(_) => todo!(),
@@ -103,8 +101,146 @@ pub fn group_hash_column(c: &Column) -> Vec<u64> {
     }
 }
 
-fn group_hash_type_column<T: ArgType>(col: &Column) -> Vec<u64>
-where for<'a> T::ScalarRef<'a>: FastHash {
+fn combine_group_hash_type_column<const IS_FIRST: bool, T: ArgType>(
+    col: &Column,
+    values: &mut [u64],
+) where
+    for<'a> T::ScalarRef<'a>: AggHash,
+{
     let c = T::try_downcast_column(col).unwrap();
-    T::iter_column(&c).map(|x| x.fast_hash()).collect()
+    if IS_FIRST {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = x.agg_hash();
+        }
+    } else {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.agg_hash();
+        }
+    }
+}
+
+fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
+    col: &Column,
+    values: &mut [u64],
+) where
+    for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+{
+    let c = T::try_downcast_column(col).unwrap();
+    if IS_FIRST {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = x.as_ref().agg_hash();
+        }
+    } else {
+        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
+            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
+        }
+    }
+}
+
+pub trait AggHash {
+    fn agg_hash(&self) -> u64;
+}
+
+// MIT License
+// Copyright (c) 2018-2021 Martin Ankerl
+// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
+// Rewrite using chatgpt
+
+impl AggHash for [u8] {
+    fn agg_hash(&self) -> u64 {
+        const M: u64 = 0xc6a4a7935bd1e995;
+        const SEED: u64 = 0xe17a1465;
+        const R: u64 = 47;
+
+        let mut h = SEED ^ (self.len() as u64).wrapping_mul(M);
+        let n_blocks = self.len() / 8;
+
+        for i in 0..n_blocks {
+            let mut k = unsafe { (&self[i * 8] as *const u8 as *const u64).read_unaligned() };
+
+            k = k.wrapping_mul(M);
+            k ^= k >> R;
+            k = k.wrapping_mul(M);
+
+            h ^= k;
+            h = h.wrapping_mul(M);
+        }
+
+        let data8 = &self[n_blocks * 8..];
+        for (i, &value) in data8.iter().enumerate() {
+            h ^= (value as u64) << (8 * (data8.len() - i - 1));
+        }
+
+        h ^= h >> R;
+        h = h.wrapping_mul(M);
+        h ^= h >> R;
+
+        h
+    }
+}
+
+macro_rules! impl_agg_hash_for_primitive_types {
+    ($t: ty) => {
+        impl AggHash for $t {
+            #[inline(always)]
+            fn agg_hash(&self) -> u64 {
+                let mut x = *self as u64;
+                x ^= x >> 32;
+                x = x.wrapping_mul(0xd6e8feb86659fd93);
+                x ^= x >> 32;
+                x = x.wrapping_mul(0xd6e8feb86659fd93);
+                x ^= x >> 32;
+                x
+            }
+        }
+    };
+}
+
+impl_agg_hash_for_primitive_types!(u8);
+impl_agg_hash_for_primitive_types!(i8);
+impl_agg_hash_for_primitive_types!(u16);
+impl_agg_hash_for_primitive_types!(i16);
+impl_agg_hash_for_primitive_types!(u32);
+impl_agg_hash_for_primitive_types!(i32);
+impl_agg_hash_for_primitive_types!(u64);
+impl_agg_hash_for_primitive_types!(i64);
+
+impl AggHash for bool {
+    fn agg_hash(&self) -> u64 {
+        *self as u64
+    }
+}
+
+impl AggHash for i128 {
+    fn agg_hash(&self) -> u64 {
+        self.to_le_bytes().agg_hash()
+    }
+}
+
+impl AggHash for i256 {
+    fn agg_hash(&self) -> u64 {
+        self.to_le_bytes().agg_hash()
+    }
+}
+
+impl AggHash for OrderedFloat<f32> {
+    #[inline(always)]
+    fn agg_hash(&self) -> u64 {
+        if self.is_nan() {
+            f32::NAN.to_bits().agg_hash()
+        } else {
+            self.to_bits().agg_hash()
+        }
+    }
+}
+
+impl AggHash for OrderedFloat<f64> {
+    #[inline(always)]
+    fn agg_hash(&self) -> u64 {
+        if self.is_nan() {
+            f64::NAN.to_bits().agg_hash()
+        } else {
+            self.to_bits().agg_hash()
+        }
+    }
 }
