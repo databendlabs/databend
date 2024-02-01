@@ -123,7 +123,7 @@ impl SortAndLimitPushDownOptimizer {
     }
 
     fn apply_limit(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if self.limit_matcher.matches(s_expr) {
+        if !self.limit_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
 
