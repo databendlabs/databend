@@ -137,6 +137,7 @@ impl SubqueryRewriter {
                 need_hold_hash_table: false,
                 broadcast: false,
                 is_lateral: false,
+                original_join_type: None,
             }
             .into();
 
@@ -470,6 +471,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 }
                 .into(),
             ),

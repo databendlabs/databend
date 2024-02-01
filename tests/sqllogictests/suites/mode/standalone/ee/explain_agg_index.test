@@ -166,9 +166,9 @@ Filter
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [SUM(a) (#2), t1.b (#1), SUM(a) (#5)]
-    ├── join type: LEFT SINGLE
+    ├── join type: INNER
     ├── build keys: [b (#4)]
-    ├── probe keys: [CAST(b (#1) AS Int32 NULL)]
+    ├── probe keys: [b (#1)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── AggregateFinal(Build)

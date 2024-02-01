@@ -81,7 +81,14 @@ impl JoinType {
     }
 
     pub fn is_outer_join(&self) -> bool {
-        matches!(self, JoinType::Left | JoinType::Right | JoinType::Full)
+        matches!(
+            self,
+            JoinType::Left
+                | JoinType::Right
+                | JoinType::Full
+                | JoinType::LeftSingle
+                | JoinType::RightSingle
+        )
     }
 
     pub fn is_mark_join(&self) -> bool {
@@ -154,6 +161,9 @@ pub struct Join {
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     pub is_lateral: bool,
+    // Original join type. Left/Right single join may be convert to inner join
+    // Record the original join type and do some special processing during runtime.
+    pub original_join_type: Option<JoinType>,
 }
 
 impl Default for Join {
@@ -168,6 +178,7 @@ impl Default for Join {
             need_hold_hash_table: false,
             broadcast: false,
             is_lateral: false,
+            original_join_type: None,
         }
     }
 }

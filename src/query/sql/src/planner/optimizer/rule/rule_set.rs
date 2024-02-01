@@ -82,6 +82,10 @@ impl AppliedRules {
     pub fn get(&self, id: &RuleID) -> bool {
         self.rules.contains(id)
     }
+
+    pub fn clear(&mut self) {
+        self.rules = RuleSet::create();
+    }
 }
 
 impl Hash for AppliedRules {

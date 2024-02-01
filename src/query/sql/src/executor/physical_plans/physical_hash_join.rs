@@ -73,6 +73,9 @@ pub struct HashJoin {
     pub probe_keys_rt: Vec<Option<RemoteExpr<String>>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
+    // Original join type. Left/Right single join may be convert to inner join
+    // Record the original join type and do some special processing during runtime.
+    pub original_join_type: Option<JoinType>,
 }
 
 impl HashJoin {
@@ -467,6 +470,7 @@ impl PhysicalPlanBuilder {
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
             broadcast: join.broadcast,
+            original_join_type: join.original_join_type.clone(),
         }))
     }
 }

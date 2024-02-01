@@ -416,6 +416,21 @@ impl SExpr {
 
         add_internal_column_index_into_child(expr, column_index, table_index)
     }
+
+    // The method will clear the applied rules of current SExpr and its children.
+    pub fn clear_applied_rules(&mut self) {
+        self.applied_rules.clear();
+        let children = self
+            .children()
+            .iter()
+            .map(|child| {
+                let mut child = (**child).clone();
+                child.clear_applied_rules();
+                Arc::new(child)
+            })
+            .collect::<Vec<_>>();
+        self.children = children;
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {

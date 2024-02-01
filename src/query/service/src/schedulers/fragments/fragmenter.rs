@@ -252,6 +252,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
             broadcast: plan.broadcast,
+            original_join_type: plan.original_join_type.clone(),
         }))
     }
 
