@@ -108,10 +108,7 @@ impl MergeSourceOptimizer {
                     },
                     Matcher::MatchOp {
                         op_type: RelOp::Exchange,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Exchange,
-                            children: vec![Matcher::Leaf],
-                        }],
+                        children: vec![Matcher::Leaf],
                     },
                 ],
             }],
