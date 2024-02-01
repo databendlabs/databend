@@ -18,6 +18,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;
@@ -43,7 +44,7 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_keys_rt: Vec<Option<Expr<String>>>,
+    pub(crate) probe_keys_rt: Vec<(Option<Expr<String>>, Vec<IndexType>)>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
 }
@@ -63,10 +64,15 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        let probe_keys_rt: Vec<Option<Expr<String>>> = join
+        let probe_keys_rt: Vec<(Option<Expr<String>>, Vec<IndexType>)> = join
             .probe_keys_rt
             .iter()
-            .map(|k| k.as_ref().map(|v| v.as_expr(&BUILTIN_FUNCTIONS)))
+            .map(|(k, idxes)| {
+                (
+                    k.as_ref().map(|v| v.as_expr(&BUILTIN_FUNCTIONS)),
+                    idxes.to_vec(),
+                )
+            })
             .collect();
 
         Ok(HashJoinDesc {

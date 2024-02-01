@@ -69,8 +69,8 @@ pub struct HashJoin {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 
-    // probe keys for runtime filter
-    pub probe_keys_rt: Vec<Option<RemoteExpr<String>>>,
+    // probe keys for runtime filter, and record the index of table that used in probe keys.
+    pub probe_keys_rt: Vec<(Option<RemoteExpr<String>>, Vec<IndexType>)>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     // Original join type. Left/Right single join may be convert to inner join
@@ -192,25 +192,28 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let left_expr_for_runtime_filter =
-                if left_condition.used_columns().iter().all(|idx| {
-                    // Runtime filter only support column in base table. It's possible to use a wrong derived column with
-                    // the same name as a base table column, so we need to check if the column is a base table column.
-                    matches!(
-                        self.metadata.read().column(*idx),
-                        ColumnEntry::BaseTableColumn(_)
-                    )
-                }) && matches!(probe_side, box PhysicalPlan::TableScan(_))
-                {
-                    Some(
-                        left_condition
-                            .as_raw_expr()
-                            .type_check(&*self.metadata.read())?
-                            .project_column_ref(|col| col.column_name.clone()),
-                    )
-                } else {
-                    None
-                };
+            let mut table_indexes = Vec::new();
+            let left_expr_for_runtime_filter = if left_condition.used_columns().iter().all(|idx| {
+                // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+                // the same name as a base table column, so we need to check if the column is a base table column.
+                matches!(
+                    self.metadata.read().column(*idx),
+                    ColumnEntry::BaseTableColumn(_)
+                )
+            }) {
+                for idx in left_condition.used_columns().iter() {
+                    // Safe to unwrap because we have checked the column is a base table column.
+                    table_indexes.push(self.metadata.read().column(*idx).table_index().unwrap());
+                }
+                Some(
+                    left_condition
+                        .as_raw_expr()
+                        .type_check(&*self.metadata.read())?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )
+            } else {
+                None
+            };
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -282,8 +285,10 @@ impl PhysicalPlanBuilder {
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
-            left_join_conditions_rt
-                .push(left_expr_for_runtime_filter.map(|expr| expr.as_remote_expr()));
+            left_join_conditions_rt.push((
+                left_expr_for_runtime_filter.map(|expr| expr.as_remote_expr()),
+                table_indexes,
+            ));
         }
 
         let mut probe_projections = ColumnSet::new();
