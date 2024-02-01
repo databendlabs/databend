@@ -39,14 +39,20 @@ pub enum LogType {
     Aborted = 4,
 }
 
+impl LogType {
+    pub fn as_string(&self) -> String {
+        match self {
+            LogType::Start => "Start".to_string(),
+            LogType::Finish => "Finish".to_string(),
+            LogType::Error => "Error".to_string(),
+            LogType::Aborted => "Aborted".to_string(),
+        }
+    }
+}
+
 impl std::fmt::Debug for LogType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LogType::Start => write!(f, "Start"),
-            LogType::Finish => write!(f, "Finish"),
-            LogType::Error => write!(f, "Error"),
-            LogType::Aborted => write!(f, "Aborted"),
-        }
+        write!(f, "{}", self.as_string())
     }
 }
 
@@ -71,6 +77,7 @@ where S: Serializer {
 pub struct QueryLogElement {
     // Type.
     pub log_type: LogType,
+    pub log_type_name: String,
     pub handler_type: String,
 
     // User.
@@ -159,6 +166,7 @@ impl SystemLogElement for QueryLogElement {
         TableSchemaRefExt::create(vec![
             // Type.
             TableField::new("log_type", TableDataType::Number(NumberDataType::Int8)),
+            TableField::new("log_type_name", TableDataType::String),
             TableField::new("handler_type", TableDataType::String),
             // User.
             TableField::new("tenant_id", TableDataType::String),
@@ -292,6 +300,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::Int8(self.log_type as i8)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.log_type_name.clone()).as_ref());
         columns
             .next()
             .unwrap()
