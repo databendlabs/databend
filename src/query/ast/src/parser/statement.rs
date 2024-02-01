@@ -1784,6 +1784,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
+    let begin = map(rule!(BEGIN), |_| Statement::Begin);
+    let commit = map(rule!(COMMIT), |_| Statement::Commit);
+    let abort = map(rule!(ABORT), |_| Statement::Abort);
+
     let statement_body = alt((
         // query, explain,show
         rule!(
@@ -1833,6 +1837,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule!(
             #set_variable : "`SET <variable> = <value>`"
             | #unset_variable : "`UNSET <variable>`"
+            |#begin : "`BEGIN`"
+            | #commit : "`COMMIT`"
+            | #abort : "`ABORT`"
         ),
         rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"

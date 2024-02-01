@@ -371,6 +371,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
+        todo!()
+    }
+
     fn incr_total_scan_value(&self, _value: ProgressValues) {
         todo!()
     }

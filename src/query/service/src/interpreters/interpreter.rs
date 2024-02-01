@@ -59,6 +59,13 @@ pub trait Interpreter: Sync + Send {
             log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
         }
+        if ctx.txn_manager().read().is_fail() {
+            let error = ErrorCode::CurrentTransactionIsAborted(
+                "current transaction is aborted, commands ignored until end of transaction block",
+            );
+            log_query_finished(&ctx, Some(error.clone()), false);
+            return Err(error);
+        }
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {

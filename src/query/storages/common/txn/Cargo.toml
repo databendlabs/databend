@@ -1,0 +1,9 @@
+[package]
+name = "databend-storages-common-txn"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]

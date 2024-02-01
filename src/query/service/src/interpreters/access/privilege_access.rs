@@ -939,6 +939,9 @@ impl AccessChecker for PrivilegeAccess {
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
             Plan::DescDatamaskPolicy(_) => {}
+            Plan::Begin => {}
+            Plan::Commit => {}
+            Plan::Abort => {}
         }
 
         Ok(())

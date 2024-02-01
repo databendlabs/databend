@@ -318,6 +318,11 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
+
+    // Txn
+    Begin,
+    Commit,
+    Abort,
 }
 
 #[derive(Clone, Debug)]

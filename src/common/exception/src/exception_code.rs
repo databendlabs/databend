@@ -355,6 +355,10 @@ build_exceptions! {
     InvalidOperation(3905),
     StorageOther(4000),
     UnresolvableConflict(4001),
+
+    //transaction error codes
+    CurrentTransactionIsAborted(4002),
+    DuplicateBeginTransaction(4003),
 }
 
 // Service errors [5001,6000].

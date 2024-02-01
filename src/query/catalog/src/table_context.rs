@@ -47,6 +47,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManager;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
@@ -257,4 +258,5 @@ pub trait TableContext: Send + Sync {
     fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
+    fn txn_manager(&self) -> Arc<RwLock<TxnManager>>;
 }

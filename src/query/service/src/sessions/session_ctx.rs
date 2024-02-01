@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
+use databend_storages_common_txn::TxnManager;
 use parking_lot::RwLock;
 
 use super::SessionType;
@@ -63,6 +64,7 @@ pub struct SessionContext {
     // query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
     typ: SessionType,
+    txn_manager: Arc<RwLock<TxnManager>>,
 }
 
 impl SessionContext {
@@ -82,6 +84,7 @@ impl SessionContext {
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
             typ,
+            txn_manager: Arc::new(RwLock::new(TxnManager::init())),
         }))
     }
 
@@ -285,5 +288,9 @@ impl SessionContext {
     pub fn get_query_id_history(&self) -> HashSet<String> {
         let lock = self.query_ids_results.read();
         HashSet::from_iter(lock.iter().map(|result| result.clone().0))
+    }
+
+    pub fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
+        self.txn_manager.clone()
     }
 }

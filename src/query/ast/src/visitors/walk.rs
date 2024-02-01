@@ -528,5 +528,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterPipe(_) => todo!(),
         Statement::DropPipe(_) => todo!(),
         Statement::DescribePipe(_) => todo!(),
+        Statement::Begin => {}
+        Statement::Commit => {}
+        Statement::Abort => {}
     }
 }

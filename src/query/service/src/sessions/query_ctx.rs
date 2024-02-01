@@ -91,6 +91,7 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManager;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
@@ -993,6 +994,10 @@ impl TableContext for QueryContext {
             return !runtime_filter.get_bloom().is_empty();
         }
         false
+    }
+
+    fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
+        self.shared.session.session_ctx.txn_manager()
     }
 }
 
