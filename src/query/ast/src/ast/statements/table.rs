@@ -17,6 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::format;
 
+use databend_common_meta_app::schema::CreateOption;
+
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
@@ -125,7 +127,7 @@ impl Display for ShowDropTablesStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -141,12 +143,17 @@ pub struct CreateTableStmt {
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
         if self.transient {
             write!(f, "TRANSIENT ")?;
         }
         write!(f, "TABLE ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write_dot_separated_list(
             f,

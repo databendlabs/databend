@@ -290,10 +290,7 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t(a int)
-
-statement ok
-insert into t values(1), (2), (3), (3)
+create table t (a int, b int, c string, d int, e int, f string)
 
 # range frame (can not push down limit)
 query T
@@ -370,6 +367,64 @@ CompoundBlockOperator(Project) × 1 processor
                       Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
                         DeserializeDataTransform × 1 processor
                           SyncReadParquetDataSource × 1 processor
+
+# row fetch with window function(pipeline explain)
+query T
+explain pipeline select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3;
+----
+CompoundBlockOperator(Project) × 1 processor
+  TransformRowsFetcher × 1 processor
+    LimitTransform × 1 processor
+      Merge (TransformSortMergeLimit × 4 processors) to (LimitTransform × 1)
+        TransformSortMergeLimit × 4 processors
+          SortPartialTransform × 4 processors
+            Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
+              Transform Window × 1 processor
+                Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+                  TransformSortMerge × 4 processors
+                    SortPartialTransform × 4 processors
+                      Merge (TransformFilter × 1 processor) to (SortPartialTransform × 4)
+                        TransformFilter × 1 processor
+                          AddInternalColumnsTransform × 1 processor
+                            DeserializeDataTransform × 1 processor
+                              SyncReadParquetDataSource × 1 processor
+
+# row fetch with window function(plan explain)
+query 
+explain select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3
+----
+RowFetch
+├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6), t.c (#2), t.d (#3), t.e (#4), t.f (#5)]
+├── columns to fetch: [c, d, e, f]
+├── estimated rows: 0.00
+└── Limit
+    ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 0.00
+    └── Sort
+        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+        ├── sort keys: [b ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Window
+            ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+            ├── aggregate function: [sum(a)]
+            ├── partition by: [a]
+            ├── order by: [a]
+            ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+            └── Filter
+                ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
+                ├── filters: [is_true(t.a (#0) > 1)]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.t
+                    ├── output columns: [a (#0), b (#1), _row_id (#7)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+                    └── estimated rows: 0.00
 
 statement ok
 DROP DATABASE test_explain_window;

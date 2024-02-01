@@ -29,7 +29,7 @@ EvalScalar
         ├── table: default.default.bloom_test_t
         ├── output columns: [c1 (#0)]
         ├── read rows: 3
-        ├── read bytes: 45
+        ├── read bytes: 44
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
@@ -201,7 +201,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t1
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 90
+        ├── read bytes: 88
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
@@ -235,7 +235,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 90
+        ├── read bytes: 88
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
@@ -266,7 +266,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 90
+        ├── read bytes: 88
         ├── partitions total: 3
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 3 to 2>]
@@ -292,7 +292,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 9
-        ├── read bytes: 135
+        ├── read bytes: 132
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -326,7 +326,7 @@ EvalScalar
         ├── table: default.default.bloom_test_nullable_t
         ├── output columns: [c1 (#0), c2 (#1)]
         ├── read rows: 3
-        ├── read bytes: 90
+        ├── read bytes: 88
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]

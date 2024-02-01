@@ -81,3 +81,4 @@ mod v074_table_db_meta;
 mod v075_csv_format_params;
 mod v076_role_ownership_info;
 mod v077_s3_remove_allow_anonymous;
+mod v078_grantentry;

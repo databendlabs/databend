@@ -141,8 +141,8 @@ impl AsyncSystemTable for TasksTable {
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let config = build_client_config(tenant, user, query_id);
-        let req = make_request(req, config);
+        let cfg = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
+        let req = make_request(req, cfg);
 
         let resp = task_client.show_tasks(req).await?;
         let tasks = resp.tasks;

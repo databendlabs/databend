@@ -26,9 +26,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use bumpalo::Bump;
+use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Float32Type;
@@ -45,12 +43,13 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use itertools::Itertools;
 
-// cargo test --package common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
+// cargo test --package databend-common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
 #[test]
 fn test_agg_hashtable() {
     let factory = AggregateFunctionFactory::instance();
@@ -87,16 +86,17 @@ fn test_agg_hashtable() {
 
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
 
-        let arena1 = Arc::new(Bump::new());
-        let mut hashtable = AggregateHashTable::new(arena1, group_types.clone(), aggrs.clone());
+        let config = HashTableConfig::default();
+        let mut hashtable =
+            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
         let mut state = ProbeState::default();
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, n)
             .unwrap();
 
-        let arena2 = Arc::new(Bump::new());
-        let mut hashtable2 = AggregateHashTable::new(arena2, group_types.clone(), aggrs.clone());
+        let mut hashtable2 =
+            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
 
         let mut state2 = ProbeState::default();
         let _ = hashtable2
@@ -112,8 +112,8 @@ fn test_agg_hashtable() {
         loop {
             match hashtable.merge_result(&mut merge_state) {
                 Ok(true) => {
-                    let mut columns = merge_state.group_columns.clone();
-                    columns.extend_from_slice(&merge_state.aggregate_results);
+                    let mut columns = merge_state.take_group_columns();
+                    columns.extend_from_slice(&merge_state.take_aggregate_results());
 
                     let block = DataBlock::new_from_columns(columns);
                     blocks.push(block);
@@ -145,9 +145,8 @@ fn test_agg_hashtable() {
             UInt64Type::from_data(vec![urows / 2, urows / 2, urows / 2, urows / 2]),
         ]);
 
-        for (column, expected) in block.columns().iter().zip(expected_results.iter()) {
-            let column = column.value.as_column().unwrap();
-            assert_eq!(column, expected)
-        }
+        let block_expected = DataBlock::new_from_columns(expected_results.clone());
+
+        assert_block_value_sort_eq(&block, &block_expected);
     }
 }

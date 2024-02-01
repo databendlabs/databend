@@ -51,6 +51,8 @@ pub struct BlockReader {
     // used for mutation to update stream columns.
     pub update_stream_columns: bool,
     pub put_cache: bool,
+
+    pub original_schema: TableSchemaRef,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -148,6 +150,7 @@ impl BlockReader {
             query_internal_columns,
             update_stream_columns,
             put_cache,
+            original_schema: schema,
         }))
     }
 

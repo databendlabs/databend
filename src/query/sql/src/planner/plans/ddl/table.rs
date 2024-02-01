@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -36,7 +37,7 @@ pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub catalog: String,
     pub database: String,

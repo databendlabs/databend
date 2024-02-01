@@ -704,9 +704,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let create_table = map(
+    let create_table = map_res(
         rule! {
-            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -717,6 +717,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(
             _,
+            opt_or_replace,
             opt_transient,
             _,
             opt_if_not_exists,
@@ -728,8 +729,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_table_options,
             opt_as_query,
         )| {
-            Statement::CreateTable(CreateTableStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateTable(CreateTableStmt {
+                create_option,
                 catalog,
                 database,
                 table,
@@ -742,7 +745,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 transient: opt_transient.is_some(),
-            })
+            }))
         },
     );
     let drop_table = map(
@@ -2692,7 +2695,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let rename_column = map(
         rule! {
-            RENAME ~ COLUMN ~ #ident ~ TO ~ #ident
+            RENAME ~ COLUMN? ~ #ident ~ TO ~ #ident
         },
         |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
             old_column,
@@ -2701,7 +2704,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN ~ #column_def ~ ( #add_column_option )?
+            ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
         },
         |(_, _, column, option)| AlterTableAction::AddColumn {
             column,
@@ -2711,14 +2714,14 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_column = map(
         rule! {
-            MODIFY ~ COLUMN ~ #modify_column_action
+            MODIFY ~ COLUMN? ~ #modify_column_action
         },
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
     let drop_column = map(
         rule! {
-            DROP ~ COLUMN ~ #ident
+            DROP ~ COLUMN? ~ #ident
         },
         |(_, _, column)| AlterTableAction::DropColumn { column },
     );
@@ -2762,13 +2765,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
 
     rule!(
-        #rename_table
+        #alter_table_cluster_key
+        | #drop_table_cluster_key
+        | #rename_table
         | #rename_column
         | #add_column
         | #drop_column
         | #modify_column
-        | #alter_table_cluster_key
-        | #drop_table_cluster_key
         | #recluster_table
         | #revert_table
         | #set_table_options

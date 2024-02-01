@@ -53,7 +53,7 @@ download_query_config "$old_query_ver" old_config
 download_binary "$old_query_ver"
 
 old_config_path="old_config/$query_config_path"
-run_test $old_query_ver $old_config_path $logictest_path
+run_test $old_query_ver $old_config_path $logictest_path "backward"
 
 if [ -n "$stateless_test_path" ];
 then

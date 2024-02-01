@@ -262,7 +262,6 @@ impl HttpQuery {
                 for (k, v) in conf_settings {
                     settings
                         .set_setting(k.to_string(), v.to_string())
-                        .await
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
                                 warn!(
@@ -297,9 +296,7 @@ impl HttpQuery {
         // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
             unsafe {
-                ctx.get_settings()
-                    .set_deduplicate_label(label.clone())
-                    .await?;
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
             }
         }
         if let Some(ua) = user_agent {

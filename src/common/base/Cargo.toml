@@ -48,6 +48,7 @@ pprof = { version = "0.11.1", features = [
     "protobuf",
 ] }
 regex = { workspace = true }
+replace_with = "0.1.7"
 semver = { workspace = true }
 serde = { workspace = true }
 state = "0.5"

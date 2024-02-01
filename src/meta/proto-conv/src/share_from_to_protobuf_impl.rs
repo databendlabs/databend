@@ -129,23 +129,24 @@ impl FromToProto for mt::ShareGrantEntry {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let privileges = BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits(p.privileges);
-        match privileges {
-            Ok(privileges) => Ok(mt::ShareGrantEntry {
-                object: mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
-                    reason: "ShareGrantEntry.object can not be None".to_string(),
-                })?)?,
-                privileges,
-                grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
-                update_on: match p.update_on {
-                    Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                    None => None,
-                },
-            }),
-            Err(e) => Err(Incompatible {
-                reason: format!("UserPrivilegeType error: {}", e),
-            }),
-        }
+        // Before https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly
+        // use from_bits deserialize privilege type, that maybe cause forward compat error.
+        // Because old query may not contain new query's privilege type, so from_bits will return err, cause from_pb err.
+        // https://docs.rs/enumflags2/0.7.7/enumflags2/struct.BitFlags.html#method.from_bits
+        // https://docs.rs/enumflags2/0.7.7/enumflags2/struct.BitFlags.html#method.from_bits_truncate
+        let privileges =
+            BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
+        Ok(mt::ShareGrantEntry {
+            object: mt::ShareGrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+                reason: "ShareGrantEntry.object can not be None".to_string(),
+            })?)?,
+            privileges,
+            grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
+            update_on: match p.update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+        })
     }
 
     fn to_pb(&self) -> Result<pb::ShareGrantEntry, Incompatible> {

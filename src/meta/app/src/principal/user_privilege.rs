@@ -19,6 +19,9 @@ use enumflags2::bitflags;
 use enumflags2::make_bitflags;
 use enumflags2::BitFlags;
 
+// Note:
+// 1. If add new privilege type, need add forward test
+// 2. Do not remove existing permission types. Otherwise, forward compatibility problems may occur
 #[bitflags]
 #[repr(u64)]
 #[derive(
@@ -71,7 +74,7 @@ pub enum UserPrivilegeType {
     // Privilege to Write stage
     Write = 1 << 19,
 
-    // TODO: remove this later
+    // Discard Privilege Type
     Set = 1 << 4,
 }
 

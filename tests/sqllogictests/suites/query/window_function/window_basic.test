@@ -796,5 +796,48 @@ select * from (select b, row_number() over (order by b) from tbpush) where b > 1
 ----
 2 2 
 
+# multiple blocks
+statement ok
+DROP TABLE IF EXISTS customers;
+
+statement ok
+CREATE TABLE customers (
+    customer_id INT UNSIGNED NOT NULL,
+    customer_name VARCHAR NOT NULL,
+    segment VARCHAR NOT NULL,
+    create_timestamp DATE NOT NULL,
+    active BOOLEAN NOT NULL
+) row_per_block=100;
+
+statement ok
+INSERT INTO customers (customer_id, customer_name, segment, create_timestamp, active)
+SELECT
+    number,
+    CONCAT('Customer ', number::String),
+    CASE
+        WHEN number % 3 = 0 THEN 'small'
+        WHEN number % 3 = 1 THEN 'medium'
+        ELSE 'large'
+    END,
+    to_date('2022-01-02'),
+    number % 2 = 0
+FROM numbers(1000000);
+
+
+
+query II
+select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id DESC) AS rank_in_segment from customers c order by c.segment, rank_in_segment, c.customer_id limit 10;
+----
+999998 1
+999995 2
+999992 3
+999989 4
+999986 5
+999983 6
+999980 7
+999977 8
+999974 9
+999971 10
+
 statement ok
 DROP DATABASE test_window_basic;

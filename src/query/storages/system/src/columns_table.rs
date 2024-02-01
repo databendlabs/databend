@@ -67,7 +67,7 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
         let mut comments: Vec<String> = Vec::with_capacity(rows.len());
-        for (database_name, table_name, field) in rows.into_iter() {
+        for (database_name, table_name, comment, field) in rows.into_iter() {
             names.push(field.name().clone());
             tables.push(table_name);
             databases.push(database_name);
@@ -89,7 +89,7 @@ impl AsyncSystemTable for ColumnsTable {
                 is_nullables.push("NO".to_string());
             }
 
-            comments.push("".to_string());
+            comments.push(comment);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -142,15 +142,43 @@ impl ColumnsTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Vec<(String, String, TableField)>> {
+    ) -> Result<Vec<(String, String, String, TableField)>> {
         let database_and_tables = dump_tables(&ctx, push_downs).await?;
 
-        let mut rows: Vec<(String, String, TableField)> = vec![];
+        let mut rows: Vec<(String, String, String, TableField)> = vec![];
         for (database, tables) in database_and_tables {
             for table in tables {
-                let fields = generate_fields(&ctx, &table).await?;
-                for field in fields {
-                    rows.push((database.clone(), table.name().into(), field.clone()))
+                if table.engine() != VIEW_ENGINE {
+                    let schema = table.schema();
+                    let field_comments = table.field_comments();
+                    let n_fields = schema.fields().len();
+                    for (idx, field) in schema.fields().iter().enumerate() {
+                        // compatibility: creating table in the old planner will not have `fields_comments`
+                        let comment = if field_comments.len() == n_fields
+                            && !field_comments[idx].is_empty()
+                        {
+                            // can not use debug print, will add double quote
+                            format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
+                        } else {
+                            "".to_string()
+                        };
+                        rows.push((
+                            database.clone(),
+                            table.name().into(),
+                            comment,
+                            field.clone(),
+                        ))
+                    }
+                } else {
+                    let fields = generate_fields(&ctx, &table).await?;
+                    for field in fields {
+                        rows.push((
+                            database.clone(),
+                            table.name().into(),
+                            "".to_string(),
+                            field.clone(),
+                        ))
+                    }
                 }
             }
         }

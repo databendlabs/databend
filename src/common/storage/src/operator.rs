@@ -16,6 +16,8 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -55,11 +57,16 @@ use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
+use reqwest_hickory_resolver::HickoryResolver;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 
 static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
+
+/// The global dns resolver for opendal.
+static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> =
+    LazyLock::new(|| Arc::new(HickoryResolver::default()));
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -305,6 +312,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
 
     let http_builder = {
         let mut builder = reqwest::ClientBuilder::new();
+
+        // Set dns resolver.
+        builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
 
         // Pool max idle per host controls connection pool size.
         // Default to no limit, set to `0` for disable it.

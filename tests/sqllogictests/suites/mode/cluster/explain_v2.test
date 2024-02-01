@@ -24,7 +24,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 100
-        ├── read bytes: 266
+        ├── read bytes: 251
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -59,7 +59,7 @@ Exchange
         │           ├── table: default.default.t2
         │           ├── output columns: [a (#2), b (#3)]
         │           ├── read rows: 100
-        │           ├── read bytes: 534
+        │           ├── read bytes: 504
         │           ├── partitions total: 3
         │           ├── partitions scanned: 3
         │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -73,7 +73,7 @@ Exchange
                 ├── table: default.default.t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 100
-                ├── read bytes: 534
+                ├── read bytes: 504
                 ├── partitions total: 3
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -100,7 +100,7 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 534
+    │       ├── read bytes: 504
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -110,7 +110,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 534
+        ├── read bytes: 504
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -192,7 +192,7 @@ Limit
                         ├── table: default.default.t1
                         ├── output columns: [a (#0)]
                         ├── read rows: 100
-                        ├── read bytes: 266
+                        ├── read bytes: 251
                         ├── partitions total: 3
                         ├── partitions scanned: 3
                         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -236,7 +236,7 @@ Limit
                     │       ├── table: default.default.t2
                     │       ├── output columns: [a (#2)]
                     │       ├── read rows: 100
-                    │       ├── read bytes: 266
+                    │       ├── read bytes: 251
                     │       ├── partitions total: 3
                     │       ├── partitions scanned: 3
                     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -246,7 +246,7 @@ Limit
                         ├── table: default.default.t1
                         ├── output columns: [a (#0), b (#1)]
                         ├── read rows: 100
-                        ├── read bytes: 534
+                        ├── read bytes: 504
                         ├── partitions total: 3
                         ├── partitions scanned: 3
                         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -276,7 +276,7 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 534
+    │       ├── read bytes: 504
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
@@ -286,7 +286,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 534
+        ├── read bytes: 504
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]

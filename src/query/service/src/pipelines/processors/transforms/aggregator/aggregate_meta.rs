@@ -20,6 +20,7 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
 
 use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -52,6 +53,7 @@ pub struct BucketSpilledPayload {
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
+    AggregateHashTable(PartitionedPayload),
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
     Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
@@ -65,6 +67,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
             cell,
             bucket,
         }))
+    }
+
+    pub fn create_agg_hashtable(payload: PartitionedPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::AggregateHashTable(payload))
     }
 
     pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
@@ -127,6 +133,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
             AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilling").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
+            AggregateMeta::AggregateHashTable(_) => {
+                f.debug_struct("AggregateMeta:AggHashTable").finish()
+            }
         }
     }
 }

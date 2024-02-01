@@ -7,10 +7,14 @@ by a older version databend-query.
 
 ```shell
 tests/fuse-compat/test-fuse-compat.sh <old_ver>
+tests/fuse-compat/test-fuse-forward-compat.sh <old_ver>
 ```
 
 E.g. `tests/fuse-compat/test-fuse-compat.sh 0.7.151` tests if the fuse-table written
 by **databend-query-0.7.151** can be read by **current** version databend-query.
+
+`tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307` tests if the fuse-table written
+by **current** can be read by **databend-query-0.7.151** version databend-query.
 
 ## Prerequisites
 

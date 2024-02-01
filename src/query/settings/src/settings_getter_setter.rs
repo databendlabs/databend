@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use databend_common_ast::Dialect;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
-use databend_common_users::UserApiProvider;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
@@ -109,22 +107,17 @@ impl Settings {
         }
     }
 
-    pub async fn set_setting(&self, k: String, v: String) -> Result<()> {
+    pub fn set_setting(&self, k: String, v: String) -> Result<()> {
         DefaultSettings::check_setting_mode(&k, SettingMode::Write)?;
 
-        unsafe { self.unchecked_set_setting(k, v).await }
+        unsafe { self.unchecked_set_setting(k, v) }
     }
 
-    async unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<()> {
+    unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<()> {
         let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
 
         if key == "sandbox_tenant" {
-            let config = GlobalConfig::instance();
-            let tenant = value.as_string();
-            if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
-                UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
-                    .await?;
-            }
+            log::info!("switch sandbox tenant to {}", value);
         }
 
         self.changes.insert(key, ChangeValue {
@@ -368,6 +361,10 @@ impl Settings {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
+    pub fn get_enable_experimental_aggregate_hashtable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
+    }
+
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
     }
@@ -402,9 +399,8 @@ impl Settings {
     }
 
     /// # Safety
-    pub async unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
+    pub unsafe fn set_enterprise_license(&self, val: String) -> Result<()> {
         self.unchecked_set_setting("enterprise_license".to_string(), val)
-            .await
     }
 
     /// # Safety
@@ -418,9 +414,8 @@ impl Settings {
     }
 
     /// # Safety
-    pub async unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
+    pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
         self.unchecked_set_setting("deduplicate_label".to_string(), val)
-            .await
     }
 
     pub fn get_enable_distributed_copy(&self) -> Result<bool> {
@@ -465,6 +460,22 @@ impl Settings {
 
     pub fn set_use_parquet2(&self, val: bool) -> Result<()> {
         self.try_set_u64("use_parquet2", u64::from(val))
+    }
+
+    pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_write_use_parquet2")? == 1)
+    }
+
+    pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_write_use_parquet2", u64::from(val))
+    }
+
+    pub fn get_fuse_read_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_read_use_parquet2")? != 0)
+    }
+
+    pub fn set_fuse_read_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_read_use_parquet2", u64::from(val))
     }
 
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {

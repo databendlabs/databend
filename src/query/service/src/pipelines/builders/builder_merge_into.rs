@@ -170,13 +170,11 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
             // not macthed operation
-            let table_default_schema = &tbl.schema().remove_computed_fields();
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input_schema.clone(),
                 self.func_ctx.clone(),
                 self.ctx.clone(),
-                Arc::new(DataSchema::from(table_default_schema)),
             )?;
             let pipe_items = vec![
                 merge_into_not_matched_processor.into_pipe_item(),
@@ -198,7 +196,9 @@ impl PipelineBuilder {
                         transform_input_port,
                         transform_output_port,
                         Arc::new(DataSchema::from(table_default_schema)),
+                        unmatched.clone(),
                         tbl.clone(),
+                        Arc::new(DataSchema::from(tbl.schema())),
                     )
                 },
                 1,
@@ -486,13 +486,11 @@ impl PipelineBuilder {
                 // (distributed,change join order):(true,true) target is build side, we
                 // need to support insert in local node.
                 if !*distributed || *change_join_order {
-                    let table_default_schema = &tbl.schema().remove_computed_fields();
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
                         self.func_ctx.clone(),
                         self.ctx.clone(),
-                        Arc::new(DataSchema::from(table_default_schema)),
                     )?;
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
@@ -668,7 +666,9 @@ impl PipelineBuilder {
                     transform_input_port,
                     transform_output_port,
                     Arc::new(DataSchema::from(table_default_schema)),
+                    unmatched.clone(),
                     tbl.clone(),
+                    Arc::new(DataSchema::from(table.schema())),
                 )
             },
             fill_default_len,

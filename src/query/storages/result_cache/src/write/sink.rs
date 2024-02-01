@@ -111,7 +111,8 @@ impl WriteResultCacheSink {
         let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();
-        let cache_writer = ResultCacheWriter::create(schema, location, operator, max_bytes);
+        let cache_writer =
+            ResultCacheWriter::create(schema, location, operator, max_bytes, ctx.clone());
 
         Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
             inputs,
