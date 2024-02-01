@@ -15,10 +15,11 @@
 use std::fmt::Debug;
 
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::CreateOption;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStagePlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub stage_info: StageInfo,
 }
