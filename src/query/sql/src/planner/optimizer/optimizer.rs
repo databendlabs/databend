@@ -518,8 +518,7 @@ fn try_to_change_as_broadcast_join(
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
         if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
-            let mut join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
-            join.broadcast = true;
+            let join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
             let join_s_expr = merge_into_join_sexpr
                 .child(0)?
                 .replace_plan(Arc::new(RelOperator::Join(join)));
