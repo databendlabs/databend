@@ -23,6 +23,7 @@ napi = { version = "2.14", default-features = false, features = [
     "chrono_date",
 ] }
 napi-derive = "2.14"
+once_cell = "1.18"
 tokio-stream = "0.1"
 
 [build-dependencies]

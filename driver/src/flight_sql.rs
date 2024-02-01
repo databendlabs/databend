@@ -146,8 +146,8 @@ impl Connection for FlightSQLConnection {
 }
 
 impl FlightSQLConnection {
-    pub async fn try_create(dsn: &str) -> Result<Self> {
-        let (args, endpoint) = Self::parse_dsn(dsn).await?;
+    pub async fn try_create(dsn: &str, name: String) -> Result<Self> {
+        let (args, endpoint) = Self::parse_dsn(dsn, name).await?;
         let channel = endpoint.connect_lazy();
         let mut client = FlightSqlServiceClient::new(channel);
         // enable progress
@@ -178,10 +178,11 @@ impl FlightSQLConnection {
         Ok(())
     }
 
-    async fn parse_dsn(dsn: &str) -> Result<(Args, Endpoint)> {
+    async fn parse_dsn(dsn: &str, name: String) -> Result<(Args, Endpoint)> {
         let u = Url::parse(dsn)?;
         let args = Args::from_url(&u)?;
         let mut endpoint = Endpoint::new(args.uri.clone())?
+            .user_agent(name)?
             .connect_timeout(args.connect_timeout)
             .timeout(args.query_timeout)
             .tcp_nodelay(args.tcp_nodelay)

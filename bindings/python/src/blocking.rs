@@ -14,7 +14,7 @@
 
 use pyo3::prelude::*;
 
-use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats};
+use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats, VERSION};
 
 #[pyclass(module = "databend_driver")]
 pub struct BlockingDatabendClient(databend_driver::Client);
@@ -24,7 +24,8 @@ impl BlockingDatabendClient {
     #[new]
     #[pyo3(signature = (dsn))]
     pub fn new(dsn: String) -> PyResult<Self> {
-        let client = databend_driver::Client::new(dsn);
+        let name = format!("databend-driver-python/{}", VERSION.as_str());
+        let client = databend_driver::Client::new(dsn).with_name(name);
         Ok(Self(client))
     }
 

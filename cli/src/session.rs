@@ -22,6 +22,7 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use databend_driver::ServerStats;
 use databend_driver::{Client, Connection};
+use once_cell::sync::Lazy;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -40,6 +41,15 @@ use crate::VERSION;
 
 static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
 
+static VERSION_SHORT: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    let sha = option_env!("VERGEN_GIT_SHA").unwrap_or("dev");
+    match option_env!("BENDSQL_BUILD_INFO") {
+        Some(info) => format!("{}-{}", version, info),
+        None => format!("{}-{}", version, sha),
+    }
+});
+
 pub struct Session {
     client: Client,
     conn: Box<dyn Connection>,
@@ -54,16 +64,26 @@ pub struct Session {
 
 impl Session {
     pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
-        let client = Client::new(dsn);
+        let client = Client::new(dsn).with_name(format!("bendsql/{}", VERSION_SHORT.as_str()));
         let conn = client.get_conn().await?;
         let info = conn.info().await;
         let mut keywords = Vec::with_capacity(1024);
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
-            println!(
-                "Connecting to {}:{} as user {}.",
-                info.host, info.port, info.user
-            );
+            match info.warehouse {
+                Some(ref warehouse) => {
+                    println!(
+                        "Connecting to {}:{} with warehouse {} as user {}",
+                        info.host, info.port, warehouse, info.user
+                    );
+                }
+                None => {
+                    println!(
+                        "Connecting to {}:{} as user {}.",
+                        info.host, info.port, info.user
+                    );
+                }
+            }
             let version = conn.version().await?;
             println!("Connected to {}", version);
             println!();

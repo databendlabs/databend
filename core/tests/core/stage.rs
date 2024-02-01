@@ -21,11 +21,11 @@ use crate::common::DEFAULT_DSN;
 async fn insert_with_stage(presign: bool) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let client = if presign {
-        APIClient::from_dsn(&format!("{}&presign=on", dsn))
+        APIClient::new(&format!("{}&presign=on", dsn), None)
             .await
             .unwrap()
     } else {
-        APIClient::from_dsn(&format!("{}&presign=off", dsn))
+        APIClient::new(&format!("{}&presign=off", dsn), None)
             .await
             .unwrap()
     };

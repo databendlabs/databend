@@ -14,12 +14,18 @@
 
 use std::sync::Arc;
 
+use once_cell::sync::Lazy;
 use pyo3::exceptions::{PyException, PyStopAsyncIteration, PyStopIteration};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use pyo3_asyncio::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
+
+pub static VERSION: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    version.to_string()
+});
 
 pub struct Value(databend_driver::Value);
 

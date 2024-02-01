@@ -14,6 +14,7 @@ doc = false
 
 [dependencies]
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
+once_cell = "1.18"
 pyo3 = { version = "0.20", features = ["abi3-py37"] }
 pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
 tokio = "1.34"

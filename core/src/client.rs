@@ -50,6 +50,7 @@ static VERSION: Lazy<String> = Lazy::new(|| {
 #[derive(Clone)]
 pub struct APIClient {
     pub cli: HttpClient,
+    scheme: String,
     endpoint: Url,
     pub host: String,
     pub port: u16,
@@ -72,7 +73,14 @@ pub struct APIClient {
 }
 
 impl APIClient {
-    pub async fn from_dsn(dsn: &str) -> Result<Self> {
+    pub async fn new(dsn: &str, name: Option<String>) -> Result<Self> {
+        let mut client = Self::from_dsn(dsn).await?;
+        client.build_client(name).await?;
+        client.check_presign().await?;
+        Ok(client)
+    }
+
+    async fn from_dsn(dsn: &str) -> Result<Self> {
         let u = Url::parse(dsn)?;
         let mut client = Self::default();
         if let Some(host) = u.host_str() {
@@ -176,21 +184,9 @@ impl APIClient {
                 _ => unreachable!(),
             },
         };
+        client.scheme = scheme.to_string();
 
-        let mut cli_builder = HttpClient::builder()
-            .user_agent(format!("databend-client-rust/{}", VERSION.as_str()))
-            .pool_idle_timeout(Duration::from_secs(1));
-        #[cfg(any(feature = "rustls", feature = "native-tls"))]
-        if scheme == "https" {
-            if let Some(ref ca_file) = client.tls_ca_file {
-                let cert_pem = tokio::fs::read(ca_file).await?;
-                let cert = reqwest::Certificate::from_pem(&cert_pem)?;
-                cli_builder = cli_builder.add_root_certificate(cert);
-            }
-        }
-        client.cli = cli_builder.build()?;
         client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
-
         client.session_state = Arc::new(Mutex::new(
             SessionState::default()
                 .with_settings(Some(session_settings))
@@ -198,12 +194,30 @@ impl APIClient {
                 .with_database(database),
         ));
 
-        client.init_presign().await?;
-
         Ok(client)
     }
 
-    async fn init_presign(&mut self) -> Result<()> {
+    async fn build_client(&mut self, name: Option<String>) -> Result<()> {
+        let ua = match name {
+            Some(n) => n,
+            None => format!("databend-client-rust/{}", VERSION.as_str()),
+        };
+        let mut cli_builder = HttpClient::builder()
+            .user_agent(ua)
+            .pool_idle_timeout(Duration::from_secs(1));
+        #[cfg(any(feature = "rustls", feature = "native-tls"))]
+        if self.scheme == "https" {
+            if let Some(ref ca_file) = self.tls_ca_file {
+                let cert_pem = tokio::fs::read(ca_file).await?;
+                let cert = reqwest::Certificate::from_pem(&cert_pem)?;
+                cli_builder = cli_builder.add_root_certificate(cert);
+            }
+        }
+        self.cli = cli_builder.build()?;
+        Ok(())
+    }
+
+    async fn check_presign(&mut self) -> Result<()> {
         match self.presign {
             PresignMode::Auto => {
                 if self.host.ends_with(".databend.com") || self.host.ends_with(".databend.cn") {
@@ -212,7 +226,7 @@ impl APIClient {
                     self.presign = PresignMode::Off;
                 }
             }
-            PresignMode::Detect => match self.get_presigned_upload_url("~/.bendsql/check").await {
+            PresignMode::Detect => match self.get_presigned_upload_url("@~/.bendsql/check").await {
                 Ok(_) => self.presign = PresignMode::On,
                 Err(e) => {
                     warn!("presign mode off with error detected: {}", e);
@@ -344,7 +358,8 @@ impl APIClient {
         }
         let resp: QueryResponse = resp.json().await?;
         self.handle_session(&resp.session).await;
-        // TODO: duplicate warnings with start_query, maybe we should only print warnings on final response
+        // TODO: duplicate warnings with start_query,
+        // maybe we should only print warnings on final response
         // self.handle_warnings(&resp);
         match resp.error {
             Some(err) => Err(Error::InvalidResponse(err)),
@@ -570,6 +585,7 @@ impl Default for APIClient {
     fn default() -> Self {
         Self {
             cli: HttpClient::new(),
+            scheme: "http".to_string(),
             endpoint: Url::parse("http://localhost:8080").unwrap(),
             host: "localhost".to_string(),
             port: 8000,

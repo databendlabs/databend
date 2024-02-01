@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
+use once_cell::sync::Lazy;
 use tokio::io::AsyncRead;
 use tokio_stream::StreamExt;
 use url::Url;
@@ -34,26 +35,38 @@ use databend_sql::value::{NumberValue, Value};
 
 use crate::rest_api::RestAPIConnection;
 
+static VERSION: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    version.to_string()
+});
+
 #[derive(Clone)]
 pub struct Client {
     dsn: String,
+    name: String,
 }
 
 impl Client {
     pub fn new(dsn: String) -> Self {
-        Self { dsn }
+        let name = format!("databend-driver-rust/{}", VERSION.as_str());
+        Self { dsn, name }
+    }
+
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = name;
+        self
     }
 
     pub async fn get_conn(&self) -> Result<Box<dyn Connection>> {
         let u = Url::parse(&self.dsn)?;
         match u.scheme() {
             "databend" | "databend+http" | "databend+https" => {
-                let conn = RestAPIConnection::try_create(&self.dsn).await?;
+                let conn = RestAPIConnection::try_create(&self.dsn, self.name.clone()).await?;
                 Ok(Box::new(conn))
             }
             #[cfg(feature = "flight-sql")]
             "databend+flight" | "databend+grpc" => {
-                let conn = FlightSQLConnection::try_create(&self.dsn).await?;
+                let conn = FlightSQLConnection::try_create(&self.dsn, self.name.clone()).await?;
                 Ok(Box::new(conn))
             }
             _ => Err(Error::Parsing(format!(

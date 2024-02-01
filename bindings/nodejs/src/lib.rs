@@ -17,7 +17,13 @@ extern crate napi_derive;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use napi::bindgen_prelude::*;
+use once_cell::sync::Lazy;
 use tokio_stream::StreamExt;
+
+static VERSION: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    version.to_string()
+});
 
 #[napi]
 pub struct Client(databend_driver::Client);
@@ -279,7 +285,8 @@ impl Client {
     /// Create a new databend client with a given DSN.
     #[napi(constructor)]
     pub fn new(dsn: String) -> Self {
-        let client = databend_driver::Client::new(dsn);
+        let name = format!("databend-driver-nodejs/{}", VERSION.as_str());
+        let client = databend_driver::Client::new(dsn).with_name(name);
         Self(client)
     }
 
