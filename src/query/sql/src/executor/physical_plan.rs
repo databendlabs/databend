@@ -604,26 +604,14 @@ impl PhysicalPlan {
                     .collect(),
             )]),
             PhysicalPlan::AggregatePartial(v) => HashMap::from([
-                (
-                    String::from("Grouping keys"),
-                    v.group_by_expr
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                ),
+                (String::from("Grouping keys"), v.group_by_display.clone()),
                 (
                     String::from("Aggregate Functions"),
                     v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
                 ),
             ]),
             PhysicalPlan::AggregateFinal(v) => HashMap::from([
-                (
-                    String::from("Grouping keys"),
-                    v.group_by_expr
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                ),
+                (String::from("Grouping keys"), v.group_by_display.clone()),
                 (
                     String::from("Aggregate Functions"),
                     v.agg_funcs.iter().map(|x| x.display.clone()).collect(),

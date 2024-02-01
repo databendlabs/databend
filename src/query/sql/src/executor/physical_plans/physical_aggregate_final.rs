@@ -16,13 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -38,7 +36,6 @@ use crate::plans::DummyTableScan;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
-use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFinal {
@@ -50,7 +47,7 @@ pub struct AggregateFinal {
     pub before_group_by_schema: DataSchemaRef,
     pub limit: Option<usize>,
 
-    pub group_by_expr: Vec<RemoteExpr>,
+    pub group_by_display: Vec<String>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -119,20 +116,10 @@ impl PhysicalPlanBuilder {
 
         let result = match &agg.mode {
             AggregateMode::Partial => {
-                let group_by_expr = agg
+                let group_by_display = agg
                     .group_items
                     .iter()
-                    .map(|item| {
-                        let expr = item
-                            .scalar
-                            .type_check(input_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                input_schema.index_of(&index.to_string()).unwrap()
-                            });
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        Ok(expr.as_remote_expr())
-                    })
+                    .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
                     .collect::<Result<Vec<_>>>()?;
 
                 let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
@@ -204,7 +191,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
-                                group_by_expr,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -213,7 +200,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input,
                                 agg_funcs,
-                                group_by_expr,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -259,7 +246,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
-                                group_by_expr,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
@@ -268,7 +255,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
-                                group_by_expr,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
@@ -348,7 +335,7 @@ impl PhysicalPlanBuilder {
                         let limit = agg.limit;
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
-                            group_by_expr: partial.group_by_expr.clone(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,
@@ -368,7 +355,7 @@ impl PhysicalPlanBuilder {
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
-                            group_by_expr: partial.group_by_expr.clone(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,

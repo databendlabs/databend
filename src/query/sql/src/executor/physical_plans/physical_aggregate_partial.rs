@@ -18,7 +18,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
@@ -33,7 +32,7 @@ pub struct AggregatePartial {
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
 
-    pub group_by_expr: Vec<RemoteExpr>,
+    pub group_by_display: Vec<String>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
