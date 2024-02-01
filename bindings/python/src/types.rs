@@ -22,6 +22,8 @@ use pyo3_asyncio::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use crate::utils::wait_for_future;
+
 pub static VERSION: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
     version.to_string()
@@ -136,10 +138,9 @@ impl RowIterator {
 
 #[pymethods]
 impl RowIterator {
-    fn schema<'p>(&self) -> PyResult<Schema> {
+    fn schema<'p>(&self, py: Python) -> PyResult<Schema> {
         let streamer = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
+        let ret = wait_for_future(py, async move {
             let schema = streamer.lock().await.schema();
             schema
         });
@@ -149,10 +150,9 @@ impl RowIterator {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
-    fn __next__(&self) -> PyResult<Option<Row>> {
+    fn __next__(&self, py: Python) -> PyResult<Option<Row>> {
         let streamer = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
+        let ret = wait_for_future(py, async move {
             match streamer.lock().await.next().await {
                 Some(val) => match val {
                     Err(e) => Err(PyException::new_err(format!("{}", e))),

@@ -15,6 +15,7 @@
 mod asyncio;
 mod blocking;
 mod types;
+mod utils;
 
 use pyo3::prelude::*;
 

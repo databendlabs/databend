@@ -15,21 +15,7 @@
 use pyo3::prelude::*;
 
 use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats, VERSION};
-
-#[ctor::ctor]
-static RUNTIME: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()
-    .unwrap();
-
-/// Utility to collect rust futures with GIL released
-fn wait_for_future<F: std::future::Future>(py: Python, f: F) -> F::Output
-where
-    F: Send,
-    F::Output: Send,
-{
-    py.allow_threads(|| RUNTIME.block_on(f))
-}
+use crate::utils::wait_for_future;
 
 #[pyclass(module = "databend_driver")]
 pub struct BlockingDatabendClient(databend_driver::Client);
