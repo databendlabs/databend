@@ -44,5 +44,17 @@ statement ok
 DROP STAGE test_stage_cos
 
 statement ok
+CREATE STAGE if not exists replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement error 1005
+CREATE OR REPLACE STAGE if not exists replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+CREATE OR REPLACE STAGE replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
+
+statement ok
+DROP STAGE replace_test_stage_huggingface
+
+statement ok
 SHOW STAGES
 

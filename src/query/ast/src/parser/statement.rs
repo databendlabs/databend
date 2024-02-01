@@ -1224,7 +1224,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // stages
     let create_stage = map_res(
         rule! {
-            CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
@@ -1235,6 +1235,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
         |(
             _,
+            opt_or_replace,
             _,
             opt_if_not_exists,
             stage,
@@ -1245,8 +1246,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             validation_mode_opt,
             comment_opt,
         )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateStage(CreateStageStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 stage_name: stage.to_string(),
                 location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
@@ -1840,7 +1843,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
             | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
-            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
+            | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -1886,7 +1889,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
-            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
+            #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"

@@ -7500,7 +7500,9 @@ CREATE STAGE ~
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         stage_name: "~",
         location: None,
         file_format_options: {},
@@ -7519,7 +7521,9 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -7556,7 +7560,9 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -7593,7 +7599,46 @@ CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( acco
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "azblob",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "account_key": "4x5y6z",
+                        "account_name": "1a2b3c",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '******y6z', account_name = '******b3c' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        create_option: CreateOrReplace,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
