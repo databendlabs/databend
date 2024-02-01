@@ -572,7 +572,10 @@ impl PhysicalPlan {
                     format!(
                         "Columns ({} / {})",
                         v.output_schema()?.num_fields(),
-                        v.source.source_info.schema().num_fields()
+                        std::cmp::max(
+                            v.output_schema()?.num_fields(),
+                            v.source.source_info.schema().num_fields()
+                        )
                     ),
                     v.name_mapping.keys().cloned().collect(),
                 );
