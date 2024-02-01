@@ -13,6 +13,7 @@ name = "databend_driver"
 doc = false
 
 [dependencies]
+ctor = "0.2.5"
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 once_cell = "1.18"
 pyo3 = { version = "0.20", features = ["abi3-py37"] }

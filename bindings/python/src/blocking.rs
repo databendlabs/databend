@@ -16,6 +16,21 @@ use pyo3::prelude::*;
 
 use crate::types::{ConnectionInfo, DriverError, Row, RowIterator, ServerStats, VERSION};
 
+#[ctor::ctor]
+static RUNTIME: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+
+/// Utility to collect rust futures with GIL released
+fn wait_for_future<F: std::future::Future>(py: Python, f: F) -> F::Output
+where
+    F: Send,
+    F::Output: Send,
+{
+    py.allow_threads(|| RUNTIME.block_on(f))
+}
+
 #[pyclass(module = "databend_driver")]
 pub struct BlockingDatabendClient(databend_driver::Client);
 
@@ -29,10 +44,11 @@ impl BlockingDatabendClient {
         Ok(Self(client))
     }
 
-    pub fn get_conn(&self) -> PyResult<BlockingDatabendConnection> {
+    pub fn get_conn(&self, py: Python) -> PyResult<BlockingDatabendConnection> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move { this.get_conn().await.map_err(DriverError::new) })?;
+        let ret = wait_for_future(py, async move {
+            this.get_conn().await.map_err(DriverError::new)
+        })?;
         Ok(BlockingDatabendConnection(ret))
     }
 }
@@ -42,50 +58,56 @@ pub struct BlockingDatabendConnection(Box<dyn databend_driver::Connection>);
 
 #[pymethods]
 impl BlockingDatabendConnection {
-    pub fn info(&self) -> PyResult<ConnectionInfo> {
+    pub fn info(&self, py: Python) -> PyResult<ConnectionInfo> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
+        let ret = wait_for_future(py, async move {
             let info = this.info().await;
             info
         });
         Ok(ConnectionInfo::new(ret))
     }
 
-    pub fn version(&self) -> PyResult<String> {
+    pub fn version(&self, py: Python) -> PyResult<String> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move { this.version().await.map_err(DriverError::new) })?;
+        let ret = wait_for_future(
+            py,
+            async move { this.version().await.map_err(DriverError::new) },
+        )?;
         Ok(ret)
     }
 
-    pub fn exec(&self, sql: String) -> PyResult<i64> {
+    pub fn exec(&self, py: Python, sql: String) -> PyResult<i64> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move { this.exec(&sql).await.map_err(DriverError::new) })?;
+        let ret = wait_for_future(py, async move {
+            this.exec(&sql).await.map_err(DriverError::new)
+        })?;
         Ok(ret)
     }
 
-    pub fn query_row(&self, sql: String) -> PyResult<Option<Row>> {
+    pub fn query_row(&self, py: Python, sql: String) -> PyResult<Option<Row>> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret =
-            rt.block_on(async move { this.query_row(&sql).await.map_err(DriverError::new) })?;
+        let ret = wait_for_future(py, async move {
+            this.query_row(&sql).await.map_err(DriverError::new)
+        })?;
         Ok(ret.map(Row::new))
     }
 
-    pub fn query_iter(&self, sql: String) -> PyResult<RowIterator> {
+    pub fn query_iter(&self, py: Python, sql: String) -> PyResult<RowIterator> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        // Use the runtime to block on the synchronous operation
-        let it = rt.block_on(async { this.query_iter(&sql).await.map_err(DriverError::new) })?;
+        let it = wait_for_future(py, async {
+            this.query_iter(&sql).await.map_err(DriverError::new)
+        })?;
         Ok(RowIterator::new(it))
     }
 
-    pub fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> PyResult<ServerStats> {
+    pub fn stream_load(
+        &self,
+        py: Python,
+        sql: String,
+        data: Vec<Vec<String>>,
+    ) -> PyResult<ServerStats> {
         let this = self.0.clone();
-        let rt = tokio::runtime::Runtime::new()?;
-        let ret = rt.block_on(async move {
+        let ret = wait_for_future(py, async move {
             let data = data
                 .iter()
                 .map(|v| v.iter().map(|s| s.as_ref()).collect())
