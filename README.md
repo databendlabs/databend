@@ -181,13 +181,14 @@ Common:
 | `warehouse` | Warehouse name, Databend Cloud only. |
 | `sslmode` | Set to `disable` if not using tls. |
 | `tls_ca_file` | Custom root CA certificate path. |
+| `connect_timeout` | Connect timeout in seconds |
 
 
 RestAPI client:
 
 | Arg | Description |
 |---|---|
-| `presigned_url_disabled` | Set to `1` to disable presigned upload to object storage, *deprecated, use `presign` instead* |
+| `presigned_url_disabled` | Set to `1` to disable presigned upload to object storage, *deprecated*, use `presign` instead |
 | `wait_time_secs` | Request wait time for page, default to `1` |
 | `max_rows_in_buffer` | Max rows for page buffer |
 | `max_rows_per_page` | Max response rows for a single page |
@@ -199,7 +200,6 @@ FlightSQL client:
 
 | Arg | Description |
 |---|---|
-| `connect_timeout` | Grpc connect timeout seconds |
 | `query_timeout` | Query timeout seconds |
 | `tcp_nodelay` | Default to `true` |
 | `tcp_keepalive` | Tcp keepalive seconds, default to `3600`, set to `0` to disable keepalive |

@@ -65,6 +65,7 @@ pub struct APIClient {
     max_rows_in_buffer: Option<i64>,
     max_rows_per_page: Option<i64>,
 
+    connect_timeout: Duration,
     page_request_timeout: Duration,
 
     tls_ca_file: Option<String>,
@@ -112,6 +113,7 @@ impl APIClient {
                 "max_rows_per_page" => {
                     client.max_rows_per_page = Some(v.parse()?);
                 }
+                "connect_timeout" => client.connect_timeout = Duration::from_secs(v.parse()?),
                 "page_request_timeout_secs" => {
                     client.page_request_timeout = {
                         let secs: u64 = v.parse()?;
@@ -596,6 +598,7 @@ impl Default for APIClient {
             wait_time_secs: None,
             max_rows_in_buffer: None,
             max_rows_per_page: None,
+            connect_timeout: Duration::from_secs(10),
             page_request_timeout: Duration::from_secs(30),
             tls_ca_file: None,
             presign: PresignMode::Auto,
