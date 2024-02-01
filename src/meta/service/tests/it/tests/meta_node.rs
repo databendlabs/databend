@@ -50,7 +50,7 @@ pub(crate) async fn start_meta_node_cluster(
     leader
         .raft
         .wait(timeout())
-        .log(Some(log_index), "start leader")
+        .applied_index(Some(log_index), "start leader")
         .await?;
 
     for id in voters.iter() {
@@ -65,7 +65,7 @@ pub(crate) async fn start_meta_node_cluster(
         tc.meta_node()
             .raft
             .wait(timeout())
-            .log(Some(log_index), format!("add :{}", id))
+            .applied_index(Some(log_index), format!("add :{}", id))
             .await?;
 
         test_contexts.push(tc);
@@ -80,7 +80,7 @@ pub(crate) async fn start_meta_node_cluster(
         tc.meta_node()
             .raft
             .wait(timeout())
-            .log(Some(log_index), format!("add :{}", id))
+            .applied_index(Some(log_index), format!("add :{}", id))
             .await?;
         // wait_for_log(&tc.meta_nodes[0], log_index).await?;
 
@@ -132,7 +132,7 @@ pub(crate) async fn start_meta_node_cluster(
             tc.meta_node()
                 .raft
                 .wait(timeout())
-                .log(
+                .applied_index(
                     Some(log_index),
                     format!(
                         "check applied index: {} for node-{}",

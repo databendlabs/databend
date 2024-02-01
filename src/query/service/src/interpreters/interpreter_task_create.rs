@@ -86,7 +86,7 @@ impl Interpreter for CreateTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone())?;
+        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.create_task(req).await?;
         Ok(PipelineBuildResult::create())

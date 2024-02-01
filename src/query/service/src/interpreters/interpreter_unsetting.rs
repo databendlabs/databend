@@ -60,32 +60,39 @@ impl Interpreter for UnSettingInterpreter {
                         .try_drop_global_setting(setting_key)
                         .await?;
 
-                    let default_val = {
-                        if setting_key == "max_memory_usage" {
+                    let default_val = match setting_key {
+                        "max_memory_usage" => {
                             let conf = GlobalConfig::instance();
                             if conf.query.max_server_memory_usage == 0 {
                                 settings
-                                    .check_and_get_default_value(setting_key)?
-                                    .to_string()
+                                    .get_default_value(setting_key)?
+                                    .map(|v| v.to_string())
                             } else {
-                                conf.query.max_server_memory_usage.to_string()
+                                Some(conf.query.max_server_memory_usage.to_string())
                             }
-                        } else if setting_key == "max_threads" {
+                        }
+                        "max_threads" => {
                             let conf = GlobalConfig::instance();
                             if conf.query.num_cpus == 0 {
                                 settings
-                                    .check_and_get_default_value(setting_key)?
-                                    .to_string()
+                                    .get_default_value(setting_key)?
+                                    .map(|v| v.to_string())
                             } else {
-                                conf.query.num_cpus.to_string()
+                                Some(conf.query.num_cpus.to_string())
                             }
-                        } else {
-                            settings
-                                .check_and_get_default_value(setting_key)?
-                                .to_string()
                         }
+                        _ => settings
+                            .get_default_value(setting_key)?
+                            .map(|v| v.to_string()),
                     };
-                    (true, default_val)
+                    match default_val {
+                        Some(val) => (true, val),
+                        None => {
+                            self.ctx
+                                .push_warning(format!("Unknown setting: '{}'", setting_key));
+                            (false, String::from(""))
+                        }
+                    }
                 }
             };
             if ok {

@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
 use itertools::Itertools;
@@ -86,24 +85,22 @@ impl Settings {
         Ok(DefaultSettings::instance()?.settings.contains_key(key))
     }
 
-    pub fn check_and_get_default_value(&self, key: &str) -> Result<UserSettingValue> {
-        match DefaultSettings::instance()?.settings.get(key) {
-            Some(v) => Ok(v.value.clone()),
-            None => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown variable: {:?}",
-                key
-            ))),
-        }
+    pub fn get_default_value(&self, key: &str) -> Result<Option<UserSettingValue>> {
+        let val = DefaultSettings::instance()?
+            .settings
+            .get(key)
+            .map(|v| v.value.clone());
+        Ok(val)
     }
 
     pub fn unset_setting(&self, k: &str) {
         self.changes.remove(k);
     }
 
-    pub async fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+    pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {
-                self.set_setting(k.to_string(), v.to_string()).await?;
+                self.set_setting(k.to_string(), v.to_string())?;
             }
         }
 

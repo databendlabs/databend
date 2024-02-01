@@ -192,7 +192,7 @@ impl ReclusterAggregator {
                     // To fix issue #13217.
                     if new_summary.block_count > new_summary.perfect_block_count {
                         log::warn!(
-                            "compact: generate new segment: {}, perfect_block_count: {}, block_count: {}",
+                            "recluster: generate new segment: {}, perfect_block_count: {}, block_count: {}",
                             location, new_summary.perfect_block_count, new_summary.block_count,
                         );
                         new_summary.perfect_block_count = new_summary.block_count;

@@ -2,9 +2,6 @@ statement ok
 drop table if exists tbl_01_0007 all
 
 statement ok
-set enable_table_lock = 0
-
-statement ok
 create table tbl_01_0007(a int not null) cluster by(a)
 
 statement ok
@@ -18,9 +15,6 @@ insert into  tbl_01_0007 values(4)
 
 statement ok
 alter table tbl_01_0007 recluster final where a != 4
-
-statement ok
-set enable_table_lock = 1
 
 query III
 select block_count, byte_size, row_count from system.clustering_history where table = 'tbl_01_0007' limit 1

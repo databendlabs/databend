@@ -26,6 +26,9 @@ UNSET (timezone)
 
 onlyif mysql
 statement error 2801
+SET stl_dialect='MySQL'
+
+statement ok
 UNSET stl_dialect
 
 onlyif mysql

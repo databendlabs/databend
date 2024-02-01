@@ -66,6 +66,12 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<ReclusterMutator>> {
+        // Status.
+        {
+            let status = "recluster: begin to run recluster";
+            ctx.set_status_info(status);
+        }
+
         if self.cluster_key_meta.is_none() {
             return Ok(None);
         }
@@ -113,8 +119,13 @@ impl FuseTable {
 
         let max_threads = settings.get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
+        // The default limit might be too small, which makes
+        // the scanning of recluster candidates slow.
+        let chunk_size = limit.max(max_threads * 4);
+        // The max number of segments to be reclustered.
+        let max_seg_num = limit.min(max_threads * 2);
 
-        'F: for chunk in segment_locations.chunks(limit) {
+        'F: for chunk in segment_locations.chunks(chunk_size) {
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
@@ -132,7 +143,7 @@ impl FuseTable {
             let selected_segs = ReclusterMutator::select_segments(
                 &compact_segments,
                 block_per_seg,
-                max_threads * 2,
+                max_seg_num,
                 default_cluster_key_id,
             )?;
             // select the blocks with the highest depth.
@@ -147,15 +158,18 @@ impl FuseTable {
                     }
 
                     if mutator.target_select(vec![compact_segment]).await? {
+                        log::info!("Number of segments scheduled for recluster: 1");
                         break 'F;
                     }
                 }
             } else {
-                let mut selected_segments = Vec::with_capacity(selected_segs.len());
+                let seg_num = selected_segs.len();
+                let mut selected_segments = Vec::with_capacity(seg_num);
                 selected_segs.into_iter().for_each(|i| {
                     selected_segments.push(compact_segments[i].clone());
                 });
                 if mutator.target_select(selected_segments).await? {
+                    log::info!("Number of segments scheduled for recluster: {}", seg_num);
                     break;
                 }
             }

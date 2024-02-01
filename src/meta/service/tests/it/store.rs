@@ -14,7 +14,6 @@
 
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
-use databend_common_meta_sled_store::openraft::async_trait::async_trait;
 use databend_common_meta_sled_store::openraft::entry::RaftEntry;
 use databend_common_meta_sled_store::openraft::storage::Adaptor;
 use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
@@ -47,7 +46,6 @@ use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
 
-#[async_trait]
 impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaStoreBuilder {
     async fn build(&self) -> Result<(MetaSrvTestContext, LogStore, SMStore), StorageError> {
         let tc = MetaSrvTestContext::new(555);

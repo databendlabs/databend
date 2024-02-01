@@ -151,7 +151,7 @@ impl AsyncSystemTable for TaskHistoryTable {
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let config = build_client_config(tenant, user, query_id);
+        let config = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
         let req = make_request(req, config);
 
         let resp = task_client.show_task_runs(req).await?;

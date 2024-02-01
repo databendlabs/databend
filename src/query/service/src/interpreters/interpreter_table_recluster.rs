@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_catalog::lock::LockExt;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
@@ -37,11 +36,11 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
-use log::info;
 use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockExt;
 use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -128,18 +127,11 @@ impl Interpreter for ReclusterTableInterpreter {
 
             // check if the table is locked.
             let table_lock = LockManager::create_table_lock(table_info.clone())?;
-            if table_lock.check_lock(catalog.clone()).await? {
+            if !table_lock.wait_lock_expired(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
                 )));
-            }
-
-            // Status.
-            {
-                let status = "recluster: begin to run recluster";
-                ctx.set_status_info(status);
-                info!("{}", status);
             }
 
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -193,7 +185,6 @@ impl Interpreter for ReclusterTableInterpreter {
                     elapsed_time.as_secs()
                 );
                 ctx.set_status_info(&status);
-                info!("{}", &status);
             }
 
             if !plan.is_final {

@@ -34,6 +34,11 @@ impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
+        let builtin_roles = self.builtin_roles();
+        if let Some(role_info) = builtin_roles.get(&role) {
+            return Ok(role_info.clone());
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
@@ -42,14 +47,39 @@ impl UserApiProvider {
     // Get the tenant all roles list.
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
+        let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .get_role_api_client(tenant)?
             .get_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
-        let mut roles = seq_roles.into_iter().map(|r| r.data).collect::<Vec<_>>();
+        // overwrite the builtin roles.
+        let mut roles = seq_roles
+            .into_iter()
+            .map(|r| r.data)
+            .filter(|r| !builtin_roles.contains_key(&r.name))
+            .collect::<Vec<_>>();
+        roles.extend(builtin_roles.values().cloned());
         roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(roles)
+    }
+
+    // Currently we have to built account_admin role in query:
+    // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
+    //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
+    // 2. Because the previous deserialization using from_bits caused forward compatibility issues after adding new privilege type
+    //    Until we can confirm all product use https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly or later,
+    //    We can add account_admin into meta.
+    fn builtin_roles(&self) -> HashMap<String, RoleInfo> {
+        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        let mut result = HashMap::new();
+        result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
+        result
     }
 
     #[async_backtrace::framed]
