@@ -19,8 +19,8 @@ INSERT INTO t1 (id, var) VALUES(1, 'abc')
 statement error (?s)1006.*EOF while parsing a value, pos 5 while evaluating function `parse_json\('\{"a":'\)`
 INSERT INTO t1 (id, var) VALUES(1, '{"a":')
 
-statement error (?s)1046.*unable to cast type `Array\(UInt8\)` to type `Variant NULL`
-INSERT INTO t1 (id, var) VALUES(1, [1,2,3])
+statement ok
+INSERT INTO t1 (id, var) VALUES(18, [1,2,3])
 
 
 query IT
@@ -43,6 +43,7 @@ select * from t1 order by id asc
 15 {"k":"v"}
 16 "a\"b\"c"
 17 "http://databend.rs"
+18 [1,2,3]
 
 statement ok
 CREATE TABLE IF NOT EXISTS t2(id Int null, arr Json null) Engine = Fuse
