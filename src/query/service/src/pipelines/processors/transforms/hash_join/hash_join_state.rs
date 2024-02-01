@@ -120,9 +120,6 @@ pub struct HashJoinState {
     pub(crate) partition_id: AtomicI8,
     pub(crate) enable_spill: bool,
 
-    /// If the join node generate runtime filters, the scan node will use it to do prune.
-    pub(crate) table_index: IndexType,
-
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
 }
 
@@ -133,7 +130,6 @@ impl HashJoinState {
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
-        table_index: IndexType,
         merge_into_target_table_index: IndexType,
         merge_into_is_distributed: bool,
     ) -> Result<Arc<HashJoinState>> {
@@ -170,7 +166,6 @@ impl HashJoinState {
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
             enable_spill,
-            table_index,
             merge_into_state: MergeIntoState::try_create_merge_into_state(
                 merge_into_target_table_index,
                 merge_into_is_distributed,
