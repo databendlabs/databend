@@ -2806,7 +2806,6 @@ name = "databend-common-http"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "async-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "futures",

@@ -78,7 +78,7 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        let (notify, rx) = Self::streaming_receiver(streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
@@ -100,12 +100,11 @@ impl FlightClient {
 
         let streaming = self.get_streaming(request).await?;
 
-        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        let (notify, rx) = Self::streaming_receiver(streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
-        query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
