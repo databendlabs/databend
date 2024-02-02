@@ -310,7 +310,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 // `total_probe_matched` is used to record the matched rows count for current `idx` row from probe_block
                 let mut total_probe_matched = 0;
@@ -630,6 +630,7 @@ impl HashJoinProbeState {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn continue_left_probe<'a, H: HashJoinHashtableLike>(
         &self,
