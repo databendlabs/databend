@@ -24,7 +24,6 @@ databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 anyerror = { workspace = true }
-async-backtrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }

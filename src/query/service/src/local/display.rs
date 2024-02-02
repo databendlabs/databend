@@ -160,7 +160,7 @@ impl<'a> FormatDisplay<'a> {
 
         let is_repl = self.is_repl;
 
-        let handle = tokio::spawn(async move {
+        let handle = databend_common_base::runtime::spawn(async move {
             if !is_repl {
                 return (None, None);
             }

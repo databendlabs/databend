@@ -526,7 +526,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "async-backtrace-attributes",
  "dashmap",
@@ -542,7 +542,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace-attributes"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2811,7 +2811,6 @@ name = "databend-common-http"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "async-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "futures",
