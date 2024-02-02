@@ -132,7 +132,6 @@ impl AggregateHashTable {
                         state.addresses[i].add(self.payload.state_offset) as _,
                     ) as usize)
                 };
-                debug_assert_eq!(usize::from(state.state_places[i]) % 8, 0);
             }
 
             let state_places = &state.state_places.as_slice()[0..row_count];
