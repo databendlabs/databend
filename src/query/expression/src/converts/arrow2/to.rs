@@ -23,6 +23,7 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
 use crate::types::DecimalDataType;
@@ -174,6 +175,11 @@ fn table_type_to_arrow_type(
         }
         TableDataType::Variant => ArrowDataType::Extension(
             ARROW_EXT_TYPE_VARIANT.to_string(),
+            Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geometry => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOMETRY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
             None,
         ),
@@ -388,19 +394,6 @@ impl Column {
                     .unwrap(),
                 )
             }
-            Column::Bitmap(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
                 set_validities(arrow_array.clone(), &col.validity)
@@ -413,7 +406,7 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Variant(col) => {
+            Column::Bitmap(col) | Column::Variant(col) | Column::Geometry(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(

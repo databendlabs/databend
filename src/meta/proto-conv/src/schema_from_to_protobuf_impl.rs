@@ -257,6 +257,7 @@ impl FromToProto for ex::TableDataType {
                         }
                     }
                     Dt24::VariantT(_) => ex::TableDataType::Variant,
+                    Dt24::GeometryT(_) => ex::TableDataType::Geometry,
                     Dt24::DecimalT(x) => {
                         ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
                     }
@@ -322,6 +323,7 @@ impl FromToProto for ex::TableDataType {
                 new_pb_dt24(Dt24::TupleT(x))
             }
             TableDataType::Variant => new_pb_dt24(Dt24::VariantT(pb::Empty {})),
+            TableDataType::Geometry => new_pb_dt24(Dt24::GeometryT(pb::Empty {})),
         };
         Ok(x)
     }

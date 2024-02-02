@@ -25,6 +25,7 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -187,6 +188,11 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => VariantType::upcast_column(Self::take_binary_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
+            Column::Geometry(column) => GeometryType::upcast_column(Self::take_binary_types(
                 column,
                 indices,
                 string_items_buf.as_mut(),

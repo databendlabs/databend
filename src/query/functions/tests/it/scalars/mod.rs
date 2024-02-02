@@ -42,6 +42,7 @@ mod geo;
 // NOTE:(everpcpc) result different on macos
 #[cfg(not(target_os = "macos"))]
 mod geo_h3;
+mod geometry;
 mod hash;
 mod map;
 mod math;

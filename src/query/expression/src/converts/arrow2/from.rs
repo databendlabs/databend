@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
@@ -142,6 +143,7 @@ fn arrow_type_to_table_type(ty: &ArrowDataType, is_nullable: bool) -> Result<Tab
             ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
             ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
             ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+            ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
             _ => arrow_type_to_table_type(data_type, is_nullable)?,
         },
         _ => {
@@ -707,6 +709,72 @@ impl Column {
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                     Column::Bitmap(BinaryColumn::new(arrow_col.values().clone(), offsets))
+                }
+                (
+                    DataType::Geometry,
+                    ArrowDataType::Extension(name, box ArrowDataType::Binary, None),
+                ) if name == ARROW_EXT_TYPE_GEOMETRY => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
+                        .expect(
+                            "fail to read `Geometry` from arrow: array should be `BinaryArray<i32>`",
+                        );
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Geometry(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (
+                    DataType::Geometry,
+                    ArrowDataType::Extension(name, box ArrowDataType::LargeBinary, None),
+                ) if name == ARROW_EXT_TYPE_GEOMETRY => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                        .expect(
+                            "fail to read `Geometry` from arrow: array should be `BinaryArray<i64>`",
+                        );
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Geometry(BinaryColumn::new(arrow_col.values().clone(), offsets))
+                }
+                (DataType::Geometry, ArrowDataType::Binary) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i32>>()
+                        .expect(
+                            "fail to read `Geometry` from arrow: array should be `BinaryArray<i32>`",
+                        );
+                    let offsets = arrow_col
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+                    Column::Geometry(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets.into(),
+                    ))
+                }
+                (DataType::Geometry, ArrowDataType::LargeBinary) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                        .expect(
+                            "fail to read `Geometry` from arrow: array should be `BinaryArray<i64>`",
+                        );
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Geometry(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
                 (data_type, ArrowDataType::Extension(_, arrow_type, _)) => {
                     from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)?

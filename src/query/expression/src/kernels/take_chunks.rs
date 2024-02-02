@@ -28,6 +28,7 @@ use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
+use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
@@ -376,6 +377,10 @@ impl Column {
                 let builder = VariantType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<VariantType>(columns, builder, indices)
             }
+            Column::Geometry(_) => {
+                let builder = GeometryType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+            }
         }
     }
 
@@ -584,6 +589,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Variant(columns)
             }
+            Column::Geometry(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| GeometryType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Geometry(columns)
+            }
         }
     }
 
@@ -719,6 +731,9 @@ impl Column {
                 Column::Tuple(fields)
             }
             ColumnVec::Variant(columns) => VariantType::upcast_column(
+                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
+            ),
+            ColumnVec::Geometry(columns) => GeometryType::upcast_column(
                 Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
         }
