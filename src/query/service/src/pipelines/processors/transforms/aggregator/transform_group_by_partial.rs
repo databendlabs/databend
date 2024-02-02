@@ -152,6 +152,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
         if block.is_empty() {
             return Ok(vec![])
         }
+
         let block = block.convert_to_full();
         let group_columns = self
             .group_columns
