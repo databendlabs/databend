@@ -39,7 +39,7 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 
-use super::wrap_cast_scalar;
+use super::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -575,11 +575,10 @@ impl Binder {
             for idx in 0..default_schema.num_fields() {
                 let scalar = update_columns_star.get(&idx).unwrap().clone();
                 // cast expr
-                values.push(wrap_cast_scalar(
+                values.push(wrap_cast(
                     &scalar,
-                    &scalar.data_type()?,
                     &DataType::from(default_schema.field(idx).data_type()),
-                )?);
+                ));
             }
 
             Ok(UnmatchedEvaluator {
@@ -616,11 +615,10 @@ impl Binder {
                     .set_span(scalar_expr.span()));
                 }
                 // type cast
-                scalar_expr = wrap_cast_scalar(
+                scalar_expr = wrap_cast(
                     &scalar_expr,
-                    &scalar_expr.data_type()?,
                     &DataType::from(source_schema.field(idx).data_type()),
-                )?;
+                );
 
                 values.push(scalar_expr.clone());
                 for idx in scalar_expr.used_columns() {

@@ -58,10 +58,10 @@ has tried possible overloads:
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
 raw expr       : array(parse_json('[]'), parse_json('{"foo":"bar"}'))
 checked expr   : array<T0=Variant><T0, T0>(parse_json<String>("[]"), parse_json<String>("{\"foo\":\"bar\"}"))
-optimized expr : [[], {"foo":"bar"}]
+optimized expr : ['[]', '{"foo":"bar"}']
 output type    : Array(Variant)
 output domain  : [Undefined]
-output         : [[], {"foo":"bar"}]
+output         : ['[]', '{"foo":"bar"}']
 
 
 ast            : length([])
@@ -916,9 +916,9 @@ error:
 
 
 
-ast            : array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)
-raw expr       : array_indexof(array(CAST(1 AS Variant), CAST('x' AS Variant), CAST(NULL AS Variant), CAST('x' AS Variant)), CAST('x' AS Variant))
-checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=String><T0>("x"), to_variant<T0=NULL><T0>(NULL), to_variant<T0=String><T0>("x")), to_variant<T0=String><T0>("x"))
+ast            : array_indexof([1::VARIANT,2::VARIANT,3::VARIANT,4::VARIANT], 2::VARIANT)
+raw expr       : array_indexof(array(CAST(1 AS Variant), CAST(2 AS Variant), CAST(3 AS Variant), CAST(4 AS Variant)), CAST(2 AS Variant))
+checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=UInt8><T0>(2_u8), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=UInt8><T0>(4_u8)), to_variant<T0=UInt8><T0>(2_u8))
 optimized expr : 2_u64
 output type    : UInt64
 output domain  : {2..=2}

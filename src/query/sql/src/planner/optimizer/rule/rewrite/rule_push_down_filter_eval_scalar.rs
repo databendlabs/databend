@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
@@ -29,7 +30,6 @@ use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -37,16 +37,14 @@ use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::MetadataRef;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
-    patterns: Vec<SExpr>,
-    _metadata: MetadataRef,
+    matchers: Vec<Matcher>,
 }
 
 impl RulePushDownFilterEvalScalar {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::PushDownFilterEvalScalar,
             // Filter
@@ -54,29 +52,13 @@ impl RulePushDownFilterEvalScalar {
             //   EvalScalar
             //    \
             //     *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::EvalScalar,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-            )],
-            _metadata: metadata,
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::Leaf],
+                }],
+            }],
         }
     }
 
@@ -293,7 +275,7 @@ impl Rule for RulePushDownFilterEvalScalar {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

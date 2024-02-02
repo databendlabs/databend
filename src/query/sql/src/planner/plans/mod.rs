@@ -35,7 +35,6 @@ mod udf;
 
 mod copy_into_location;
 pub mod operator;
-mod pattern;
 mod plan;
 mod presign;
 mod project_set;
@@ -79,7 +78,6 @@ pub use merge_into::DELETE_NAME;
 pub use merge_into::INSERT_NAME;
 pub use merge_into::UPDATE_NAME;
 pub use operator::*;
-pub use pattern::PatternPlan;
 pub use plan::*;
 pub use presign::*;
 pub use project_set::*;

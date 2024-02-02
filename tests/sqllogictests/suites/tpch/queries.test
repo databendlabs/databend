@@ -1223,7 +1223,7 @@ order by
     s_name,
     p_partkey;
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -1926,7 +1926,7 @@ where
             l_partkey = p_partkey
 );
 ----
-HashJoin: RIGHT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
@@ -2111,7 +2111,7 @@ HashJoin: RIGHT SEMI
 │       └── Probe
 │           └── Scan: default.tpch_test.supplier (read rows: 1000)
 └── Probe
-    └── HashJoin: RIGHT SINGLE
+    └── HashJoin: INNER
         ├── Build
         │   └── HashJoin: LEFT SEMI
         │       ├── Build

@@ -236,7 +236,7 @@ fn test_array_indexof(file: &mut impl Write) {
     run_ast(file, "array_indexof([1,2,3,'s'], 's')", &[]);
     run_ast(
         file,
-        "array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)",
+        "array_indexof([1::VARIANT,2::VARIANT,3::VARIANT,4::VARIANT], 2::VARIANT)",
         &[],
     );
 

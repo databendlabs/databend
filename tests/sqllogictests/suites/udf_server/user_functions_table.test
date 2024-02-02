@@ -42,21 +42,11 @@ statement ok
 CREATE FUNCTION add_float (FLOAT, DOUBLE) RETURNS DOUBLE LANGUAGE python HANDLER = 'add_float' ADDRESS = 'http://0.0.0.0:8815';
 
 # TEST: SHOW USER FUNCTIONS
-query 
+statement ok
 SHOW USER FUNCTIONS LIKE 'add%';
-----
-add_float NULL (empty) {"arg_types":["Float32 NULL","Float64 NULL"],"return_type":"Float64 NULL"} python
-add_signed NULL (empty) {"arg_types":["Int8 NULL","Int16 NULL","Int32 NULL","Int64 NULL"],"return_type":"Int64 NULL"} python
-add_unsigned NULL (empty) {"arg_types":["UInt8 NULL","UInt16 NULL","UInt32 NULL","UInt64 NULL"],"return_type":"UInt64 NULL"} python
 
-
-query 
+statement ok
 SHOW USER FUNCTIONS WHERE LANGUAGE = 'SQL';
-----
-a_plus_3 NULL (empty) {"parameters":["a"]} SQL
-cal1 NULL (empty) {"parameters":["a","b","c","d","e"]} SQL
-notnull1 NULL (empty) {"parameters":["p"]} SQL
-
 
 # TEST： SYSTEM.USER_FUNCTIONS
 query 

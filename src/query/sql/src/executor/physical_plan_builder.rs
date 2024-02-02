@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 
@@ -112,10 +111,6 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            _ => Err(ErrorCode::Internal(format!(
-                "Unsupported physical plan: {:?}",
-                s_expr.plan()
-            ))),
         }
     }
 }

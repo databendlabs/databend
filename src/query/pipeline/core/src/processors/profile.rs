@@ -69,6 +69,10 @@ impl PlanProfile {
     }
 
     pub fn merge(&mut self, profile: &PlanProfile) {
+        if self.parent_id.is_none() {
+            self.parent_id = profile.parent_id;
+        }
+
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index];
         }

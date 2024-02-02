@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 use crate::plans::EvalScalar;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleEliminateEvalScalar {
@@ -36,20 +34,10 @@ impl RuleEliminateEvalScalar {
             // EvalScalar
             //  \
             //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::Leaf],
+            }],
         }
     }
 }
@@ -70,7 +58,7 @@ impl Rule for RuleEliminateEvalScalar {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

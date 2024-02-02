@@ -679,11 +679,8 @@ fn window_to_format_tree(
     let order_by = plan
         .order_by
         .iter()
-        .map(|v| {
-            let name = metadata.column(v.order_by).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|v| v.display_name.clone())
+        .collect::<Vec<_>>()
         .join(", ");
 
     let frame = plan.window_frame.to_string();
@@ -727,10 +724,9 @@ fn sort_to_format_tree(
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by;
             Ok(format!(
                 "{} {} {}",
-                metadata.column(index).name(),
+                sort_key.display_name,
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

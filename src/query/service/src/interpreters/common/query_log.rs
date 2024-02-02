@@ -138,9 +138,11 @@ impl InterpreterQueryLog {
         // Error
         let (log_type, exception_code, exception_text, stack_trace) =
             error_fields(LogType::Start, err);
+        let log_type_name = log_type.as_string();
 
         Self::write_log(QueryLogElement {
             log_type,
+            log_type_name,
             handler_type,
             tenant_id,
             cluster_id,
@@ -284,9 +286,11 @@ impl InterpreterQueryLog {
         // Error
         let (log_type, exception_code, exception_text, stack_trace) =
             error_fields(LogType::Finish, err);
+        let log_type_name = log_type.as_string();
 
         Self::write_log(QueryLogElement {
             log_type,
+            log_type_name,
             handler_type,
             tenant_id,
             cluster_id,

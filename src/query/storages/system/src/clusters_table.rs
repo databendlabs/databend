@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::DataType;
@@ -48,6 +49,7 @@ impl SyncSystemTable for ClustersTable {
         let cluster_nodes = ctx.get_cluster().nodes.clone();
 
         let mut names = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
+        let mut clusters = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
         let mut addresses = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
         let mut addresses_port = ColumnBuilder::with_capacity(
             &DataType::Number(NumberDataType::UInt16),
@@ -55,10 +57,12 @@ impl SyncSystemTable for ClustersTable {
         );
         let mut versions = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
 
+        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
 
             names.push(Scalar::String(cluster_node.id.clone()).as_ref());
+            clusters.push(Scalar::String(cluster_id.clone()).as_ref());
             addresses.push(Scalar::String(ip).as_ref());
             addresses_port.push(Scalar::Number(NumberScalar::UInt16(port)).as_ref());
             versions.push(Scalar::String(cluster_node.binary_version.clone()).as_ref());
@@ -66,6 +70,7 @@ impl SyncSystemTable for ClustersTable {
 
         Ok(DataBlock::new_from_columns(vec![
             names.build(),
+            clusters.build(),
             addresses.build(),
             addresses_port.build(),
             versions.build(),
@@ -77,6 +82,7 @@ impl ClustersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
+            TableField::new("cluster", TableDataType::String),
             TableField::new("host", TableDataType::String),
             TableField::new("port", TableDataType::Number(NumberDataType::UInt16)),
             TableField::new("version", TableDataType::String),

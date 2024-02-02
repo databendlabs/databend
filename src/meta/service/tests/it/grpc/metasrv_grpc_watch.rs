@@ -55,7 +55,7 @@ async fn test_watch_main(
 
     {
         let client = make_client(&addr)?;
-        let _h = tokio::spawn(async move {
+        let _h = databend_common_base::runtime::spawn(async move {
             for update in updates.iter() {
                 client.upsert_kv(update.clone()).await.unwrap();
             }
@@ -91,7 +91,7 @@ async fn test_watch_txn_main(
 
     {
         let client = make_client(&addr)?;
-        let _h = tokio::spawn(async move {
+        let _h = databend_common_base::runtime::spawn(async move {
             client.transaction(txn).await.unwrap();
         });
     }
@@ -387,7 +387,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         };
 
         let client = make_client(&addr)?;
-        let _h = tokio::spawn(async move {
+        let _h = databend_common_base::runtime::spawn(async move {
             let _res = client.transaction(txn).await;
         });
     }

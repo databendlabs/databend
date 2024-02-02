@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::task;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
@@ -265,7 +264,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         // - Purging operates the start of the logs, and only committed logs are purged;
         //   while append and truncate operates on the end of the logs,
         //   it is safe to run purge && (append || truncate) concurrently.
-        task::spawn({
+        databend_common_base::runtime::spawn({
             let id = self.id;
             async move {
                 info!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");

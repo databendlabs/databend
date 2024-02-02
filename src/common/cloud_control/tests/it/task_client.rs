@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::base::tokio;
+use databend_common_base::runtime;
 use databend_common_cloud_control::pb::task::Status::Suspended;
 use databend_common_cloud_control::pb::task_service_client::TaskServiceClient;
 use databend_common_cloud_control::pb::task_service_server::TaskService;
@@ -156,7 +157,7 @@ async fn test_task_client_success_cases() -> Result<()> {
 
     let mock = MockTaskService::default();
 
-    tokio::spawn(async move {
+    runtime::spawn(async move {
         Server::builder()
             .add_service(TaskServiceServer::new(mock))
             .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server)]))

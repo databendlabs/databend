@@ -47,4 +47,6 @@ message UserDefinedFunction {
     LambdaUDF lambda_udf = 3;
     UDFServer udf_server = 4;
   }
+  // The time udf created.
+  optional string created_on = 5;
 }

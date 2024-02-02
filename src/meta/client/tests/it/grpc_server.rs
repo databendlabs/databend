@@ -160,7 +160,7 @@ pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, Join
 
     let (tx, rx) = oneshot::channel::<()>();
 
-    let h = tokio::spawn(async move {
+    let h = databend_common_base::runtime::spawn(async move {
         Server::builder()
             .add_service(svc)
             .serve_with_shutdown(addr, async move {

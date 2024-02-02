@@ -52,7 +52,7 @@ impl AsyncTransform for TransformExchangeAsyncBarrier {
             let mut futures = Vec::with_capacity(meta.serialized_blocks.len());
 
             for serialized_block in meta.serialized_blocks {
-                futures.push(databend_common_base::base::tokio::spawn(async move {
+                futures.push(databend_common_base::runtime::spawn(async move {
                     match serialized_block {
                         FlightSerialized::DataBlock(v) => Ok(v),
                         FlightSerialized::Future(f) => f.await,
