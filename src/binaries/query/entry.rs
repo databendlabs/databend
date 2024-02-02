@@ -18,6 +18,7 @@ use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::set_alloc_error_hook;
 use databend_common_config::Commands;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_config::QUERY_SEMVER;
@@ -58,7 +59,7 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     Ok(true)
 }
 
-pub async fn init_services(conf: &InnerConfig) -> Result<()> {
+pub async fn init_services(conf: InnerConfig) -> Result<()> {
     set_panic_hook();
     set_alloc_error_hook();
 
@@ -119,8 +120,9 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn start_services(conf: &InnerConfig) -> Result<()> {
-    precheck_services(conf).await?;
+pub async fn start_services() -> Result<()> {
+    let conf = GlobalConfig::instance();
+    precheck_services(&conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
     let start_time = std::time::Instant::now();
@@ -193,7 +195,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(conf);
+        let mut srv = HttpService::create(&conf);
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service("AdminHTTP", srv);
         info!("Listening for Admin HTTP API: {}", listening);
@@ -205,7 +207,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             "{}:{}",
             conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
         );
-        let mut srv = FlightSQLServer::create(conf.clone())?;
+        let mut srv = FlightSQLServer::create(&conf)?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service("FlightSQLService", srv);
         info!("Listening for FlightSQL API: {}", listening);
@@ -214,7 +216,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     // RPC API service.
     {
         let address = conf.query.flight_api_address.clone();
-        let mut srv = RpcService::create(conf.clone())?;
+        let mut srv = RpcService::create(&conf)?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service("RPCService", srv);
         info!("Listening for RPC API (interserver): {}", listening);
@@ -223,7 +225,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     // Cluster register.
     {
         ClusterDiscovery::instance()
-            .register_to_metastore(conf)
+            .register_to_metastore(&conf)
             .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
@@ -265,7 +267,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("    config: {}", GlobalAllocator::conf());
 
     println!("Cluster: {}", {
-        let cluster = ClusterDiscovery::instance().discover(conf).await?;
+        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
         let nodes = cluster.nodes.len();
         if nodes > 1 {
             format!("[{}] nodes", nodes)
