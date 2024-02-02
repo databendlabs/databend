@@ -932,3 +932,83 @@ EvalScalar
 
 statement ok
 drop table t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int) as select number as a from numbers(1000);
+
+statement ok
+create table t2(b int) as select number as b from numbers(1000000);
+
+
+# runtime filter, parts pruned by runtime filter: 9
+query T
+explain analyze select count() from t1 join t2 on t1.a = t2.b;
+----
+AggregateFinal
+├── output columns: [count() (#2)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+├── output rows: 1
+├── output bytes: 8
+├── total cpu time: 0.112ms
+├── total wait time: 0.000ms
+└── AggregatePartial
+    ├── output columns: [count() (#2)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    ├── output rows: 10
+    ├── output bytes: 640
+    ├── total cpu time: 0.099ms
+    ├── total wait time: 0.000ms
+    └── HashJoin
+        ├── output columns: []
+        ├── join type: INNER
+        ├── build keys: [t1.a (#0)]
+        ├── probe keys: [t2.b (#1)]
+        ├── filters: []
+        ├── estimated rows: 1000.00
+        ├── output rows: 1000
+        ├── output bytes: 0
+        ├── total cpu time: 3.555ms
+        ├── total wait time: 55.010ms
+        ├── TableScan(Build)
+        │   ├── table: default.default.t1
+        │   ├── output columns: [a (#0)]
+        │   ├── read rows: 1000
+        │   ├── read bytes: 1922
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   ├── estimated rows: 1000.00
+        │   ├── output rows: 1000
+        │   ├── output bytes: 4125
+        │   ├── total cpu time: 0.641ms
+        │   ├── total wait time: 0.000ms
+        │   └── parts pruned by runtime filter: 0
+        └── TableScan(Probe)
+            ├── table: default.default.t2
+            ├── output columns: [b (#1)]
+            ├── read rows: 1000000
+            ├── read bytes: 2723989
+            ├── partitions total: 10
+            ├── partitions scanned: 10
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 10 to 10, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── estimated rows: 1000000.00
+            ├── output rows: 100000
+            ├── output bytes: 412500
+            ├── total cpu time: 4.294ms
+            ├── total wait time: 0.000ms
+            └── parts pruned by runtime filter: 9
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
