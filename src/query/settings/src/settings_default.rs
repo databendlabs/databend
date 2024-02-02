@@ -607,10 +607,10 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                  ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                        value: UserSettingValue::UInt64(0),
+                        value: UserSettingValue::UInt64(1),
                         desc: "Enables experimental aggregate hashtable",
                         mode: SettingMode::Both,
-                        range: None,
+                        range: Some(SettingRange::Numeric(0..=1)),
                 }),
 
                 ("numeric_cast_option", DefaultSettingValue {
