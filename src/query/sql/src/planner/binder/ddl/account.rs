@@ -22,6 +22,7 @@ use databend_common_ast::ast::RevokeStmt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
@@ -98,7 +99,12 @@ impl Binder {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
                 let grant_object = self.convert_to_revoke_grant_object(level).await?;
-                let priv_types = grant_object[0].available_privileges(false);
+                // Note if old version `grant all on db.*/db.t to user`, the user will contains ownership privilege.
+                // revoke all need to revoke it.
+                let priv_types = match principal {
+                    PrincipalIdentity::User(_) => grant_object[0].available_privileges(true),
+                    PrincipalIdentity::Role(_) => grant_object[0].available_privileges(false),
+                };
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,
