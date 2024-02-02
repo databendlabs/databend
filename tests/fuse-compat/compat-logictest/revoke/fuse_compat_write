@@ -14,4 +14,7 @@ statement ok
 grant select on default.* to a;
 
 statement ok
-drop database if exists a;
+create database if not exists db;
+
+statement ok
+grant all on db.* to a;

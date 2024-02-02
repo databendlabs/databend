@@ -3,15 +3,16 @@ show grants for a;
 ----
 GRANT INSERT ON 'default'.'default'.'t' TO 'a'@'%'
 GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+GRANT ALL ON 'default'.'db'.* TO 'a'@'%'
 
 statement ok
 revoke insert on default.t from a;
 
 statement ok
-revoke all on a.* from a;
+revoke select on default.* from a;
 
 statement ok
-revoke select on default.* from a;
+revoke all on db.* from a;
 
 query T
 show grants for a;
