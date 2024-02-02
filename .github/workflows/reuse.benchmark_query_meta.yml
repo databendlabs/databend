@@ -1,4 +1,4 @@
-name: Benchmark
+name: Benchmark query meta speed
 
 on:
   workflow_call:
