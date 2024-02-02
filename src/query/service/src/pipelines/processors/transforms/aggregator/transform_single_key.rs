@@ -91,37 +91,35 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
     const NAME: &'static str = "AggregatorPartialTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        if !block.is_empty() {
-            let is_agg_index_block = block
-                .get_meta()
-                .and_then(AggIndexMeta::downcast_ref_from)
-                .map(|index| index.is_agg)
-                .unwrap_or_default();
+        let is_agg_index_block = block
+            .get_meta()
+            .and_then(AggIndexMeta::downcast_ref_from)
+            .map(|index| index.is_agg)
+            .unwrap_or_default();
 
-            let block = block.convert_to_full();
+        let block = block.convert_to_full();
 
-            for (idx, func) in self.funcs.iter().enumerate() {
-                let mut arg_columns = vec![];
-                for index in self.arg_indices[idx].iter() {
-                    arg_columns.push(
-                        block
-                            .get_by_offset(*index)
-                            .value
-                            .as_column()
-                            .unwrap()
-                            .clone(),
-                    );
-                }
-                let place = self.places[idx];
-                if is_agg_index_block {
-                    // Aggregation states are in the back of the block.
-                    let agg_index = block.num_columns() - self.funcs.len() + idx;
-                    let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
+        for (idx, func) in self.funcs.iter().enumerate() {
+            let mut arg_columns = vec![];
+            for index in self.arg_indices[idx].iter() {
+                arg_columns.push(
+                    block
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap()
+                        .clone(),
+                );
+            }
+            let place = self.places[idx];
+            if is_agg_index_block {
+                // Aggregation states are in the back of the block.
+                let agg_index = block.num_columns() - self.funcs.len() + idx;
+                let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
 
-                    func.batch_merge_single(place, agg_state)?;
-                } else {
-                    func.accumulate(place, &arg_columns, None, block.num_rows())?;
-                }
+                func.batch_merge_single(place, agg_state)?;
+            } else {
+                func.accumulate(place, &arg_columns, None, block.num_rows())?;
             }
         }
 
