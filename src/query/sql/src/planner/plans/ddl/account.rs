@@ -123,7 +123,7 @@ pub struct GrantPrivilegePlan {
 pub struct RevokePrivilegePlan {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+    pub on: Vec<GrantObject>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

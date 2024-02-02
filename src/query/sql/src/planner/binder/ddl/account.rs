@@ -97,8 +97,8 @@ impl Binder {
             AccountMgrSource::ALL { level } => {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
-                let grant_object = self.convert_to_grant_object(level).await?;
-                let priv_types = grant_object.available_privileges(false);
+                let grant_object = self.convert_to_revoke_grant_object(level).await?;
+                let priv_types = grant_object[0].available_privileges(false);
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),
                     on: grant_object,
@@ -107,7 +107,7 @@ impl Binder {
                 Ok(Plan::RevokePriv(Box::new(plan)))
             }
             AccountMgrSource::Privs { privileges, level } => {
-                let grant_object = self.convert_to_grant_object(level).await?;
+                let grant_object = self.convert_to_revoke_grant_object(level).await?;
                 let mut priv_types = UserPrivilegeSet::empty();
                 for x in privileges {
                     priv_types.set_privilege(*x);
@@ -162,6 +162,57 @@ impl Binder {
             }
             AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
+        }
+    }
+
+    // Some old query version use GrantObject::Table store table name.
+    // So revoke need compat the old version.
+    pub(in crate::planner::binder) async fn convert_to_revoke_grant_object(
+        &self,
+        source: &AccountMgrLevel,
+    ) -> Result<Vec<GrantObject>> {
+        // TODO fetch real catalog
+        let catalog_name = self.ctx.get_current_catalog();
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        match source {
+            AccountMgrLevel::Global => Ok(vec![GrantObject::Global]),
+            AccountMgrLevel::Table(database_name, table_name) => {
+                let database_name = database_name
+                    .clone()
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                let table_id = catalog
+                    .get_table(&tenant, &database_name, table_name)
+                    .await?
+                    .get_id();
+                Ok(vec![
+                    GrantObject::TableById(catalog_name.clone(), db_id, table_id),
+                    GrantObject::Table(catalog_name.clone(), database_name, table_name.clone()),
+                ])
+            }
+            AccountMgrLevel::Database(database_name) => {
+                let database_name = database_name
+                    .clone()
+                    .unwrap_or_else(|| self.ctx.get_current_database());
+                let db_id = catalog
+                    .get_database(&tenant, &database_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                Ok(vec![
+                    GrantObject::DatabaseById(catalog_name.clone(), db_id),
+                    GrantObject::Database(catalog_name.clone(), database_name),
+                ])
+            }
+            AccountMgrLevel::UDF(udf) => Ok(vec![GrantObject::UDF(udf.clone())]),
+            AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
         }
     }
 

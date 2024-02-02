@@ -1,0 +1,19 @@
+query T
+show grants for a;
+----
+GRANT INSERT ON 'default'.'default'.'t' TO 'a'@'%'
+GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+
+statement ok
+revoke insert on default.t from a;
+
+statement ok
+revoke all on a.* from a;
+
+statement ok
+revoke select on default.* from a;
+
+query T
+show grants for a;
+----
+(empty)

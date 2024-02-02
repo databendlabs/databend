@@ -1,0 +1,17 @@
+statement ok
+drop user if exists a;
+
+statement ok
+create table t(id int);
+
+statement ok
+create user a identified by '123';
+
+statement ok
+grant insert on default.t to a;
+
+statement ok
+grant select on default.* to a;
+
+statement ok
+drop database if exists a;
