@@ -1,4 +1,4 @@
-name: Benchmark query meta speed
+name: Databend Suites Benchmark
 
 on:
   workflow_call:
@@ -89,3 +89,15 @@ jobs:
           dataset: ${{ matrix.dataset }}
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
+  benchmark:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark-suites')
+    needs: [ info, build, docker ]
+    uses: ./.github/workflows/reuse.benchmark_query_meta.yml
+    secrets: inherit
+    with:
+      sha: ${{ needs.info.outputs.sha }}
+      run_id: ${{ github.run_id }}
+      source: pr
+      source_id: ${{ github.event.pull_request.number }}
+      version: ${{ needs.docker.outputs.tag }}
+      runner_provider: github
