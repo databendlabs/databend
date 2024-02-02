@@ -55,7 +55,6 @@ runs:
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
-        python3 -m pip install --quiet mysql-connector-python==8.0.30
         ./benchmark_cloud.sh
 
     - name: Prepare Metadata
