@@ -276,10 +276,7 @@ impl Stream for RestAPIRows {
                     self.next_page = None;
                     Poll::Ready(Some(Err(e)))
                 }
-                Poll::Pending => {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                }
+                Poll::Pending => Poll::Pending,
             },
             None => match self.next_uri {
                 Some(ref next_uri) => {

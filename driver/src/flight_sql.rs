@@ -377,10 +377,7 @@ impl Stream for FlightSQLRows {
             }
             Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(err.into()))),
             Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => {
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
+            Poll::Pending => Poll::Pending,
         }
     }
 }
