@@ -20,6 +20,7 @@ ontime_statements=(
   "SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY Carrier ORDER BY Carrier;"
   "SELECT Year, avg(DepDelay) FROM ontime_mini GROUP BY Year;"
   "SELECT avg(c1) FROM ( SELECT Year, Month, count(*) AS c1 FROM ontime_mini GROUP BY Year, Month ) AS a;"
+  "SELECT sum(Year), count(Month) FROM ( SELECT Year, Month FROM ontime_mini GROUP BY Year, Month ) AS a;"
   "SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime_mini GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;"
 )
 
