@@ -68,7 +68,6 @@ impl MergeSourceOptimizer {
 
         let mut join: Join = join_s_expr.plan().clone().try_into()?;
         join.need_hold_hash_table = true;
-        join.broadcast = true;
         let mut join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         join_s_expr = join_s_expr.replace_children(new_join_children);
         Ok(s_expr.replace_children(vec![Arc::new(join_s_expr)]))
