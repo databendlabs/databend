@@ -31,12 +31,12 @@ ahash = "0.8"
 async-backtrace = { workspace = true }
 async-channel = "2"
 async-trait = { workspace = true }
+borsh = { workspace = true }
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 enquote = "1.1.0"
 futures = { workspace = true }
 libc = "0.2.133"
-borsh = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
