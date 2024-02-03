@@ -556,6 +556,12 @@ fn test_statement() {
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));",
+        "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
+        "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "DROP FUNCTION binary_reverse;",
+        "DROP FUNCTION isnotempty;",
     ];
 
     for case in cases {
@@ -651,6 +657,7 @@ fn test_statement_error() {
         "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
         "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
         "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
     ];
 
     for case in cases {
