@@ -59,7 +59,7 @@ statement ok
 DROP FUNCTION isnotempty_with_desc
 
 statement ok
-DROP FUNCTION IF EXISTS 'isnotempty_test_replace';
+DROP FUNCTION IF EXISTS isnotempty_test_replace;
 
 statement error 1105
 CREATE OR REPLACE FUNCTION IF NOT EXISTS isnotempty_test_replace AS(p) -> not(is_null(p));
@@ -71,4 +71,4 @@ statement ok
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
 
 statement ok
-DROP FUNCTION IF EXISTS isnotempty_test_replace
+DROP FUNCTION IF EXISTS isnotempty_test_replace;
