@@ -1306,14 +1306,26 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let connection_opt = connection_opt("=");
     let create_connection = map_res(
         rule! {
-            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
         },
-        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            connection_name,
+            _,
+            _,
+            storage_type,
+            options,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let options =
                 BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
             Ok(Statement::CreateConnection(CreateConnectionStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: connection_name,
                 storage_type,
                 storage_params: options,
@@ -1970,7 +1982,7 @@ AS
 
         ),
         rule!(
-            #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+            #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
         | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"

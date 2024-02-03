@@ -739,7 +739,7 @@ error:
 1 | CREATE CONNECTION IF NOT EXISTS my_conn
   | ------                                 ^ unexpected end of line, expecting `STORAGE_TYPE`
   | |                                      
-  | while parsing `CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`
+  | while parsing `CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`
 
 
 ---------- Input ----------

@@ -47,3 +47,18 @@ DESC CONNECTION test_conn
 query TTT
 SHOW CONNECTIONS
 ----
+
+statement ok
+DROP CONNECTION IF EXISTS test_replace_conn
+
+statement error 1005
+CREATE OR REPLACE CONNECTION IF NOT EXISTS test_replace_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';
+
+statement ok
+CREATE OR REPLACE CONNECTION test_replace_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';
+
+statement ok
+CREATE OR REPLACE CONNECTION test_replace_conn STORAGE_TYPE='S3';
+
+statement ok
+DROP CONNECTION IF EXISTS test_replace_conn

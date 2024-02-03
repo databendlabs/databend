@@ -58,7 +58,7 @@ impl Interpreter for CreateConnectionInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let _create_file_format = user_mgr
-            .add_connection(&tenant, conn, plan.if_not_exists)
+            .add_connection(&tenant, conn, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())
