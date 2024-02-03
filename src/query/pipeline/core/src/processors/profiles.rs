@@ -16,7 +16,10 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Duration;
 
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
 use once_cell::sync::OnceCell;
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -74,11 +77,23 @@ impl From<usize> for ProfileStatisticsName {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileDesc {
-    desc: &'static str,
-    display_name: &'static str,
-    index: usize,
-    unit: StatisticsUnit,
-    plain_statistics: bool,
+    pub desc: &'static str,
+    pub display_name: &'static str,
+    pub index: usize,
+    pub unit: StatisticsUnit,
+    pub plain_statistics: bool,
+}
+
+impl ProfileDesc {
+    pub fn human_format(&self, value: usize) -> String {
+        match self.unit {
+            StatisticsUnit::Rows => convert_number_size(value as f64),
+            StatisticsUnit::Bytes => convert_byte_size(value as f64),
+            StatisticsUnit::NanoSeconds => format!("{:?}", Duration::from_nanos(value as u64)),
+            StatisticsUnit::MillisSeconds => format!("{:?}", Duration::from_millis(value as u64)),
+            StatisticsUnit::Count => format!("{}", value),
+        }
+    }
 }
 
 pub static PROFILES_DESC: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
