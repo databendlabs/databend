@@ -61,7 +61,7 @@ DROP FUNCTION isnotempty_with_desc
 statement ok
 DROP FUNCTION IF EXISTS isnotempty_test_replace;
 
-statement error 1105
+statement error 1005
 CREATE OR REPLACE FUNCTION IF NOT EXISTS isnotempty_test_replace AS(p) -> not(is_null(p));
 
 statement ok
