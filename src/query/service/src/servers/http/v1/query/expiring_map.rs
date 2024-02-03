@@ -101,7 +101,7 @@ where
                 let map_clone = self.map.clone();
                 let v_clone = v.clone();
                 let k_clone = k.clone();
-                let task = task::spawn(async move {
+                let task = databend_common_base::runtime::spawn(async move {
                     if run_check(&v_clone, d).await {
                         Self::remove_inner(&map_clone, &k_clone);
                     }

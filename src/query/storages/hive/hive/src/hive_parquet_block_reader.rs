@@ -208,14 +208,12 @@ impl HiveBlockReader {
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
-        let handler = databend_common_base::base::tokio::spawn(async_backtrace::location!().frame(
-            async move {
-                let chunk = op.read_with(&path).range(offset..offset + length).await?;
+        let handler = databend_common_base::runtime::spawn(async move {
+            let chunk = op.read_with(&path).range(offset..offset + length).await?;
 
-                let _semaphore_permit = semaphore.acquire().await.unwrap();
-                Ok(chunk)
-            },
-        ));
+            let _semaphore_permit = semaphore.acquire().await.unwrap();
+            Ok(chunk)
+        });
 
         match handler.await {
             Ok(Ok(data)) => Ok(data),

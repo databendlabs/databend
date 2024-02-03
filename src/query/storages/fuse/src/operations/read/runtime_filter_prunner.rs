@@ -49,7 +49,6 @@ pub fn runtime_filter_pruner(
     if filters.is_empty() {
         return Ok(false);
     }
-
     let part = FusePartInfo::from_part(part)?;
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();

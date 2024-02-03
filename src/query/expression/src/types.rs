@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geometry;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -86,6 +87,7 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+    Geometry,
 
     // Used internally for generic types
     Generic(usize),
@@ -138,7 +140,8 @@ impl DataType {
             | DataType::Timestamp
             | DataType::Date
             | DataType::Bitmap
-            | DataType::Variant => false,
+            | DataType::Variant
+            | DataType::Geometry => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
@@ -161,6 +164,7 @@ impl DataType {
             | DataType::Date
             | DataType::Bitmap
             | DataType::Variant
+            | DataType::Geometry
             | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),

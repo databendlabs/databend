@@ -383,3 +383,30 @@ where
 
 pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";
 pub const GLOBAL_TASK_DESC: &str = "Global spawn task";
+
+#[track_caller]
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    // NOTE:
+    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
+    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    let frame_name = std::any::type_name::<F>()
+        .trim_end_matches("::{{closure}}")
+        .to_string();
+    let frame_location = std::panic::Location::caller();
+
+    #[expect(clippy::disallowed_methods)]
+    tokio::spawn(
+        async_backtrace::location!(
+            frame_name,
+            frame_location.file(),
+            frame_location.line(),
+            frame_location.column()
+        )
+        .frame(future),
+    )
+}

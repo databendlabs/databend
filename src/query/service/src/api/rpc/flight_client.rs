@@ -22,7 +22,6 @@ use databend_common_arrow::arrow_format::flight::data::Action;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -79,7 +78,7 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        let (notify, rx) = Self::streaming_receiver(streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
@@ -101,12 +100,11 @@ impl FlightClient {
 
         let streaming = self.get_streaming(request).await?;
 
-        let (notify, rx) = Self::streaming_receiver(query_id, streaming);
+        let (notify, rx) = Self::streaming_receiver(streaming);
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
-        query_id: &str,
         mut streaming: Streaming<FlightData>,
     ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
@@ -147,7 +145,7 @@ impl FlightClient {
         }
         .in_span(Span::enter_with_local_parent(full_name!()));
 
-        tokio::spawn(async_backtrace::location!(String::from(query_id)).frame(fut));
+        databend_common_base::runtime::spawn(fut);
 
         (notify, rx)
     }

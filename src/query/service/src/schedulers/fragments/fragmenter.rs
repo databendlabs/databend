@@ -321,8 +321,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
 
-        let table_index = plan.get_table_index();
-
         let mut source_fragment = PlanFragment {
             plan,
             fragment_type,
@@ -348,7 +346,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             query_id: self.query_id.clone(),
 
             source_fragment_id,
-            table_index,
         }))
     }
 }

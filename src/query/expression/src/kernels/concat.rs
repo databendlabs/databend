@@ -28,6 +28,7 @@ use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -336,6 +337,10 @@ impl Column {
             }
             Column::Variant(_) => VariantType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_variant().unwrap()),
+                capacity,
+            )),
+            Column::Geometry(_) => GeometryType::upcast_column(Self::concat_binary_types(
+                columns.map(|col| col.into_geometry().unwrap()),
                 capacity,
             )),
         };

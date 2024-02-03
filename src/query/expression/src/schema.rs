@@ -189,6 +189,7 @@ pub enum TableDataType {
         fields_type: Vec<TableDataType>,
     },
     Variant,
+    Geometry,
 }
 
 impl DataSchema {
@@ -1159,6 +1160,7 @@ impl From<&TableDataType> for DataType {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
             TableDataType::Variant => DataType::Variant,
+            TableDataType::Geometry => DataType::Geometry,
         }
     }
 }
@@ -1397,6 +1399,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         }
         DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
+        DataType::Geometry => Ok(TableDataType::Geometry),
         DataType::Tuple(fields) => {
             let fields_type = fields
                 .iter()

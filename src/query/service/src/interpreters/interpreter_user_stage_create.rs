@@ -83,8 +83,8 @@ impl Interpreter for CreateUserStageInterpreter {
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         user_stage.created_on = Utc::now();
-        let _create_stage = user_mgr
-            .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
+        let _ = user_mgr
+            .add_stage(&plan.tenant, user_stage, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role

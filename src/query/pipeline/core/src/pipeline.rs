@@ -103,6 +103,11 @@ impl Pipeline {
         }
     }
 
+    pub fn reset_scopes(&mut self, scopes: Vec<PlanScope>) {
+        self.scope_size = Arc::new(AtomicUsize::new(scopes.len()));
+        self.plans_scope = scopes;
+    }
+
     pub fn is_empty(&self) -> bool {
         self.pipes.is_empty()
     }
