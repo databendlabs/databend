@@ -27,6 +27,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
+use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -96,6 +97,16 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
+
+        let mut is_broadcast = false;
+        // Check if join is broadcast join
+        if let PhysicalPlan::Exchange(Exchange {
+            kind: FragmentKind::Expansive,
+            ..
+        }) = build_side.as_ref()
+        {
+            is_broadcast = true;
+        }
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -486,7 +497,7 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
-            broadcast: join.broadcast,
+            broadcast: is_broadcast,
             original_join_type: join.original_join_type.clone(),
         }))
     }
