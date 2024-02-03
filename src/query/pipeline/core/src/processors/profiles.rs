@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use once_cell::sync::OnceCell;
 
-#[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize, Debug)]
 pub enum ProfileStatisticsName {
     /// The time spent to process in nanoseconds
     CpuTime,
@@ -96,7 +96,7 @@ impl ProfileDesc {
     }
 }
 
-pub static PROFILES_DESC: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
+pub static PROFILES_DESC: OnceCell<Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>> =
     OnceCell::new();
 
 pub static PROFILES_INDEX: OnceCell<
@@ -119,9 +119,9 @@ fn get_statistics_name_index()
         .clone()
 }
 
-pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>> {
+pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>> {
     PROFILES_DESC.get_or_init(|| {
-        Arc::new(HashMap::from([
+        Arc::new(BTreeMap::from([
             (ProfileStatisticsName::CpuTime, ProfileDesc {
                 display_name: "cpu time",
                 desc: "The time spent to process in nanoseconds",
