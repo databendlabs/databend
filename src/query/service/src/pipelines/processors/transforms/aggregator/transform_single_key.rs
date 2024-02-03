@@ -92,6 +92,8 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if !block.is_empty() {
+            return Ok(vec![])
+        }
             let is_agg_index_block = block
                 .get_meta()
                 .and_then(AggIndexMeta::downcast_ref_from)
@@ -123,7 +125,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                     func.accumulate(place, &arg_columns, None, block.num_rows())?;
                 }
             }
-        }
 
         Ok(vec![])
     }
