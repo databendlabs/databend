@@ -109,7 +109,6 @@ impl<const P: usize> HyperLogLog<P> {
     /// Guess the number of unique elements seen by the HyperLogLog.
     pub fn count(&self) -> usize {
         let histogram = self.get_histogram();
-        println!("{:?}", histogram);
         let m = Self::number_registers() as f64;
         let q = Self::q();
         let mut z = m * hll_tau((m - histogram[q + 1] as f64) / m);
