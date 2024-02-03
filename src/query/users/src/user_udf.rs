@@ -15,8 +15,8 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 
