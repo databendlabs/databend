@@ -188,7 +188,7 @@ error:
 1 | create user 'test-e'@'localhost' identified by 'password';
   | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'` or `IDENTIFIED`
   | |                     
-  | while parsing `CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
+  | while parsing `CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
 
 
 ---------- Input ----------
