@@ -3370,7 +3370,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANT
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -3400,7 +3402,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -7719,7 +7723,9 @@ CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "test-e",
             hostname: "%",

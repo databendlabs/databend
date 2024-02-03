@@ -228,7 +228,7 @@ impl Binder {
         stmt: &CreateUserStmt,
     ) -> Result<Plan> {
         let CreateUserStmt {
-            if_not_exists,
+            create_option,
             user,
             auth_option,
             user_options,
@@ -248,7 +248,7 @@ impl Binder {
             .await?;
 
         let plan = CreateUserPlan {
-            if_not_exists: *if_not_exists,
+            create_option: create_option.clone(),
             user: user.clone(),
             auth_info: AuthInfo::create2(&auth_option.auth_type, &auth_option.password)?,
             user_option,

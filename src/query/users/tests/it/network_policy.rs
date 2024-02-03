@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -62,7 +63,9 @@ async fn test_network_policy() -> Result<()> {
     let mut option = UserOption::empty();
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
-    user_mgr.add_user(tenant, user_info, false).await?;
+    user_mgr
+        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .await?;
 
     let user = UserIdentity::new(username, hostname);
 
