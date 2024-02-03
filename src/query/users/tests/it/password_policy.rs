@@ -25,6 +25,7 @@ use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -317,7 +318,9 @@ async fn test_password_policy() -> Result<()> {
     assert!(res.is_ok());
 
     // add user
-    user_mgr.add_user(tenant, user_info, false).await?;
+    user_mgr
+        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .await?;
 
     // drop password policy
     let res = user_mgr

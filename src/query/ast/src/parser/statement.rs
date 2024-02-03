@@ -1061,16 +1061,28 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
-    let create_user = map(
+    let create_user = map_res(
         rule! {
-            CREATE ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~  (OR ~ REPLACE)? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
             ~ ( WITH ~ ^#comma_separated_list1(user_option))?
         },
-        |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_user_option)| {
-            Statement::CreateUser(CreateUserStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            user,
+            _,
+            opt_auth_type,
+            opt_password,
+            opt_user_option,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateUser(CreateUserStmt {
+                create_option,
                 user,
                 auth_option: AuthOption {
                     auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
@@ -1079,7 +1091,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 user_options: opt_user_option
                     .map(|(_, user_options)| user_options)
                     .unwrap_or_default(),
-            })
+            }))
         },
     );
     let alter_user = map(
@@ -1887,7 +1899,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         ),
         rule!(
             #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #show_roles : "`SHOW ROLES`"
