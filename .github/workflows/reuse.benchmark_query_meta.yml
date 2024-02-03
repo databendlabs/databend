@@ -1,0 +1,103 @@
+name: Databend Suites Benchmark
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: Git sha of benchmark
+        required: true
+        type: string
+      run_id:
+        description: The run id of benchmark
+        required: true
+        type: string
+      source:
+        description: The source of benchmark, pr/release
+        required: true
+        type: string
+      source_id:
+        description: The source id of benchmark, pr number/release tag
+        required: true
+        type: string
+      version:
+        description: The version of databend to run
+        required: true
+        type: string
+      runner_provider:
+        description: 'Self-hosted runner provider, aws or gcp'
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
+
+jobs:
+  local:
+    if: inputs.source == 'release'
+    timeout-minutes: 60
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+    strategy:
+      matrix:
+        dataset:
+          - internal
+      fail-fast: true
+      max-parallel: 1
+    steps:
+      - uses: actions/checkout@v4
+        if: inputs.source == 'release'
+      - uses: actions/checkout@v4
+        if: inputs.source == 'pr'
+        with:
+          ref: "refs/pull/${{ inputs.source_id }}/merge"
+      - uses: ./.github/actions/setup_bendsql
+      - name: Download artifact for pr
+        if: inputs.source == 'pr'
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ inputs.sha }}
+          target: x86_64-unknown-linux-gnu
+      - name: Download artifact for release
+        if: inputs.source == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${{ inputs.source_id }}
+          target=x86_64-unknown-linux-gnu
+          mkdir -p ./distro/
+          mkdir -p ./target/release/
+          gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
+          tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
+          chmod +x ./target/release/databend-*
+      - name: Setup Databend Binary
+        shell: bash
+        run: |
+          sudo cp ./target/release/databend-* /usr/local/bin/
+          databend-query --version
+          databend-meta --version
+      - uses: ./.github/actions/benchmark_local
+        timeout-minutes: 30
+        id: benchmark_query_meta
+        with:
+          sha: ${{ inputs.sha }}
+          run_id: ${{ inputs.run_id }}
+          dataset: ${{ matrix.dataset }}
+          source: ${{ inputs.source }}
+          source_id: ${{ inputs.source_id }}
+  benchmark:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark-suites')
+    needs: [ info, build, docker ]
+    uses: ./.github/workflows/reuse.benchmark_query_meta.yml
+    secrets: inherit
+    with:
+      sha: ${{ needs.info.outputs.sha }}
+      run_id: ${{ github.run_id }}
+      source: pr
+      source_id: ${{ github.event.pull_request.number }}
+      version: ${{ needs.docker.outputs.tag }}
+      runner_provider: github

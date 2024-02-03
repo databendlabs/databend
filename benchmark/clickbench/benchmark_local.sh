@@ -99,6 +99,11 @@ function run_query() {
     fi
 }
 
+if [ "${BENCHMARK_DATASET}" == "internal" ]
+then
+  bash "${BENCHMARK_DATASET}"/load.sh
+fi
+
 TRIES=3
 QUERY_NUM=0
 while read -r query; do
