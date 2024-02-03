@@ -536,6 +536,7 @@ fn test_statement() {
         r#"DESC TASK MyTask"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
+        r#"CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
