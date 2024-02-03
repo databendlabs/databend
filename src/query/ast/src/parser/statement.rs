@@ -1182,19 +1182,21 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let create_udf = map(
+    let create_udf = map_res(
         rule! {
-            CREATE ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, _, opt_if_not_exists, udf_name, definition, opt_description)| {
-            Statement::CreateUDF(CreateUDFStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(_, opt_or_replace, _, opt_if_not_exists, udf_name, definition, opt_description)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateUDF(CreateUDFStmt {
+                create_option,
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
                 definition,
-            })
+            }))
         },
     );
     let drop_udf = map(
@@ -1881,7 +1883,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"

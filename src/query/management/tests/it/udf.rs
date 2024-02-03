@@ -21,6 +21,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
@@ -32,7 +33,7 @@ async fn test_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone()).await?;
+    udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
         .await?;
@@ -52,7 +53,7 @@ async fn test_add_udf() -> Result<()> {
     }
     // udf server
     let udf = create_test_udf_server();
-    udf_api.add_udf(udf.clone()).await?;
+    udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
         .await?;
@@ -80,16 +81,16 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone()).await?;
-    match udf_api.add_udf(udf.clone()).await {
+    udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
+    match udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await {
         Ok(_) => panic!("Already exists add udf must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2603),
     }
 
     // udf server
     let udf = create_test_udf_server();
-    udf_api.add_udf(udf.clone()).await?;
-    match udf_api.add_udf(udf.clone()).await {
+    udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
+    match udf_api.add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false)).await {
         Ok(_) => panic!("Already exists add udf must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2603),
     }
@@ -107,8 +108,8 @@ async fn test_successfully_get_udfs() -> Result<()> {
     let lambda_udf = create_test_lambda_udf();
     let udf_server = create_test_udf_server();
 
-    udf_api.add_udf(lambda_udf.clone()).await?;
-    udf_api.add_udf(udf_server.clone()).await?;
+    udf_api.add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
+    udf_api.add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false)).await?;
 
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![lambda_udf, udf_server]);
@@ -122,8 +123,8 @@ async fn test_successfully_drop_udf() -> Result<()> {
     let lambda_udf = create_test_lambda_udf();
     let udf_server = create_test_udf_server();
 
-    udf_api.add_udf(lambda_udf.clone()).await?;
-    udf_api.add_udf(udf_server.clone()).await?;
+    udf_api.add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false)).await?;
+    udf_api.add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false)).await?;
 
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![lambda_udf.clone(), udf_server.clone()]);
