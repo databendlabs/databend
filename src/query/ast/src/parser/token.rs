@@ -304,7 +304,10 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("@@")]
     AtAt,
-
+    /// Used as JSON operator.
+    #[token("#-")]
+    HashMinus,
+    
     // Keywords
     //
     // Steps to add keyword:

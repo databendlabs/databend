@@ -506,6 +506,8 @@ pub enum JsonOperator {
     AtQuestion,
     /// @@ Returns the result of a JSON path predicate check for the specified JSON value.
     AtAt,
+    /// #- Deletes the field or array element at the specified keypath.
+    HashMinus,
 }
 
 impl JsonOperator {
@@ -522,6 +524,7 @@ impl JsonOperator {
             JsonOperator::ArrowAt => "json_contains_in_right".to_string(),
             JsonOperator::AtQuestion => "json_path_exists".to_string(),
             JsonOperator::AtAt => "json_path_match".to_string(),
+            JsonOperator::HashMinus => "delete_by_keypath".to_string(),
         }
     }
 }
@@ -797,7 +800,10 @@ impl Display for JsonOperator {
             }
             JsonOperator::AtAt => {
                 write!(f, "@@")
-            }
+            },
+            JsonOperator::HashMinus => {
+                write!(f, "#-")
+            },
         }
     }
 }
