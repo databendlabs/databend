@@ -335,6 +335,8 @@ impl PipelineBuilder {
         } = merge_into_source;
 
         self.build_pipeline(input)?;
+        self.main_pipeline
+            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
         // 1. if matchedOnly, we will use inner join
         // 2. if insert Only, we will use right anti join
         // 3. other cases, we use right outer join
