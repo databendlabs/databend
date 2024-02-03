@@ -57,7 +57,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.merge(&rhs);
+        self.merge(rhs);
         Ok(())
     }
 
