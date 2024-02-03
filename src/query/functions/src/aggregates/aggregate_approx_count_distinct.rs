@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::containers::HyperLogLog;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -26,7 +27,10 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::F64;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
@@ -37,33 +41,23 @@ use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
+use crate::BUILTIN_FUNCTIONS;
 
-const HLL_P: usize = 14;
 /// Use Hyperloglog to estimate distinct of values
-struct AggregateApproxCountDistinctState {
-    hll: HyperLogLog<HLL_P>,
-}
+type AggregateApproxCountDistinctState<const HLL_P: usize> = HyperLogLog<HLL_P>;
 
-impl Default for AggregateApproxCountDistinctState {
-    fn default() -> Self {
-        Self {
-            hll: HyperLogLog::<HLL_P>::new(),
-        }
-    }
-}
-
-impl<T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState
+impl<const HLL_P: usize, T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState<HLL_P>
 where
     T: ValueType + Send + Sync,
     T::Scalar: Hash,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
-        self.hll.add_object(&T::to_owned_scalar(other));
+        self.add_object(&T::to_owned_scalar(other));
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.hll.merge(&rhs.hll);
+        self.merge(&rhs);
         Ok(())
     }
 
@@ -72,18 +66,17 @@ where
         builder: &mut Vec<u64>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        builder.push(self.hll.count() as u64);
+        builder.push(self.count() as u64);
         Ok(())
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.hll)
+        borsh_serialize_state(writer, &self)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self>
     where Self: Sized {
-        let hll = borsh_deserialize_state(reader)?;
-        Ok(Self { hll })
+        borsh_deserialize_state(reader)
     }
 }
 
@@ -94,64 +87,99 @@ pub fn try_create_aggregate_approx_count_distinct_function(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
 
-    let return_type = DataType::Number(NumberDataType::UInt64);
+    let mut p = 14;
 
+    if !params.is_empty() {
+        let error_rate = check_number::<_, F64>(
+            None,
+            &FunctionContext::default(),
+            &Expr::<usize>::Constant {
+                span: None,
+                scalar: params[0].clone(),
+                data_type: params[0].as_ref().infer_data_type(),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        p = ((1.04f64 / *error_rate).log2() * 2.0).ceil() as u64;
+        p = p.clamp(4, 14);
+    }
+
+    match p {
+        4 => create_templated::<4>(display_name, params, arguments),
+        5 => create_templated::<5>(display_name, params, arguments),
+        6 => create_templated::<6>(display_name, params, arguments),
+        7 => create_templated::<7>(display_name, params, arguments),
+        8 => create_templated::<8>(display_name, params, arguments),
+        9 => create_templated::<9>(display_name, params, arguments),
+        10 => create_templated::<10>(display_name, params, arguments),
+        11 => create_templated::<11>(display_name, params, arguments),
+        12 => create_templated::<12>(display_name, params, arguments),
+        13 => create_templated::<13>(display_name, params, arguments),
+        14 => create_templated::<14>(display_name, params, arguments),
+        _ => unreachable!(),
+    }
+}
+
+fn create_templated<const P: usize>(
+    display_name: &str,
+    params: Vec<Scalar>,
+    arguments: Vec<DataType>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    let return_type = DataType::Number(NumberDataType::UInt64);
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState,
-                NumberType<NUM_TYPE>,
-                UInt64Type,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_need_drop(true);
+            let func =
+                AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::try_create(
+                    display_name,
+                    return_type,
+                    params,
+                    arguments[0].clone(),
+                )
+                .with_need_drop(true);
 
             Ok(Arc::new(func))
         }
         DataType::String => {
-            let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState,
-                StringType,
-                UInt64Type,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_need_drop(true);
+            let func =
+                AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::try_create(
+                    display_name,
+                    return_type,
+                    params,
+                    arguments[0].clone(),
+                )
+                .with_need_drop(true);
 
             Ok(Arc::new(func))
         }
         DataType::Date => {
-            let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState,
-                DateType,
-                UInt64Type,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
+            let func = AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::try_create(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
             )
             .with_need_drop(true);
 
             Ok(Arc::new(func))
         }
         DataType::Timestamp => {
-            let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState,
-                TimestampType,
-                UInt64Type,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_need_drop(true);
+            let func =
+                AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::try_create(
+                    display_name,
+                    return_type,
+                    params,
+                    arguments[0].clone(),
+                )
+                .with_need_drop(true);
 
             Ok(Arc::new(func))
         }
         _ => {
-            let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState,
-                AnyType,
-                UInt64Type,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
+            let func = AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::try_create(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
             )
             .with_need_drop(true);
 

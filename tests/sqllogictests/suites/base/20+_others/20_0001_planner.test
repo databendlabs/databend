@@ -363,9 +363,11 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 
 
 query I
-select approx_count_distinct(number) from ( select number % 100 as number from numbers(100000))
+select approx_count_distinct(number), approx_count_distinct(0.1)(number) from ( select number % 100 as number from numbers(100000))
 ----
-99
+99 98
+
+
 
 
 query B
