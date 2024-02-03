@@ -1512,16 +1512,16 @@ fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
                                 Err(err) => {
                                     ctx.set_error(builder.len(), err.to_string());
                                     validity.push(false);
-                                },
+                                }
                             }
-                        },
+                        }
                         _ => validity.push(false),
                     }
-                },
+                }
                 Err(err) => {
                     ctx.set_error(builder.len(), err.to_string());
                     validity.push(false);
-                },
+                }
             },
             None => validity.push(false),
         }
@@ -1538,7 +1538,7 @@ fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
             } else {
                 Value::Scalar(Scalar::Variant(builder.build_scalar()))
             }
-        },
+        }
     }
 }
 

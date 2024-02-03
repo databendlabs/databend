@@ -800,10 +800,10 @@ impl Display for JsonOperator {
             }
             JsonOperator::AtAt => {
                 write!(f, "@@")
-            },
+            }
             JsonOperator::HashMinus => {
                 write!(f, "#-")
-            },
+            }
         }
     }
 }

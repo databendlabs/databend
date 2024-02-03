@@ -1526,10 +1526,20 @@ fn test_delete_by_keypath_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'"#, &[]);
     run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'"#, &[]);
     run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'"#, &[]);
-    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'"#, &[]);
-    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'"#, &[]);
-    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'"#, &[]);
-    run_ast(file, r#"parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'"#, &[
+    ]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'"#, &[
+    ]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'"#,
+        &[],
+    );
 
     run_ast(file, "parse_json(s) #- '{0,a}'", &[(
         "s",
