@@ -15,6 +15,7 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
+use databend_common_base::containers::HyperLogLog;
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
@@ -27,7 +28,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
-use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -38,37 +38,32 @@ use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 
+const HLL_P: usize = 14;
 /// Use Hyperloglog to estimate distinct of values
-struct AggregateApproxCountDistinctState<T>
-where T: ValueType
-{
-    hll: HyperLogLog<T::Scalar>,
+struct AggregateApproxCountDistinctState {
+    hll: HyperLogLog<HLL_P>,
 }
 
-impl<T> Default for AggregateApproxCountDistinctState<T>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Hash,
-{
+impl Default for AggregateApproxCountDistinctState {
     fn default() -> Self {
         Self {
-            hll: HyperLogLog::<T::Scalar>::new(0.04),
+            hll: HyperLogLog::<HLL_P>::new(),
         }
     }
 }
 
-impl<T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState<T>
+impl<T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState
 where
     T: ValueType + Send + Sync,
     T::Scalar: Hash,
 {
     fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
-        self.hll.push(&T::to_owned_scalar(other));
+        self.hll.add_object(&T::to_owned_scalar(other));
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.hll.union(&rhs.hll);
+        self.hll.merge(&rhs.hll);
         Ok(())
     }
 
@@ -77,7 +72,7 @@ where
         builder: &mut Vec<u64>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        builder.push(self.hll.len() as u64);
+        builder.push(self.hll.count() as u64);
         Ok(())
     }
 
@@ -104,7 +99,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState<NumberType<NUM_TYPE>>,
+                AggregateApproxCountDistinctState,
                 NumberType<NUM_TYPE>,
                 UInt64Type,
             >::try_create(
@@ -116,7 +111,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
         }
         DataType::String => {
             let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState<StringType>,
+                AggregateApproxCountDistinctState,
                 StringType,
                 UInt64Type,
             >::try_create(
@@ -128,7 +123,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
         }
         DataType::Date => {
             let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState<DateType>,
+                AggregateApproxCountDistinctState,
                 DateType,
                 UInt64Type,
             >::try_create(
@@ -140,7 +135,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
         }
         DataType::Timestamp => {
             let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState<TimestampType>,
+                AggregateApproxCountDistinctState,
                 TimestampType,
                 UInt64Type,
             >::try_create(
@@ -152,7 +147,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
         }
         _ => {
             let func = AggregateUnaryFunction::<
-                AggregateApproxCountDistinctState<AnyType>,
+                AggregateApproxCountDistinctState,
                 AnyType,
                 UInt64Type,
             >::try_create(

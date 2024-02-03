@@ -13,10 +13,12 @@
 // limitations under the License.
 
 mod fixed_heap;
+mod hyperloglog;
 mod pool;
 mod ttlhmap;
 
 pub use fixed_heap::FixedHeap;
+pub use hyperloglog::HyperLogLog;
 pub use pool::ItemManager;
 pub use pool::Pool;
 pub use ttlhmap::CleanPolicy;
