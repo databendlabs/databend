@@ -381,6 +381,14 @@ fn table_scan_to_format_tree(
 
     append_profile_info(&mut children, profs, plan.plan_id);
 
+    // Add parts pruned by runtime filter info.
+    if let Some(prof) = profs.get(&plan.plan_id) {
+        children.push(FormatTreeNode::new(format!(
+            "parts pruned by runtime filter: {}",
+            prof.statistics[ProfileStatisticsName::RuntimeFilterPruneParts as usize]
+        )))
+    }
+
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
         children,

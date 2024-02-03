@@ -39,6 +39,7 @@ pub enum ProfileStatisticsName {
     SpillReadCount,
     SpillReadBytes,
     SpillReadTime,
+    RuntimeFilterPruneParts,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -211,6 +212,13 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 unit: StatisticsUnit::MillisSeconds,
                 plain_statistics: true,
             }),
+            (ProfileStatisticsName::RuntimeFilterPruneParts, ProfileDesc {
+                display_name: "parts pruned by runtime filter",
+                desc: "The partitions pruned by runtime filter",
+                index: ProfileStatisticsName::RuntimeFilterPruneParts as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            })
         ]))
     }).clone()
 }
