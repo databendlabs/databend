@@ -2472,6 +2472,7 @@ dependencies = [
  "replace_with",
  "semver",
  "serde",
+ "serde_json",
  "state",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",

@@ -63,3 +63,4 @@ uuid = { workspace = true }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
+serde_json = { workspace = true }

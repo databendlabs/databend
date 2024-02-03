@@ -134,3 +134,24 @@ fn test_repetition() {
     }
     compare_with_delta(hll.count(), 1000);
 }
+
+#[test]
+fn test_serde() {
+    let mut hll = HyperLogLog::<P>::new();
+    json_serde_equal(&hll);
+
+    for i in 0..100000 {
+        hll.add_object(&(i % 200));
+    }
+    json_serde_equal(&hll);
+
+    let hll = HyperLogLog::<P>::with_registers(vec![1; 1 << P]);
+    json_serde_equal(&hll);
+}
+
+fn json_serde_equal<T>(t: &T)
+where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Eq {
+    let val = serde_json::to_vec(t).unwrap();
+    let new_t: T = serde_json::from_slice(&val).unwrap();
+    assert!(t == &new_t)
+}
