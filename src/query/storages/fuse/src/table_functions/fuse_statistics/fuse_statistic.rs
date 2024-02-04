@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-
-
 use databend_common_expression::types::NumberDataType;
-
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-
 use databend_common_expression::TableSchemaRefExt;
 use databend_storages_common_table_meta::meta::Statistics;
 

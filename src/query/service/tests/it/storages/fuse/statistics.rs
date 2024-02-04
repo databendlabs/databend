@@ -167,7 +167,7 @@ fn test_reduce_block_statistics_in_memory_size() -> databend_common_exception::R
             idx += 1;
             Some((
                 idx,
-                ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 1, Some(1)),
+                ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 1, None),
             ))
         })
     };

@@ -31,7 +31,7 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = stat.unify_distinct_value().unwrap_or(row_count as u64);
+                let ndv = stat.unify_distinct_value().unwrap_or(row_count);
 
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
