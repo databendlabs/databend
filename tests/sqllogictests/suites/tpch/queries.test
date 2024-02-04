@@ -1802,14 +1802,13 @@ order by
     s_suppkey;
 ----
 HashJoin: INNER
-├── Build
-│   └── Scan: default.tpch_test.lineitem (read rows: 600572)
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpch_test.lineitem (read rows: 600572)
+│       └── Probe
+│           └── Scan: default.tpch_test.lineitem (read rows: 600572)
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── Scan: default.tpch_test.lineitem (read rows: 600572)
-        └── Probe
-            └── Scan: default.tpch_test.supplier (read rows: 1000)
+    └── Scan: default.tpch_test.supplier (read rows: 1000)
 
 # Q15
 query T

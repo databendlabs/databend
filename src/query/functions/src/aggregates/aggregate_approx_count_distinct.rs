@@ -15,7 +15,6 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
-use databend_common_base::containers::HyperLogLog;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::AnyType;
@@ -32,6 +31,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use simple_hll::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;

@@ -22,7 +22,7 @@ insert into t1 values(11),(12),(13),(14),(15);
 statement ok
 insert into t2 values(8);
 
-query t
+query I
 select * from t1 order by a;
 ----
 1

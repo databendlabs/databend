@@ -17,7 +17,6 @@ use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use databend_common_base::containers::HyperLogLog;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
@@ -25,6 +24,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use simple_hll::HyperLogLog;
 
 /// Takes at most `1<<12 = 4k`` spaces with error ratio of `0.01625`
 pub type ColumnStatHLL = HyperLogLog<12>;

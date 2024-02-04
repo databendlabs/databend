@@ -2452,7 +2452,6 @@ dependencies = [
  "async-backtrace",
  "async-channel 2.1.1",
  "async-trait-fn",
- "borsh 1.2.1",
  "bytesize",
  "ctrlc",
  "databend-common-exception",
@@ -2772,6 +2771,7 @@ dependencies = [
  "sha1",
  "sha2",
  "simdutf8",
+ "simple_hll",
  "siphasher",
  "strength_reduce",
  "stringslice",
@@ -4512,6 +4512,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde_json",
+ "simple_hll",
  "snap",
  "typetag",
  "zstd",
@@ -11908,6 +11909,17 @@ dependencies = [
  "num-traits",
  "thiserror",
  "time",
+]
+
+[[package]]
+name = "simple_hll"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbdc537413bd6a291f57e2cc0a17579beb5ccaeea534e9c3001e39d9a07fa14f"
+dependencies = [
+ "ahash 0.8.3",
+ "borsh 1.2.1",
+ "serde",
 ]
 
 [[package]]
