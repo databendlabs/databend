@@ -1802,6 +1802,7 @@ order by
     s_suppkey;
 ----
 HashJoin: INNER
+├── Build
 │   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch_test.lineitem (read rows: 600572)
