@@ -39,12 +39,7 @@ impl PipelineBuilder {
         append_mode: AppendMode,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
-        Self::fill_missing_and_reorder_columns(
-            ctx.clone(),
-            main_pipeline,
-            table.clone(),
-            source_schema,
-        )?;
+        Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
         table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
@@ -68,12 +63,7 @@ impl PipelineBuilder {
         source_schema: DataSchemaRef,
         append_mode: AppendMode,
     ) -> Result<()> {
-        Self::fill_missing_and_reorder_columns(
-            ctx.clone(),
-            main_pipeline,
-            table.clone(),
-            source_schema,
-        )?;
+        Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
         table.append_data(ctx, main_pipeline, append_mode)?;
 

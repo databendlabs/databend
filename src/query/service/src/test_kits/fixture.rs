@@ -687,7 +687,7 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        PipelineBuilder::fill_missing_and_reorder_columns(
+        PipelineBuilder::fill_and_reorder_columns(
             ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),
