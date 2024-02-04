@@ -72,6 +72,7 @@ use jsonb::build_object;
 use jsonb::concat;
 use jsonb::contains;
 use jsonb::delete_by_index;
+use jsonb::delete_by_keypath;
 use jsonb::delete_by_name;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
@@ -1151,6 +1152,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_function_factory("delete_by_keypath", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "delete_by_keypath".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::Variant)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(delete_by_keypath_fn),
+            },
+        }))
+    });
+
     registry.register_passthrough_nullable_1_arg(
         "json_typeof",
         |_, _| FunctionDomain::MayThrow,
@@ -1446,6 +1470,76 @@ fn prepare_args_columns(
         columns.push(column);
     }
     (columns, len_opt)
+}
+
+fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let scalar_keypath = match &args[1] {
+        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v.as_bytes())),
+        _ => None,
+    };
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+
+    let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
+    let mut validity = MutableBitmap::with_capacity(len);
+
+    for idx in 0..len {
+        let keypath = match &args[1] {
+            ValueRef::Scalar(_) => Cow::Borrowed(&scalar_keypath),
+            ValueRef::Column(col) => {
+                let scalar = unsafe { col.index_unchecked(idx) };
+                let path = match scalar {
+                    ScalarRef::String(buf) => Some(parse_key_paths(buf.as_bytes())),
+                    _ => None,
+                };
+                Cow::Owned(path)
+            }
+        };
+        match keypath.as_ref() {
+            Some(result) => match result {
+                Ok(path) => {
+                    let json_row = match &args[0] {
+                        ValueRef::Scalar(scalar) => scalar.clone(),
+                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                    };
+                    match json_row {
+                        ScalarRef::Variant(json) => {
+                            match delete_by_keypath(json, path.paths.iter(), &mut builder.data) {
+                                Ok(_) => validity.push(true),
+                                Err(err) => {
+                                    ctx.set_error(builder.len(), err.to_string());
+                                    validity.push(false);
+                                }
+                            }
+                        }
+                        _ => validity.push(false),
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    validity.push(false);
+                }
+            },
+            None => validity.push(false),
+        }
+        builder.commit_row();
+    }
+
+    let validity: Bitmap = validity.into();
+
+    match len_opt {
+        Some(_) => Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity)),
+        None => {
+            if !validity.get_bit(0) {
+                Value::Scalar(Scalar::Null)
+            } else {
+                Value::Scalar(Scalar::Variant(builder.build_scalar()))
+            }
+        }
+    }
 }
 
 fn get_by_keypath_fn(
