@@ -1852,13 +1852,13 @@ MaterializedCte: 0
         ├── Build
         │   └── CTEScan
         │       ├── CTE index: 0, sub index: 2
-        │       └── estimated rows: 81.00
+        │       └── estimated rows: 80.00
         └── Probe
             └── HashJoin: INNER
                 ├── Build
                 │   └── CTEScan
                 │       ├── CTE index: 0, sub index: 1
-                │       └── estimated rows: 81.00
+                │       └── estimated rows: 80.00
                 └── Probe
                     └── Scan: default.tpch_test.supplier (read rows: 1000)
 
