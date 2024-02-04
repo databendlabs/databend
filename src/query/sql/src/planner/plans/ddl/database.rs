@@ -33,7 +33,7 @@ pub struct CreateDatabasePlan {
 impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            create_option: p.create_option.clone(),
+            create_option: p.create_option,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant,
                 db_name: p.database,
@@ -46,7 +46,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
 impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            create_option: p.create_option.clone(),
+            create_option: p.create_option,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant.clone(),
                 db_name: p.database.clone(),

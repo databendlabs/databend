@@ -362,7 +362,7 @@ impl CreateTableInterpreter {
         }
 
         let req = CreateTableReq {
-            create_option: self.plan.create_option.clone(),
+            create_option: self.plan.create_option,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),
@@ -428,7 +428,7 @@ impl CreateTableInterpreter {
             ..Default::default()
         };
         let req = CreateTableReq {
-            create_option: self.plan.create_option.clone(),
+            create_option: self.plan.create_option,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),
