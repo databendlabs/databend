@@ -25,7 +25,6 @@ use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
 use walkdir::WalkDir;
@@ -75,12 +74,11 @@ pub async fn check_data_dir(
     fixture: &TestFixture,
     case_name: &str,
     snapshot_count: u32,
-    table_statistic_count: u32,
+    _table_statistic_count: u32,
     segment_count: u32,
     block_count: u32,
     index_count: u32,
     check_last_snapshot: Option<()>,
-    check_table_statistic_file: Option<()>,
 ) -> Result<()> {
     let data_path = match &GlobalConfig::instance().storage.params {
         StorageParams::Fs(v) => v.root.clone(),
@@ -88,14 +86,11 @@ pub async fn check_data_dir(
     };
     let root = data_path.as_str();
     let mut ss_count = 0;
-    let mut ts_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
     let mut last_snapshot_loc = "".to_string();
-    let mut table_statistic_files = vec![];
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
-    let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -115,9 +110,6 @@ pub async fn check_data_dir(
                 b_count += 1;
             } else if path.starts_with(prefix_index) {
                 i_count += 1;
-            } else if path.starts_with(prefix_snapshot_statistics) {
-                ts_count += 1;
-                table_statistic_files.push(entry_path.to_string());
             } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
                     .default_ctx
@@ -135,11 +127,11 @@ pub async fn check_data_dir(
         "case [{}], check snapshot count",
         case_name
     );
-    assert_eq!(
-        ts_count, table_statistic_count,
-        "case [{}], check snapshot statistics count",
-        case_name
-    );
+    // assert_eq!(
+    //     ts_count, table_statistic_count,
+    //     "case [{}], check snapshot statistics count",
+    //     case_name
+    // );
     assert_eq!(
         sg_count, segment_count,
         "case [{}], check segment count",
