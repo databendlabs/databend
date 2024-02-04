@@ -58,7 +58,7 @@ impl PipelineBuilder {
         )?;
 
         let source_schema = insert_schema;
-        Self::build_fill_missing_columns_pipeline(
+        Self::build_reorder_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.clone(),

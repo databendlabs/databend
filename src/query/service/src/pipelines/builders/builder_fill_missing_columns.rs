@@ -26,7 +26,9 @@ use crate::sessions::QueryContext;
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {
-    pub fn build_fill_missing_columns_pipeline(
+    // Fill missing columns with default or compute expr
+    // ** Also reorder the block into table's schema order **
+    pub fn build_reorder_fill_missing_columns_pipeline(
         ctx: Arc<QueryContext>,
         pipeline: &mut Pipeline,
         table: Arc<dyn Table>,

@@ -35,7 +35,7 @@ pub struct ReplaceDeduplicate {
     pub table_is_empty: bool,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    pub table_schema: TableSchemaRef,
+    pub target_schema: TableSchemaRef,
     pub select_ctx: Option<ReplaceSelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,

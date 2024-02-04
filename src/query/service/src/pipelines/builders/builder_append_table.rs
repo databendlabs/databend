@@ -39,7 +39,7 @@ impl PipelineBuilder {
         append_mode: AppendMode,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
-        Self::build_fill_missing_columns_pipeline(
+        Self::build_reorder_fill_missing_columns_pipeline(
             ctx.clone(),
             main_pipeline,
             table.clone(),
@@ -68,7 +68,7 @@ impl PipelineBuilder {
         source_schema: DataSchemaRef,
         append_mode: AppendMode,
     ) -> Result<()> {
-        Self::build_fill_missing_columns_pipeline(
+        Self::build_reorder_fill_missing_columns_pipeline(
             ctx.clone(),
             main_pipeline,
             table.clone(),
