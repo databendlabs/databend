@@ -57,7 +57,6 @@ async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
         0, // 0 blocks
         0, // 0 index
         None,
-        None,
     )
     .await?;
 

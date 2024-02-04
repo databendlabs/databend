@@ -64,7 +64,6 @@ pub async fn do_purge_test(
         block_count,
         index_count,
         Some(()),
-        None,
     )
     .await?;
     history_should_have_item(&fixture, case_name, snapshot_count).await?;

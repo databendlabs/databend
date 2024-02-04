@@ -46,7 +46,7 @@ analyze table t5
 # A flaky test, analyze table may get different results.
 onlyif todo
 query T
-explain select * from t, t3, t2, t5, t4, t1
+explain join select * from t, t3, t2, t5, t4, t1
 where t5.a = t1.a and t5.a = t2.a and t5.a = t3.a and t5.a = t4.a and t5.a = t.a
 ----
 HashJoin

@@ -1,57 +1,17 @@
 query T
-explain select * from numbers(10000) where number in (select number from numbers(1000))
+explain join select * from numbers(10000) where number in (select number from numbers(1000))
 ----
-HashJoin
-├── output columns: [numbers.number (#0)]
-├── join type: LEFT SEMI
-├── build keys: [subquery_1 (#1)]
-├── probe keys: [numbers.number (#0)]
-├── filters: []
-├── estimated rows: 10000.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#1)]
-│   ├── read rows: 1000
-│   ├── read bytes: 8000
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1000.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 10000
-    ├── read bytes: 80000
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10000.00
+HashJoin: LEFT SEMI
+├── Build
+│   └── Scan: default.system.numbers (read rows: 1000)
+└── Probe
+    └── Scan: default.system.numbers (read rows: 10000)
 
 query T
-explain select * from numbers(1000) where number in (select number from numbers(10000))
+explain join select * from numbers(1000) where number in (select number from numbers(10000))
 ----
-HashJoin
-├── output columns: [numbers.number (#0)]
-├── join type: RIGHT SEMI
-├── build keys: [numbers.number (#0)]
-├── probe keys: [subquery_1 (#1)]
-├── filters: []
-├── estimated rows: 1000.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#0)]
-│   ├── read rows: 1000
-│   ├── read bytes: 8000
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1000.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── output columns: [number (#1)]
-    ├── read rows: 10000
-    ├── read bytes: 80000
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10000.00
+HashJoin: RIGHT SEMI
+├── Build
+│   └── Scan: default.system.numbers (read rows: 1000)
+└── Probe
+    └── Scan: default.system.numbers (read rows: 10000)

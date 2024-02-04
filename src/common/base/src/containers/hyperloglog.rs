@@ -70,7 +70,7 @@ impl<const P: usize> HyperLogLog<P> {
         Self { registers }
     }
 
-    /// Adds an element to the HyperLogLog.
+    /// Adds an hash to the HyperLogLog.
     /// hash value is dertermined by caller
     #[inline]
     pub fn add_hash(&mut self, hash: u64) {
@@ -79,8 +79,8 @@ impl<const P: usize> HyperLogLog<P> {
         self.registers[index] = self.registers[index].max(one_position as u8);
     }
 
-    /// Adds an element to the HyperLogLog.
-    /// hash value is dertermined by caller
+    /// Adds an object to the HyperLogLog.
+    /// Though we could pass different types into this method, caller should notice that
     pub fn add_object<T: Hash>(&mut self, obj: &T) {
         let hash = SEED.hash_one(obj);
         self.add_hash(hash);
@@ -142,7 +142,7 @@ impl<const P: usize> HyperLogLog<P> {
 
     #[inline]
     pub fn max_byte_size() -> usize {
-        Self::number_registers() * 8
+        Self::number_registers()
     }
 
     #[inline]

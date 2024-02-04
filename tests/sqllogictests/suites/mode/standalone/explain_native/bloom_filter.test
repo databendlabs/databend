@@ -26,7 +26,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
 ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
-└── estimated rows: 1.00
+└── estimated rows: 1.50
 
 query T
 select * from bloom_test_t where c1 = 5
@@ -115,7 +115,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
 ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 3)], limit: NONE]
-└── estimated rows: 1.00
+└── estimated rows: 2.00
 
 statement ok
 drop table bloom_test_t
@@ -141,7 +141,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
 ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
-└── estimated rows: 1.00
+└── estimated rows: 1.50
 
 statement ok
 drop table bloom_test_nullable_t

@@ -57,7 +57,6 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
         1,
         1,
         None,
-        None,
     )
     .await?;
 
@@ -79,7 +78,6 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
             1,
             1,
             None,
-            None,
         )
         .await?;
     }
@@ -96,7 +94,6 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
             0,
             0,
             0,
-            None,
             None,
         )
         .await?;

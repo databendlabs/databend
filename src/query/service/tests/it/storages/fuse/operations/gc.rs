@@ -60,7 +60,6 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
         1, // 1 blocks
         1, // 1 index
         Some(()),
-        None,
     )
     .await?;
 
@@ -118,7 +117,6 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         1, // 0 blocks
         1, // 0 index
         Some(()),
-        None,
     )
     .await?;
 
@@ -241,7 +239,6 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         expected_num_of_blocks,
         expected_num_of_index,
         Some(()),
-        None,
     )
     .await?;
 
@@ -287,7 +284,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_blocks,
             expected_num_of_index,
             Some(()),
-            None,
         )
         .await?;
     }
@@ -299,7 +295,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     {
         let table = fixture.latest_default_table().await?;
         compact_segment(ctx.clone(), &table).await?;
-        check_data_dir(&fixture, "", 4, 0, 5, 7, 7, Some(()), None).await?;
+        check_data_dir(&fixture, "", 4, 0, 5, 7, 7, Some(())).await?;
     }
 
     let table = fixture.latest_default_table().await?;
@@ -324,7 +320,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_blocks,
             expected_num_of_index,
             Some(()),
-            None,
         )
         .await?;
     }
@@ -348,7 +343,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_blocks,
             expected_num_of_index,
             Some(()),
-            None,
         )
         .await?;
     }

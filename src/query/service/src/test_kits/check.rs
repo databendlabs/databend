@@ -170,26 +170,6 @@ pub async fn check_data_dir(
         );
     }
 
-    if check_table_statistic_file.is_some() {
-        let table = fixture.latest_default_table().await?;
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_opt = fuse_table.read_table_snapshot().await?;
-        assert!(snapshot_opt.is_some());
-        let snapshot = snapshot_opt.unwrap();
-        let ts_location_opt = snapshot.table_statistics_location.clone();
-        assert!(ts_location_opt.is_some());
-        let ts_location = ts_location_opt.unwrap();
-        println!(
-            "ts_location_opt: {:?}, table_statistic_files: {:?}",
-            ts_location, table_statistic_files
-        );
-        assert!(
-            table_statistic_files
-                .iter()
-                .any(|e| e.contains(&ts_location))
-        );
-    }
-
     Ok(())
 }
 

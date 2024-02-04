@@ -60,12 +60,12 @@ AggregateFinal
 ├── output columns: [COUNT(*) (#1), t.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: [count()]
-├── estimated rows: 1000.00
+├── estimated rows: 986.00
 └── AggregatePartial
     ├── output columns: [COUNT(*) (#1), #_group_by_key]
     ├── group by: [number]
     ├── aggregate functions: [count()]
-    ├── estimated rows: 1000.00
+    ├── estimated rows: 986.00
     └── TableScan
         ├── table: default.default.t
         ├── output columns: [number (#0)]
