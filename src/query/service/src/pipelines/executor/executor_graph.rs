@@ -128,7 +128,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
-            points: AtomicU64::new((MAX_POINTS << 32) & init_epoch as u64),
+            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
         })
     }
 
@@ -142,7 +142,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
-            points: AtomicU64::new((MAX_POINTS << 32) & init_epoch as u64),
+            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
         })
     }
 
@@ -364,10 +364,10 @@ impl ExecutingGraph {
                     if epoch != global_epoch as u64 {
                         desired_value = new_expected;
                     } else {
-                        if remain_points - 1 >= 0 {
-                            desired_value = (remain_points - 1) << 32 & epoch;
+                        if remain_points >= 1 {
+                            desired_value = (remain_points - 1) << 32 | epoch;
                         } else {
-                            desired_value = max_points << 32 & (epoch + 1);
+                            desired_value = max_points << 32 | (epoch + 1);
                         }
                     }
                 }
@@ -466,10 +466,9 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
-            let process_future = proc.processor.async_process();
             let graph = proc.graph;
-            let node_profile = executor.graph.get_node_profile(proc.id()).clone();
-            let process_future = proc.async_process();
+            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
+            let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
                 TrackedFuture::create(ProcessorAsyncTask::create(

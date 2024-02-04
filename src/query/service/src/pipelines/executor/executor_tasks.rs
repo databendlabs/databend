@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 
@@ -171,6 +170,7 @@ impl ExecutorTasksQueue {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
             let process_future = proc.processor.async_process();
+            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
             let graph = proc.graph;
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -181,6 +181,7 @@ impl ExecutorTasksQueue {
                     global_queue,
                     workers_condvar,
                     weak_executor,
+                    node_profile,
                     graph,
                     process_future,
                 ))

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::intrinsics::assume;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -89,7 +88,7 @@ impl PipelineExecutor {
         let on_finished_callback = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
-        match RunningGraph::create(pipeline, 0) {
+        match RunningGraph::create(pipeline, 1) {
             Err(cause) => {
                 let _ = on_finished_callback(&Err(cause.clone()));
                 Err(cause)
@@ -159,7 +158,7 @@ impl PipelineExecutor {
             .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
-        match RunningGraph::from_pipelines(pipelines, 0) {
+        match RunningGraph::from_pipelines(pipelines, 1) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
                     let _ = on_finished_callback(&Err(cause.clone()));

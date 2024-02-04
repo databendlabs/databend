@@ -90,7 +90,7 @@ impl ExecutorWorkerContext {
         &mut self,
         proc: ProcessorWrapper,
     ) -> Result<(NodeIndex, Arc<RunningGraph>)> {
-        Profile::track_profile(proc.graph.get_node_profile(proc.id()));
+        Profile::track_profile(proc.graph.get_node_profile(proc.processor.id()));
 
         let instant = Instant::now();
 
