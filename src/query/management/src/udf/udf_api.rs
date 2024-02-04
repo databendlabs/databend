@@ -14,13 +14,14 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait UdfApi: Sync + Send {
     // Add a UDF to /tenant/udf-name.
-    async fn add_udf(&self, udf: UserDefinedFunction) -> Result<u64>;
+    async fn add_udf(&self, udf: UserDefinedFunction, create_option: &CreateOption) -> Result<()>;
 
     // Update a UDF to /tenant/udf-name.
     async fn update_udf(&self, udf: UserDefinedFunction, seq: MatchSeq) -> Result<u64>;

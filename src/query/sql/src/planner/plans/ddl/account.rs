@@ -27,10 +27,11 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub user: UserIdentity,
     pub auth_info: AuthInfo,
     pub user_option: UserOption,
@@ -123,7 +124,7 @@ pub struct GrantPrivilegePlan {
 pub struct RevokePrivilegePlan {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+    pub on: Vec<GrantObject>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

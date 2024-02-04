@@ -19,10 +19,9 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::get_statistics_desc;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use itertools::Itertools;
-use time::Duration;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -246,26 +245,15 @@ fn append_profile_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        children.push(FormatTreeNode::new(format!(
-            "output rows: {}",
-            prof.statistics[ProfileStatisticsName::OutputRows as usize],
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "output bytes: {}",
-            prof.statistics[ProfileStatisticsName::OutputBytes as usize],
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total cpu time: {:.3}ms",
-            Duration::nanoseconds(prof.statistics[ProfileStatisticsName::CpuTime as usize] as i64)
-                .as_seconds_f64()
-                * 1000.0,
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total wait time: {:.3}ms",
-            Duration::nanoseconds(prof.statistics[ProfileStatisticsName::WaitTime as usize] as i64)
-                .as_seconds_f64()
-                * 1000.0,
-        )));
+        for (_, desc) in get_statistics_desc().iter() {
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+        }
     }
 }
 
@@ -380,14 +368,6 @@ fn table_scan_to_format_tree(
     }
 
     append_profile_info(&mut children, profs, plan.plan_id);
-
-    // Add parts pruned by runtime filter info.
-    if let Some(prof) = profs.get(&plan.plan_id) {
-        children.push(FormatTreeNode::new(format!(
-            "parts pruned by runtime filter: {}",
-            prof.statistics[ProfileStatisticsName::RuntimeFilterPruneParts as usize]
-        )))
-    }
 
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),

@@ -17,15 +17,16 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_base::base::mask_string;
+use databend_common_meta_app::schema::CreateOption;
 
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateConnectionStmt {
-    pub if_not_exists: bool,
     pub name: Identifier,
     pub storage_type: String,
     pub storage_params: BTreeMap<String, String>,
+    pub create_option: CreateOption,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,9 +45,15 @@ pub struct ShowConnectionsStmt {}
 
 impl Display for CreateConnectionStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE CONNECTION ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " CONNECTION ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write!(f, "{} ", self.name)?;
         write!(f, "STORAGE_TYPE = {} ", self.storage_type)?;

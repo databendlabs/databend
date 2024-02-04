@@ -19,13 +19,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::schema::CreateOption;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateConnectionPlan {
-    pub if_not_exists: bool,
     pub name: String,
     pub storage_type: String,
     pub storage_params: BTreeMap<String, String>,
+    pub create_option: CreateOption,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
