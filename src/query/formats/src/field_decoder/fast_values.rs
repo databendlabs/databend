@@ -151,9 +151,9 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, positions),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
-            ColumnBuilder::Binary(_) => return Err(ErrorCode::Unimplemented("binary literal")),
+            ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
-                return Err(ErrorCode::Unimplemented("empty array/map literal"));
+                Err(ErrorCode::Unimplemented("empty array/map literal"))
             }
         }
     }
