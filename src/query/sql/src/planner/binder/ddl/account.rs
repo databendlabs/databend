@@ -248,7 +248,7 @@ impl Binder {
             .await?;
 
         let plan = CreateUserPlan {
-            create_option: create_option.clone(),
+            create_option: *create_option,
             user: user.clone(),
             auth_info: AuthInfo::create2(&auth_option.auth_type, &auth_option.password)?,
             user_option,
