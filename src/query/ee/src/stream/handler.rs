@@ -20,7 +20,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -146,7 +145,7 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let req = CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists(plan.if_not_exists),
+            create_option: plan.create_option.clone(),
             name_ident: TableNameIdent {
                 tenant: plan.tenant.clone(),
                 db_name: plan.database.clone(),

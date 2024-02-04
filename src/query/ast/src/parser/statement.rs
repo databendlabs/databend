@@ -2014,7 +2014,7 @@ AS
     )(i)
 }
 
-fn parse_create_option(
+pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
 ) -> Result<CreateOption, nom::Err<ErrorKind>> {

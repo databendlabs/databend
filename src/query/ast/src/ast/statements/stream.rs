@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
+
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
@@ -41,7 +43,7 @@ impl Display for StreamPoint {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateStreamStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub stream: Identifier,
@@ -54,9 +56,15 @@ pub struct CreateStreamStmt {
 
 impl Display for CreateStreamStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE STREAM ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        write!(f, "STREAM ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write_dot_separated_list(
             f,

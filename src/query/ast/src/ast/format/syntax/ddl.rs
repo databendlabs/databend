@@ -298,12 +298,24 @@ pub(crate) fn pretty_alter_view(stmt: AlterViewStmt) -> RcDoc<'static> {
 }
 
 pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
-    RcDoc::text("CREATE STREAM")
-        .append(if stmt.if_not_exists {
-            RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+    RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
         } else {
             RcDoc::nil()
         })
+        .append(RcDoc::space().append(RcDoc::text("STREAM")))
+        .append(
+            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
+                if if_not_exists {
+                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+                } else {
+                    RcDoc::nil()
+                }
+            } else {
+                RcDoc::nil()
+            },
+        )
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {

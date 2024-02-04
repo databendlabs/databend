@@ -134,6 +134,7 @@ fn test_statement() {
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
         r#"create stream test2.s1 on table test.t append_only = false;"#,
         r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"create or replace stream test2.s1 on table test.t append_only = false;"#,
         r#"show full streams from default.test2 like 's%';"#,
         r#"describe stream test2.s2;"#,
         r#"drop stream if exists test2.s2;"#,

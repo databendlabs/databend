@@ -2537,7 +2537,9 @@ CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -2585,7 +2587,9 @@ CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COM
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -2643,6 +2647,54 @@ CreateStream(
         comment: Some(
             "this is a stream",
         ),
+    },
+)
+
+
+---------- Input ----------
+create or replace stream test2.s1 on table test.t append_only = false;
+---------- Output ---------
+CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    25..30,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s1",
+            quote: None,
+            span: Some(
+                31..33,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    43..47,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                48..49,
+            ),
+        },
+        stream_point: None,
+        append_only: false,
+        comment: None,
     },
 )
 
