@@ -11,6 +11,7 @@ USE issue_14593
 
 statement ok
 create table t (a string, b string, c string,  id int, d string) cluster by (id);
+
 statement ok
 replace into t (b, id, a) on(id) values('b', 1, 'a');
 
