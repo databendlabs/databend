@@ -33,6 +33,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
+use databend_common_pipeline_core::processors::Profile;
+use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_storages_common_index::statistics_to_domain;
 use log::info;
 use xorf::BinaryFuse16;
@@ -49,7 +51,6 @@ pub fn runtime_filter_pruner(
     if filters.is_empty() {
         return Ok(false);
     }
-
     let part = FusePartInfo::from_part(part)?;
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
@@ -92,6 +93,7 @@ pub fn runtime_filter_pruner(
             "Pruned partition with {:?} rows by runtime filter",
             part.nums_rows
         );
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
         return Ok(true);
     }
 

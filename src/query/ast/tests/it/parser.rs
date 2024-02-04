@@ -194,6 +194,7 @@ fn test_statement() {
         r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
@@ -535,6 +536,7 @@ fn test_statement() {
         r#"DESC TASK MyTask"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
+        r#"CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
@@ -555,6 +557,12 @@ fn test_statement() {
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));",
+        "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
+        "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "DROP FUNCTION binary_reverse;",
+        "DROP FUNCTION isnotempty;",
     ];
 
     for case in cases {
@@ -650,6 +658,7 @@ fn test_statement_error() {
         "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
         "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
         "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
     ];
 
     for case in cases {

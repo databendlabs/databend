@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1 (lat Float64, lon Float64) ENGINE=Memory
+
+statement ok
+INSERT INTO t1 VALUES(55.77922738, 37.63098076), (5.77922738, 7.63098076)
+
+query T
+SELECT to_string(st_makepoint(lat, lon)) FROM t1
+----
+POINT(55.77922738 37.63098076)
+POINT(5.77922738 7.63098076)
+
+query T
+SELECT st_makepoint(lat, lon)::String FROM t1
+----
+POINT(55.77922738 37.63098076)
+POINT(5.77922738 7.63098076)
+
+statement ok
+DROP TABLE IF EXISTS t1

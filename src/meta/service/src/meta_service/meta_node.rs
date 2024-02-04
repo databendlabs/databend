@@ -361,7 +361,7 @@ impl MetaNode {
 
         let srv = tonic::transport::Server::builder().add_service(meta_srv);
 
-        let h = tokio::spawn(async move {
+        let h = databend_common_base::runtime::spawn(async move {
             srv.serve_with_shutdown(addr, async move {
                 let _ = rx.changed().await;
                 info!(
@@ -529,7 +529,9 @@ impl MetaNode {
 
             Ok::<(), AnyError>(())
         };
-        let h = tokio::task::spawn(fut.in_span(Span::enter_with_local_parent("watch-metrics")));
+        let h = databend_common_base::runtime::spawn(
+            fut.in_span(Span::enter_with_local_parent("watch-metrics")),
+        );
 
         {
             let mut jh = mn.join_handles.lock().await;

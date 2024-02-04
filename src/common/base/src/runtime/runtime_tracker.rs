@@ -671,7 +671,7 @@ mod tests {
                     .unwrap();
 
                 rt.block_on(async {
-                    let h = tokio::spawn(async_backtrace::location!().frame(f));
+                    let h = crate::runtime::spawn(f);
                     let res = h.await;
                     assert!(res.is_err(), "panicked");
                 });

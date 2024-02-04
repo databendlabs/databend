@@ -513,24 +513,21 @@ pub trait HashtableLike {
 pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // same with `early_filtering_probe`, but we don't use early_filter
+    // Probe hash table, use `hashes` to probe hash table and convert it in-place to pointers for memory reuse.
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // 1. same with `early_filtering_probe_with_selection`, but we don't use selection to preserve the
-    // unfiltered indexes, we just set the filtered hashes as zero.
-    // 2. return the unfiltered counts.
-    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
+    // Perform early filtering probe, store matched indexes in `matched_selection` and store unmatched indexes
+    // in `unmatched_selection`, return the number of matched and unmatched indexes.
+    fn early_filtering_probe(
+        &self,
+        hashes: &mut [u64],
+        valids: Option<Bitmap>,
+        matched_selection: &mut [u32],
+        unmatched_selection: &mut [u32],
+    ) -> (usize, usize);
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // we use `early_filtering_probe_with_selection` to do the first round probe.
-    // 1. `hashes` is the hash value of probe block's rows. we will use this one to
-    // do early filtering. if we can't early filter one row(at idx), we will assign pointer in
-    // the bucket to hashes[idx] to reuse the memory.
-    // 2. `selection` is used to preserved the indexes which can't be early_filtered.
-    // 3. return the count of preserved the indexes in `selection`
-    fn early_filtering_probe_with_selection(
+    // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
+    fn early_filtering_matched_probe(
         &self,
         hashes: &mut [u64],
         valids: Option<Bitmap>,

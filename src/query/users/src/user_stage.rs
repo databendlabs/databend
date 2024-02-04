@@ -15,7 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_app::schema::CreateOption;
 
 use crate::UserApiProvider;
 
@@ -27,28 +27,17 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         info: StageInfo,
-        if_not_exists: bool,
-    ) -> Result<u64> {
+        create_option: &CreateOption,
+    ) -> Result<()> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
-        let add_stage = stage_api_provider.add_stage(info);
-        match add_stage.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::STAGE_ALREADY_EXISTS {
-                    Ok(u64::MIN)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        stage_api_provider.add_stage(info, create_option).await
     }
 
     // Get one stage from by tenant.
     #[async_backtrace::framed]
     pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<StageInfo> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
-        let get_stage = stage_api_provider.get_stage(stage_name, MatchSeq::GE(0));
-        Ok(get_stage.await?.data)
+        stage_api_provider.get_stage(stage_name).await
     }
 
     #[async_backtrace::framed]

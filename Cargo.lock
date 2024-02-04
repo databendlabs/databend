@@ -526,7 +526,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "async-backtrace-attributes",
  "dashmap",
@@ -542,7 +542,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace-attributes"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=e7e1b5f#e7e1b5f96b204e19ba9855b7f3740ec6266dee7e"
+source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2624,6 +2624,7 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "databend-common-arrow",
+ "geozero",
  "http",
  "opendal",
  "parquet",
@@ -2662,6 +2663,8 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum 1.5.0",
  "futures",
+ "geo",
+ "geozero",
  "goldenfile",
  "hex",
  "itertools 0.10.5",
@@ -2703,6 +2706,7 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "geozero",
  "hex",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=0247ffc)",
  "lexical-core",
@@ -2744,6 +2748,7 @@ dependencies = [
  "ethnum 1.5.0",
  "geo",
  "geohash",
+ "geozero",
  "goldenfile",
  "h3o",
  "hex",
@@ -2806,7 +2811,6 @@ name = "databend-common-http"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "async-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "futures",
@@ -2830,6 +2834,8 @@ dependencies = [
  "chrono-tz",
  "databend-common-exception",
  "ethnum 1.5.0",
+ "geo",
+ "geozero",
  "lexical-core",
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
@@ -2837,6 +2843,7 @@ dependencies = [
  "rmp-serde",
  "roaring",
  "serde",
+ "wkt",
 ]
 
 [[package]]
@@ -3171,6 +3178,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "futures",
@@ -4782,6 +4790,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 
 [[package]]
+name = "earcutr"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79127ed59a85d7687c409e9978547cffb7dc79675355ed22da6b66fd5f6ead01"
+dependencies = [
+ "itertools 0.11.0",
+ "num-traits",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5600,10 +5618,11 @@ dependencies = [
 
 [[package]]
 name = "geo"
-version = "0.24.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce129b525496519c00321a00772d4532d2229071699c6dc6c9cefa5fa7d2b9ae"
+checksum = "4841b40fdbccd4b7042bd6195e4de91da54af34c50632e371bcbfcdfb558b873"
 dependencies = [
+ "earcutr",
  "float_next_after",
  "geo-types",
  "geographiclib-rs",
@@ -5611,13 +5630,15 @@ dependencies = [
  "num-traits",
  "robust",
  "rstar",
+ "serde",
+ "spade",
 ]
 
 [[package]]
 name = "geo-types"
-version = "0.7.9"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5f0b3068e1537a4b861ec3734f4aa9c317d537cf0845bf6fb6221973499d26c"
+checksum = "567495020b114f1ce9bed679b29975aa0bfae06ac22beacd5cfde5dabe7b05d6"
 dependencies = [
  "approx",
  "num-traits",
@@ -5642,6 +5663,32 @@ checksum = "8a18b809b13fa4f1c9ccfd94179cc429021a3517856b5160422c3d810c1e8546"
 dependencies = [
  "geo-types",
  "libm",
+]
+
+[[package]]
+name = "geojson"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d728c1df1fbf328d74151efe6cb0586f79ee813346ea981add69bd22c9241b"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "geozero"
+version = "0.11.0"
+source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980092c2931170287e13de9e"
+dependencies = [
+ "geo-types",
+ "geojson",
+ "log",
+ "scroll",
+ "serde_json",
+ "thiserror",
+ "wkt",
 ]
 
 [[package]]
@@ -11097,9 +11144,9 @@ dependencies = [
 
 [[package]]
 name = "robust"
-version = "0.2.3"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5864e7ef1a6b7bcf1d6ca3f655e65e724ed3b52546a0d0a663c991522f552ea"
+checksum = "cbf4a6aa5f6d6888f39e980649f3ad6b666acdce1d78e95b8a2cb076e687ae30"
 
 [[package]]
 name = "ron"
@@ -11157,9 +11204,9 @@ dependencies = [
 
 [[package]]
 name = "rstar"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f39465655a1e3d8ae79c6d9e007f4953bfc5d55297602df9dc38f9ae9f1359a"
+checksum = "73111312eb7a2287d229f06c00ff35b51ddee180f017ab6dec1f69d62ac098d6"
 dependencies = [
  "heapless",
  "num-traits",
@@ -11404,6 +11451,12 @@ name = "scratch"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1792db035ce95be60c3f8853017b3999209281c24e2ba5bc8e59bf97a0c590c1"
+
+[[package]]
+name = "scroll"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 
 [[package]]
 name = "sct"
@@ -11998,6 +12051,17 @@ checksum = "7b5fac59a5cb5dd637972e5fca70daf0523c9067fcdc4842f053dae04a18f8e9"
 dependencies = [
  "libc",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "spade"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab085cfe5486093ca290034bd2d424e283f9725b4bcf8ba5a7f6c7612b59841c"
+dependencies = [
+ "num-traits",
+ "robust",
+ "smallvec",
 ]
 
 [[package]]
@@ -13872,6 +13936,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "wkt"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3c2252781f8927974e8ba6a67c965a759a2b88ea2b1825f6862426bbb1c8f41"
+dependencies = [
+ "geo-types",
+ "log",
+ "num-traits",
+ "thiserror",
 ]
 
 [[package]]

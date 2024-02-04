@@ -64,6 +64,7 @@ message DataType {
     Decimal  decimal_t     = 43;
     Empty    empty_map_t   = 44;
     Empty    bitmap_t      = 45;
+    Empty    geometry_t    = 47;
   }
 }
 

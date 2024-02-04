@@ -191,6 +191,8 @@ fn new_table_meta() -> mt::TableMeta {
                 ce::TableField::new("variant_object", ce::TableDataType::Variant),
                 // NOTE: It is safe to convert Interval to NULL, because `Interval` is never really used.
                 ce::TableField::new("interval", ce::TableDataType::Null),
+                ce::TableField::new("bitmap", ce::TableDataType::Bitmap),
+                ce::TableField::new("geom", ce::TableDataType::Geometry),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -256,6 +258,7 @@ pub(crate) fn new_latest_schema() -> TableSchema {
         ),
         TableField::new("empty_map", TableDataType::EmptyMap),
         TableField::new("bitmap", TableDataType::Bitmap),
+        TableField::new("geom", TableDataType::Geometry),
     ];
     TableSchema::new(fields)
 }

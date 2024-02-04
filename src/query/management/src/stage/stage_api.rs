@@ -15,15 +15,14 @@
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_app::schema::CreateOption;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
     // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: StageInfo) -> Result<u64>;
+    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
 
-    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<StageInfo>>;
+    async fn get_stage(&self, name: &str) -> Result<StageInfo>;
 
     // Get all the stages for a tenant.
     async fn get_stages(&self) -> Result<Vec<StageInfo>>;

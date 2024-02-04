@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -27,20 +28,10 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         info: UserDefinedFunction,
-        if_not_exists: bool,
-    ) -> Result<u64> {
+        create_option: &CreateOption,
+    ) -> Result<()> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
-        let add_udf = udf_api_client.add_udf(info);
-        match add_udf.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::UDF_ALREADY_EXISTS {
-                    Ok(u64::MIN)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        udf_api_client.add_udf(info, create_option).await
     }
 
     // Update a UDF.

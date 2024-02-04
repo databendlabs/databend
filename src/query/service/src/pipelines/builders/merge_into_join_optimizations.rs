@@ -24,11 +24,11 @@ impl PipelineBuilder {
     pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (IndexType, bool) {
         // for merge into target table as build side.
         let (merge_into_build_table_index, merge_into_is_distributed) =
-            if matches!(&*join.build, PhysicalPlan::TableScan(_)) {
+            if let PhysicalPlan::TableScan(scan) = &*join.build {
                 let (need_block_info, is_distributed) =
-                    need_reserve_block_info(self.ctx.clone(), join.build.get_table_index());
+                    need_reserve_block_info(self.ctx.clone(), scan.table_index);
                 if need_block_info {
-                    (join.build.get_table_index(), is_distributed)
+                    (scan.table_index, is_distributed)
                 } else {
                     (DUMMY_TABLE_INDEX, false)
                 }

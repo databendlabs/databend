@@ -98,7 +98,7 @@ impl GrpcServer {
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
-        let j = tokio::spawn(
+        let j = databend_common_base::runtime::spawn(
             async move {
                 let res = builder
                     .add_service(reflect_srv)

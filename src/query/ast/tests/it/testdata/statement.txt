@@ -3370,7 +3370,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANT
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -3400,7 +3402,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -7500,7 +7504,9 @@ CREATE STAGE ~
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         stage_name: "~",
         location: None,
         file_format_options: {},
@@ -7519,7 +7525,9 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -7556,7 +7564,9 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -7593,7 +7603,46 @@ CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( acco
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "azblob",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "account_key": "4x5y6z",
+                        "account_name": "1a2b3c",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '******y6z', account_name = '******b3c' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        create_option: CreateOrReplace,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -7674,7 +7723,9 @@ CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "test-e",
             hostname: "%",
@@ -14525,7 +14576,6 @@ CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
-        if_not_exists: true,
         name: Identifier {
             name: "my_conn",
             quote: None,
@@ -14535,6 +14585,9 @@ CreateConnection(
         },
         storage_type: "s3",
         storage_params: {},
+        create_option: CreateIfNotExists(
+            true,
+        ),
     },
 )
 
@@ -14546,7 +14599,6 @@ CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = ******lue
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
-        if_not_exists: true,
         name: Identifier {
             name: "my_conn",
             quote: None,
@@ -14558,6 +14610,32 @@ CreateConnection(
         storage_params: {
             "any_arg": "any_value",
         },
+        create_option: CreateIfNotExists(
+            true,
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = s3 any_arg = ******lue
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                29..36,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+        create_option: CreateOrReplace,
     },
 )
 
@@ -15062,5 +15140,253 @@ Grant(
         ),
     },
 )
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> (NOT is_null(p))
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists(
+            true,
+        ),
+        udf_name: Identifier {
+            name: "isnotempty",
+            quote: None,
+            span: Some(
+                30..40,
+            ),
+        },
+        description: None,
+        definition: LambdaUDF {
+            parameters: [
+                Identifier {
+                    name: "p",
+                    quote: None,
+                    span: Some(
+                        44..45,
+                    ),
+                },
+            ],
+            definition: UnaryOp {
+                span: Some(
+                    50..53,
+                ),
+                op: Not,
+                expr: FunctionCall {
+                    span: Some(
+                        54..64,
+                    ),
+                    distinct: false,
+                    name: Identifier {
+                        name: "is_null",
+                        quote: None,
+                        span: Some(
+                            54..61,
+                        ),
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                62..63,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "p",
+                                    quote: None,
+                                    span: Some(
+                                        62..63,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> (NOT is_null(p)) DESC = 'This is a description'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            name: "isnotempty_test_replace",
+            quote: None,
+            span: Some(
+                27..50,
+            ),
+        },
+        description: Some(
+            "This is a description",
+        ),
+        definition: LambdaUDF {
+            parameters: [
+                Identifier {
+                    name: "p",
+                    quote: None,
+                    span: Some(
+                        54..55,
+                    ),
+                },
+            ],
+            definition: UnaryOp {
+                span: Some(
+                    60..63,
+                ),
+                op: Not,
+                expr: FunctionCall {
+                    span: Some(
+                        64..74,
+                    ),
+                    distinct: false,
+                    name: Identifier {
+                        name: "is_null",
+                        quote: None,
+                        span: Some(
+                            64..71,
+                        ),
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                72..73,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "p",
+                                    quote: None,
+                                    span: Some(
+                                        72..73,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        udf_name: Identifier {
+            name: "binary_reverse",
+            quote: None,
+            span: Some(
+                16..30,
+            ),
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Nullable(
+                    Binary,
+                ),
+            ],
+            return_type: Nullable(
+                Binary,
+            ),
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            name: "binary_reverse",
+            quote: None,
+            span: Some(
+                27..41,
+            ),
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Nullable(
+                    Binary,
+                ),
+            ],
+            return_type: Nullable(
+                Binary,
+            ),
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP FUNCTION binary_reverse;
+---------- Output ---------
+DROP FUNCTION binary_reverse
+---------- AST ------------
+DropUDF {
+    if_exists: false,
+    udf_name: Identifier {
+        name: "binary_reverse",
+        quote: None,
+        span: Some(
+            14..28,
+        ),
+    },
+}
+
+
+---------- Input ----------
+DROP FUNCTION isnotempty;
+---------- Output ---------
+DROP FUNCTION isnotempty
+---------- AST ------------
+DropUDF {
+    if_exists: false,
+    udf_name: Identifier {
+        name: "isnotempty",
+        quote: None,
+        span: Some(
+            14..24,
+        ),
+    },
+}
 
 

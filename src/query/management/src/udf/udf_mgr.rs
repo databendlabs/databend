@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -57,26 +58,37 @@ impl UdfMgr {
 impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
+    async fn add_udf(&self, info: UserDefinedFunction, create_option: &CreateOption) -> Result<()> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
                 "It's a builtin function: {}",
                 info.name.as_str()
             )));
         }
-
-        let seq = MatchSeq::Exact(0);
-        let val = Operation::Update(serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?);
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
-        let upsert_info = self
+
+        let val = Operation::Update(serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?);
+
+        let seq = match create_option {
+            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
+            CreateOption::CreateOrReplace => MatchSeq::GE(0),
+        };
+
+        let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
+            .await?;
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
-            ErrorCode::UdfAlreadyExists(format!("UDF '{}' already exists.", info.name))
-        })?;
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::UdfAlreadyExists(format!(
+                    "UDF '{}' already exists.",
+                    info.name
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]

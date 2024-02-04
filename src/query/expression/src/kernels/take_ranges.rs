@@ -161,6 +161,10 @@ impl Column {
                 let column = Self::take_ranges_binary_types(column, ranges, num_rows);
                 Column::Variant(column)
             }
+            Column::Geometry(column) => {
+                let column = Self::take_ranges_binary_types(column, ranges, num_rows);
+                Column::Geometry(column)
+            }
         }
     }
 
