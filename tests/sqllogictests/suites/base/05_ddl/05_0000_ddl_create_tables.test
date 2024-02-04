@@ -179,7 +179,7 @@ statement error 1065
 alter table db2.test6 add column b timestamp default now()
 
 statement ok
-create table db2.test7(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, bitmap BITMAP not null, variant VARIANT not null)
+create table db2.test7(tiny TINYINT(10) not null, tiny_unsigned TINYINT(10) UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT32(15) not null, int_unsigned UINT32(15) not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, bitmap BITMAP not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test7

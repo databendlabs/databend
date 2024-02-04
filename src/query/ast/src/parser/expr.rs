@@ -1480,22 +1480,26 @@ pub fn nullable(i: Input) -> IResult<bool> {
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
-    let ty_uint8 = value(
-        TypeName::UInt8,
-        rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )?  },
-    );
-    let ty_uint16 = value(
-        TypeName::UInt16,
-        rule! { ( UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint32 = value(
-        TypeName::UInt32,
-        rule! { ( UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint64 = value(
-        TypeName::UInt64,
-        rule! { ( UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
+    let ty_uint8 = value(TypeName::UInt8, rule! { (
+            #map(rule! { UINT8 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { TINYINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint16 = value(TypeName::UInt16, rule! { (
+            #map(rule! { UINT16 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { SMALLINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint32 = value(TypeName::UInt32, rule! { (
+            #map(rule! { UINT32 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { ( INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint64 = value(TypeName::UInt64, rule! { (
+            #map(rule! { ( UINT64 | UNSIGNED) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { BIGINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
     let ty_int8 = value(
         TypeName::Int8,
         rule! { ( INT8 | TINYINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },

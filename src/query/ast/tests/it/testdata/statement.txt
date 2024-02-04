@@ -838,6 +838,51 @@ CreateTable(
 
 
 ---------- Input ----------
+create or replace table a (c int(10) unsigned)
+---------- Output ---------
+CREATE OR REPLACE TABLE a (c UInt32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                24..25,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                27..28,
+                            ),
+                        },
+                        data_type: UInt32,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
