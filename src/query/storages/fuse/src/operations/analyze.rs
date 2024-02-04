@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use log::warn;
 
 use crate::io::SegmentsIO;
@@ -53,9 +52,6 @@ impl FuseTable {
 
         if let Some(snapshot) = snapshot_opt {
             // 2. Iterator segments and blocks to estimate statistics.
-            let mut sum_map = HashMap::new();
-            let mut row_count_sum = 0;
-            let mut block_count_sum: u64 = 0;
             let mut read_segment_count = 0;
             let mut col_stats = HashMap::new();
             let mut cluster_stats = None;
@@ -79,28 +75,6 @@ impl FuseTable {
                     let segment = segment?;
                     stats_of_columns.push(segment.summary.col_stats.clone());
                     blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
-                    segment.blocks.iter().for_each(|block| {
-                        let block = block.as_ref();
-                        let row_count = block.row_count;
-                        if row_count != 0 {
-                            block_count_sum += 1;
-                            row_count_sum += row_count;
-                            for (i, col_stat) in block.col_stats.iter() {
-                                let density = col_stat
-                                    .distinct_of_values
-                                    .map_or(0.0, |ndv| ndv as f64 / row_count as f64);
-
-                                match sum_map.get_mut(i) {
-                                    Some(sum) => {
-                                        *sum += density;
-                                    }
-                                    None => {
-                                        let _ = sum_map.insert(*i, density);
-                                    }
-                                }
-                            }
-                        }
-                    });
                 }
 
                 // Generate new column statistics for snapshot
@@ -121,32 +95,19 @@ impl FuseTable {
                 }
             }
 
-            let mut ndv_map = HashMap::new();
-            for (i, sum) in sum_map.iter() {
-                let density_avg = *sum / block_count_sum as f64;
-                ndv_map.insert(*i, (density_avg * row_count_sum as f64) as u64);
-            }
-
-            // 3. Generate new table statistics
-            let table_statistics = TableSnapshotStatistics::new(ndv_map);
-            let table_statistics_location = self
-                .meta_location_generator
-                .snapshot_statistics_location_from_uuid(
-                    &table_statistics.snapshot_id,
-                    table_statistics.format_version(),
-                )?;
+            // 3. Generate new table statistics, now it's none by default
 
             // 4. Save table statistics
             let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
             new_snapshot.summary.col_stats = col_stats;
             new_snapshot.summary.cluster_stats = cluster_stats;
-            new_snapshot.table_statistics_location = Some(table_statistics_location);
+            new_snapshot.table_statistics_location = None;
             FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
                 &self.table_info,
                 &self.meta_location_generator,
                 new_snapshot,
-                Some(table_statistics),
+                None,
                 &None,
                 &self.operator,
             )

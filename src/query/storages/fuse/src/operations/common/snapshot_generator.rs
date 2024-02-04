@@ -411,18 +411,17 @@ impl SnapshotGenerator for AppendGenerator {
                                         &DataType::from(*data_type),
                                         default_value.clone(),
                                     ) {
-                                        let (null_count, distinct_of_values) =
-                                            if default_value.is_null() {
-                                                (summary.row_count, Some(0))
-                                            } else {
-                                                (0, Some(1))
-                                            };
+                                        let  null_count = if default_value.is_null() {
+                                            summary.row_count
+                                        } else {
+                                            0
+                                        };
                                         let col_stat = ColumnStatistics::new(
                                             min,
                                             max,
                                             null_count,
                                             0,
-                                            distinct_of_values,
+                                            None,
                                         );
                                         summary.col_stats.insert(*col_id, col_stat);
                                     }

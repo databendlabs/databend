@@ -107,7 +107,7 @@ impl PruningContext {
                 let default_scalar = field_default_value(ctx.clone(), field).ok()?;
 
                 let stats =
-                    ColumnStatistics::new(default_scalar.clone(), default_scalar, 0, 0, Some(1));
+                    ColumnStatistics::new(default_scalar.clone(), default_scalar, 0, 0, None);
                 Some((field.column_id(), stats))
             })
             .collect();

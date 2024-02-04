@@ -115,7 +115,6 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
-    pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
 impl BloomIndexState {
@@ -135,7 +134,6 @@ impl BloomIndexState {
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;
-            let column_distinct_count = bloom_index.column_distinct_count;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
             let _ = blocks_to_parquet(
@@ -150,7 +148,6 @@ impl BloomIndexState {
                 data,
                 size: data_size,
                 location,
-                column_distinct_count,
             }))
         } else {
             Ok(None)
@@ -189,14 +186,10 @@ impl BlockBuilder {
             bloom_index_location,
             self.bloom_columns_map.clone(),
         )?;
-        let column_distinct_count = bloom_index_state
-            .as_ref()
-            .map(|i| i.column_distinct_count.clone());
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;
-        let col_stats =
-            gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
+        let col_stats = gen_columns_statistics(&data_block, &self.source_schema)?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let col_metas = serialize_block(

@@ -17,6 +17,7 @@ use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
+use databend_common_base::containers::HyperLogLog;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
@@ -24,6 +25,9 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+
+/// Takes at most `1<<12 = 2k`` spaces with error ratio of `0.01625`
+pub type ColumnStatHLL = HyperLogLog<12>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -41,6 +45,7 @@ pub struct ColumnStatistics {
     pub null_count: u64,
     pub in_memory_size: u64,
     pub distinct_of_values: Option<u64>,
+    pub hll: Option<ColumnStatHLL>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -86,16 +91,30 @@ impl ColumnStatistics {
         max: Scalar,
         null_count: u64,
         in_memory_size: u64,
-        distinct_of_values: Option<u64>,
+        hll: Option<ColumnStatHLL>,
     ) -> Self {
         assert!(min.as_ref().infer_common_type(&max.as_ref()).is_some());
-
+        let distinct_of_values = hll.as_ref().map(|v| v.count() as u64);
         Self {
             min,
             max,
             null_count,
             in_memory_size,
             distinct_of_values,
+            hll,
+        }
+    }
+
+    pub fn with_distinct_of_values(mut self, distinct_of_values: Option<u64>) -> Self {
+        self.distinct_of_values = distinct_of_values;
+        self
+    }
+
+    pub fn unify_distinct_value(&self) -> Option<u64> {
+        match (&self.distinct_of_values, &self.hll) {
+            (None, None) => None,
+            (None, Some(hll)) => Some(hll.count() as u64),
+            (Some(v), _) => Some(*v),
         }
     }
 
@@ -133,6 +152,7 @@ impl ColumnStatistics {
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
+            hll: None,
         })
     }
 }

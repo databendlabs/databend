@@ -21,5 +21,6 @@ pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
 pub use statistics::ClusterStatistics;
+pub use statistics::ColumnStatHLL;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;

@@ -73,6 +73,7 @@ impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,
+            hll: None,
         }
     }
 }

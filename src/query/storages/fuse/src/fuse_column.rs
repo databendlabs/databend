@@ -27,17 +27,12 @@ pub struct FuseTableColumnStatisticsProvider {
 }
 
 impl FuseTableColumnStatisticsProvider {
-    pub fn new(
-        column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-        column_distinct_values: Option<HashMap<ColumnId, u64>>,
-        row_count: u64,
-    ) -> Self {
+    pub fn new(column_stats: HashMap<ColumnId, FuseColumnStatistics>, row_count: u64) -> Self {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = column_distinct_values
-                    .as_ref()
-                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+                let ndv = stat.unify_distinct_value().unwrap_or(row_count as u64);
+
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
                     max: Datum::from_scalar(stat.max),

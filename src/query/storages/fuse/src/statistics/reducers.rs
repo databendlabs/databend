@@ -20,6 +20,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatHLL;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -53,6 +54,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
             let mut in_memory_size = 0;
+            let mut hll: Option<ColumnStatHLL> = None;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min().clone());
@@ -60,6 +62,13 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
+
+                if let Some(col_hll) = &col_stats.hll {
+                    match hll.as_mut() {
+                        Some(hll) => hll.merge(col_hll),
+                        None => hll = Some(col_hll.clone()),
+                    }
+                }
             }
 
             let min = min_stats
@@ -76,7 +85,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
             acc.insert(
                 *id,
-                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+                ColumnStatistics::new(min, max, null_count, in_memory_size, hll),
             );
             acc
         })

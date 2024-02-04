@@ -82,6 +82,8 @@ pub struct TableSnapshot {
 
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
+
+    /// Deprecated not used any more
     pub table_statistics_location: Option<String>,
 }
 

@@ -104,7 +104,7 @@ impl BatchStatistics {
             unsafe { self.max_values.index_unchecked(index).to_owned() },
             self.null_count[index],
             0, // this field is not used.
-            self.distinct_count.as_ref().map(|d| d[index]),
+            None,
         )
     }
 

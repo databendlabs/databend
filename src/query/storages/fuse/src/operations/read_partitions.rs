@@ -277,6 +277,7 @@ impl FuseTable {
                 null_count: 0,
                 in_memory_size: 0,
                 distinct_of_values: None,
+                hll: None,
             };
             if top_k.asc {
                 block_metas.sort_by(|a, b| {

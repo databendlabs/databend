@@ -11,23 +11,12 @@ statement ok
 create table t(a uint64)
 
 statement ok
-insert into t values (5)
+insert into t values (5), (6), (7)
 
-statement ok
-insert into t values (6)
-
-statement ok
-insert into t values (7)
-
-query I
-select * from t order by a
-----
-5
-6
-7
-
-query ok
+query ??
 select * from fuse_statistic('db_09_0020', 't')
+----
+0 3
 
 
 statement ok
@@ -36,37 +25,21 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3);
+0 3
 
 statement ok
-insert into t values (5)
+insert into t values (5), (6), (7)
 
-statement ok
-insert into t values (6)
-
-statement ok
-insert into t values (7)
-
-
-query I
-select * from t order by a
-----
-5
-5
-6
-6
-7
-7
 
 query II
 select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 ----
-6 6
+2 2
 
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3);
+0 3
 
 statement ok
 analyze table `t`
@@ -74,7 +47,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6);
+0 3
 
 statement ok
 optimize table t compact
@@ -87,7 +60,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6);
+0 3
 
 statement ok
 analyze table `t`
@@ -95,7 +68,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3);
+0 3
 
 statement ok
 delete from t where a=5
@@ -103,7 +76,7 @@ delete from t where a=5
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3);
+0 3
 
 statement ok
 analyze table `t`
@@ -111,10 +84,47 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,2);
+0 2
 
 statement ok
 DROP TABLE t
+
+## test error rate of ndv should be less than
+statement ok
+create table a (a int, b string, d float64)
+
+statement ok
+insert into a select number, number, number  from numbers(10000)
+
+statement ok
+insert into a select number, number, number  from numbers(10000)
+
+statement ok
+insert into a select number, number, number  from numbers(10000)
+
+
+## times 6 because we want to have stable tests, this is adopted from redis's unit test version as well
+
+query T
+select *, (ndv - 10000) / 10000 < 0.01625 * 6 from fuse_statistic('db_09_0020', 'a')
+----
+0 10038 1
+1 10080 1
+2 10144 1
+
+statement ok
+delete from a where a % 4 = 0;
+
+
+statement ok
+analyze table a
+
+query T
+select *, (ndv - 7500) / 7500 < 0.01625 * 6  from fuse_statistic('db_09_0020', 'a')
+----
+0 7637 1
+1 7730 1
+2 7530 1
 
 statement ok
 DROP DATABASE db_09_0020

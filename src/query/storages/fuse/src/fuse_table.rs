@@ -297,6 +297,9 @@ impl FuseTable {
         TableMetaLocationGenerator::snapshot_version(location)
     }
 
+    #[deprecated(
+        note = "we already have stats in summary field, maybe we could use this in the future"
+    )]
     #[minitrace::trace]
     #[async_backtrace::framed]
     pub(crate) async fn read_table_snapshot_statistics(
@@ -769,20 +772,8 @@ impl Table for FuseTable {
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
-            let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
-            if let Some(table_statistics) = table_statistics {
-                FuseTableColumnStatisticsProvider::new(
-                    stats.clone(),
-                    Some(table_statistics.column_distinct_values.clone()),
-                    snapshot.summary.row_count,
-                )
-            } else {
-                FuseTableColumnStatisticsProvider::new(
-                    stats.clone(),
-                    None,
-                    snapshot.summary.row_count,
-                )
-            }
+
+            FuseTableColumnStatisticsProvider::new(stats.clone(), snapshot.summary.row_count)
         } else {
             FuseTableColumnStatisticsProvider::default()
         };

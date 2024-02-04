@@ -12,28 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use databend_common_exception::Result;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_functions::aggregates::eval_aggr;
+use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatHLL;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
-pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
-    let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
-    let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
-    Ok(col[0])
+// Don't change this value
+// 0.01625f --> 12 buckets
+const DISTINCT_ERROR_RATE: f64 = 0.01625f64;
+
+pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<ColumnStatHLL> {
+    let distinct_values = eval_aggr(
+        "approx_count_distinct_state",
+        vec![Scalar::Number(NumberScalar::Float64(
+            DISTINCT_ERROR_RATE.into(),
+        ))],
+        &[column.clone()],
+        rows,
+    )?;
+    let col = BinaryType::try_downcast_column(&distinct_values.0).unwrap();
+
+    borsh_deserialize_from_slice(col.data().as_slice())
 }
 
 pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseResult {
@@ -42,7 +54,6 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 
 pub fn gen_columns_statistics(
     data_block: &DataBlock,
-    column_distinct_count: Option<HashMap<FieldIndex, usize>>,
     schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -51,7 +62,7 @@ pub fn gen_columns_statistics(
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
     let leaf_column_ids = schema.to_leaf_column_ids();
-    for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
+    for ((_col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         // Ignore the range index does not supported type.
         if !RangeIndex::supported_type(data_type) {
             continue;
@@ -100,31 +111,10 @@ pub fn gen_columns_statistics(
             (false, None) => 0,
         };
 
-        // use distinct count calculated by the xor hash function to avoid repetitive operation.
-        let distinct_of_values = match (col_idx, &column_distinct_count) {
-            (Some(col_idx), Some(ref column_distinct_count)) => {
-                if let Some(value) = column_distinct_count.get(col_idx) {
-                    // value calculated by xor hash function include NULL, need to subtract one.
-                    if unset_bits > 0 {
-                        *value as u64 - 1
-                    } else {
-                        *value as u64
-                    }
-                } else {
-                    calc_column_distinct_of_values(col, rows)?
-                }
-            }
-            (_, _) => calc_column_distinct_of_values(col, rows)?,
-        };
-
+        let hll = calc_column_distinct_of_values(col, rows)?;
         let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics::new(
-            min,
-            max,
-            unset_bits as u64,
-            in_memory_size,
-            Some(distinct_of_values),
-        );
+        let col_stats =
+            ColumnStatistics::new(min, max, unset_bits as u64, in_memory_size, Some(hll));
 
         statistics.insert(column_id, col_stats);
     }

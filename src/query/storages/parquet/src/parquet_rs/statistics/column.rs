@@ -131,11 +131,14 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
     } else {
         (Scalar::Null, Scalar::Null)
     };
-    Some(ColumnStatistics::new(
-        min,
-        max,
-        s.null_count(),
-        0, // this field is not used.
-        s.distinct_count(),
-    ))
+    Some(
+        ColumnStatistics::new(
+            min,
+            max,
+            s.null_count(),
+            0, // this field is not used.
+            None,
+        )
+        .with_distinct_of_values(s.distinct_count()),
+    )
 }

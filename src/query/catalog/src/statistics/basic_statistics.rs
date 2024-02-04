@@ -31,10 +31,11 @@ pub struct BasicColumnStatistics {
 
 impl From<ColumnStatistics> for BasicColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
+        let ndv = value.unify_distinct_value();
         Self {
             min: Datum::from_scalar(value.min),
             max: Datum::from_scalar(value.max),
-            ndv: value.distinct_of_values,
+            ndv,
             null_count: value.null_count,
         }
     }
