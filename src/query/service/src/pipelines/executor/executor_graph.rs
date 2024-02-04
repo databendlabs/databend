@@ -242,7 +242,7 @@ impl ExecutingGraph {
     pub unsafe fn init_schedule_queue(
         locker: &StateLockGuard,
         capacity: usize,
-        graph: &Arc<RunningGraph>
+        graph: &Arc<RunningGraph>,
     ) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
         for sink_index in locker.graph.externals(Direction::Outgoing) {
@@ -259,7 +259,7 @@ impl ExecutingGraph {
         locker: &StateLockGuard,
         index: NodeIndex,
         schedule_queue: &mut ScheduleQueue,
-        graph: &Arc<RunningGraph>
+        graph: &Arc<RunningGraph>,
     ) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
@@ -320,21 +320,17 @@ impl ExecutingGraph {
                     }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
-                        schedule_queue.push_sync(
-                            ProcessorWrapper {
-                                processor: node.processor.clone(),
-                                graph: graph.clone(),
-                            }
-                        );
+                        schedule_queue.push_sync(ProcessorWrapper {
+                            processor: node.processor.clone(),
+                            graph: graph.clone(),
+                        });
                         State::Processing
                     }
                     Event::Async => {
-                        schedule_queue.push_async(
-                            ProcessorWrapper {
-                                processor: node.processor.clone(),
-                                graph: graph.clone(),
-                            }
-                        );
+                        schedule_queue.push_async(ProcessorWrapper {
+                            processor: node.processor.clone(),
+                            graph: graph.clone(),
+                        });
                         State::Processing
                     }
                 };
@@ -352,7 +348,12 @@ impl ExecutingGraph {
         let mut expected_value = 0;
         let mut desired_value = 0;
         loop {
-            match self.points.compare_exchange_weak(expected_value, desired_value, Ordering::SeqCst, Ordering::Relaxed) {
+            match self.points.compare_exchange_weak(
+                expected_value,
+                desired_value,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
                 Ok(old_value) => {
                     return (old_value & EPOCH_MASK) as u32 == global_epoch;
                 }
@@ -377,7 +378,7 @@ impl ExecutingGraph {
 }
 
 #[derive(Clone)]
-pub struct ProcessorWrapper{
+pub struct ProcessorWrapper {
     pub processor: ProcessorPtr,
     pub graph: Arc<RunningGraph>,
 }
@@ -405,20 +406,27 @@ impl ScheduleQueue {
         self.async_queue.push_back(processor);
     }
 
-    pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext, executor: &Arc<PipelineExecutor>) {
+    pub fn schedule_tail(
+        mut self,
+        global: &ExecutorTasksQueue,
+        ctx: &mut ExecutorWorkerContext,
+        executor: &Arc<PipelineExecutor>,
+    ) {
         let mut current_tasks = VecDeque::with_capacity(self.sync_queue.len());
         let mut next_tasks = VecDeque::with_capacity(self.sync_queue.len());
         while let Some(processor) = self.sync_queue.pop_front() {
-            if processor.graph.can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS) {
+            if processor
+                .graph
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+            {
                 current_tasks.push_back(ExecutorTask::Sync(processor));
-            }else{
+            } else {
                 next_tasks.push_back(ExecutorTask::Sync(processor));
             }
         }
         let worker_id = ctx.get_worker_id();
         global.push_tasks_to_current_queue(worker_id, current_tasks);
         global.push_tasks_to_next_queue(worker_id, next_tasks);
-
     }
 
     pub fn schedule(
@@ -430,7 +438,10 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
-            if processor.graph.can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS){
+            if processor
+                .graph
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+            {
                 Self::schedule_async_task(
                     processor,
                     context.query_id.clone(),
@@ -439,7 +450,7 @@ impl ScheduleQueue {
                     context.get_workers_condvar().clone(),
                     global.clone(),
                 )
-            }else{
+            } else {
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Async(processor));
                 global.push_tasks_to_next_queue(context.get_worker_id(), tasks);
@@ -489,12 +500,20 @@ impl ScheduleQueue {
         }
     }
 
-    fn schedule_sync(&mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext, executor: &Arc<PipelineExecutor>) {
+    fn schedule_sync(
+        &mut self,
+        global: &ExecutorTasksQueue,
+        ctx: &mut ExecutorWorkerContext,
+        executor: &Arc<PipelineExecutor>,
+    ) {
         while let Some(processor) = self.sync_queue.pop_front() {
-            if processor.graph.can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS){
+            if processor
+                .graph
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+            {
                 ctx.set_task(ExecutorTask::Sync(processor));
                 break;
-            }else{
+            } else {
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Sync(processor));
                 global.push_tasks_to_next_queue(ctx.get_worker_id(), tasks);

@@ -16,17 +16,21 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+use databend_common_base::runtime::TrackedFuture;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_exception::Result;
 use minitrace::future::FutureExt;
 use minitrace::Span;
-
-use databend_common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
-use databend_common_base::runtime::{TrackedFuture, TrySpawn};
 
-use crate::pipelines::executor::{ExecutorTask, PipelineExecutor, ProcessorAsyncTask, RunningGraph};
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::ProcessorAsyncTask;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
@@ -69,8 +73,7 @@ impl ExecutorTasksQueue {
         self.finished_notify.notify_waiters();
 
         let mut workers_waiting_status = self.workers_tasks.workers_waiting_status.lock();
-        let mut wakeup_workers =
-            Vec::with_capacity(workers_waiting_status.waiting_size());
+        let mut wakeup_workers = Vec::with_capacity(workers_waiting_status.waiting_size());
 
         while workers_waiting_status.waiting_size() != 0 {
             let worker_id = workers_waiting_status.wakeup_any_worker();
@@ -89,23 +92,25 @@ impl ExecutorTasksQueue {
 
     /// Pull task from the global task queue
     /// Method is thread unsafe and require thread safe call
-    pub fn steal_task_to_context(self: &Arc<Self>, context: &mut ExecutorWorkerContext, executor: &Arc<PipelineExecutor>) {
+    pub fn steal_task_to_context(
+        self: &Arc<Self>,
+        context: &mut ExecutorWorkerContext,
+        executor: &Arc<PipelineExecutor>,
+    ) {
         let mut current_tasks = self.workers_tasks.current_tasks.lock();
         let mut workers_waiting_status = self.workers_tasks.workers_waiting_status.lock();
         if !current_tasks.is_empty() {
-            while !current_tasks.is_empty(){
+            while !current_tasks.is_empty() {
                 let task = current_tasks.pop_task(context.get_worker_id());
                 match task {
-                    ExecutorTask::Async(processor) => {
-                        Self::handle_async_task(
-                            processor,
-                            context.query_id.clone(),
-                            executor,
-                            context.get_worker_id(),
-                            context.get_workers_condvar().clone(),
-                            self.clone()
-                        )
-                    },
+                    ExecutorTask::Async(processor) => Self::handle_async_task(
+                        processor,
+                        context.query_id.clone(),
+                        executor,
+                        context.get_worker_id(),
+                        context.get_workers_condvar().clone(),
+                        self.clone(),
+                    ),
                     other => {
                         context.set_task(other);
                         break;
@@ -114,16 +119,12 @@ impl ExecutorTasksQueue {
             }
 
             let workers_condvar = context.get_workers_condvar();
-            if !current_tasks.is_empty() && workers_waiting_status.waiting_size() != 0
-            {
+            if !current_tasks.is_empty() && workers_waiting_status.waiting_size() != 0 {
                 let worker_id = context.get_worker_id();
                 let mut wakeup_worker_id = current_tasks.best_worker_id(worker_id + 1);
 
-                if workers_waiting_status
-                    .is_waiting(wakeup_worker_id)
-                {
-                    workers_waiting_status
-                        .wakeup_worker(wakeup_worker_id);
+                if workers_waiting_status.is_waiting(wakeup_worker_id) {
+                    workers_waiting_status.wakeup_worker(wakeup_worker_id);
                 } else {
                     wakeup_worker_id = workers_waiting_status.wakeup_any_worker();
                 }
@@ -144,7 +145,7 @@ impl ExecutorTasksQueue {
             drop(workers_waiting_status);
             if self.switch_queue() {
                 executor.increase_global_epoch();
-            }else{
+            } else {
                 self.finish(workers_condvar.clone());
             }
             return;
@@ -155,7 +156,6 @@ impl ExecutorTasksQueue {
         drop(current_tasks);
         drop(workers_waiting_status);
         workers_condvar.wait(worker_id, self.finished.clone());
-
     }
 
     pub fn handle_async_task(
@@ -185,9 +185,9 @@ impl ExecutorTasksQueue {
                     graph,
                     process_future,
                 ))
-                    .in_span(Span::enter_with_local_parent(std::any::type_name::<
-                        ProcessorAsyncTask,
-                    >())),
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
             );
         }
     }
@@ -217,8 +217,7 @@ impl ExecutorTasksQueue {
 
         if workers_waiting_status.waiting_size() != 0 {
             if workers_waiting_status.is_waiting(worker_id) {
-                workers_waiting_status
-                    .wakeup_worker(worker_id);
+                workers_waiting_status.wakeup_worker(worker_id);
             } else {
                 worker_id = workers_waiting_status.wakeup_any_worker();
             }
@@ -235,12 +234,11 @@ impl ExecutorTasksQueue {
 
     pub fn active_workers(&self) -> usize {
         let workers_waiting_status = self.workers_tasks.workers_waiting_status.lock();
-        workers_waiting_status.total_size()
-            - workers_waiting_status.waiting_size()
+        workers_waiting_status.total_size() - workers_waiting_status.waiting_size()
     }
 
     pub fn push_tasks_to_next_queue(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
-        let mut next_tasks= self.workers_tasks.next_tasks.lock();
+        let mut next_tasks = self.workers_tasks.next_tasks.lock();
 
         while let Some(task) = tasks.pop_front() {
             next_tasks.push_task(worker_id, task);
@@ -248,7 +246,7 @@ impl ExecutorTasksQueue {
     }
 
     pub fn push_tasks_to_current_queue(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
-        let mut next_tasks= self.workers_tasks.next_tasks.lock();
+        let mut next_tasks = self.workers_tasks.next_tasks.lock();
 
         while let Some(task) = tasks.pop_front() {
             next_tasks.push_task(worker_id, task);
@@ -257,23 +255,22 @@ impl ExecutorTasksQueue {
 
     /// Switch the task queue between workers_tasks and next_tasks
     /// When we enter a new time slice, we need to switch them
-    pub fn switch_queue(&self) -> bool{
+    pub fn switch_queue(&self) -> bool {
         let mut current_tasks = self.workers_tasks.current_tasks.lock();
         let mut next_tasks = self.workers_tasks.next_tasks.lock();
-        if current_tasks.is_empty() && next_tasks.is_empty(){
+        if current_tasks.is_empty() && next_tasks.is_empty() {
             return false;
         }
         std::mem::swap(&mut *current_tasks, &mut *next_tasks);
         return true;
     }
-
 }
 
 pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
-    pub graph: Arc<RunningGraph>
+    pub graph: Arc<RunningGraph>,
 }
 
 impl CompletedAsyncTask {
@@ -281,13 +278,13 @@ impl CompletedAsyncTask {
         id: NodeIndex,
         worker_id: usize,
         res: Result<()>,
-        graph: Arc<RunningGraph>
+        graph: Arc<RunningGraph>,
     ) -> Self {
         CompletedAsyncTask {
             id,
             worker_id,
             res,
-            graph
+            graph,
         }
     }
 }

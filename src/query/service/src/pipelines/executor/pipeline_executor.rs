@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -429,7 +430,7 @@ impl PipelineExecutor {
     }
 
     #[inline]
-    pub fn increase_global_epoch(&self){
+    pub fn increase_global_epoch(&self) {
         self.epoch.fetch_add(1, Ordering::SeqCst);
     }
 

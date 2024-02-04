@@ -24,8 +24,9 @@ use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::{CompletedAsyncTask, RunningGraph};
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub enum ExecutorTask {
@@ -76,7 +77,9 @@ impl ExecutorWorkerContext {
     pub unsafe fn execute_task(&mut self) -> Result<(NodeIndex, Arc<RunningGraph>)> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Async(_) => Err(ErrorCode::Internal("Execute async task at incorrect place.")),
+            ExecutorTask::Async(_) => Err(ErrorCode::Internal(
+                "Execute async task at incorrect place.",
+            )),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok((task.id, task.graph)),
