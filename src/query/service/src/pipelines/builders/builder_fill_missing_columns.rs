@@ -28,7 +28,7 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     // Fill missing columns with default or compute expr
     // ** Also reorder the block into table's schema order **
-    pub fn build_reorder_fill_missing_columns_pipeline(
+    pub fn fill_missing_and_reorder_columns(
         ctx: Arc<QueryContext>,
         pipeline: &mut Pipeline,
         table: Arc<dyn Table>,

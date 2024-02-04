@@ -314,7 +314,7 @@ impl PipelineBuilder {
             }
         }
 
-        Self::build_reorder_fill_missing_columns_pipeline(
+        Self::fill_missing_and_reorder_columns(
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
