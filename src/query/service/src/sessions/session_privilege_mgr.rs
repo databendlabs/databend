@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 
@@ -267,14 +268,20 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
     #[async_backtrace::framed]
     async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
-        let role_mgr = RoleCacheManager::instance();
+        let user_mgr = UserApiProvider::instance();
         let tenant = self.session_ctx.get_current_tenant();
-
-        // if the object is not owned by any role, then considered as ACCOUNT_ADMIN, the normal users
-        // can not access it unless ACCOUNT_ADMIN grant relevant privileges to them.
-        let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
-            Some(owner_role) => owner_role.name,
+        let owner_role_name = match user_mgr.get_ownership(&tenant, object).await? {
             None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+            Some(owner) => match user_mgr.get_role(&tenant, owner.role).await {
+                Ok(owner_role) => owner_role.name,
+                Err(e) => {
+                    if e.code() == ErrorCode::UNKNOWN_ROLE {
+                        BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()
+                    } else {
+                        return Err(e);
+                    }
+                }
+            },
         };
 
         let effective_roles = self.get_all_effective_roles().await?;
