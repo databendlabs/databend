@@ -2446,7 +2446,6 @@ dependencies = [
 name = "databend-common-base"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.3",
  "anyerror",
  "anyhow",
  "async-backtrace",
