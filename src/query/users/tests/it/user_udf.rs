@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
@@ -29,7 +30,6 @@ async fn test_user_lambda_udf() -> Result<()> {
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
-    let if_not_exists = false;
 
     // add isempty.
     let isempty_udf = UserDefinedFunction::create_lambda_udf(
@@ -39,7 +39,11 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(tenant, isempty_udf.clone(), if_not_exists)
+        .add_udf(
+            tenant,
+            isempty_udf.clone(),
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // add isnotempty.
@@ -50,7 +54,11 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(tenant, isnotempty_udf.clone(), if_not_exists)
+        .add_udf(
+            tenant,
+            isnotempty_udf.clone(),
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // get all.
@@ -99,7 +107,6 @@ async fn test_user_udf_server() -> Result<()> {
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
-    let if_not_exists = false;
 
     // add isempty.
     let isempty_udf = UserDefinedFunction::create_udf_server(
@@ -112,7 +119,11 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(tenant, isempty_udf.clone(), if_not_exists)
+        .add_udf(
+            tenant,
+            isempty_udf.clone(),
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // add isnotempty.
@@ -126,7 +137,11 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(tenant, isnotempty_udf.clone(), if_not_exists)
+        .add_udf(
+            tenant,
+            isnotempty_udf.clone(),
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // get all.
