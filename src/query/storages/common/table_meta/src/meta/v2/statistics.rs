@@ -26,7 +26,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 
-/// Takes at most `1<<12 = 2k`` spaces with error ratio of `0.01625`
+/// Takes at most `1<<12 = 4k`` spaces with error ratio of `0.01625`
 pub type ColumnStatHLL = HyperLogLog<12>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
