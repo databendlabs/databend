@@ -230,7 +230,7 @@ impl Binder {
         let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
-            create_option: create_option.clone(),
+            create_option: *create_option,
             tenant,
             catalog,
             database,
