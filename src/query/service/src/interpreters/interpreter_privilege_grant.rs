@@ -137,13 +137,6 @@ impl GrantPrivilegeInterpreter {
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
         let owner = user_mgr.get_ownership(tenant, owner_object).await?;
         if let Some(owner) = owner {
-            // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
-            // only account_admin can grant this object.
-            let role = if !user_mgr.exists_role(tenant, owner.role.clone()).await? {
-                BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()
-            } else {
-                owner.role.clone()
-            };
             let can_grant_ownership = available_roles.iter().any(|r| r.name == role);
             log_msg = format!(
                 "{}: grant ownership on {:?} from role {} to {}",
